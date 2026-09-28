@@ -101,6 +101,7 @@ const AdminRefunds = lazy(() => import('./pages/admin/AdminRefunds'));
 const AdminZinc = lazy(() => import('./pages/admin/AdminZinc'));
 const AdminQuestions = lazy(() => import('./pages/admin/AdminQuestions'));
 const AdminAIControlCenter = lazy(() => import('./pages/superadmin/AdminAIControlCenter'));
+const AdminAISystemTest = lazy(() => import('./pages/superadmin/AdminAISystemTest'));
 
 // Collector Plugins (6 official modules)
 // 01. AI Search
@@ -400,6 +401,7 @@ function App() {
                   </ProtectedRoute>
                 }>
                   <Route index element={<AdminAIControlCenter />} />
+                  <Route path="test" element={<AdminAISystemTest />} />
                 </Route>
 
                   </Routes>
