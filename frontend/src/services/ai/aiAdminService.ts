@@ -6,11 +6,12 @@ import type {
   AIUsageEvent, 
   AIErrorEvent, 
   AIAuditLog, 
-  AIDashboardSummary 
+  AIDashboardSummary,
+  AITestResult 
 } from './types';
 
 // ============================================================
-// AI ADMIN SERVICE — SUPERADMIN EXCLUSIVE
+// AI ADMIN SERVICE — SUPERADMIN EXCLUSIVE (PHASE 2 HARDENED)
 // ============================================================
 
 export class AIAdminService {
@@ -57,6 +58,44 @@ export class AIAdminService {
         errors_today: 0,
         avg_latency_ms: 0,
         last_activity: null
+      };
+    }
+  }
+
+  /**
+   * Safe 0-cost diagnostic check
+   */
+  static async getDiagnosticStatus(): Promise<{ ok: boolean; configured: boolean; liveTestEnabled: boolean; supportedModels: string[] }> {
+    try {
+      const res = await fetch('/api/openai-test', { method: 'GET' });
+      if (!res.ok) {
+        return { ok: false, configured: false, liveTestEnabled: false, supportedModels: [] };
+      }
+      return await res.json();
+    } catch {
+      return { ok: false, configured: false, liveTestEnabled: false, supportedModels: [] };
+    }
+  }
+
+  /**
+   * Executes a controlled live test E2E for superadmin certification
+   */
+  static async runLiveTest(model: string = 'gpt-5.6-terra'): Promise<AITestResult> {
+    try {
+      const res = await fetch('/api/openai-test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ model })
+      });
+
+      const data = await res.json();
+      return data as AITestResult;
+    } catch (err: any) {
+      return {
+        ok: false,
+        error: err.message || 'Error during OpenAI live test invocation.'
       };
     }
   }
@@ -276,4 +315,3 @@ export class AIAdminService {
     }
   }
 }
-

@@ -1,5 +1,5 @@
 // ============================================================
-// AI INFRASTRUCTURE TYPES — PHASE 1
+// AI INFRASTRUCTURE TYPES — PHASE 2 HARDENING & TELEMETRY
 // ============================================================
 
 export type AIEngineKey = 
@@ -26,8 +26,29 @@ export type AIExecutionStatus =
   | 'PROVIDER_NOT_CONFIGURED'
   | 'RATE_LIMITED'
   | 'TIMEOUT'
+  | 'OPENAI_ERROR'
+  | 'INVALID_OUTPUT'
+  | 'MODEL_NOT_ALLOWED'
   | 'SUCCESS'
   | 'FALLBACK';
+
+export interface AIPricingInfo {
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  input_cost_usd: number | null;
+  output_cost_usd: number | null;
+  estimated_cost_usd: number | null;
+  pricing_status: 'PRICED' | 'UNKNOWN_PRICING';
+  pricing_source?: string;
+}
+
+export interface AIUsageInfo {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
 
 export interface AISystemConfig {
   id: string;
@@ -156,6 +177,8 @@ export interface AIExecuteOptions<T = any> {
   operation: string;
   payload?: any;
   context?: Record<string, any>;
+  prompt?: string;
+  systemPrompt?: string;
   fallbackHandler?: () => Promise<T> | T;
 }
 
@@ -165,8 +188,29 @@ export interface AIExecuteResponse<T = any> {
   provider: string | null;
   model: string | null;
   data?: T;
+  text?: string;
   fallback_executed?: boolean;
   error?: string;
   latency_ms?: number;
+  usage?: AIUsageInfo;
+  pricing?: AIPricingInfo;
+  request_id?: string;
+  response_id?: string;
 }
 
+export interface AITestResult {
+  ok: boolean;
+  certified?: boolean;
+  response?: string;
+  expectedResponse?: string;
+  provider?: string;
+  model?: string;
+  usage?: AIUsageInfo;
+  pricing?: AIPricingInfo;
+  latencyMs?: number;
+  requestId?: string;
+  responseId?: string;
+  timestamp?: string;
+  error?: string;
+  errorType?: string;
+}

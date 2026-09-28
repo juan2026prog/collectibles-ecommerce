@@ -1,3 +1,9 @@
+// ============================================================
+// COLLECTIBLES 2026 — OPENAI PROVIDER ADAPTER (CLIENT-SIDE)
+// Dispatches AI requests securely to the /api/ai-execute server endpoint.
+// OPENAI_API_KEY is NEVER exposed to the browser.
+// ============================================================
+
 import type { AIProviderAdapter } from './baseProvider';
 import type { AIEngineKey, AIExecuteResponse } from '../types';
 import { supabase } from '../../../lib/supabase';
@@ -5,45 +11,140 @@ import { supabase } from '../../../lib/supabase';
 export class OpenAIProvider implements AIProviderAdapter {
   public readonly providerKey = 'OPENAI';
 
+  /**
+   * Executes AI request via server-side endpoint
+   */
   async execute<T = any>(
     engine: AIEngineKey,
     operation: string,
     payload?: any,
-    context?: Record<string, any>
+    context?: Record<string, any>,
+    prompt?: string,
+    systemPrompt?: string
   ): Promise<AIExecuteResponse<T>> {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
+    const startTime = performance.now();
 
-    const response = await fetch('/api/ai-execute', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify({
-        engine,
-        operation,
-        payload,
-        context,
-        country: context?.country
-      })
-    });
-
-    if (!response.ok) throw new Error(`AI backend failed (${response.status})`);
-    return await response.json() as AIExecuteResponse<T>;
-  }
-
-  async healthCheck() {
     try {
-      const response = await fetch('/api/openai-test');
-      const data = await response.json();
-      return { healthy: Boolean(data?.configured), message: data?.configured ? 'OpenAI configured server-side.' : 'OpenAI not configured.' };
-    } catch {
-      return { healthy: false, message: 'OpenAI health check unavailable.' };
+      let token: string | undefined;
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        token = sessionData?.session?.access_token;
+      } catch (_) {}
+
+      // Build prompt if not explicitly passed
+      const resolvedPrompt = prompt || (typeof payload === 'string' ? payload : JSON.stringify(payload || {}));
+
+      const res = await fetch('/api/ai-execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          engine,
+          country: context?.country || 'UY',
+          operation,
+          payload,
+          prompt: resolvedPrompt,
+          systemPrompt,
+          temperature: context?.temperature,
+          maxTokens: context?.maxTokens,
+          model: context?.model,
+          context
+        })
+      });
+
+      const elapsed = Math.round(performance.now() - startTime);
+      let data: any;
+      try {
+        data = await res.json();
+      } catch {
+        return {
+          success: false,
+          status: 'INVALID_OUTPUT',
+          provider: 'OPENAI',
+          model: null,
+          error: `Failed to parse response from AI server (${res.status}).`,
+          latency_ms: elapsed
+        };
+      }
+
+      if (!res.ok) {
+        return {
+          success: false,
+          status: data.status || 'OPENAI_ERROR',
+          provider: 'OPENAI',
+          model: data.model || null,
+          error: data.error || 'OpenAI execution failed.',
+          latency_ms: data.latency_ms || elapsed,
+          request_id: data.request_id
+        };
+      }
+
+      return {
+        success: true,
+        status: 'SUCCESS',
+        provider: 'OPENAI',
+        model: data.model,
+        text: data.text,
+        data: data.text as unknown as T,
+        latency_ms: data.latency_ms || elapsed,
+        usage: data.usage,
+        pricing: data.pricing,
+        request_id: data.request_id,
+        response_id: data.response_id
+      };
+
+    } catch (err: any) {
+      const elapsed = Math.round(performance.now() - startTime);
+      return {
+        success: false,
+        status: 'OPENAI_ERROR',
+        provider: 'OPENAI',
+        model: null,
+        error: err?.message || 'Network error connecting to AI Gateway endpoint.',
+        latency_ms: elapsed
+      };
     }
   }
 
-  estimateCost() { return 0; }
+  /**
+   * Safe health check (calls 0-cost GET /api/openai-test)
+   */
+  async healthCheck(): Promise<{ healthy: boolean; message: string; configured?: boolean }> {
+    try {
+      const res = await fetch('/api/openai-test', { method: 'GET' });
+      const data = await res.json();
+      if (res.ok && data.configured) {
+        return {
+          healthy: true,
+          configured: true,
+          message: `OpenAI Provider connected server-side (${data.supportedModels?.length || 4} models available).`
+        };
+      }
+      return {
+        healthy: false,
+        configured: data.configured || false,
+        message: data.configured ? 'OpenAI endpoint issue.' : 'OPENAI_API_KEY not configured on server.'
+      };
+    } catch (err: any) {
+      return {
+        healthy: false,
+        configured: false,
+        message: err?.message || 'Failed to reach OpenAI diagnostic endpoint.'
+      };
+    }
+  }
+
+  /**
+   * Reference estimation (per 1M tokens)
+   */
+  estimateCost(inputTokens: number, outputTokens: number, model?: string): number {
+    const inputRate = model?.includes('sol') || model?.includes('mini') ? 0.15 : 2.50;
+    const outputRate = model?.includes('sol') || model?.includes('mini') ? 0.60 : 10.00;
+    const cost = (inputTokens / 1_000_000) * inputRate + (outputTokens / 1_000_000) * outputRate;
+    return parseFloat(cost.toFixed(6));
+  }
 }
 
 export const openAIProvider = new OpenAIProvider();

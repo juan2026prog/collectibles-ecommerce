@@ -1,184 +1,265 @@
-const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
+// ============================================================
+// COLLECTIBLES 2026 — OPENAI RESPONSES API CLIENT (SERVER-SIDE)
+// Dedicated server-side module for executing calls to OpenAI.
+// OPENAI_API_KEY is NEVER exposed to the frontend or public logs.
+// ============================================================
 
-const DEFAULT_TIMEOUT_MS = 25_000;
-const DEFAULT_MAX_OUTPUT_TOKENS = 1_200;
-const HARD_MAX_OUTPUT_TOKENS = 4_000;
-const DEFAULT_MAX_INPUT_CHARS = 50_000;
-const HARD_MAX_INPUT_CHARS = 200_000;
+import { calculateOpenAICost } from './openaiPricing.js';
+
+const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
+
+const DEFAULT_TIMEOUT_MS = 25000;
+const DEFAULT_MAX_OUTPUT_TOKENS = 1200;
+const HARD_MAX_OUTPUT_TOKENS = 4000;
+const DEFAULT_MAX_INPUT_CHARS = 50000;
+const HARD_MAX_INPUT_CHARS = 200000;
 
 function envInt(name, fallback, hardMax) {
-  const raw = Number.parseInt(process.env[name] || "", 10);
+  const raw = parseInt(process.env[name] || '', 10);
   if (!Number.isFinite(raw) || raw <= 0) return fallback;
   return Math.min(raw, hardMax);
 }
 
 export const OPENAI_MODELS = Object.freeze({
-  fast: process.env.OPENAI_MODEL_FAST || "gpt-5.6-luna",
-  balanced: process.env.OPENAI_MODEL_BALANCED || "gpt-5.6-terra",
-  reasoning: process.env.OPENAI_MODEL_REASONING || "gpt-5.6-sol",
+  fast: process.env.OPENAI_MODEL_FAST || 'gpt-5.6-sol',
+  balanced: process.env.OPENAI_MODEL_BALANCED || 'gpt-5.6-terra',
+  reasoning: process.env.OPENAI_MODEL_REASONING || 'gpt-5.6-sol'
 });
 
 export function getOpenAIConfig() {
   return {
-    configured: Boolean(process.env.OPENAI_API_KEY),
+    configured: Boolean(process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim() !== ''),
     models: OPENAI_MODELS,
-    timeoutMs: envInt("OPENAI_TIMEOUT_MS", DEFAULT_TIMEOUT_MS, 60_000),
-    maxOutputTokens: envInt(
-      "OPENAI_MAX_OUTPUT_TOKENS",
-      DEFAULT_MAX_OUTPUT_TOKENS,
-      HARD_MAX_OUTPUT_TOKENS,
-    ),
-    maxInputChars: envInt(
-      "OPENAI_MAX_INPUT_CHARS",
-      DEFAULT_MAX_INPUT_CHARS,
-      HARD_MAX_INPUT_CHARS,
-    ),
+    timeoutMs: envInt('OPENAI_TIMEOUT_MS', DEFAULT_TIMEOUT_MS, 60000),
+    maxOutputTokens: envInt('OPENAI_MAX_OUTPUT_TOKENS', DEFAULT_MAX_OUTPUT_TOKENS, HARD_MAX_OUTPUT_TOKENS),
+    maxInputChars: envInt('OPENAI_MAX_INPUT_CHARS', DEFAULT_MAX_INPUT_CHARS, HARD_MAX_INPUT_CHARS)
   };
 }
 
-function getAllowedModels() {
-  const configured = (process.env.OPENAI_ALLOWED_MODELS || "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  return new Set(
-    configured.length > 0 ? configured : Object.values(OPENAI_MODELS),
-  );
-}
-
-function resolveModel(profile, explicitModel) {
-  const model = explicitModel || OPENAI_MODELS[profile] || OPENAI_MODELS.balanced;
-
-  if (!getAllowedModels().has(model)) {
-    const error = new Error("Requested OpenAI model is not allowed");
-    error.code = "OPENAI_MODEL_NOT_ALLOWED";
-    error.status = 400;
-    throw error;
+export class OpenAIError extends Error {
+  constructor(message, errorType = 'OPENAI_ERROR', statusCode = 500, details = {}) {
+    super(message);
+    this.name = 'OpenAIError';
+    this.errorType = errorType;
+    this.code = errorType;
+    this.status = statusCode;
+    this.statusCode = statusCode;
+    this.details = details;
   }
-
-  return model;
 }
 
-function normalizeInput(input, maxInputChars) {
-  if (typeof input === "string") {
-    if (!input.trim()) {
-      const error = new Error("OpenAI input cannot be empty");
-      error.code = "OPENAI_EMPTY_INPUT";
-      error.status = 400;
-      throw error;
-    }
-
-    if (input.length > maxInputChars) {
-      const error = new Error("OpenAI input exceeds configured size limit");
-      error.code = "OPENAI_INPUT_TOO_LARGE";
-      error.status = 413;
-      throw error;
-    }
-  }
-
-  return input;
-}
-
+/**
+ * Extracts output text from Responses API payload
+ */
 function extractOutputText(data) {
-  if (typeof data?.output_text === "string" && data.output_text.trim()) {
+  if (typeof data?.output_text === 'string' && data.output_text.trim()) {
     return data.output_text.trim();
   }
 
   const parts = [];
-
   for (const item of data?.output || []) {
     for (const content of item?.content || []) {
       if (
-        (content?.type === "output_text" || content?.type === "text") &&
-        typeof content?.text === "string"
+        (content?.type === 'output_text' || content?.type === 'text') &&
+        typeof content?.text === 'string'
       ) {
         parts.push(content.text);
       }
     }
   }
 
-  return parts.join("\n").trim();
+  if (parts.length > 0) {
+    return parts.join('\n').trim();
+  }
+
+  if (data?.choices && data.choices[0]?.message?.content) {
+    return data.choices[0].message.content.trim();
+  }
+
+  return '';
 }
 
-export async function createOpenAITextResponse({
-  input,
-  instructions,
-  profile = "balanced",
-  model,
-  maxOutputTokens,
-  metadata,
-} = {}) {
-  const apiKey = process.env.OPENAI_API_KEY;
+/**
+ * Executes a call to OpenAI Responses API with telemetry & pricing calculation.
+ * 
+ * @param {Object} options
+ * @param {string} [options.model] - Model identifier e.g. 'gpt-5.6-terra'
+ * @param {string} [options.profile] - 'fast' | 'balanced' | 'reasoning'
+ * @param {string|Array} options.input - Text or messages input
+ * @param {number} [options.temperature=0.2]
+ * @param {number} [options.maxTokens]
+ * @param {number} [options.timeoutMs=25000]
+ * @param {string} [options.systemPrompt]
+ * @param {string} [options.instructions]
+ * @param {Object} [options.metadata]
+ * @returns {Promise<Object>} Execution result with data, usage, telemetry, and pricing
+ */
+export async function callOpenAIResponses(options = {}) {
+  const {
+    model: explicitModel,
+    profile = 'balanced',
+    input,
+    temperature = 0.2,
+    maxTokens,
+    timeoutMs = 25000,
+    systemPrompt,
+    instructions,
+    metadata
+  } = options;
 
-  if (!apiKey) {
-    const error = new Error("OPENAI_API_KEY is not configured");
-    error.code = "OPENAI_NOT_CONFIGURED";
-    error.status = 500;
-    throw error;
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey || apiKey.trim() === '') {
+    throw new OpenAIError(
+      'OpenAI API key is not configured on server.',
+      'NOT_CONFIGURED',
+      500
+    );
   }
 
-  const config = getOpenAIConfig();
-  const selectedModel = resolveModel(profile, model);
-  const safeInput = normalizeInput(input, config.maxInputChars);
-  const outputLimit = Math.min(
-    Number.isFinite(maxOutputTokens) && maxOutputTokens > 0
-      ? Math.floor(maxOutputTokens)
-      : config.maxOutputTokens,
-    HARD_MAX_OUTPUT_TOKENS,
-  );
+  if (!input) {
+    throw new OpenAIError(
+      'Input prompt is required for OpenAI execution.',
+      'INVALID_OUTPUT',
+      400
+    );
+  }
 
+  const selectedModel = explicitModel || OPENAI_MODELS[profile] || OPENAI_MODELS.balanced || 'gpt-5.6-terra';
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), config.timeoutMs);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const startTime = Date.now();
 
   try {
+    const requestBody = {
+      model: selectedModel,
+      input,
+      store: false,
+      temperature: typeof temperature === 'number' ? temperature : 0.2
+    };
+
+    if (maxTokens) {
+      requestBody.max_output_tokens = maxTokens;
+    }
+
+    const resolvedInstructions = systemPrompt || instructions;
+    if (resolvedInstructions) {
+      requestBody.instructions = resolvedInstructions;
+    }
+
+    if (metadata) {
+      requestBody.metadata = metadata;
+    }
+
     const response = await fetch(OPENAI_RESPONSES_URL, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
+        'Authorization': `Bearer ${apiKey.trim()}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'Collectibles-2026-AIGateway/2.0'
       },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: selectedModel,
-        input: safeInput,
-        ...(instructions ? { instructions } : {}),
-        max_output_tokens: outputLimit,
-        store: false,
-        ...(metadata ? { metadata } : {}),
-      }),
+      body: JSON.stringify(requestBody),
+      signal: controller.signal
     });
 
-    const requestId = response.headers.get("x-request-id");
-    const data = await response.json().catch(() => ({}));
+    const latencyMs = Date.now() - startTime;
+    const xRequestId = response.headers.get('x-request-id') || `req_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+
+    let responseData;
+    try {
+      responseData = await response.json();
+    } catch {
+      throw new OpenAIError(
+        'Failed to parse JSON response from OpenAI.',
+        'INVALID_OUTPUT',
+        response.status || 502,
+        { latencyMs, requestId: xRequestId }
+      );
+    }
 
     if (!response.ok) {
-      const error = new Error(
-        data?.error?.message || `OpenAI request failed with status ${response.status}`,
+      const status = response.status;
+      const errorObj = responseData?.error || {};
+      const errMsg = errorObj.message || `OpenAI request failed with status ${status}`;
+
+      let errorType = 'OPENAI_ERROR';
+      if (status === 429) {
+        errorType = 'RATE_LIMITED';
+      } else if (status === 401 || status === 403) {
+        errorType = 'NOT_CONFIGURED';
+      } else if (status === 404 || errorObj.code === 'model_not_found') {
+        errorType = 'MODEL_NOT_ALLOWED';
+      }
+
+      throw new OpenAIError(
+        errMsg,
+        errorType,
+        status,
+        {
+          code: errorObj.code || status,
+          type: errorObj.type,
+          requestId: xRequestId,
+          latencyMs
+        }
       );
-      error.code = data?.error?.code || data?.error?.type || "OPENAI_REQUEST_FAILED";
-      error.status = response.status;
-      error.requestId = requestId;
-      throw error;
     }
+
+    const outputText = extractOutputText(responseData);
+
+    // Usage tokens extraction
+    const usage = responseData.usage || {};
+    const inputTokens = usage.input_tokens || usage.prompt_tokens || 0;
+    const outputTokens = usage.output_tokens || usage.completion_tokens || 0;
+    const totalTokens = usage.total_tokens || (inputTokens + outputTokens);
+
+    // Calculate cost
+    const pricing = calculateOpenAICost(responseData.model || selectedModel, inputTokens, outputTokens);
 
     return {
-      text: extractOutputText(data),
-      model: data?.model || selectedModel,
-      usage: data?.usage || null,
-      requestId,
-      responseId: data?.id || null,
+      success: true,
+      text: outputText,
+      outputText,
+      model: responseData.model || selectedModel,
+      responseId: responseData.id || `resp_${Date.now()}`,
+      requestId: xRequestId,
+      latencyMs,
+      usage: {
+        inputTokens,
+        outputTokens,
+        totalTokens
+      },
+      pricing,
+      raw: responseData
     };
-  } catch (error) {
-    if (error?.name === "AbortError") {
-      const timeoutError = new Error("OpenAI request timed out");
-      timeoutError.code = "OPENAI_TIMEOUT";
-      timeoutError.status = 504;
-      throw timeoutError;
+
+  } catch (err) {
+    const latencyMs = Date.now() - startTime;
+    if (err.name === 'AbortError' || controller.signal.aborted) {
+      throw new OpenAIError(
+        `OpenAI request timed out after ${timeoutMs}ms.`,
+        'TIMEOUT',
+        504,
+        { latencyMs, timeoutMs }
+      );
     }
 
-    throw error;
+    if (err instanceof OpenAIError) {
+      throw err;
+    }
+
+    throw new OpenAIError(
+      err.message || 'Unknown network error calling OpenAI.',
+      'OPENAI_ERROR',
+      500,
+      { latencyMs }
+    );
   } finally {
-    clearTimeout(timer);
+    clearTimeout(timeoutId);
   }
+}
+
+/**
+ * Convenience alias matching createOpenAITextResponse
+ */
+export async function createOpenAITextResponse(options = {}) {
+  return callOpenAIResponses(options);
 }

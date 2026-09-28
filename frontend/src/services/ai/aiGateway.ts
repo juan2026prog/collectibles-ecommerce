@@ -11,9 +11,9 @@ import { openAIProvider } from './providers/openAIProvider';
 import type { AIProviderAdapter } from './providers/baseProvider';
 
 // ============================================================
-// COLLECTIBLES AI GATEWAY — PHASE 1
+// COLLECTIBLES AI GATEWAY — PHASE 2 HARDENED
 // Central Server/Client Layer for all AI invocations.
-// Providers: NullAIProvider fallback + server-side OpenAIProvider
+// Available providers: NullAIProvider ('NONE'), OpenAIProvider ('OPENAI')
 // ============================================================
 
 export class AIGateway {
@@ -36,6 +36,10 @@ export class AIGateway {
     this.providers.set(provider.providerKey, provider);
   }
 
+  public getProvider(providerKey: string): AIProviderAdapter | undefined {
+    return this.providers.get(providerKey);
+  }
+
   /**
    * Main AI Execution Gateway
    * Hierarchy:
@@ -43,12 +47,12 @@ export class AIGateway {
    * 2. Check Circuit Breaker (CLOSED / OPEN)
    * 3. Check Country Config (ai_country_config.ai_enabled)
    * 4. Check Engine Config (ai_engine_config.enabled)
-   * 5. Dispatch to configured Provider
+   * 5. Dispatch to Provider (NullAIProvider or OpenAIProvider)
    * 6. Safe Fallback execution if disabled / failed
    */
   public async execute<T = any>(options: AIExecuteOptions<T>): Promise<AIExecuteResponse<T>> {
     const startTime = performance.now();
-    const { engine, country, operation, payload, context, fallbackHandler } = options;
+    const { engine, country, operation, payload, context, prompt, systemPrompt, fallbackHandler } = options;
 
     try {
       // 1. Fetch Global System Config
@@ -126,7 +130,10 @@ export class AIGateway {
       }
 
       // 4. Resolve Provider
-      const targetProviderKey = engineConfig.provider || systemConfig.provider || 'NONE';
+      const targetProviderKey = (engineConfig.provider && engineConfig.provider !== 'NONE')
+        ? engineConfig.provider 
+        : (systemConfig.provider || 'NONE');
+
       const providerAdapter = this.providers.get(targetProviderKey) || this.providers.get('NONE');
 
       if (!providerAdapter || targetProviderKey === 'NONE') {
@@ -140,19 +147,51 @@ export class AIGateway {
         );
       }
 
-      // 5. Execute Provider Adapter
-      const result = await providerAdapter.execute<T>(engine, operation, payload, {
+      // Merge context with engine config
+      const executionContext = {
         ...context,
-        country,
-        model: engineConfig.model,
-        max_output_tokens: engineConfig.max_output_tokens,
-        timeout_ms: engineConfig.timeout_ms
-      });
+        country: country || 'UY',
+        model: engineConfig.model !== 'NOT CONFIGURED' ? engineConfig.model : undefined,
+        temperature: engineConfig.temperature,
+        maxTokens: engineConfig.max_output_tokens
+      };
+
+      // 5. Execute Provider Adapter
+      const result = await (providerAdapter as any).execute(
+        engine, 
+        operation, 
+        payload, 
+        executionContext, 
+        prompt, 
+        systemPrompt
+      );
+
       const elapsed = Math.round(performance.now() - startTime);
+
+      if (!result.success && fallbackHandler) {
+        try {
+          const fallbackData = await fallbackHandler();
+          return {
+            success: true,
+            status: 'FALLBACK',
+            provider: result.provider,
+            model: result.model,
+            data: fallbackData,
+            fallback_executed: true,
+            latency_ms: elapsed,
+            error: result.error
+          };
+        } catch (fbErr: any) {
+          return {
+            ...result,
+            latency_ms: elapsed
+          };
+        }
+      }
 
       return {
         ...result,
-        latency_ms: elapsed
+        latency_ms: result.latency_ms || elapsed
       };
 
     } catch (err: any) {
@@ -244,4 +283,3 @@ export const aiGateway = AIGateway.getInstance();
 export async function executeAI<T = any>(options: AIExecuteOptions<T>): Promise<AIExecuteResponse<T>> {
   return aiGateway.execute<T>(options);
 }
-

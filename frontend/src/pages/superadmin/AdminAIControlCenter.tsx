@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   Brain, ShieldAlert, Cpu, Globe, DollarSign, Activity, AlertTriangle, 
   Settings, Power, RefreshCw, CheckCircle2, XCircle, Info, Lock,
-  History, Search, ShieldCheck
+  History, Search, ShieldCheck, Play, Zap
 } from 'lucide-react';
 import { AIAdminService } from '../../services/ai/aiAdminService';
 import type { 
@@ -12,7 +12,8 @@ import type {
   AIUsageEvent, 
   AIErrorEvent, 
   AIAuditLog, 
-  AIDashboardSummary 
+  AIDashboardSummary,
+  AITestResult 
 } from '../../services/ai/types';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -34,6 +35,19 @@ export default function AdminAIControlCenter() {
   const [errorEvents, setErrorEvents] = useState<AIErrorEvent[]>([]);
   const [auditLogs, setAuditLogs] = useState<AIAuditLog[]>([]);
 
+  // Server diagnostic status
+  const [diagnostic, setDiagnostic] = useState<{ ok: boolean; configured: boolean; liveTestEnabled: boolean; supportedModels: string[] }>({
+    ok: false,
+    configured: false,
+    liveTestEnabled: false,
+    supportedModels: []
+  });
+
+  // Live Test State
+  const [testModel, setTestModel] = useState<string>('gpt-5.6-terra');
+  const [testRunning, setTestRunning] = useState<boolean>(false);
+  const [testResult, setTestResult] = useState<AITestResult | null>(null);
+
   // Confirmation Modal State for Global Switch
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [pendingGlobalState, setPendingGlobalState] = useState<boolean>(false);
@@ -45,14 +59,15 @@ export default function AdminAIControlCenter() {
   async function loadAllData() {
     setLoading(true);
     try {
-      const [sum, sys, engs, cntrs, usg, errs, aud] = await Promise.all([
+      const [sum, sys, engs, cntrs, usg, errs, aud, diag] = await Promise.all([
         AIAdminService.getDashboardSummary(),
         AIAdminService.getSystemConfig(),
         AIAdminService.getEngineConfigs(),
         AIAdminService.getCountryConfigs(),
         AIAdminService.getUsageEvents(50),
         AIAdminService.getErrorEvents(50),
-        AIAdminService.getAuditLogs(50)
+        AIAdminService.getAuditLogs(50),
+        AIAdminService.getDiagnosticStatus()
       ]);
 
       setSummary(sum);
@@ -62,6 +77,7 @@ export default function AdminAIControlCenter() {
       setUsageEvents(usg);
       setErrorEvents(errs);
       setAuditLogs(aud);
+      setDiagnostic(diag);
     } catch (err: any) {
       console.error('Error loading AI Control Center data:', err);
       setStatusMessage({ type: 'error', text: 'Error al cargar datos de control IA.' });
@@ -141,6 +157,41 @@ export default function AdminAIControlCenter() {
     }
   }
 
+  async function handleRunLiveTest() {
+    setTestRunning(true);
+    setTestResult(null);
+    try {
+      const res = await AIAdminService.runLiveTest(testModel);
+      setTestResult(res);
+      if (res.ok && res.certified) {
+        setStatusMessage({
+          type: 'success',
+          text: `Prueba E2E OpenAI certificada con éxito (${res.model}) — Latencia: ${res.latencyMs}ms.`
+        });
+      } else {
+        setStatusMessage({
+          type: 'error',
+          text: res.error || 'La prueba de OpenAI no devolvió el resultado esperado.'
+        });
+      }
+      // Reload usage telemetry and stats
+      const [sum, usg, errs] = await Promise.all([
+        AIAdminService.getDashboardSummary(),
+        AIAdminService.getUsageEvents(50),
+        AIAdminService.getErrorEvents(50)
+      ]);
+      setSummary(sum);
+      setUsageEvents(usg);
+      setErrorEvents(errs);
+    } catch (err: any) {
+      setStatusMessage({ type: 'error', text: 'Fallo al ejecutar la prueba en vivo de OpenAI.' });
+    } finally {
+      setTestRunning(false);
+    }
+  }
+
+  const isOpenAIConfigured = diagnostic.configured && systemConfig?.provider === 'OPENAI';
+
   return (
     <div className="min-h-screen bg-[#0d1117] text-gray-100 p-4 md:p-8 font-sans pb-24">
       {/* Header Banner */}
@@ -168,7 +219,7 @@ export default function AdminAIControlCenter() {
           <div className="flex items-center gap-3 z-10">
             <button
               onClick={loadAllData}
-              disabled={loading || actionLoading}
+              disabled={loading || actionLoading || testRunning}
               className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white rounded-xl text-sm font-medium border border-gray-700 transition flex items-center gap-2"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
@@ -201,17 +252,17 @@ export default function AdminAIControlCenter() {
         )}
 
         {/* Security Hardening Note */}
-        <div className="bg-blue-950/20 border border-blue-900/40 rounded-xl p-4 flex items-start gap-3 text-xs text-blue-300">
-          <ShieldCheck className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+        <div className="bg-emerald-950/20 border border-emerald-900/40 rounded-xl p-4 flex items-start gap-3 text-xs text-emerald-300">
+          <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
           <div>
-            <span className="font-semibold text-blue-200">Fase 1 — Preparación Segura de Infraestructura:</span> OpenAI API Key no está conectada. El proveedor activo es <code className="bg-blue-950 px-1 py-0.5 rounded text-blue-300 font-mono">NullAIProvider</code> devolviendo <code className="bg-blue-950 px-1 py-0.5 rounded text-blue-300 font-mono">AI_DISABLED</code> sin costo ni llamadas externas.
+            <span className="font-semibold text-emerald-200">OpenAI Gateway Server-Side Activo:</span> Toda llamada de IA se procesa a través de <code className="bg-emerald-950 px-1 py-0.5 rounded text-emerald-300 font-mono">/api/ai-execute</code> y OpenAI Responses API (<code className="bg-emerald-950 px-1 py-0.5 rounded text-emerald-300 font-mono">store: false</code>). Credenciales server-side protegidas con telemetría de tokens, costos reales y control de fallbacks.
           </div>
         </div>
 
         {/* Navigation Tabs */}
         <div className="flex items-center gap-2 border-b border-gray-800 overflow-x-auto pb-2 scrollbar-none">
           {[
-            { id: 'overview', label: 'Overview', icon: Activity },
+            { id: 'overview', label: 'Overview & Test', icon: Activity },
             { id: 'engines', label: 'AI Engines (7)', icon: Cpu },
             { id: 'countries', label: 'Countries Matrix', icon: Globe },
             { id: 'budgets', label: 'Budgets & Limits', icon: DollarSign },
@@ -239,18 +290,20 @@ export default function AdminAIControlCenter() {
           })}
         </div>
 
-        {/* TAB 1: OVERVIEW */}
+        {/* TAB 1: OVERVIEW & TEST */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* Status Metric Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-[#161b22] border border-gray-800 rounded-2xl p-5 space-y-2">
                 <span className="text-xs text-gray-400 font-medium">OpenAI Provider</span>
-                <div className="text-lg font-bold text-amber-400 flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-                  NOT CONFIGURED
+                <div className={`text-lg font-bold flex items-center gap-2 ${isOpenAIConfigured ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  <span className={`w-2.5 h-2.5 rounded-full ${isOpenAIConfigured ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                  {isOpenAIConfigured ? 'CONNECTED' : (systemConfig?.provider || 'NONE')}
                 </div>
-                <p className="text-[11px] text-gray-500">Provider: {systemConfig?.provider || 'NONE'}</p>
+                <p className="text-[11px] text-gray-500">
+                  Key: {diagnostic.configured ? 'Configurada Server-Side' : 'No detectada'}
+                </p>
               </div>
 
               <div className="bg-[#161b22] border border-gray-800 rounded-2xl p-5 space-y-2">
@@ -265,10 +318,10 @@ export default function AdminAIControlCenter() {
               <div className="bg-[#161b22] border border-gray-800 rounded-2xl p-5 space-y-2">
                 <span className="text-xs text-gray-400 font-medium">Cost Today / Month</span>
                 <div className="text-lg font-bold text-white font-mono">
-                  USD {summary?.cost_today_usd ? summary.cost_today_usd.toFixed(2) : '0.00'}
+                  USD {summary?.cost_today_usd ? summary.cost_today_usd.toFixed(4) : '0.0000'}
                 </div>
                 <p className="text-[11px] text-gray-500">
-                  Month: USD {summary?.cost_month_usd ? summary.cost_month_usd.toFixed(2) : '0.00'}
+                  Month: USD {summary?.cost_month_usd ? summary.cost_month_usd.toFixed(4) : '0.0000'}
                 </p>
               </div>
 
@@ -308,6 +361,108 @@ export default function AdminAIControlCenter() {
                   {systemConfig?.global_enabled ? 'DESACTIVAR AI GLOBAL' : 'ACTIVAR AI GLOBAL'}
                 </button>
               </div>
+            </div>
+
+            {/* Administrative Live Certification Test Box */}
+            <div className="bg-[#161b22] border border-purple-900/40 rounded-2xl p-6 space-y-4 shadow-xl">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-purple-400" /> Prueba de Certificación E2E en Vivo
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Ejecuta 1 única llamada controlada a OpenAI Responses API (<code className="text-purple-300">OPENAI_COLLECTIBLES_OK</code>) para validar el circuito completo, tokens, cálculo de costo, latencia y telemetría en tiempo real.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <select
+                    value={testModel}
+                    onChange={(e) => setTestModel(e.target.value)}
+                    disabled={testRunning}
+                    className="bg-[#0d1117] border border-gray-700 text-white text-xs rounded-xl px-3 py-2.5 font-mono focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="gpt-5.6-terra">gpt-5.6-terra</option>
+                    <option value="gpt-5.6-sol">gpt-5.6-sol</option>
+                    <option value="gpt-4o">gpt-4o</option>
+                    <option value="gpt-4o-mini">gpt-4o-mini</option>
+                  </select>
+
+                  <button
+                    onClick={handleRunLiveTest}
+                    disabled={testRunning || !diagnostic.configured}
+                    className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold rounded-xl text-xs shadow-lg shadow-purple-600/20 transition flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {testRunning ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Verificando...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="w-4 h-4" />
+                        Ejecutar Test E2E
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {testResult && (
+                <div className={`p-4 rounded-xl border space-y-3 ${
+                  testResult.ok && testResult.certified
+                    ? 'bg-emerald-950/30 border-emerald-800 text-emerald-200'
+                    : 'bg-rose-950/30 border-rose-800 text-rose-200'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-2">
+                      {testResult.ok && testResult.certified ? (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                          Certificación E2E Exitosa (OK)
+                        </>
+                      ) : (
+                        <>
+                          <XCircle className="w-4 h-4 text-rose-400" />
+                          Fallo de Certificación
+                        </>
+                      )}
+                    </span>
+                    <span className="text-[11px] font-mono text-gray-400">
+                      Request ID: {testResult.requestId}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs font-mono bg-[#0d1117]/80 p-3 rounded-lg border border-gray-800">
+                    <div>
+                      <span className="text-gray-500 text-[10px] block font-sans">Respuesta OpenAI:</span>
+                      <span className="text-white font-bold">{testResult.response || testResult.error}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 text-[10px] block font-sans">Modelo:</span>
+                      <span className="text-purple-300">{testResult.model || testModel}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 text-[10px] block font-sans">Tokens (In / Out / Tot):</span>
+                      <span className="text-white">
+                        {testResult.usage?.inputTokens || 0} / {testResult.usage?.outputTokens || 0} / {testResult.usage?.totalTokens || 0}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 text-[10px] block font-sans">Costo Estimado:</span>
+                      <span className="text-emerald-400 font-bold">
+                        {testResult.pricing?.estimated_cost_usd !== null && testResult.pricing?.estimated_cost_usd !== undefined
+                          ? `$${testResult.pricing.estimated_cost_usd.toFixed(6)}`
+                          : 'UNKNOWN_PRICING'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500 text-[10px] block font-sans">Latencia:</span>
+                      <span className="text-amber-300 font-bold">{testResult.latencyMs} ms</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Hierarchy Overview Card */}
@@ -352,7 +507,7 @@ export default function AdminAIControlCenter() {
             <div className="bg-[#161b22] border border-gray-800 rounded-2xl p-6">
               <h3 className="text-lg font-bold text-white mb-2">Motores de Inteligencia Artificial (7)</h3>
               <p className="text-xs text-gray-400 mb-6">
-                Configuración independiente para cada motor operativo. Todos los motores inician con estado desactivado (<code className="text-rose-400">OFF</code>) y proveedor <code className="text-amber-400">NONE</code>.
+                Configuración independiente para cada motor operativo. Todos los motores operan bajo el AI Gateway y pueden ser activados selectivamente.
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -377,8 +532,8 @@ export default function AdminAIControlCenter() {
                           <span className="font-mono text-gray-200">{engine.engine_key}</span>
                         </div>
                         <div>
-                          <span className="text-gray-500 block">Proveedor:</span>
-                          <span className="font-mono text-gray-200">{engine.provider}</span>
+                          <span className="text-gray-500 block">Proveedor / Modelo:</span>
+                          <span className="font-mono text-gray-200">{engine.provider} ({engine.model})</span>
                         </div>
                         <div>
                           <span className="text-gray-500 block">Max Tokens In/Out:</span>
@@ -568,7 +723,9 @@ export default function AdminAIControlCenter() {
                   </div>
                   <div className="flex justify-between text-xs text-gray-400">
                     <span>Gasto Actual Hoy:</span>
-                    <span className="font-mono text-emerald-400">USD 0.00</span>
+                    <span className="font-mono text-emerald-400">
+                      USD {summary?.cost_today_usd ? summary.cost_today_usd.toFixed(4) : '0.0000'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -594,15 +751,17 @@ export default function AdminAIControlCenter() {
                 <h4 className="font-bold text-white text-sm">Monitoreo de Costos OpenAI</h4>
                 <div className="space-y-2">
                   <div className="flex justify-between text-xs text-gray-400">
-                    <span>Costo Registrado:</span>
-                    <span className="font-mono text-white">USD 0.00</span>
+                    <span>Costo Registrado Hoy:</span>
+                    <span className="font-mono text-white">
+                      USD {summary?.cost_today_usd ? summary.cost_today_usd.toFixed(4) : '0.0000'}
+                    </span>
                   </div>
                   <div className="flex justify-between text-xs text-gray-400">
-                    <span>Llamadas API:</span>
-                    <span className="font-mono text-white">0 llamadas</span>
+                    <span>Llamadas API Hoy:</span>
+                    <span className="font-mono text-white">{summary?.requests_today || 0} llamadas</span>
                   </div>
                   <p className="text-[11px] text-emerald-400/80 mt-2">
-                    Fase 1: No hay conexiones activas a OpenAI ni facturación.
+                    Cálculo exacto mediante api/lib/openaiPricing.js.
                   </p>
                 </div>
               </div>
@@ -618,7 +777,7 @@ export default function AdminAIControlCenter() {
               <div className="text-center py-12 text-gray-500 bg-[#0d1117] rounded-xl border border-gray-800/80">
                 <CheckCircle2 className="w-10 h-10 mx-auto mb-2 text-gray-600" />
                 <p className="text-sm font-medium">No AI usage recorded yet.</p>
-                <p className="text-xs text-gray-600 mt-1">El sistema está preparado esperando activación de fase 2.</p>
+                <p className="text-xs text-gray-600 mt-1">Ejecuta un Test E2E desde Overview para verificar telemetría en vivo.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -628,10 +787,12 @@ export default function AdminAIControlCenter() {
                       <th className="p-2">Fecha</th>
                       <th className="p-2">Motor</th>
                       <th className="p-2">País</th>
-                      <th className="p-2">Tokens</th>
+                      <th className="p-2">Modelo</th>
+                      <th className="p-2">Tokens (In / Out / Tot)</th>
                       <th className="p-2">Costo (USD)</th>
                       <th className="p-2">Latencia</th>
                       <th className="p-2">Estado</th>
+                      <th className="p-2">Request ID</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -640,10 +801,20 @@ export default function AdminAIControlCenter() {
                         <td className="p-2">{new Date(evt.created_at).toLocaleString()}</td>
                         <td className="p-2 font-mono">{evt.engine}</td>
                         <td className="p-2">{evt.country_code}</td>
-                        <td className="p-2">{evt.total_tokens}</td>
-                        <td className="p-2 font-mono">${evt.estimated_cost_usd.toFixed(4)}</td>
+                        <td className="p-2 font-mono text-purple-300">{evt.model}</td>
+                        <td className="p-2 font-mono">
+                          {evt.input_tokens} / {evt.output_tokens} / {evt.total_tokens}
+                        </td>
+                        <td className="p-2 font-mono text-emerald-400">${evt.estimated_cost_usd.toFixed(4)}</td>
                         <td className="p-2">{evt.latency_ms}ms</td>
-                        <td className="p-2">{evt.status}</td>
+                        <td className="p-2">
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-400 font-bold text-[10px]">
+                            {evt.status}
+                          </span>
+                        </td>
+                        <td className="p-2 font-mono text-[10px] text-gray-500 truncate max-w-[120px]">
+                          {evt.request_id}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -671,7 +842,9 @@ export default function AdminAIControlCenter() {
                       <th className="p-2">Fecha</th>
                       <th className="p-2">Motor</th>
                       <th className="p-2">Tipo</th>
+                      <th className="p-2">Código</th>
                       <th className="p-2">Mensaje Seguro</th>
+                      <th className="p-2">Request ID</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -679,8 +852,10 @@ export default function AdminAIControlCenter() {
                       <tr key={err.id} className="border-b border-gray-800">
                         <td className="p-2">{new Date(err.created_at).toLocaleString()}</td>
                         <td className="p-2 font-mono">{err.engine}</td>
-                        <td className="p-2">{err.error_type}</td>
+                        <td className="p-2 text-amber-400 font-bold">{err.error_type}</td>
+                        <td className="p-2 font-mono">{err.error_code || '—'}</td>
                         <td className="p-2 text-rose-300">{err.safe_message}</td>
+                        <td className="p-2 font-mono text-[10px] text-gray-500">{err.request_id}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -708,9 +883,17 @@ export default function AdminAIControlCenter() {
                     {systemConfig?.provider || 'NONE'}
                   </span>
                 </div>
-                <div className="p-3 bg-amber-950/20 border border-amber-900/40 rounded-lg text-xs text-amber-300 flex items-center gap-2">
-                  <Info className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>OpenAI credentials are configured securely on the server. OpenAI is not configured.</span>
+                <div className={`p-3 rounded-lg text-xs flex items-center gap-2 ${
+                  isOpenAIConfigured 
+                    ? 'bg-emerald-950/20 border border-emerald-900/40 text-emerald-300'
+                    : 'bg-amber-950/20 border border-amber-900/40 text-amber-300'
+                }`}>
+                  <Info className="w-4 h-4 shrink-0" />
+                  <span>
+                    {isOpenAIConfigured
+                      ? 'OpenAI Provider activo y autenticado server-side con OpenAI Responses API.'
+                      : 'OpenAI no está activo o sus credenciales están pendientes en el servidor.'}
+                  </span>
                 </div>
                 <p className="text-xs text-gray-400">
                   Por regla estricta de seguridad, ninguna API Key se almacena en el cliente ni en tablas públicas. Todo secreto vive exclusivamente en variables de entorno del servidor.
@@ -720,7 +903,7 @@ export default function AdminAIControlCenter() {
               <div className="bg-[#0d1117] border border-gray-800 rounded-xl p-5 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-bold text-white">Timeout por Defecto</span>
-                  <span className="font-mono text-xs text-white">{systemConfig?.default_timeout_ms || 5000} ms</span>
+                  <span className="font-mono text-xs text-white">{systemConfig?.default_timeout_ms || 15000} ms</span>
                 </div>
                 <p className="text-xs text-gray-400">
                   Tiempo máximo de espera para llamadas de IA antes de disparar el fallback local.
@@ -786,11 +969,6 @@ export default function AdminAIControlCenter() {
               <strong className={pendingGlobalState ? 'text-emerald-400' : 'text-rose-400'}>
                 {pendingGlobalState ? 'ACTIVADO (ON)' : 'DESACTIVADO (OFF)'}
               </strong>.
-              {pendingGlobalState && (
-                <span className="block mt-2 text-xs text-gray-400">
-                  Nota: En esta Fase 1 el proveedor activo es <code className="text-primary-300">NullAIProvider</code>, por lo que no se realizarán llamadas externas a OpenAI.
-                </span>
-              )}
             </p>
 
             <div className="flex items-center justify-end gap-3 pt-2">
@@ -815,4 +993,3 @@ export default function AdminAIControlCenter() {
     </div>
   );
 }
-
