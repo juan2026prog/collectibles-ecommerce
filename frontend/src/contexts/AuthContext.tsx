@@ -101,11 +101,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('*, user_roles(role)')
         .eq('id', userId)
         .single();
       if (error) throw error;
-      const loadedProfile = data as Profile | null;
+      const rawProfile = data as any;
+      const privilegedRole = rawProfile?.user_roles?.find((r: any) => r.role === 'super_admin' || r.role === 'god_admin')?.role;
+      const loadedProfile = rawProfile ? { ...rawProfile, role: privilegedRole || rawProfile.role } as Profile : null;
       setProfile(loadedProfile);
       setCachedProfile(loadedProfile);
     } catch (err) {
