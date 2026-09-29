@@ -1,8 +1,8 @@
 // ==============================================================================
 // COLLECTIBLES 2026 — SERVER-SIDE FX SYNC & OVERRIDE HANDLER
 // Path: /api/currency-sync.js
-// GET: Publicly read verified exchange rates & status
-// POST: (Protected / Cron / SuperAdmin) Sync live rates or manual override
+// GET: Publicly read verified exchange rates OR run scheduled Vercel Cron sync
+// POST: (Protected / SuperAdmin) Sync live rates or apply manual override
 // ==============================================================================
 
 import { createClient } from '@supabase/supabase-js';
@@ -14,6 +14,13 @@ let supabase = null;
 if (supabaseUrl && supabaseServiceKey) {
   supabase = createClient(supabaseUrl, supabaseServiceKey);
 }
+
+export const FX_PROVIDER_CONFIG = {
+  provider_id: 'EXCHANGERATE_API',
+  provider_name: 'ExchangeRate-API',
+  provider_endpoint: 'https://open.er-api.com/v6/latest/USD',
+  provider_url: 'https://www.exchangerate-api.com'
+};
 
 // Country & Currency Specifications
 export const COUNTRY_CURRENCIES = [
@@ -76,20 +83,140 @@ export const FALLBACK_STATIC_RATES = {
   USD: 1.0
 };
 
+async function executeLiveSync(triggerSource = 'SCHEDULED_CRON') {
+  const fxRes = await fetch(FX_PROVIDER_CONFIG.provider_endpoint);
+  if (!fxRes.ok) {
+    throw new Error(`External FX API error: HTTP ${fxRes.status}`);
+  }
+
+  const fxData = await fxRes.json();
+  if (!fxData || !fxData.rates) {
+    throw new Error('Invalid FX payload from ExchangeRate-API provider');
+  }
+
+  const nowIso = new Date().toISOString();
+  const providerTimestamp = fxData.time_last_update_utc || fxData.time_last_update_unix || null;
+  const syncedRates = [];
+
+  for (const item of COUNTRY_CURRENCIES) {
+    const rawRate = item.quote_currency === 'USD' ? 1.0 : fxData.rates[item.quote_currency];
+    if (typeof rawRate !== 'number' || rawRate <= 0) {
+      continue;
+    }
+
+    const formattedRate = Number(rawRate.toFixed(6));
+
+    if (supabase) {
+      // Check if row has active manual override
+      const { data: existing } = await supabase
+        .from('currency_exchange_rates')
+        .select('*')
+        .eq('base_currency', 'USD')
+        .eq('quote_currency', item.quote_currency)
+        .maybeSingle();
+
+      if (existing && existing.is_manual_override) {
+        syncedRates.push({
+          quote_currency: item.quote_currency,
+          rate: existing.rate,
+          status: 'MANUAL_OVERRIDE_PRESERVED',
+          source: item.source_name
+        });
+        continue;
+      }
+
+      const { data: upserted, error: upErr } = await supabase
+        .from('currency_exchange_rates')
+        .upsert({
+          country_code: item.country_code,
+          country_name: item.country_name,
+          base_currency: 'USD',
+          quote_currency: item.quote_currency,
+          rate: formattedRate,
+          provider: FX_PROVIDER_CONFIG.provider_name,
+          source_name: item.source_name,
+          source_url: item.source_url,
+          status: 'VERIFIED',
+          is_manual_override: false,
+          is_active: item.is_active,
+          is_auto_sync: true,
+          fetched_at: nowIso,
+          effective_at: nowIso,
+          expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
+          updated_at: nowIso
+        }, { onConflict: 'base_currency,quote_currency' })
+        .select()
+        .single();
+
+      if (!upErr && upserted) {
+        await supabase.from('currency_exchange_rate_history').insert({
+          rate_id: upserted.id,
+          base_currency: 'USD',
+          quote_currency: item.quote_currency,
+          rate: formattedRate,
+          provider: FX_PROVIDER_CONFIG.provider_name,
+          source_name: item.source_name,
+          source_url: item.source_url,
+          status: 'VERIFIED',
+          is_manual_override: false,
+          reason: `Automated live FX synchronization (${triggerSource})`,
+          effective_at: nowIso
+        });
+      }
+    }
+
+    syncedRates.push({
+      country: item.country_name,
+      currency: item.quote_currency,
+      rate: formattedRate,
+      source: item.source_name,
+      provider_timestamp: providerTimestamp,
+      status: 'VERIFIED'
+    });
+  }
+
+  return {
+    provider: FX_PROVIDER_CONFIG.provider_name,
+    provider_endpoint: FX_PROVIDER_CONFIG.provider_endpoint,
+    provider_timestamp: providerTimestamp,
+    synced_at: nowIso,
+    synced_count: syncedRates.length,
+    results: syncedRates
+  };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, apikey');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, apikey, x-vercel-cron');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
+  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  const isCronExecution = !!req.headers['x-vercel-cron'] || url.searchParams.get('cron') === 'true';
+  const isForceSyncRequested = url.searchParams.get('sync') === 'true';
+
   // ----------------------------------------------------
-  // GET: Fetch Active Rates for Frontend Display & SuperAdmin
+  // GET: Read Active Rates OR Trigger Vercel Cron / On-demand Sync
   // ----------------------------------------------------
   if (req.method === 'GET') {
+    if (isCronExecution || isForceSyncRequested) {
+      try {
+        const syncResult = await executeLiveSync(isCronExecution ? 'VERCEL_CRON' : 'GET_SYNC_REQUEST');
+        return res.status(200).json({
+          ok: true,
+          message: isCronExecution ? 'Vercel Cron scheduled FX sync executed successfully' : 'Live FX sync executed successfully',
+          ...syncResult
+        });
+      } catch (err) {
+        console.error('[CurrencySync] GET sync failed:', err);
+        return res.status(500).json({ ok: false, error: err.message, timestamp: new Date().toISOString() });
+      }
+    }
+
     try {
       if (supabase) {
         const { data, error } = await supabase
@@ -98,7 +225,6 @@ export default async function handler(req, res) {
           .order('country_code', { ascending: false });
 
         if (!error && data && data.length > 0) {
-          // Check freshness (1 hour standard, 24 hours max)
           const now = Date.now();
           const enriched = data.map(item => {
             const fetchedTime = new Date(item.fetched_at).getTime();
@@ -121,6 +247,8 @@ export default async function handler(req, res) {
           return res.status(200).json({
             ok: true,
             canonical_currency: 'USD',
+            provider: FX_PROVIDER_CONFIG.provider_name,
+            provider_endpoint: FX_PROVIDER_CONFIG.provider_endpoint,
             rates: enriched,
             source: 'SUPABASE_EXCHANGE_RATES',
             timestamp: new Date().toISOString()
@@ -135,7 +263,7 @@ export default async function handler(req, res) {
         base_currency: 'USD',
         quote_currency: c.quote_currency,
         rate: FALLBACK_STATIC_RATES[c.quote_currency] || 1.0,
-        provider: 'OPEN_EXCHANGE_RATES_API',
+        provider: FX_PROVIDER_CONFIG.provider_name,
         source_name: c.source_name,
         source_url: c.source_url,
         status: 'VERIFIED',
@@ -150,6 +278,8 @@ export default async function handler(req, res) {
       return res.status(200).json({
         ok: true,
         canonical_currency: 'USD',
+        provider: FX_PROVIDER_CONFIG.provider_name,
+        provider_endpoint: FX_PROVIDER_CONFIG.provider_endpoint,
         rates: fallbackList,
         source: 'INSTITUTIONAL_FALLBACK',
         timestamp: new Date().toISOString()
@@ -180,7 +310,6 @@ export default async function handler(req, res) {
 
       try {
         if (supabase) {
-          // Update exchange rate row
           const { data: updatedRow, error: updateErr } = await supabase
             .from('currency_exchange_rates')
             .update({
@@ -199,7 +328,6 @@ export default async function handler(req, res) {
 
           if (updateErr) throw updateErr;
 
-          // Record history
           await supabase.from('currency_exchange_rate_history').insert({
             rate_id: updatedRow.id,
             base_currency: 'USD',
@@ -238,8 +366,7 @@ export default async function handler(req, res) {
       }
 
       try {
-        // Fetch latest live rate from Open Exchange Rates API
-        const fxRes = await fetch('https://open.er-api.com/v6/latest/USD');
+        const fxRes = await fetch(FX_PROVIDER_CONFIG.provider_endpoint);
         const fxData = await fxRes.json();
         const liveRate = fxData?.rates?.[quote_currency] || FALLBACK_STATIC_RATES[quote_currency];
         const nowIso = new Date().toISOString();
@@ -254,7 +381,7 @@ export default async function handler(req, res) {
               is_manual_override: false,
               override_reason: null,
               override_admin_email: null,
-              provider: 'OPEN_EXCHANGE_RATES_API',
+              provider: FX_PROVIDER_CONFIG.provider_name,
               fetched_at: nowIso,
               effective_at: nowIso,
               expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
@@ -267,13 +394,12 @@ export default async function handler(req, res) {
 
           if (updateErr) throw updateErr;
 
-          // Record history
           await supabase.from('currency_exchange_rate_history').insert({
             rate_id: updatedRow.id,
             base_currency: 'USD',
             quote_currency,
             rate: Number(liveRate),
-            provider: 'OPEN_EXCHANGE_RATES_API',
+            provider: FX_PROVIDER_CONFIG.provider_name,
             source_name: updatedRow.source_name,
             source_url: updatedRow.source_url,
             status: 'VERIFIED',
@@ -301,105 +427,11 @@ export default async function handler(req, res) {
 
     // 3. Sync All Live Rates (Scheduled Sync / Force Sync)
     try {
-      const fxRes = await fetch('https://open.er-api.com/v6/latest/USD');
-      if (!fxRes.ok) {
-        throw new Error(`External FX API error: HTTP ${fxRes.status}`);
-      }
-
-      const fxData = await fxRes.json();
-      if (!fxData || !fxData.rates) {
-        throw new Error('Invalid FX payload from external API provider');
-      }
-
-      const nowIso = new Date().toISOString();
-      const providerTimestamp = fxData.time_last_update_utc || fxData.time_last_update_unix || null;
-      const syncedRates = [];
-
-      for (const item of COUNTRY_CURRENCIES) {
-        const rawRate = item.quote_currency === 'USD' ? 1.0 : fxData.rates[item.quote_currency];
-        if (typeof rawRate !== 'number' || rawRate <= 0) {
-          continue;
-        }
-
-        const formattedRate = Number(rawRate.toFixed(6));
-
-        if (supabase) {
-          // Check if row has active manual override
-          const { data: existing } = await supabase
-            .from('currency_exchange_rates')
-            .select('*')
-            .eq('base_currency', 'USD')
-            .eq('quote_currency', item.quote_currency)
-            .maybeSingle();
-
-          if (existing && existing.is_manual_override) {
-            syncedRates.push({
-              quote_currency: item.quote_currency,
-              rate: existing.rate,
-              status: 'MANUAL_OVERRIDE_PRESERVED',
-              source: item.source_name
-            });
-            continue;
-          }
-
-          const { data: upserted, error: upErr } = await supabase
-            .from('currency_exchange_rates')
-            .upsert({
-              country_code: item.country_code,
-              country_name: item.country_name,
-              base_currency: 'USD',
-              quote_currency: item.quote_currency,
-              rate: formattedRate,
-              provider: 'OPEN_EXCHANGE_RATES_API',
-              source_name: item.source_name,
-              source_url: item.source_url,
-              status: 'VERIFIED',
-              is_manual_override: false,
-              is_active: item.is_active,
-              is_auto_sync: true,
-              fetched_at: nowIso,
-              effective_at: nowIso,
-              expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
-              updated_at: nowIso
-            }, { onConflict: 'base_currency,quote_currency' })
-            .select()
-            .single();
-
-          if (!upErr && upserted) {
-            await supabase.from('currency_exchange_rate_history').insert({
-              rate_id: upserted.id,
-              base_currency: 'USD',
-              quote_currency: item.quote_currency,
-              rate: formattedRate,
-              provider: 'OPEN_EXCHANGE_RATES_API',
-              source_name: item.source_name,
-              source_url: item.source_url,
-              status: 'VERIFIED',
-              is_manual_override: false,
-              reason: 'Scheduled automated synchronization',
-              effective_at: nowIso
-            });
-          }
-        }
-
-        syncedRates.push({
-          country: item.country_name,
-          currency: item.quote_currency,
-          rate: formattedRate,
-          source: item.source_name,
-          provider_timestamp: providerTimestamp,
-          status: 'VERIFIED'
-        });
-      }
-
+      const syncResult = await executeLiveSync('MANUAL_SYNC_BUTTON');
       return res.status(200).json({
         ok: true,
         message: 'Live FX sync executed successfully across all supported currencies',
-        provider: 'OPEN_EXCHANGE_RATES_API',
-        provider_timestamp: providerTimestamp,
-        synced_at: nowIso,
-        synced_count: syncedRates.length,
-        results: syncedRates
+        ...syncResult
       });
     } catch (err) {
       console.error('[CurrencySync] Sync failed:', err);
@@ -413,3 +445,4 @@ export default async function handler(req, res) {
 
   return res.status(405).json({ error: 'Method Not Allowed' });
 }
+

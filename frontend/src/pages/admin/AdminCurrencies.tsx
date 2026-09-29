@@ -122,7 +122,7 @@ export default function AdminCurrencies() {
         throw new Error(json.error || 'Fallo en la sincronización server-side');
       }
 
-      toast.success('Sincronización FX completada exitosamente desde Open Exchange Rates');
+      toast.success('Sincronización FX completada exitosamente desde ExchangeRate-API');
       await loadExchangeRates();
       if (selectedCurrency) {
         await loadCurrencyHistory(selectedCurrency);

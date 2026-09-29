@@ -25,38 +25,38 @@ describe('FUNCTIONAL VALIDATION SUITE — FX, FINANCIAL MODEL & SOURCING', () =>
 
       const expectedAudit = {
         UYU: {
-          dataProvider: 'Open Exchange Rates API',
+          dataProvider: 'ExchangeRate-API',
           institutionalRef: 'Banco Central del Uruguay (BCU)',
           baseCurrency: 'USD',
-          endpoint: 'https://openexchangerates.org/api/latest.json (via /api/currency-sync)',
+          endpoint: 'https://open.er-api.com/v6/latest/USD (via /api/currency-sync)',
           isActive: true
         },
         ARS: {
-          dataProvider: 'Open Exchange Rates API',
+          dataProvider: 'ExchangeRate-API',
           institutionalRef: 'Banco Central de la República Argentina (BCRA)',
           baseCurrency: 'USD',
-          endpoint: 'https://openexchangerates.org/api/latest.json (via /api/currency-sync)',
+          endpoint: 'https://open.er-api.com/v6/latest/USD (via /api/currency-sync)',
           isActive: false
         },
         CLP: {
-          dataProvider: 'Open Exchange Rates API',
+          dataProvider: 'ExchangeRate-API',
           institutionalRef: 'Banco Central de Chile',
           baseCurrency: 'USD',
-          endpoint: 'https://openexchangerates.org/api/latest.json (via /api/currency-sync)',
+          endpoint: 'https://open.er-api.com/v6/latest/USD (via /api/currency-sync)',
           isActive: false
         },
         PEN: {
-          dataProvider: 'Open Exchange Rates API',
+          dataProvider: 'ExchangeRate-API',
           institutionalRef: 'Banco Central de Reserva del Perú (BCRP)',
           baseCurrency: 'USD',
-          endpoint: 'https://openexchangerates.org/api/latest.json (via /api/currency-sync)',
+          endpoint: 'https://open.er-api.com/v6/latest/USD (via /api/currency-sync)',
           isActive: false
         },
         MXN: {
-          dataProvider: 'Open Exchange Rates API',
+          dataProvider: 'ExchangeRate-API',
           institutionalRef: 'Banco de México (Banxico)',
           baseCurrency: 'USD',
-          endpoint: 'https://openexchangerates.org/api/latest.json (via /api/currency-sync)',
+          endpoint: 'https://open.er-api.com/v6/latest/USD (via /api/currency-sync)',
           isActive: false
         },
         USD: {
