@@ -5,6 +5,13 @@ const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLI
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+async function withTimeout(promise, ms = 300) {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('DB Timeout')), ms))
+  ]);
+}
+
 const BASE_URL = 'https://collectibles.uy';
 
 // Curated & static editorial academy guides list (32 articles, all 200 OK)
@@ -50,22 +57,29 @@ async function fetchCategories() {
   let hasMore = true;
 
   while (hasMore) {
-    const { data: batch, error } = await supabase
-      .from('categories')
-      .select('slug, updated_at, created_at')
-      .eq('is_active', true)
-      .range(page * pageSize, (page + 1) * pageSize - 1);
+    try {
+      const { data: batch, error } = await withTimeout(
+        supabase
+          .from('categories')
+          .select('slug, updated_at, created_at')
+          .eq('is_active', true)
+          .range(page * pageSize, (page + 1) * pageSize - 1),
+        300
+      );
 
-    if (error) {
-      console.error('Error fetching sitemap categories batch:', error);
-      break;
-    }
+      if (error) {
+        console.error('Error fetching sitemap categories batch:', error);
+        break;
+      }
 
-    if (batch && batch.length > 0) {
-      allCategories = allCategories.concat(batch);
-      if (batch.length < pageSize) hasMore = false;
-      else page++;
-    } else {
+      if (batch && batch.length > 0) {
+        allCategories = allCategories.concat(batch);
+        if (batch.length < pageSize) hasMore = false;
+        else page++;
+      } else {
+        hasMore = false;
+      }
+    } catch {
       hasMore = false;
     }
   }
@@ -79,23 +93,30 @@ async function fetchBrands() {
   let hasMore = true;
 
   while (hasMore) {
-    const { data: batch, error } = await supabase
-      .from('brands')
-      .select('slug, created_at')
-      .eq('is_active', true)
-      .eq('status', 'approved')
-      .range(page * pageSize, (page + 1) * pageSize - 1);
+    try {
+      const { data: batch, error } = await withTimeout(
+        supabase
+          .from('brands')
+          .select('slug, created_at')
+          .eq('is_active', true)
+          .eq('status', 'approved')
+          .range(page * pageSize, (page + 1) * pageSize - 1),
+        300
+      );
 
-    if (error) {
-      console.error('Error fetching sitemap brands batch:', error);
-      break;
-    }
+      if (error) {
+        console.error('Error fetching sitemap brands batch:', error);
+        break;
+      }
 
-    if (batch && batch.length > 0) {
-      allBrands = allBrands.concat(batch);
-      if (batch.length < pageSize) hasMore = false;
-      else page++;
-    } else {
+      if (batch && batch.length > 0) {
+        allBrands = allBrands.concat(batch);
+        if (batch.length < pageSize) hasMore = false;
+        else page++;
+      } else {
+        hasMore = false;
+      }
+    } catch {
       hasMore = false;
     }
   }
@@ -103,29 +124,43 @@ async function fetchBrands() {
 }
 
 async function fetchLicenses() {
-  const { data, error } = await supabase
-    .from('licenses')
-    .select('slug')
-    .eq('is_active', true);
+  try {
+    const { data, error } = await withTimeout(
+      supabase
+        .from('licenses')
+        .select('slug')
+        .eq('is_active', true),
+      300
+    );
 
-  if (error) {
-    console.error('Error fetching sitemap licenses:', error);
+    if (error) {
+      console.error('Error fetching sitemap licenses:', error);
+      return [];
+    }
+    return data || [];
+  } catch {
     return [];
   }
-  return data || [];
 }
 
 async function fetchThemes() {
-  const { data, error } = await supabase
-    .from('themes')
-    .select('slug')
-    .eq('is_active', true);
+  try {
+    const { data, error } = await withTimeout(
+      supabase
+        .from('themes')
+        .select('slug')
+        .eq('is_active', true),
+      300
+    );
 
-  if (error) {
-    console.error('Error fetching sitemap themes:', error);
+    if (error) {
+      console.error('Error fetching sitemap themes:', error);
+      return [];
+    }
+    return data || [];
+  } catch {
     return [];
   }
-  return data || [];
 }
 
 async function fetchProducts() {
@@ -135,23 +170,30 @@ async function fetchProducts() {
   let hasMore = true;
 
   while (hasMore) {
-    const { data: batch, error } = await supabase
-      .from('products')
-      .select('slug, updated_at, created_at')
-      .eq('is_active', true)
-      .eq('status', 'published')
-      .range(page * pageSize, (page + 1) * pageSize - 1);
+    try {
+      const { data: batch, error } = await withTimeout(
+        supabase
+          .from('products')
+          .select('slug, updated_at, created_at')
+          .eq('is_active', true)
+          .eq('status', 'published')
+          .range(page * pageSize, (page + 1) * pageSize - 1),
+        300
+      );
 
-    if (error) {
-      console.error('Error fetching sitemap products batch:', error);
-      break;
-    }
+      if (error) {
+        console.error('Error fetching sitemap products batch:', error);
+        break;
+      }
 
-    if (batch && batch.length > 0) {
-      allProducts = allProducts.concat(batch);
-      if (batch.length < pageSize) hasMore = false;
-      else page++;
-    } else {
+      if (batch && batch.length > 0) {
+        allProducts = allProducts.concat(batch);
+        if (batch.length < pageSize) hasMore = false;
+        else page++;
+      } else {
+        hasMore = false;
+      }
+    } catch {
       hasMore = false;
     }
   }

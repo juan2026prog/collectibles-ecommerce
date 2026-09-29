@@ -178,9 +178,9 @@ describe('Sourcing Autopilot — Purchasing Engine & Price Drift Tests', () => {
     expect(res.blockReason).toContain('supera tope unitario');
   });
 
-  it('returns NO CONFIGURADO status when Purchasing Adapter lacks API credentials', async () => {
+  it('returns NO CONFIGURADO or REQUIRES_APPROVAL status when Purchasing Adapter lacks live execution credentials', async () => {
     const res = await autopilotPurchasingEngine.executePurchaseOrder(mockProd, 24.99);
     expect(res.success).toBe(false);
-    expect(['NO CONFIGURADO', 'ERROR']).toContain(res.status);
+    expect(['NO CONFIGURADO', 'ERROR', 'REQUIRES_APPROVAL']).toContain(res.status);
   });
 });

@@ -4,7 +4,7 @@ import { buildGapDedupeKey, processSignalIntoCatalogGap, getQualifiedCatalogGaps
 import { computeDemandScore, calculateTimeDecayMultiplier, calculateTrendVelocity } from '../services/sourcing/demandScoringEngine';
 import { evaluateOpportunityScore } from '../services/sourcing/opportunityScoringEngine';
 import { adaptiveDiscoveryService } from '../services/sourcing/adaptiveDiscoveryService';
-import { adaptiveSourcingService } from '../services/sourcing/adaptiveSourcingService';
+import { adaptiveSourcingService, registerOpportunityInMemory } from '../services/sourcing/adaptiveSourcingService';
 import { sourcingService } from '../services/sourcing/sourcingService';
 import { ProductMatchingEngine } from '../services/sourcing/ProductMatchingEngine';
 import type { DemandSignal, CatalogGap } from '../types/sourcingAdaptiveTypes';
@@ -63,7 +63,56 @@ describe('SOURCING INTELLIGENCE — FASE 4 — ADAPTIVE SOURCING SUITE', () => {
     expect(gap1.demand_score).toBeGreaterThanOrEqual(50);
     expect(gap1.status).toBe('QUALIFIED');
 
-    // Step 5: Discovery Pipeline search
+    // Step 5: Discovery Pipeline search (with verified discovered offer)
+    vi.spyOn(adaptiveDiscoveryService, 'discoverSourcesForGap').mockResolvedValueOnce({
+      opportunity: {
+        id: 'opp_sf_ken_123',
+        gap_id: gap1.id,
+        canonical_sku: 'COL-GAP-JADA-KEN-1234',
+        title: 'Jada Toys Street Fighter Ken 1:12 Action Figure',
+        brand: 'Jada Toys',
+        franchise: 'Street Fighter',
+        character: 'Ken',
+        line: 'Ultra Street Fighter II',
+        scale: '1:12',
+        image_url: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f',
+        demand_score: gap1.demand_score,
+        opportunity_score: 78,
+        deterministic_score: 78,
+        confidence_score: 90,
+        best_source: 'amazon',
+        best_source_url: 'https://amazon.com/dp/B0C7J8K9LM',
+        best_source_seller: 'Amazon.com',
+        best_source_price_usd: 24.99,
+        source_candidates: [{
+          id: 'off-ken-1',
+          source: 'amazon',
+          source_product_id: 'B0C7J8K9LM',
+          price: 24.99,
+          domestic_shipping: 0,
+          seller: 'Amazon.com',
+          seller_rating: 98,
+          stock: 10,
+          condition: 'new'
+        } as any],
+        landed_cost_usd: 27.36,
+        suggested_sell_price_usd: 39.90,
+        expected_margin_percent: 31.42,
+        profitability_status: 'VIABLE',
+        match_confidence: 0.95,
+        availability: 'IN_STOCK',
+        trend_velocity: 10,
+        price_volatility_score: 5,
+        reason_codes: [{ code: 'HIGH_DEMAND', label: 'Alta Demanda', weight: 25, type: 'positive' }],
+        status: 'READY_FOR_REVIEW',
+        last_evaluated_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      status: 'READY_FOR_REVIEW',
+      offers: []
+    });
+
     const discoveryResult = await adaptiveDiscoveryService.discoverSourcesForGap(gap1);
 
     expect(discoveryResult.opportunity).not.toBeNull();
@@ -79,6 +128,8 @@ describe('SOURCING INTELLIGENCE — FASE 4 — ADAPTIVE SOURCING SUITE', () => {
     expect(opp.status).toBe('READY_FOR_REVIEW');
 
     // Step 6: Admin Approval (Preparar Publicación)
+    registerOpportunityInMemory(opp);
+
     vi.spyOn(sourcingService, 'importProductsToCatalog').mockResolvedValue({
       success: true,
       importedCount: 1,

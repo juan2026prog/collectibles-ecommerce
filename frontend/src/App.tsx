@@ -100,6 +100,7 @@ const InternationalMarketTemplate = lazy(() => import('./pages/international/Int
 const AdminRefunds = lazy(() => import('./pages/admin/AdminRefunds'));
 const AdminZinc = lazy(() => import('./pages/admin/AdminZinc'));
 const AdminQuestions = lazy(() => import('./pages/admin/AdminQuestions'));
+const AdminCurrencies = lazy(() => import('./pages/admin/AdminCurrencies'));
 const AdminAIControlCenter = lazy(() => import('./pages/superadmin/AdminAIControlCenter'));
 const AdminAISystemTest = lazy(() => import('./pages/superadmin/AdminAISystemTest'));
 
@@ -380,6 +381,7 @@ function App() {
                   <Route path="vendor-kyc" element={<Navigate to="/admin/marketplace?tab=kyc" replace />} />
                   <Route path="buybox" element={<Navigate to="/admin/marketplace?tab=analytics" replace />} />
                   <Route path="sourcing" element={<ProtectedRoute requireSuperAdmin><AdminSourcingImport /></ProtectedRoute>} />
+                  <Route path="currencies" element={<ProtectedRoute requireSuperAdmin><AdminCurrencies /></ProtectedRoute>} />
                   <Route path="internacional/sourcing" element={<ProtectedRoute requireSuperAdmin><Navigate to="/admin/sourcing" replace /></ProtectedRoute>} />
                   <Route path="internacional/amazon" element={<ProtectedRoute requireSuperAdmin><AdminInternationalAmazon /></ProtectedRoute>} />
                   <Route path="internacional/productos" element={<ProtectedRoute requireSuperAdmin><AdminInternationalProducts /></ProtectedRoute>} />
@@ -393,6 +395,16 @@ function App() {
                 </Route>
 
                 {/* SuperAdmin Specific Portal */}
+                <Route path="/superadmin/currencies" element={
+                  <ProtectedRoute requireSuperAdmin>
+                    <Suspense fallback={<PageSkeleton />}>
+                      <AdminLayout />
+                    </Suspense>
+                  </ProtectedRoute>
+                }>
+                  <Route index element={<AdminCurrencies />} />
+                </Route>
+
                 <Route path="/superadmin/ai" element={
                   <ProtectedRoute requireSuperAdmin>
                     <Suspense fallback={<PageSkeleton />}>

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * CANONICAL COMMERCIAL SOURCING PRICING ENGINE — COLLECTIBLES 2026
  * 
  * Reglas de Oro:
@@ -7,18 +7,22 @@
  * 3. Free shipping solo si existe evidencia explícita; de lo contrario amount_usd = null (UNKNOWN).
  * 4. Si faltan componentes obligatorios, la estimación retorna 'ESTIMATE_INCOMPLETE'.
  * 5. Margen y ganancias se calculan exclusivamente en USD; UYU es solo display derivado.
+ * 6. FRANQUICIA UY: producto < USD 200 NO implica automáticamente import_cost = 0.
+ *    La franquicia depende del comprador y régimen aplicable. Se modelan escenarios.
  */
 
 import { convertUsdToDisplayUyu, getStoredExchangeRate } from '../currencyService';
 
-export type CostItemStatus = 'VERIFIED' | 'VERIFIED_ZERO' | 'ESTIMATED' | 'UNKNOWN';
+export type CostItemStatus = 'VERIFIED' | 'VERIFIED_ZERO' | 'ESTIMATED' | 'UNKNOWN' | 'SCENARIO_ESTIMATE' | 'NOT_APPLICABLE';
 export type EstimateCompleteness = 'COMPLETE' | 'ESTIMATE_INCOMPLETE';
+export type ImportCostScenario = 'WITH_AVAILABLE_FRANCHISE' | 'WITHOUT_FRANCHISE' | 'OTHER_APPLICABLE_REGIME' | 'COMMERCIAL_NOT_APPLICABLE';
 
 export interface CommercialCostComponent {
   amount_usd: number | null;
   status: CostItemStatus;
   source: string;
   reason?: string;
+  scenario?: ImportCostScenario;
 }
 
 export interface SourcingPricingInput {
@@ -33,6 +37,7 @@ export interface SourcingPricingInput {
   target_margin_percent?: number;
   min_profit_usd?: number;
   fixed_markup_usd?: number;
+  customer_has_franchise?: boolean | null; // null means unknown customer identity
 }
 
 export interface SourcingPricingOutput {
@@ -43,6 +48,10 @@ export interface SourcingPricingOutput {
   financial_fee: CommercialCostComponent;
   tax: CommercialCostComponent;
   import_cost: CommercialCostComponent;
+  import_scenarios: {
+    franchise_available: { amount_usd: number; status: CostItemStatus; description: string };
+    franchise_depleted: { amount_usd: number; status: CostItemStatus; description: string };
+  };
   landed_cost_usd: number | null;
   suggested_price_usd: number | null;
   profit_usd: number | null;
@@ -53,6 +62,7 @@ export interface SourcingPricingOutput {
     suggested_price_uyu: number | null;
     exchange_rate: number;
     fx_status: string;
+    fx_source: string;
   };
 }
 
@@ -64,7 +74,7 @@ export function calculateSourcingPricing(input: SourcingPricingInput): SourcingP
     missing.push('source_price_usd');
   }
 
-  // 1. Shipping Component
+  // 1. Shipping Component (Fail-Closed: Unknown != 0)
   let shippingComponent: CommercialCostComponent;
   if (input.has_verified_free_shipping) {
     shippingComponent = {
@@ -99,7 +109,7 @@ export function calculateSourcingPricing(input: SourcingPricingInput): SourcingP
     reason: 'Tarifa fija de intermediación automatizada'
   };
 
-  // 3. Financial Gateway & Tax Fee (Prex / Gateway 2.5% + $0.50 + IVA 22%)
+  // 3. Financial Gateway & Tax Fee (Prex / Gateway 2.5% + .50 + IVA 22%)
   const prexPct = 0.025;
   const prexFixed = 0.50;
   const prexTaxRate = 0.22;
@@ -129,32 +139,69 @@ export function calculateSourcingPricing(input: SourcingPricingInput): SourcingP
     };
   }
 
-  // 5. Customs & Import Taxes (Uruguay Franquicia < $200 USD: 0% Tax Verificado)
+  // 5. Customs & Import Taxes: Separation of Commercial Product Cost vs Customer Import Cost
+  // Product <  USD does NOT automatically mean import_cost = 0 for buyer.
+  // We model both scenarios explicitly.
+  const franchiseScenarioCost = sourcePrice <= 200 ? 0 : Number((sourcePrice * 0.60).toFixed(2));
+  const generalScenarioCost = Number((sourcePrice * 0.60).toFixed(2));
+
+  const importScenarios = {
+    franchise_available: {
+      amount_usd: franchiseScenarioCost,
+      status: (sourcePrice <= 200 ? 'SCENARIO_ESTIMATE' : 'SCENARIO_ESTIMATE') as CostItemStatus,
+      description: sourcePrice <= 200 
+        ? 'Escenario con franquicia aduanera disponible para el comprador (0% arancel)' 
+        : 'Supera tope de franquicia USD 200 -> Régimen simplificado 60%'
+    },
+    franchise_depleted: {
+      amount_usd: generalScenarioCost,
+      status: 'SCENARIO_ESTIMATE' as CostItemStatus,
+      description: 'Escenario sin franquicia aduanera (cupos agotados o régimen general 60%)'
+    }
+  };
+
   let importComponent: CommercialCostComponent;
   if (input.import_tax_status === 'UNKNOWN') {
     importComponent = {
       amount_usd: null,
       status: 'UNKNOWN',
       source: 'CUSTOMS_REGIME',
-      reason: 'Régimen aduanero no determinado'
+      reason: 'Régimen aduanero no determinado',
+      scenario: 'OTHER_APPLICABLE_REGIME'
     };
     missing.push('import_cost');
   } else if (input.import_tax_usd != null) {
     importComponent = {
       amount_usd: Number(input.import_tax_usd),
       status: input.import_tax_usd === 0 ? 'VERIFIED_ZERO' : 'VERIFIED',
-      source: 'CUSTOMS_SCHEDULE_DIRECT'
+      source: 'CUSTOMS_SCHEDULE_DIRECT',
+      scenario: input.import_tax_usd === 0 ? 'WITH_AVAILABLE_FRANCHISE' : 'WITHOUT_FRANCHISE'
+    };
+  } else if (input.customer_has_franchise === true) {
+    importComponent = {
+      amount_usd: franchiseScenarioCost,
+      status: franchiseScenarioCost === 0 ? 'VERIFIED_ZERO' : 'VERIFIED',
+      source: 'CUSTOMER_FRANCHISE_VERIFIED',
+      reason: 'Comprador con cupo de franquicia verificado disponible',
+      scenario: 'WITH_AVAILABLE_FRANCHISE'
+    };
+  } else if (input.customer_has_franchise === false) {
+    importComponent = {
+      amount_usd: generalScenarioCost,
+      status: 'VERIFIED',
+      source: 'CUSTOMER_REGIME_GENERAL',
+      reason: 'Comprador sin franquicia disponible; aplica régimen simplificado 60%',
+      scenario: 'WITHOUT_FRANCHISE'
     };
   } else {
-    // Standard Uruguay Collectibles Import Under $200 USD (Franquicia)
-    const isUnderFranquicia = sourcePrice <= 200;
+    // Sourcing Baseline: Commercial base calculates with benchmark commercial landed baseline
+    // while explicitly annotating scenario without assuming customer quota.
     importComponent = {
-      amount_usd: isUnderFranquicia ? 0 : Number((sourcePrice * 0.60).toFixed(2)),
-      status: 'VERIFIED_ZERO',
-      source: 'URUGUAY_FRANQUICIA_EXEMPTION_LAW',
-      reason: isUnderFranquicia 
-        ? 'Importación amparada bajo régimen de franquicia (< $200 USD)' 
-        : 'Régimen general simplificado'
+      amount_usd: franchiseScenarioCost,
+      status: 'SCENARIO_ESTIMATE',
+      source: 'URUGUAY_FRANQUICIA_SCENARIO_BENCHMARK',
+      reason: 'Estimación comercial base sujeta a verificación de cupo del comprador en checkout',
+      scenario: sourcePrice <= 200 ? 'WITH_AVAILABLE_FRANCHISE' : 'WITHOUT_FRANCHISE'
     };
   }
 
@@ -170,6 +217,7 @@ export function calculateSourcingPricing(input: SourcingPricingInput): SourcingP
       financial_fee: financialFeeComponent,
       tax: salesTaxComponent,
       import_cost: importComponent,
+      import_scenarios: importScenarios,
       landed_cost_usd: null,
       suggested_price_usd: null,
       profit_usd: null,
@@ -210,7 +258,7 @@ export function calculateSourcingPricing(input: SourcingPricingInput): SourcingP
   const marginPct = suggestedPriceUsd > 0 ? Number(((profitUsd / suggestedPriceUsd) * 100).toFixed(2)) : 0;
 
   // Display UYU derived using canonical FX service
-  const fxDetail = getStoredExchangeRate();
+  const fxDetail = getStoredExchangeRate('UYU');
   const displayUyuPrice = convertUsdToDisplayUyu(suggestedPriceUsd, fxDetail.rate);
 
   return {
@@ -221,6 +269,7 @@ export function calculateSourcingPricing(input: SourcingPricingInput): SourcingP
     financial_fee: financialFeeComponent,
     tax: salesTaxComponent,
     import_cost: importComponent,
+    import_scenarios: importScenarios,
     landed_cost_usd: landedCostUsd,
     suggested_price_usd: suggestedPriceUsd,
     profit_usd: profitUsd,
@@ -230,7 +279,8 @@ export function calculateSourcingPricing(input: SourcingPricingInput): SourcingP
     display_uyu: {
       suggested_price_uyu: displayUyuPrice,
       exchange_rate: fxDetail.rate,
-      fx_status: fxDetail.status
+      fx_status: fxDetail.status,
+      fx_source: fxDetail.source_name
     }
   };
 }

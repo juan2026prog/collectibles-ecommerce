@@ -18,6 +18,13 @@ import { evaluateOpportunityScore } from './opportunityScoringEngine';
 import { registerOpportunityInMemory } from './adaptiveSourcingService';
 import { productDiscoveryIntelligence } from '../intelligence/collectiblesIntelligence';
 
+async function withTimeout<T>(promise: PromiseLike<T> | Promise<T>, ms = 300): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('DB Timeout')), ms))
+  ]);
+}
+
 export class AdaptiveDiscoveryService {
   /**
    * Ejecuta la búsqueda de discovery para un Catalog Gap específico.
@@ -42,11 +49,13 @@ export class AdaptiveDiscoveryService {
 
     try {
       // Buscar en DB si ya se extrajo una oferta coincidente recientemente
-      const { data: dbOffers } = await supabase
+      const queryPromise = supabase
         .from('sourcing_source_offers')
         .select('*')
         .or(`seller.ilike.%${gap.character || '---'}%,url.ilike.%${gap.character || '---'}%`)
         .limit(5);
+
+      const { data: dbOffers } = await withTimeout(queryPromise, 300);
 
       if (dbOffers && dbOffers.length > 0) {
         dbOffers.forEach((o: any) => {

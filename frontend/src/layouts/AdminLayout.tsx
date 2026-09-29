@@ -142,6 +142,13 @@ export default function AdminLayout() {
             <KeyRound className="mr-2.5 h-[18px] w-[18px] shrink-0" /> Zinc API 2.0
           </Link>
           <Link
+            to="/superadmin/currencies"
+            onClick={() => closeOnClick && setMobileDrawerOpen(false)}
+            className="flex items-center px-3.5 py-2 text-sm text-gray-400 hover:text-white hover:bg-dark-800 rounded-xl transition-colors min-h-[44px]"
+          >
+            <DollarSign className="mr-2.5 h-[18px] w-[18px] shrink-0 text-emerald-400" /> Monedas & FX
+          </Link>
+          <Link
             to="/superadmin/ai"
             onClick={() => closeOnClick && setMobileDrawerOpen(false)}
             className="flex items-center px-3.5 py-2 text-sm text-[#f00856] hover:text-white hover:bg-dark-800 rounded-xl transition-colors min-h-[44px] font-semibold"

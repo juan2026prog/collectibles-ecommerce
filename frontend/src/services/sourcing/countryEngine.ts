@@ -31,6 +31,13 @@ const DEFAULT_RULES: Record<CountryCode, CountryImportRules> = {
   PY: { country_code: 'PY', max_franchise_value_usd: 100, max_franchise_weight_lbs: 11.0, max_franchise_shipments_per_year: 12, standard_import_tax_percent: 10, vat_tax_percent: 10, customs_handling_fee_usd: 8, min_target_margin_percent: 20, prohibited_categories: ['armas'], restricted_categories: ['baterias_litio'], allowed_categories: ['figures', 'statues'] }
 };
 
+async function withTimeout<T>(promise: PromiseLike<T> | Promise<T>, ms = 300): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('DB Timeout')), ms))
+  ]);
+}
+
 export class CountryEngine {
   private static instance: CountryEngine;
   private countryCache: Map<CountryCode, CountryConfig> = new Map();
@@ -59,9 +66,10 @@ export class CountryEngine {
     if (this.initialized) return;
 
     try {
-      const { data: dbCountries } = await supabase
-        .from('sourcing_countries')
-        .select('*');
+      const { data: dbCountries } = await withTimeout(
+        supabase.from('sourcing_countries').select('*'),
+        300
+      );
 
       if (dbCountries && dbCountries.length > 0) {
         dbCountries.forEach((c: any) => {
@@ -79,9 +87,10 @@ export class CountryEngine {
         });
       }
 
-      const { data: dbRules } = await supabase
-        .from('sourcing_country_rules')
-        .select('*');
+      const { data: dbRules } = await withTimeout(
+        supabase.from('sourcing_country_rules').select('*'),
+        300
+      );
 
       if (dbRules && dbRules.length > 0) {
         dbRules.forEach((r: any) => {

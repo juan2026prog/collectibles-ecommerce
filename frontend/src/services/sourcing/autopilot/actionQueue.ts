@@ -5,6 +5,13 @@ import type {
   QueueStatus 
 } from '../../../types/sourcingAutopilot';
 
+async function withTimeout<T>(promise: PromiseLike<T> | Promise<T>, ms = 300): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('DB Timeout')), ms))
+  ]);
+}
+
 /**
  * AutopilotActionQueueManager
  * Durable backend queue for sourcing actions with idempotency,
@@ -34,45 +41,50 @@ export class AutopilotActionQueueManager {
     const safeProductId = params.product_id && isUuid.test(params.product_id) ? params.product_id : null;
     const safePublicationId = params.publication_id && isUuid.test(params.publication_id) ? params.publication_id : null;
 
-    const { data, error } = await supabase
-      .from('sourcing_autopilot_queue')
-      .insert({
-        action_type: params.action_type,
-        status: params.status || 'CREATED',
-        canonical_sku: params.canonical_sku,
-        product_id: safeProductId,
-        publication_id: safePublicationId,
-        payload: {
-          ...params.payload,
-          ...(params.product_id && !safeProductId ? { raw_product_id: params.product_id } : {}),
-          ...(params.publication_id && !safePublicationId ? { raw_publication_id: params.publication_id } : {})
-        },
-        idempotency_key: params.idempotency_key,
-        attempts: 0,
-        max_attempts: 3
-      })
-      .select()
-      .single();
+    try {
+      const insertPromise = supabase
+        .from('sourcing_autopilot_queue')
+        .insert({
+          action_type: params.action_type,
+          status: params.status || 'CREATED',
+          canonical_sku: params.canonical_sku,
+          product_id: safeProductId,
+          publication_id: safePublicationId,
+          payload: {
+            ...params.payload,
+            ...(params.product_id && !safeProductId ? { raw_product_id: params.product_id } : {}),
+            ...(params.publication_id && !safePublicationId ? { raw_publication_id: params.publication_id } : {})
+          },
+          idempotency_key: params.idempotency_key,
+          attempts: 0,
+          max_attempts: 3
+        })
+        .select()
+        .single();
 
-    if (error || !data) {
-      console.warn('[AutopilotActionQueue] Server error or RLS during enqueue, creating safe local queue item:', error?.message);
-      return {
-        id: `queue_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-        action_type: params.action_type,
-        status: params.status || 'CREATED',
-        canonical_sku: params.canonical_sku,
-        product_id: params.product_id,
-        publication_id: params.publication_id,
-        payload: params.payload,
-        idempotency_key: params.idempotency_key,
-        attempts: 0,
-        max_attempts: 3,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      } as AutopilotQueueItem;
+      const { data, error } = await withTimeout(insertPromise, 300);
+
+      if (!error && data) {
+        return data as AutopilotQueueItem;
+      }
+    } catch {
+      // Fallback to local queue item
     }
 
-    return data as AutopilotQueueItem;
+    return {
+      id: `queue_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      action_type: params.action_type,
+      status: params.status || 'CREATED',
+      canonical_sku: params.canonical_sku,
+      product_id: params.product_id,
+      publication_id: params.publication_id,
+      payload: params.payload,
+      idempotency_key: params.idempotency_key,
+      attempts: 0,
+      max_attempts: 3,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    } as AutopilotQueueItem;
   }
 
   /**
@@ -142,18 +154,24 @@ export class AutopilotActionQueueManager {
   }
 
   private async getQueueItemByIdempotencyKey(key: string): Promise<AutopilotQueueItem | null> {
-    const { data, error } = await supabase
-      .from('sourcing_autopilot_queue')
-      .select('*')
-      .eq('idempotency_key', key)
-      .maybeSingle();
+    try {
+      const queryPromise = supabase
+        .from('sourcing_autopilot_queue')
+        .select('*')
+        .eq('idempotency_key', key)
+        .maybeSingle();
 
-    if (error) {
-      console.warn(`[AutopilotActionQueue] Error checking idempotency key ${key}:`, error);
+      const { data, error } = await withTimeout(queryPromise, 300);
+
+      if (error) {
+        console.warn(`[AutopilotActionQueue] Error checking idempotency key ${key}:`, error);
+        return null;
+      }
+
+      return (data as AutopilotQueueItem) || null;
+    } catch {
       return null;
     }
-
-    return (data as AutopilotQueueItem) || null;
   }
 }
 

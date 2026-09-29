@@ -30,12 +30,13 @@ export function useCollectorPermissions(): CollectorPermissions {
   const { settings, loaded: settingsLoaded } = useSiteSettings();
 
   const isPluginsAdminOnly = settings['collector_plugins_admin_only'] === 'true';
-  const canAccessCollectorPlugins = !isPluginsAdminOnly || isSuperAdmin;
+  const isAdminUser = Boolean(isSuperAdmin || profile?.is_admin || profile?.is_super_admin);
+  const canAccessCollectorPlugins = !isPluginsAdminOnly || isAdminUser;
   const isLoadingPermissions = (authLoading && !!user) || !settingsLoaded || (featuresLoading && !localStorage.getItem('collectibles_feature_toggles_cache'));
 
   const isModuleVisible = (moduleId: CollectorModuleId): boolean => {
-    // Only Super Admin can test/preview modules while they are admin-only.
-    if (isSuperAdmin) {
+    // Only Administrators / Super Admins can test/preview modules while they are admin-only.
+    if (isAdminUser) {
       return true;
     }
 

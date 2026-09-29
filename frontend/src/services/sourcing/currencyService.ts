@@ -13,6 +13,13 @@ const DEFAULT_RATES: Record<CurrencyCode, number> = {
   PYG: 7600.0,
 };
 
+async function withTimeout<T>(promise: PromiseLike<T> | Promise<T>, ms = 300): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('DB Timeout')), ms))
+  ]);
+}
+
 export class CurrencyService {
   private static instance: CurrencyService;
   private ratesCache: Map<CurrencyCode, ExchangeRate> = new Map();
@@ -40,9 +47,10 @@ export class CurrencyService {
 
   public async syncRatesFromDb(): Promise<void> {
     try {
-      const { data } = await supabase
-        .from('sourcing_exchange_rates')
-        .select('*');
+      const { data } = await withTimeout(
+        supabase.from('sourcing_exchange_rates').select('*'),
+        300
+      );
 
       if (data && data.length > 0) {
         data.forEach((row: any) => {

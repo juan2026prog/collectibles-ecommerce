@@ -1,6 +1,13 @@
 import type { CanonicalProduct } from '../../types/sourcing';
 import { supabase } from '../../lib/supabase';
 
+async function withTimeout<T>(promise: PromiseLike<T> | Promise<T>, ms = 300): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('DB Timeout')), ms))
+  ]);
+}
+
 export interface RadarProductQueryParams {
   franchise?: string;
   series?: string;
@@ -55,6 +62,13 @@ export class RadarIntegrationService {
       return filtered.slice(0, limit);
     }
 
+async function withTimeout<T>(promise: PromiseLike<T> | Promise<T>, ms = 300): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('DB Timeout')), ms))
+  ]);
+}
+
     // 2. Si no hay datos locales, intentar consulta a Supabase
     try {
       let query = supabase.from('canonical_products').select('*');
@@ -65,7 +79,7 @@ export class RadarIntegrationService {
       if (category) query = query.ilike('category', `%${category}%`);
       if (releaseYear) query = query.eq('release_year', releaseYear);
 
-      const { data, error } = await query.limit(limit);
+      const { data, error } = await withTimeout(query.limit(limit), 300);
       if (!error && data) {
         return data as CanonicalProduct[];
       }
