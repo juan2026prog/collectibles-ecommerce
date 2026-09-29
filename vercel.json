@@ -45,7 +45,7 @@
       ]
     },
     {
-      "source": "/((?!api/|admin|vendor|artist|affiliate|star2fan|checkout|account|assets/|images/).*)",
+      "source": "/((?!api|admin|vendor|artist|affiliate|star2fan|checkout|account|assets|images).*)",
       "headers": [
         {
           "key": "Cache-Control",
