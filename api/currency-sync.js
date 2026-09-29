@@ -7,13 +7,10 @@
 
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_f_7xF86CT0DFwT7YupNh_Q_TzmemHNf';
 
-let supabase = null;
-if (supabaseUrl && supabaseServiceKey) {
-  supabase = createClient(supabaseUrl, supabaseServiceKey);
-}
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const FX_PROVIDER_CONFIG = {
   provider_id: 'EXCHANGERATE_API',
@@ -195,9 +192,8 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  const isCronExecution = !!req.headers['x-vercel-cron'] || url.searchParams.get('cron') === 'true';
-  const isForceSyncRequested = url.searchParams.get('sync') === 'true';
+  const isCronExecution = !!req.headers['x-vercel-cron'] || req.query?.cron === 'true';
+  const isForceSyncRequested = req.query?.sync === 'true';
 
   // ----------------------------------------------------
   // GET: Read Active Rates OR Trigger Vercel Cron / On-demand Sync
