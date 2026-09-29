@@ -173,26 +173,6 @@
       "destination": "/api/catalog-image?path=:path*"
     },
     {
-      "source": "/api/gsc-monitor",
-      "destination": "/api/gsc-monitor.js"
-    },
-    {
-      "source": "/api/gsc-monitor/:path*",
-      "destination": "/api/gsc-monitor.js"
-    },
-    {
-      "source": "/api/currency-sync",
-      "destination": "/api/currency-sync.js"
-    },
-    {
-      "source": "/api/currency-sync/:path*",
-      "destination": "/api/currency-sync.js"
-    },
-    {
-      "source": "/api/ai-execute",
-      "destination": "/api/ai-execute.js"
-    },
-    {
       "source": "/sample-page:slug*",
       "destination": "/api/seo-prerender?type=wp_garbage"
     },
@@ -453,7 +433,7 @@
       "destination": "/api/seo-prerender?type=home"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]
