@@ -140,20 +140,37 @@ export function generateCanonicalSku(
 export function inferProductMetadata(title: string, brandHint?: string) {
   const lower = title.toLowerCase();
   
-  let brand = brandHint || 'McFarlane Toys';
-  if (lower.includes('mcfarlane')) brand = 'McFarlane Toys';
-  else if (lower.includes('neca')) brand = 'NECA';
-  else if (lower.includes('hasbro')) brand = 'Hasbro';
-  else if (lower.includes('bandai')) brand = 'Bandai Spirits';
-  else if (lower.includes('funko')) brand = 'Funko';
+  let brand = brandHint?.trim() || '';
+  if (!brand || brand.toLowerCase() === 'unknown') {
+    if (lower.includes('mcfarlane')) brand = 'McFarlane Toys';
+    else if (lower.includes('neca')) brand = 'NECA';
+    else if (lower.includes('hasbro') || lower.includes('marvel legends') || lower.includes('black series') || lower.includes('g.i. joe')) brand = 'Hasbro';
+    else if (lower.includes('bandai') || lower.includes('tamashii') || lower.includes('shfiguarts') || lower.includes('s.h.figuarts')) brand = 'Bandai Spirits';
+    else if (lower.includes('funko')) brand = 'Funko';
+    else if (lower.includes('mattel') || lower.includes('masters of the universe') || lower.includes('motu')) brand = 'Mattel';
+    else if (lower.includes('jada toys') || lower.includes('jada')) brand = 'Jada Toys';
+    else if (lower.includes('storm collectibles')) brand = 'Storm Collectibles';
+    else if (lower.includes('mezco')) brand = 'Mezco Toyz';
+    else if (lower.includes('hot toys')) brand = 'Hot Toys';
+    else if (lower.includes('good smile')) brand = 'Good Smile Company';
+    else if (lower.includes('super7')) brand = 'Super7';
+    else if (lower.includes('kotobukiya')) brand = 'Kotobukiya';
+    else if (lower.includes('diamond select')) brand = 'Diamond Select';
+    else brand = 'UNKNOWN';
+  }
 
-  let license = 'DC Comics';
-  if (lower.includes('marvel') || lower.includes('spider-man') || lower.includes('avengers')) license = 'Marvel';
-  else if (lower.includes('star wars') || lower.includes('black series')) license = 'Star Wars';
-  else if (lower.includes('pokemon')) license = 'Pokémon';
-  else if (lower.includes('dragon ball')) license = 'Dragon Ball';
+  let license = 'UNKNOWN';
+  if (lower.includes('marvel') || lower.includes('spider-man') || lower.includes('avengers') || lower.includes('x-men') || lower.includes('wolverine') || lower.includes('carnage') || lower.includes('deadpool')) license = 'Marvel';
+  else if (lower.includes('star wars') || lower.includes('black series') || lower.includes('mandalorian') || lower.includes('darth vader') || lower.includes('ahsoka') || lower.includes('clone trooper')) license = 'Star Wars';
+  else if (lower.includes('dc multiverse') || lower.includes('dc comics') || lower.includes('batman') || lower.includes('superman') || lower.includes('joker')) license = 'DC Comics';
+  else if (lower.includes('pokemon') || lower.includes('pokémon')) license = 'Pokémon';
+  else if (lower.includes('dragon ball') || lower.includes('goku') || lower.includes('vegeta')) license = 'Dragon Ball';
+  else if (lower.includes('transformers') || lower.includes('optimus') || lower.includes('megatron')) license = 'Transformers';
+  else if (lower.includes('tmnt') || lower.includes('ninja turtles')) license = 'TMNT';
+  else if (lower.includes('street fighter')) license = 'Street Fighter';
   else if (lower.includes('spawn')) license = 'Image Comics';
   else if (lower.includes('ghostbusters')) license = 'Ghostbusters';
+  else if (lower.includes('horror') || lower.includes('chucky') || lower.includes('pennywise') || lower.includes('jigsaw') || lower.includes('dracula') || lower.includes('terrifier') || lower.includes('friday the 13th') || lower.includes('nightmare on elm')) license = 'Horror Cinema';
 
   let character = '';
   if (lower.includes('batman')) character = 'Batman';
@@ -161,14 +178,16 @@ export function inferProductMetadata(title: string, brandHint?: string) {
   else if (lower.includes('spawn')) character = 'Spawn';
   else if (lower.includes('joker')) character = 'The Joker';
   else if (lower.includes('spider-man')) character = 'Spider-Man';
+  else if (lower.includes('wolverine')) character = 'Wolverine';
   else if (lower.includes('darth vader')) character = 'Darth Vader';
+  else if (lower.includes('carnage')) character = 'Carnage';
   else character = title.split(' ')[0] || 'Character';
 
-  let scale = '7"';
+  let scale = 'N/A';
   if (lower.includes('1/6') || lower.includes('1:6')) scale = '1/6';
-  else if (lower.includes('6 inch') || lower.includes('6"')) scale = '6"';
+  else if (lower.includes('6 inch') || lower.includes('6"') || lower.includes('6-inch')) scale = '6"';
   else if (lower.includes('1/12') || lower.includes('1:12')) scale = '1/12';
-  else if (lower.includes('7 inch') || lower.includes('7"')) scale = '7"';
+  else if (lower.includes('7 inch') || lower.includes('7"') || lower.includes('7-inch')) scale = '7"';
 
   return { brand, license, character, scale };
 }
@@ -305,7 +324,7 @@ export function normalizeAndDeduplicateOffers(
       category_name: 'Figuras de Acción',
       upc: primary.raw.upc || primary.inputMeta?.upc,
       asin: primary.raw.source === 'amazon' ? primary.raw.source_product_id : undefined,
-      image_url: primary.raw.image_url || 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop',
+      image_url: primary.raw.image_url || '',
       gallery_images: primary.raw.gallery_images || [],
       offers,
       selected_source_id: selectedOffer.id,

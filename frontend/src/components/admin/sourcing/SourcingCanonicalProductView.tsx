@@ -137,11 +137,18 @@ export const SourcingCanonicalProductView: React.FC<Props> = ({
       {/* Header Canónico */}
       <div className="flex flex-col md:flex-row gap-6 mb-6">
         <div className="w-full md:w-48 h-48 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-2 overflow-hidden shrink-0">
-          <img
-            src={product.image_url || 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=400'}
-            alt={product.title}
-            className="max-h-full max-w-full object-contain"
-          />
+          {product.image_url ? (
+            <img
+              src={product.image_url}
+              alt={product.title}
+              className="max-h-full max-w-full object-contain"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = 'none';
+              }}
+            />
+          ) : (
+            <div className="text-xs text-slate-400 font-medium">Imagen no disponible</div>
+          )}
         </div>
 
         <div className="flex-1 min-w-0">
