@@ -4,25 +4,25 @@
 // Avoids false $0.00 reporting when pricing is unknown or stale.
 // ============================================================
 
-export const PRICING_SNAPSHOT_DATE = '2026-09-28';
-export const PRICING_OFFICIAL_SOURCE_URL = 'https://openai.com/api/pricing/';
+export const PRICING_SNAPSHOT_DATE = '2026-09-29';
+export const PRICING_OFFICIAL_SOURCE_URL = 'https://developers.openai.com/api/docs/pricing';
 export const PRICING_MAX_AGE_DAYS = Math.max(1, parseInt(process.env.OPENAI_PRICING_MAX_AGE_DAYS || '7', 10));
 
 export const DEFAULT_MODEL_PRICING = {
-  // Flagship / Frontier models (Grounded on OpenAI official pricing)
+  // Flagship / Frontier models (Grounded on OpenAI official pricing for Standard API / Short-Context)
   'gpt-5.6-terra': {
     inputPer1M: 2.00,
-    cachedInputPer1M: 1.00,
+    cachedInputPer1M: 0.20,
     outputPer1M: 12.00
   },
   'gpt-5.6-sol': {
     inputPer1M: 4.00,
-    cachedInputPer1M: 2.00,
+    cachedInputPer1M: 0.40,
     outputPer1M: 20.00
   },
   'gpt-5.6-luna': {
     inputPer1M: 0.20,
-    cachedInputPer1M: 0.10,
+    cachedInputPer1M: 0.02,
     outputPer1M: 1.20
   },
   'gpt-4o': {
