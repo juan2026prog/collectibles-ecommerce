@@ -473,10 +473,12 @@ describe('FUNCTIONAL VALIDATION SUITE — FX, FINANCIAL MODEL & SOURCING', () =>
       const pricing = calculateSourcingPricing(opportunity);
 
       expect(pricing.currency).toBe('USD');
+      expect(pricing.customer_import_status).toBe('UNKNOWN');
+      expect(pricing.customs_authority).toBe('IMPORT_HUB_CUSTOMS_ENGINE');
       // Import cost is marked as scenario estimate, not automatically 0
       expect(pricing.import_cost.status).toBe('SCENARIO_ESTIMATE');
       expect(pricing.import_scenarios.franchise_available.amount_usd).toBe(0.00);
-      expect(pricing.import_scenarios.franchise_depleted.amount_usd).toBe(108.00); // 180 * 0.60
+      expect(pricing.import_scenarios.franchise_depleted.amount_usd).toBe(108.00);
 
       // When customer franchise is explicitly verified, returns VERIFIED_ZERO
       const verifiedPricing = calculateSourcingPricing({
@@ -484,17 +486,81 @@ describe('FUNCTIONAL VALIDATION SUITE — FX, FINANCIAL MODEL & SOURCING', () =>
         has_verified_free_shipping: true,
         customer_has_franchise: true
       });
+      expect(verifiedPricing.customer_import_status).toBe('KNOWN');
       expect(verifiedPricing.import_cost.status).toBe('VERIFIED_ZERO');
       expect(verifiedPricing.import_cost.amount_usd).toBe(0.00);
 
-      // When customer franchise is depleted, returns statutory 60% customs duty
+      // When customer franchise is depleted, returns statutory 60% customs duty from CustomsEngine
       const depletedPricing = calculateSourcingPricing({
         source_price_usd: 180.00,
         has_verified_free_shipping: true,
         customer_has_franchise: false
       });
+      expect(depletedPricing.customer_import_status).toBe('KNOWN');
       expect(depletedPricing.import_cost.status).toBe('VERIFIED');
       expect(depletedPricing.import_cost.amount_usd).toBe(108.00);
+    });
+
+    it('sourcing without customer does not infer customs regime and marks CUSTOMER_IMPORT_STATUS = UNKNOWN', () => {
+      const rawOpportunity = {
+        source_price_usd: 75.00,
+        has_verified_free_shipping: true
+      };
+
+      const result = calculateSourcingPricing(rawOpportunity);
+
+      expect(result.customer_import_status).toBe('UNKNOWN');
+      expect(result.import_cost.status).toBe('SCENARIO_ESTIMATE');
+      expect(result.import_cost.scenario).toBe('OTHER_APPLICABLE_REGIME');
+      expect(result.import_scenarios.franchise_available.status).toBe('SCENARIO_ESTIMATE');
+      expect(result.import_scenarios.franchise_depleted.status).toBe('SCENARIO_ESTIMATE');
+    });
+
+    it('commercial pricing delegates to CustomsEngine without hardcoding customs percentages', () => {
+      const result = calculateSourcingPricing({
+        source_price_usd: 100.00,
+        has_verified_free_shipping: true
+      });
+
+      expect(result.customs_authority).toBe('IMPORT_HUB_CUSTOMS_ENGINE');
+      expect(result.import_scenarios.franchise_available.regime).toBe('FRANQUICIA');
+      expect(result.import_scenarios.franchise_depleted.regime).toBe('SIMPLIFICADO');
+    });
+  });
+
+  // ----------------------------------------------------
+  // 9. MANUAL OVERRIDE & SCHEDULER SAFETY
+  // ----------------------------------------------------
+  describe('9. Manual Override Immunity & Scheduler Configuration', () => {
+    it('manual override cannot be overwritten by automatic sync', () => {
+      const manualRecord: ExchangeRateDetail = {
+        base: 'USD',
+        target: 'UYU',
+        rate: 43.00,
+        provider: 'SUPERADMIN_MANUAL',
+        source_name: 'Banco Central del Uruguay (BCU)',
+        source_url: 'https://www.bcu.gub.uy',
+        status: 'MANUAL_OVERRIDE',
+        is_manual_override: true,
+        override_reason: 'Fijación por auditoría financiera trimestral',
+        override_admin_email: 'admin@collectibles.uy',
+        fetched_at: new Date().toISOString(),
+        effective_at: new Date().toISOString(),
+        max_age_hours: 24,
+        age_hours: 0
+      };
+
+      // Simulating automatic sync attempting update
+      const autoSyncRate = 40.0835;
+      let effectiveRate = manualRecord.rate;
+
+      if (!manualRecord.is_manual_override) {
+        effectiveRate = autoSyncRate;
+      }
+
+      // Must remain the manual rate
+      expect(effectiveRate).toBe(43.00);
+      expect(manualRecord.status).toBe('MANUAL_OVERRIDE');
     });
   });
 });

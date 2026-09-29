@@ -206,7 +206,7 @@ export default async function handler(req, res) {
             quote_currency,
             rate: numRate,
             provider: 'MANUAL_OVERRIDE',
-            source_name: Manual Override by ,
+            source_name: `Manual Override by ${email}`,
             source_url: 'https://collectibles.uy/superadmin/currencies',
             status: 'MANUAL_OVERRIDE',
             is_manual_override: true,
@@ -217,14 +217,14 @@ export default async function handler(req, res) {
 
           return res.status(200).json({
             ok: true,
-            message: Manual override applied for USD/: ,
+            message: `Manual override applied for USD/${quote_currency}: ${numRate}`,
             record: updatedRow
           });
         }
 
         return res.status(200).json({
           ok: true,
-          message: Manual override registered (local mode): USD/ = 
+          message: `Manual override registered (local mode): USD/${quote_currency} = ${numRate}`
         });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message });
@@ -285,14 +285,14 @@ export default async function handler(req, res) {
 
           return res.status(200).json({
             ok: true,
-            message: Restored automatic sync for USD/: ,
+            message: `Restored automatic sync for USD/${quote_currency}: ${liveRate}`,
             record: updatedRow
           });
         }
 
         return res.status(200).json({
           ok: true,
-          message: Restored automatic sync for USD/: 
+          message: `Restored automatic sync for USD/${quote_currency}: ${liveRate}`
         });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message });
@@ -303,7 +303,7 @@ export default async function handler(req, res) {
     try {
       const fxRes = await fetch('https://open.er-api.com/v6/latest/USD');
       if (!fxRes.ok) {
-        throw new Error(External FX API error: HTTP );
+        throw new Error(`External FX API error: HTTP ${fxRes.status}`);
       }
 
       const fxData = await fxRes.json();
@@ -312,6 +312,7 @@ export default async function handler(req, res) {
       }
 
       const nowIso = new Date().toISOString();
+      const providerTimestamp = fxData.time_last_update_utc || fxData.time_last_update_unix || null;
       const syncedRates = [];
 
       for (const item of COUNTRY_CURRENCIES) {
@@ -335,7 +336,8 @@ export default async function handler(req, res) {
             syncedRates.push({
               quote_currency: item.quote_currency,
               rate: existing.rate,
-              status: 'MANUAL_OVERRIDE_PRESERVED'
+              status: 'MANUAL_OVERRIDE_PRESERVED',
+              source: item.source_name
             });
             continue;
           }
@@ -385,6 +387,7 @@ export default async function handler(req, res) {
           currency: item.quote_currency,
           rate: formattedRate,
           source: item.source_name,
+          provider_timestamp: providerTimestamp,
           status: 'VERIFIED'
         });
       }
@@ -393,6 +396,7 @@ export default async function handler(req, res) {
         ok: true,
         message: 'Live FX sync executed successfully across all supported currencies',
         provider: 'OPEN_EXCHANGE_RATES_API',
+        provider_timestamp: providerTimestamp,
         synced_at: nowIso,
         synced_count: syncedRates.length,
         results: syncedRates

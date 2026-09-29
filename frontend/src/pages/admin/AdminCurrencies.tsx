@@ -427,19 +427,33 @@ export default function AdminCurrencies() {
                 </div>
 
                 <div className="flex justify-between py-1 border-b border-white/5">
-                  <span className="text-gray-400">Última Actualización:</span>
+                  <span className="text-gray-400">Estado FX (Status):</span>
+                  <span className="font-semibold text-white">
+                    {activeDetail.status}
+                  </span>
+                </div>
+
+                <div className="flex justify-between py-1 border-b border-white/5">
+                  <span className="text-gray-400">Última Sincronización:</span>
                   <span className="text-gray-300">{new Date(activeDetail.fetched_at).toLocaleString()}</span>
                 </div>
 
                 <div className="flex justify-between py-1 border-b border-white/5">
-                  <span className="text-gray-400">Antigüedad:</span>
+                  <span className="text-gray-400">Próxima Sincronización:</span>
+                  <span className="text-gray-300">
+                    {new Date(Math.ceil(new Date(activeDetail.fetched_at).getTime() / 3600000) * 3600000 + 3600000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} (Horaria / Vercel Cron)
+                  </span>
+                </div>
+
+                <div className="flex justify-between py-1 border-b border-white/5">
+                  <span className="text-gray-400">Antigüedad del Dato:</span>
                   <span className="text-gray-300">{activeDetail.age_hours} h</span>
                 </div>
 
                 <div className="flex justify-between py-1">
-                  <span className="text-gray-400">Modo Operativo:</span>
+                  <span className="text-gray-400">Modo de Operación:</span>
                   <span className="font-semibold text-white">
-                    {activeDetail.is_manual_override ? 'MANUAL_OVERRIDE' : 'AUTOMATIC_VERIFIED'}
+                    {activeDetail.is_manual_override ? 'MANUAL' : 'AUTOMATIC'}
                   </span>
                 </div>
 
