@@ -307,11 +307,13 @@ describe('Sourcing Intelligence — Commercial Engine & Safety Gates', () => {
       // 3. Score Invariance
       const scoreEvaluated = evaluateOpportunityScore({
         demandScore: 80,
+        sellerTrustScore: 90,
         marginPercent: marginUsd,
         profitUsd: profitUsd,
         matchConfidence: 0.9,
         inStock: true,
-        isOfficialVerified: true
+        isOfficialVerified: true,
+        uruguayMarketGapScore: 80
       });
 
       expect(scoreEvaluated.opportunityScore).toBeGreaterThanOrEqual(70);

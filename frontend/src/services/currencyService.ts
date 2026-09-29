@@ -142,10 +142,14 @@ export function convertUsdToDisplayUyu(amountUsd: number, exchangeRate?: number 
   const safeUsd = Number(amountUsd);
   if (isNaN(safeUsd) || !isFinite(safeUsd)) return null;
 
-  const rate = exchangeRate != null && exchangeRate > 0 
-    ? exchangeRate 
-    : getStoredExchangeRate().rate;
+  if (exchangeRate !== undefined) {
+    if (exchangeRate === null || isNaN(exchangeRate) || exchangeRate <= 0) {
+      return null;
+    }
+    return Number((safeUsd * exchangeRate).toFixed(2));
+  }
 
+  const rate = getStoredExchangeRate()?.rate;
   if (!rate || isNaN(rate) || rate <= 0) {
     return null;
   }
