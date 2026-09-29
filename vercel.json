@@ -125,14 +125,6 @@
   ],
   "rewrites": [
     {
-      "source": "/api/currency-sync",
-      "destination": "/api/currency-sync.js"
-    },
-    {
-      "source": "/api/ai-execute",
-      "destination": "/api/ai-execute.js"
-    },
-    {
       "source": "/sitemap.xml",
       "destination": "/api/sitemap?type=index"
     },
