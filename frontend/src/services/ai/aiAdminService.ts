@@ -7,7 +7,8 @@ import type {
   AIErrorEvent, 
   AIAuditLog, 
   AIDashboardSummary,
-  AITestResult 
+  AITestResult,
+  AIDiagnosticStatus
 } from './types';
 
 // ============================================================
@@ -65,15 +66,15 @@ export class AIAdminService {
   /**
    * Safe 0-cost diagnostic check
    */
-  static async getDiagnosticStatus(): Promise<{ ok: boolean; configured: boolean; liveTestEnabled: boolean; supportedModels: string[] }> {
+  static async getDiagnosticStatus(): Promise<AIDiagnosticStatus> {
     try {
       const res = await fetch('/api/openai-test', { method: 'GET' });
       if (!res.ok) {
-        return { ok: false, configured: false, liveTestEnabled: false, supportedModels: [] };
+        return { ok: false, configured: false, liveTestEnabled: false, supportedModels: [], pricingDetails: [] };
       }
       return await res.json();
     } catch {
-      return { ok: false, configured: false, liveTestEnabled: false, supportedModels: [] };
+      return { ok: false, configured: false, liveTestEnabled: false, supportedModels: [], pricingDetails: [] };
     }
   }
 

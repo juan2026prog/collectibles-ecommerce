@@ -102,13 +102,42 @@ Deno.serve(async (req: Request) => {
       console.warn("⚠️ [MP Webhook] No MERCADOPAGO_WEBHOOK_SECRET configured — signature verification skipped. Set this secret for production security.");
     }
 
-    // Only handle payment notifications
-    if (body.type === "payment" && (body.action === "payment.created" || body.action === "payment.updated")) {
-      const paymentId = body.data.id;
-      
-      const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-      const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-      const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    let paymentId: string | null = null;
+    let topic: string | null = null;
+
+    // 1. Check JSON body formats
+    if (body) {
+      if (body.type === "payment" || body.topic === "payment") {
+        topic = "payment";
+        paymentId = body.data?.id || body.id || null;
+      } else if (body.data?.id) {
+        paymentId = body.data.id;
+      } else if (body.id && body.action?.startsWith("payment")) {
+        paymentId = body.id;
+      }
+    }
+
+    // 2. Check URL query params format (IPN format from Mercado Pago)
+    const reqUrl = new URL(req.url);
+    if (!paymentId) {
+      const qTopic = reqUrl.searchParams.get("topic") || reqUrl.searchParams.get("type");
+      const qId = reqUrl.searchParams.get("id") || reqUrl.searchParams.get("data.id");
+      if (qTopic === "payment" || qId) {
+        topic = "payment";
+        paymentId = qId;
+      }
+    }
+
+    if (!paymentId) {
+      console.log("[MP Webhook] Non-payment notification or missing ID. Body:", body, "URL:", req.url);
+      return new Response(JSON.stringify({ received: true, info: "Ignored or non-payment event" }), {
+        headers: responseHeaders,
+      });
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
       // Fetch the token — prefer env var over site_settings
       let mpAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
@@ -517,7 +546,6 @@ Deno.serve(async (req: Request) => {
           amount: refundAmt
         });
       }
-    }
 
     return new Response(JSON.stringify({ received: true }), {
       headers: responseHeaders

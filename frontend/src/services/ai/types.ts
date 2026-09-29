@@ -214,3 +214,26 @@ export interface AITestResult {
   error?: string;
   errorType?: string;
 }
+
+export interface AIModelPricingDetail {
+  model: string;
+  input_price_per_1m: number;
+  output_price_per_1m: number;
+  currency: string;
+  unit: string;
+  source: string;
+  verified_at: string;
+  age_days: number;
+  max_age_days: number;
+  status: 'VERIFIED' | 'STALE' | 'UNKNOWN';
+}
+
+export interface AIDiagnosticStatus {
+  ok: boolean;
+  configured: boolean;
+  liveTestEnabled: boolean;
+  supportedModels: string[];
+  pricingDetails?: AIModelPricingDetail[];
+  environment?: string;
+}
+

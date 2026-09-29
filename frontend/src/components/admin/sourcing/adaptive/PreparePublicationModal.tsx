@@ -95,6 +95,62 @@ export function PreparePublicationModal({ opportunity, isOpen, onClose, onConfir
           </div>
         </div>
 
+        {/* Sourcing Intelligence & Confidence Breakdown */}
+        <div className="bg-zinc-900/70 border border-white/10 p-4 rounded-2xl space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+              <ShieldCheck size={14} className="text-indigo-400" />
+              Sourcing Intelligence Score & Confianza
+            </span>
+            <span className="text-[11px] font-mono text-indigo-300 font-bold">
+              Confianza: {opportunity.confidence_score ?? Math.round((opportunity.match_confidence || 0.8) * 100)}%
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="bg-zinc-950 p-2.5 rounded-xl border border-white/5">
+              <span className="text-[10px] text-zinc-500 block uppercase font-bold">Score Determinista</span>
+              <span className="text-lg font-black text-white">{opportunity.deterministic_score ?? opportunity.opportunity_score}</span>
+              <span className="text-[10px] text-zinc-500 block">/ 100</span>
+            </div>
+
+            <div className="bg-zinc-950 p-2.5 rounded-xl border border-white/5">
+              <span className="text-[10px] text-zinc-500 block uppercase font-bold">Ajuste Asesor IA</span>
+              <span className={`text-lg font-black ${(opportunity.ai_adjustment ?? 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {(opportunity.ai_adjustment ?? 0) > 0 ? `+${opportunity.ai_adjustment}` : (opportunity.ai_adjustment ?? 0)}
+              </span>
+              <span className="text-[10px] text-zinc-500 block">[-10, +10]</span>
+            </div>
+
+            <div className="bg-zinc-950 p-2.5 rounded-xl border border-indigo-500/30 bg-indigo-950/20">
+              <span className="text-[10px] text-indigo-300 block uppercase font-bold">Score Final</span>
+              <span className="text-lg font-black text-indigo-400">{opportunity.opportunity_score}</span>
+              <span className="text-[10px] text-indigo-300/70 block">/ 100</span>
+            </div>
+          </div>
+
+          {/* Reason Codes */}
+          {opportunity.reason_codes && opportunity.reason_codes.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              <span className="text-[10px] font-bold text-zinc-400 uppercase block">Factores y Señales Detectadas:</span>
+              <div className="flex flex-wrap gap-1.5">
+                {opportunity.reason_codes.map((rc, idx) => (
+                  <span
+                    key={idx}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      rc.type === 'positive'
+                        ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                        : 'bg-rose-950 text-rose-400 border border-rose-800'
+                    }`}
+                  >
+                    {rc.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Alternate Sources */}
         {opportunity.source_candidates.length > 1 && (
           <div className="space-y-2">

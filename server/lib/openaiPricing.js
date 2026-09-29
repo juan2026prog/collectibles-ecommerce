@@ -4,16 +4,10 @@
 // Avoids false $0.00 reporting when pricing is unknown.
 // ============================================================
 
-/**
- * Standard pricing matrix per 1 Million tokens (USD).
- * Can be overridden via environment variables:
- * OPENAI_PRICE_<CLEAN_MODEL>_INPUT_PER_1M
- * OPENAI_PRICE_<CLEAN_MODEL>_OUTPUT_PER_1M
- */
-const PRICING_SNAPSHOT_DATE = '2026-09-28';
-const PRICING_MAX_AGE_DAYS = Math.max(1, parseInt(process.env.OPENAI_PRICING_MAX_AGE_DAYS || '7', 10));
+export const PRICING_SNAPSHOT_DATE = '2026-09-28';
+export const PRICING_MAX_AGE_DAYS = Math.max(1, parseInt(process.env.OPENAI_PRICING_MAX_AGE_DAYS || '7', 10));
 
-const DEFAULT_MODEL_PRICING = {
+export const DEFAULT_MODEL_PRICING = {
   // Flagship / Frontier models
   'gpt-5.6-terra': {
     inputPer1M: 2.00,
@@ -77,7 +71,10 @@ export function getModelPricingRates(model) {
       return {
         inputPer1M: inputRate,
         outputPer1M: outputRate,
-        source: 'ENVIRONMENT'
+        source: 'ENVIRONMENT',
+        status: 'VERIFIED',
+        snapshotDate: new Date().toISOString().split('T')[0],
+        ageDays: 0
       };
     }
   }
@@ -86,11 +83,48 @@ export function getModelPricingRates(model) {
   if (defaultRates) {
     const snapshotMs = Date.parse(PRICING_SNAPSHOT_DATE + 'T00:00:00Z');
     const ageDays = Math.floor((Date.now() - snapshotMs) / 86400000);
-    if (ageDays > PRICING_MAX_AGE_DAYS) return null; // fail closed: stale price must never look current
-    return { ...defaultRates, source: 'OPENAI_OFFICIAL_SNAPSHOT', snapshotDate: PRICING_SNAPSHOT_DATE, ageDays };
+    if (ageDays > PRICING_MAX_AGE_DAYS) {
+      return {
+        ...defaultRates,
+        source: 'OPENAI_OFFICIAL_SNAPSHOT',
+        snapshotDate: PRICING_SNAPSHOT_DATE,
+        ageDays,
+        status: 'STALE'
+      };
+    }
+    return {
+      ...defaultRates,
+      source: 'OPENAI_OFFICIAL_SNAPSHOT',
+      snapshotDate: PRICING_SNAPSHOT_DATE,
+      ageDays,
+      status: 'VERIFIED'
+    };
   }
 
   return null;
+}
+
+/**
+ * Returns the full structured pricing table for SuperAdmin verification UI
+ */
+export function getAllModelPricingDetails() {
+  const models = Object.keys(DEFAULT_MODEL_PRICING);
+  return models.map(m => {
+    const rates = getModelPricingRates(m);
+    const isStale = !rates || rates.status === 'STALE';
+    return {
+      model: m,
+      input_price_per_1m: rates?.inputPer1M ?? DEFAULT_MODEL_PRICING[m].inputPer1M,
+      output_price_per_1m: rates?.outputPer1M ?? DEFAULT_MODEL_PRICING[m].outputPer1M,
+      currency: 'USD',
+      unit: '1M tokens',
+      source: rates?.source || 'OPENAI_OFFICIAL_SNAPSHOT',
+      verified_at: rates?.snapshotDate || PRICING_SNAPSHOT_DATE,
+      age_days: rates?.ageDays ?? 0,
+      max_age_days: PRICING_MAX_AGE_DAYS,
+      status: rates?.status || (isStale ? 'STALE' : 'UNKNOWN')
+    };
+  });
 }
 
 /**
@@ -104,7 +138,7 @@ export function calculateOpenAICost(model, inputTokens = 0, outputTokens = 0) {
   const safeOutputTokens = Math.max(0, parseInt(outputTokens, 10) || 0);
   const totalTokens = safeInputTokens + safeOutputTokens;
 
-  if (!rates) {
+  if (!rates || rates.status === 'STALE') {
     return {
       model: model || 'UNKNOWN',
       input_tokens: safeInputTokens,
@@ -114,7 +148,7 @@ export function calculateOpenAICost(model, inputTokens = 0, outputTokens = 0) {
       output_cost_usd: null,
       estimated_cost_usd: null,
       pricing_status: 'UNKNOWN_PRICING',
-      pricing_source: 'STALE_OR_UNKNOWN'
+      pricing_source: rates?.status === 'STALE' ? 'STALE_SNAPSHOT' : 'STALE_OR_UNKNOWN'
     };
   }
 

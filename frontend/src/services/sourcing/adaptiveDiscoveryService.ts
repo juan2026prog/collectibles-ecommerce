@@ -141,6 +141,8 @@ export class AdaptiveDiscoveryService {
       image_url: (bestOffer as any).image_url || '',
       demand_score: gap.demand_score,
       opportunity_score: scoreResult.opportunityScore,
+      deterministic_score: scoreResult.deterministicScore,
+      confidence_score: scoreResult.confidenceScore,
       best_source: bestOffer.source,
       best_source_url: bestOffer.url,
       best_source_seller: bestOffer.seller,
@@ -168,8 +170,10 @@ export class AdaptiveDiscoveryService {
         catalogGaps: [gap],
         products: [opportunity]
       });
-      (opportunity as any).ai_intelligence = intelligence;
-      (opportunity as any).ai_advisory_score = Math.max(0, Math.min(100, opportunity.opportunity_score + intelligence.scoreAdjustment));
+      opportunity.ai_intelligence = intelligence;
+      const adjustment = Math.max(-10, Math.min(10, Number(intelligence.scoreAdjustment || 0)));
+      opportunity.ai_adjustment = adjustment;
+      opportunity.ai_advisory_score = Math.max(0, Math.min(100, opportunity.opportunity_score + adjustment));
     } catch {
       // Discovery must remain functional when AI is disabled/unavailable.
     }

@@ -130,27 +130,56 @@ Deno.serve(async (req: Request) => {
 
       const mpAccessToken = config.payments_mercadopago_access_token || Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
       if (mpAccessToken) {
-        const searchUrl = `https://api.mercadopago.com/v1/payments/search?external_reference=${order_id}&sort=date_created&criteria=desc`;
-        const searchRes = await fetch(searchUrl, {
-          headers: { "Authorization": `Bearer ${mpAccessToken}` },
-        });
-        const searchData = await searchRes.json();
+        let paymentData: any = null;
 
-        if (searchRes.ok && searchData.results?.length > 0) {
-          const latestPayment = searchData.results[0];
-          if (latestPayment.status === "approved" || latestPayment.status === "authorized") {
-            const paidOrder = await finalizeOrderIfNeeded(
-              supabaseClient,
-              supabaseUrl,
-              supabaseServiceRoleKey,
-              order_id,
-              String(latestPayment.id),
-            );
-
-            return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(paidOrder, isFullyAuthorized) }), {
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
+        // 1. Try direct payment lookup if external_id is provided or numeric
+        const paymentLookupId = external_id || (order_id && /^\d+$/.test(order_id) ? order_id : undefined) || (currentOrder.payment_id && /^\d+$/.test(currentOrder.payment_id) ? currentOrder.payment_id : undefined);
+        if (paymentLookupId && /^\d+$/.test(paymentLookupId)) {
+          try {
+            const directRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentLookupId}`, {
+              headers: { "Authorization": `Bearer ${mpAccessToken}` },
             });
+            if (directRes.ok) {
+              const dData = await directRes.json();
+              if (dData.external_reference === order_id || !dData.external_reference) {
+                paymentData = dData;
+              }
+            }
+          } catch (e) {
+            console.warn("[confirm-payment] MP direct lookup error:", e);
           }
+        }
+
+        // 2. Try search by external_reference
+        if (!paymentData) {
+          try {
+            const searchUrl = `https://api.mercadopago.com/v1/payments/search?external_reference=${order_id}&sort=date_created&criteria=desc`;
+            const searchRes = await fetch(searchUrl, {
+              headers: { "Authorization": `Bearer ${mpAccessToken}` },
+            });
+            if (searchRes.ok) {
+              const searchData = await searchRes.json();
+              if (searchData.results?.length > 0) {
+                paymentData = searchData.results[0];
+              }
+            }
+          } catch (e) {
+            console.warn("[confirm-payment] MP search lookup error:", e);
+          }
+        }
+
+        if (paymentData && (paymentData.status === "approved" || paymentData.status === "authorized")) {
+          const paidOrder = await finalizeOrderIfNeeded(
+            supabaseClient,
+            supabaseUrl,
+            supabaseServiceRoleKey,
+            order_id,
+            String(paymentData.id),
+          );
+
+          return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(paidOrder, isFullyAuthorized) }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
       }
 

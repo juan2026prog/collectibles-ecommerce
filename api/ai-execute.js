@@ -163,6 +163,95 @@ export default async function handler(req, res) {
           engineTimeoutMs = engData.timeout_ms;
         }
       }
+
+      // Budget check (Daily and Monthly)
+      const now = new Date();
+      const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+      const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+
+      const hasSysDaily = Number(sysData?.daily_budget_usd || 0) > 0;
+      const hasSysMonthly = Number(sysData?.monthly_budget_usd || 0) > 0;
+      const hasEngDaily = Number(engData?.daily_budget_usd || 0) > 0;
+      const hasEngMonthly = Number(engData?.monthly_budget_usd || 0) > 0;
+      const hasCntrDaily = Number(cntrData?.daily_budget_usd || 0) > 0;
+      const hasCntrMonthly = Number(cntrData?.monthly_budget_usd || 0) > 0;
+
+      if (hasSysDaily || hasSysMonthly || hasEngDaily || hasEngMonthly || hasCntrDaily || hasCntrMonthly) {
+        const { data: usageRows } = await client
+          .from('ai_usage_events')
+          .select('estimated_cost_usd, engine, country_code, created_at')
+          .gte('created_at', startOfMonth);
+
+        if (usageRows && usageRows.length > 0) {
+          let totalMonth = 0;
+          let totalToday = 0;
+          let engMonth = 0;
+          let engToday = 0;
+          let cntrMonth = 0;
+          let cntrToday = 0;
+
+          for (const row of usageRows) {
+            const cost = Number(row.estimated_cost_usd) || 0;
+            const isToday = row.created_at >= startOfDay;
+
+            totalMonth += cost;
+            if (isToday) totalToday += cost;
+
+            if (row.engine === engine) {
+              engMonth += cost;
+              if (isToday) engToday += cost;
+            }
+
+            if (row.country_code === country) {
+              cntrMonth += cost;
+              if (isToday) cntrToday += cost;
+            }
+          }
+
+          if (hasSysDaily && totalToday >= sysData.daily_budget_usd) {
+            return res.status(429).json({
+              success: false,
+              status: 'BUDGET_EXCEEDED',
+              error: `Presupuesto diario global de IA excedido (Gastado: $${totalToday.toFixed(4)} / Límite: $${Number(sysData.daily_budget_usd).toFixed(4)})`
+            });
+          }
+          if (hasSysMonthly && totalMonth >= sysData.monthly_budget_usd) {
+            return res.status(429).json({
+              success: false,
+              status: 'BUDGET_EXCEEDED',
+              error: `Presupuesto mensual global de IA excedido (Gastado: $${totalMonth.toFixed(4)} / Límite: $${Number(sysData.monthly_budget_usd).toFixed(4)})`
+            });
+          }
+          if (hasEngDaily && engToday >= engData.daily_budget_usd) {
+            return res.status(429).json({
+              success: false,
+              status: 'BUDGET_EXCEEDED',
+              error: `Presupuesto diario del motor ${engine} excedido (Gastado: $${engToday.toFixed(4)} / Límite: $${Number(engData.daily_budget_usd).toFixed(4)})`
+            });
+          }
+          if (hasEngMonthly && engMonth >= engData.monthly_budget_usd) {
+            return res.status(429).json({
+              success: false,
+              status: 'BUDGET_EXCEEDED',
+              error: `Presupuesto mensual del motor ${engine} excedido (Gastado: $${engMonth.toFixed(4)} / Límite: $${Number(engData.monthly_budget_usd).toFixed(4)})`
+            });
+          }
+          if (hasCntrDaily && cntrToday >= cntrData.daily_budget_usd) {
+            return res.status(429).json({
+              success: false,
+              status: 'BUDGET_EXCEEDED',
+              error: `Presupuesto diario del país ${country} excedido (Gastado: $${cntrToday.toFixed(4)} / Límite: $${Number(cntrData.daily_budget_usd).toFixed(4)})`
+            });
+          }
+          if (hasCntrMonthly && cntrMonth >= cntrData.monthly_budget_usd) {
+            return res.status(429).json({
+              success: false,
+              status: 'BUDGET_EXCEEDED',
+              error: `Presupuesto mensual del país ${country} excedido (Gastado: $${cntrMonth.toFixed(4)} / Límite: $${Number(cntrData.monthly_budget_usd).toFixed(4)})`
+            });
+          }
+        }
+      }
     }
 
     const resolvedInstructions = instructionsFor(engine, operation);

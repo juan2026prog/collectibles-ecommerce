@@ -192,8 +192,8 @@ describe('Sourcing Autopilot — Street Fighter E2E Scenario Test', { timeout: 2
       'ADMIN'
     );
 
-    expect(execRes.executedAction).toBe('AUTO_PUBLISHED');
-    expect(execRes.message).toContain('publicado automáticamente');
+    expect(execRes.executedAction).toBe('PREPARED_FOR_APPROVAL');
+    expect(execRes.message).toContain('preparada');
 
     // 3. Dry Run Check
     const dryRunReport = await autopilotExecutionEngine.runDryRun(

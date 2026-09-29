@@ -60,7 +60,11 @@ export default function CheckoutSuccess() {
           return;
         }
 
-        const externalId = searchParams.get('token') || searchParams.get('payment_id') || undefined;
+        const externalId = searchParams.get('payment_id') || 
+                           searchParams.get('collection_id') || 
+                           searchParams.get('token') || 
+                           searchParams.get('preference_id') || 
+                           undefined;
         const fallbackEmail = order?.customer_email || '';
         const { data, error } = await supabase.functions.invoke('confirm-payment', {
           body: { provider, order_id: orderId, external_id: externalId, customer_email: fallbackEmail },

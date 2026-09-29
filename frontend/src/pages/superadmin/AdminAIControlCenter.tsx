@@ -13,7 +13,8 @@ import type {
   AIErrorEvent, 
   AIAuditLog, 
   AIDashboardSummary,
-  AITestResult 
+  AITestResult,
+  AIDiagnosticStatus
 } from '../../services/ai/types';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -47,11 +48,12 @@ export default function AdminAIControlCenter() {
   const [auditLogs, setAuditLogs] = useState<AIAuditLog[]>([]);
 
   // Server diagnostic status
-  const [diagnostic, setDiagnostic] = useState<{ ok: boolean; configured: boolean; liveTestEnabled: boolean; supportedModels: string[] }>({
+  const [diagnostic, setDiagnostic] = useState<AIDiagnosticStatus>({
     ok: false,
     configured: false,
     liveTestEnabled: false,
-    supportedModels: []
+    supportedModels: [],
+    pricingDetails: []
   });
 
   // Live Test State
@@ -780,9 +782,67 @@ export default function AdminAIControlCenter() {
                     <span className="font-mono text-white">{summary?.requests_today || 0} llamadas</span>
                   </div>
                   <p className="text-[11px] text-emerald-400/80 mt-2">
-                    Cálculo exacto mediante api/lib/openaiPricing.js.
+                    Cálculo exacto mediante server/lib/openaiPricing.js.
                   </p>
                 </div>
+              </div>
+            </div>
+
+            {/* OpenAI Verified Pricing Matrix */}
+            <div className="bg-[#0d1117] border border-gray-800 rounded-xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-bold text-white text-sm">Matriz de Precios Oficial OpenAI Verificada</h4>
+                  <p className="text-xs text-gray-400">Tarifas unitarias por 1M de tokens y estado de vigencia (Snapshot Staleness Guard &lt; 7 días).</p>
+                </div>
+                <span className="px-2.5 py-1 rounded bg-indigo-950 text-indigo-400 border border-indigo-800 text-[11px] font-bold">
+                  Anti-Zero USD Fail-Closed
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-gray-300">
+                  <thead className="bg-gray-900/60 text-gray-400 uppercase font-mono">
+                    <tr>
+                      <th className="p-2.5">Modelo</th>
+                      <th className="p-2.5 text-right">Input / 1M</th>
+                      <th className="p-2.5 text-right">Output / 1M</th>
+                      <th className="p-2.5">Fuente</th>
+                      <th className="p-2.5">Fecha Snapshot</th>
+                      <th className="p-2.5 text-center">Antigüedad</th>
+                      <th className="p-2.5 text-center">Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-800/60 font-sans">
+                    {diagnostic.pricingDetails && diagnostic.pricingDetails.length > 0 ? (
+                      diagnostic.pricingDetails.map((p) => (
+                        <tr key={p.model} className="hover:bg-gray-800/30">
+                          <td className="p-2.5 font-mono text-purple-300 font-bold">{p.model}</td>
+                          <td className="p-2.5 text-right font-mono text-emerald-400">${p.input_price_per_1m.toFixed(2)}</td>
+                          <td className="p-2.5 text-right font-mono text-emerald-400">${p.output_price_per_1m.toFixed(2)}</td>
+                          <td className="p-2.5 font-mono text-[10px] text-gray-400">{p.source}</td>
+                          <td className="p-2.5 font-mono text-gray-400">{p.verified_at}</td>
+                          <td className="p-2.5 text-center font-mono text-gray-400">{p.age_days}d / max {p.max_age_days}d</td>
+                          <td className="p-2.5 text-center">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              p.status === 'VERIFIED'
+                                ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                                : 'bg-rose-950 text-rose-400 border border-rose-800'
+                            }`}>
+                              {p.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={7} className="p-4 text-center text-gray-500 font-medium">
+                          No hay detalles de precios disponibles del servidor.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>

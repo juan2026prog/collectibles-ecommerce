@@ -152,6 +152,11 @@ export interface SourcingOpportunity {
   image_url: string;
   demand_score: number; // 0 - 100
   opportunity_score: number; // 0 - 100
+  deterministic_score?: number; // 0 - 100
+  confidence_score?: number; // 0 - 100%
+  ai_adjustment?: number; // -10 to +10
+  ai_advisory_score?: number; // 0 - 100
+  ai_intelligence?: any;
   best_source?: RetailerSource;
   best_source_url?: string;
   best_source_seller?: string;

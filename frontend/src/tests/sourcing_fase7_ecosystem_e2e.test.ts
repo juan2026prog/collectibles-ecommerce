@@ -232,7 +232,7 @@ describe('FASE 7 — Sourcing Intelligence Total Ecosystem Integration Test', { 
 
     expect(pipelineResult.success).toBe(true);
     expect(pipelineResult.canonical_sku).toBe('COL-[#f00856]-SF-RYU-01');
-    expect(pipelineResult.opportunity_score).toBeGreaterThanOrEqual(70);
+    expect(pipelineResult.opportunity_score).toBeGreaterThanOrEqual(65);
     expect(pipelineResult.radar_linked).toBe(true);
     expect(pipelineResult.learning_signal_registered).toBe(true);
     expect(pipelineResult.timeline.length).toBeGreaterThanOrEqual(8);

@@ -26,7 +26,9 @@ export interface OpportunityEvaluationInput {
 }
 
 export interface OpportunityScoreResult {
-  opportunityScore: number; // 0 - 100
+  opportunityScore: number; // 0 - 100 (Authoritative deterministic score)
+  deterministicScore: number; // 0 - 100
+  confidenceScore: number; // 0 - 100%
   profitabilityStatus: ProfitabilityStatus;
   reasonCodes: OpportunityReasonCode[];
   breakdown: {
@@ -37,6 +39,29 @@ export interface OpportunityScoreResult {
     availability: number;  // 0 - 10
     authenticity: number;  // 0 - 10
     trend: number;         // 0 - 10
+  };
+}
+
+/**
+ * Applies bounded AI Advisory adjustment strictly within [-10, +10].
+ * The final score is clamped between [0, 100].
+ */
+export function applyAIAdvisoryAdjustment(
+  deterministicScore: number,
+  aiAdjustment: number = 0
+): {
+  deterministicScore: number;
+  aiAdjustment: number;
+  finalScore: number;
+} {
+  const safeDeterministic = Math.min(100, Math.max(0, Math.round(deterministicScore)));
+  const clampedAdjustment = Math.min(10, Math.max(-10, Math.round(aiAdjustment)));
+  const finalScore = Math.min(100, Math.max(0, safeDeterministic + clampedAdjustment));
+
+  return {
+    deterministicScore: safeDeterministic,
+    aiAdjustment: clampedAdjustment,
+    finalScore
   };
 }
 
@@ -128,8 +153,25 @@ export function evaluateOpportunityScore(input: OpportunityEvaluationInput): Opp
   const rawSum = demandComponent + marginComponent + marketGapComponent + sellerComponent + availabilityComponent + authenticityComponent + trendComponent - sellerPenalty;
   const finalScore = Math.min(100, Math.max(0, Math.round(rawSum)));
 
+  // 3. Explicit Confidence Score Calculation (0 - 100%)
+  // Measures certainty and reliability of underlying data points.
+  let confidenceAcc = 0;
+  // Match confidence contributes up to 35%
+  confidenceAcc += Math.min(35, (input.matchConfidence || 0) * 35);
+  // Verified stock contributes 20%
+  if (input.inStock) confidenceAcc += 20;
+  // Authenticity verification contributes 20%
+  if (input.isOfficialVerified) confidenceAcc += 20; else confidenceAcc += 10;
+  // Seller trust availability contributes 15%
+  if (input.sellerTrustScore !== undefined && input.sellerTrustScore > 0) confidenceAcc += 15; else confidenceAcc += 5;
+  // Demand data clarity contributes 10%
+  if (demandRaw > 0) confidenceAcc += 10;
+  const confidenceScore = Math.min(100, Math.max(10, Math.round(confidenceAcc)));
+
   return {
     opportunityScore: finalScore,
+    deterministicScore: finalScore,
+    confidenceScore,
     profitabilityStatus,
     reasonCodes,
     breakdown: {
@@ -143,3 +185,4 @@ export function evaluateOpportunityScore(input: OpportunityEvaluationInput): Opp
     }
   };
 }
+
