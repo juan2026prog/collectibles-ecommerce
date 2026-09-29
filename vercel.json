@@ -433,8 +433,13 @@
       "destination": "/api/seo-prerender?type=home"
     },
     {
-      "source": "/((?!api/).*)",
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
+    },
+    {
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]
 }
+
