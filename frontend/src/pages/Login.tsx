@@ -189,10 +189,12 @@ export default function Login() {
                   setError('');
                   setLoading(true);
                   try {
-                    const { error } = await signInWithGoogle();
+                    const { data, error } = await signInWithGoogle();
                     if (error) {
                       setError(error.message || 'Error al conectar con Google.');
                       setLoading(false);
+                    } else if (data?.url) {
+                      window.location.href = data.url;
                     }
                   } catch (err: any) {
                     setError(err?.message || 'Error inesperado al conectar con Google.');
