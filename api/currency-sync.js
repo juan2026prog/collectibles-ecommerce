@@ -15,7 +15,7 @@ if (supabaseUrl && supabaseServiceKey) {
   supabase = createClient(supabaseUrl, supabaseServiceKey);
 }
 
-export const FX_PROVIDER_CONFIG = {
+const FX_PROVIDER_CONFIG = {
   provider_id: 'EXCHANGERATE_API',
   provider_name: 'ExchangeRate-API',
   provider_endpoint: 'https://open.er-api.com/v6/latest/USD',
@@ -23,7 +23,7 @@ export const FX_PROVIDER_CONFIG = {
 };
 
 // Country & Currency Specifications
-export const COUNTRY_CURRENCIES = [
+const COUNTRY_CURRENCIES = [
   {
     country_code: 'UY',
     country_name: 'Uruguay',
@@ -74,7 +74,7 @@ export const COUNTRY_CURRENCIES = [
   }
 ];
 
-export const FALLBACK_STATIC_RATES = {
+const FALLBACK_STATIC_RATES = {
   UYU: 40.0835,
   ARS: 1528.7563,
   CLP: 961.514,
