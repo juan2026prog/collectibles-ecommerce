@@ -245,6 +245,31 @@ export class MultiSourceSearchService {
         };
       }
 
+      // Fallback: Query real candidates previously ingested in international_import_candidates
+      const { data: dbCandidates } = await supabase
+        .from('international_import_candidates')
+        .select('*')
+        .ilike('title', `%${query.trim()}%`)
+        .limit(25);
+
+      if (dbCandidates && dbCandidates.length > 0) {
+        return {
+          source: 'amazon',
+          items: dbCandidates.map((c: any) => ({
+            url: c.product_url_external || `https://www.amazon.com/dp/${c.external_product_id}`,
+            retailer: 'amazon',
+            title: c.title,
+            price: Number(c.price_usd || 0),
+            brand: c.brand || 'Jada',
+            asin: c.external_product_id,
+            image_url: c.image_url || c.main_image_url_external,
+            availability: c.availability || 'available',
+            condition: 'new'
+          })),
+          status: 'AVAILABLE'
+        };
+      }
+
       return {
         source: 'amazon',
         items: [],

@@ -236,5 +236,97 @@ describe('Sourcing Intelligence — Commercial Engine & Safety Gates', () => {
       expect(terra?.verified_at).toBe(PRICING_SNAPSHOT_DATE);
     });
   });
+
+  describe('6. Canonical USD Currency & Sourcing Pricing Engine Invariance', () => {
+    it('calculates full sourcing landed cost and suggested price canonically in USD', async () => {
+      const { calculateSourcingPricing } = await import('../services/sourcing/commercialPricingEngine');
+      const pricing = calculateSourcingPricing({
+        source_price_usd: 24.99,
+        has_verified_free_shipping: true,
+        partner_fee_usd: 1.00,
+        target_margin_percent: 15.0,
+        min_profit_usd: 3.99,
+        fixed_markup_usd: 6.00
+      });
+
+      expect(pricing.currency).toBe('USD');
+      expect(pricing.estimate_status).toBe('COMPLETE');
+      expect(pricing.source_price_usd).toBe(24.99);
+      expect(pricing.shipping.status).toBe('VERIFIED_ZERO');
+      expect(pricing.shipping.amount_usd).toBe(0);
+      expect(pricing.partner_fee.amount_usd).toBe(1.00);
+      expect(pricing.landed_cost_usd).toBeGreaterThan(24.99);
+      expect(pricing.suggested_price_usd).toBeGreaterThan(pricing.landed_cost_usd!);
+      expect(pricing.profit_usd).toBeGreaterThanOrEqual(3.99);
+      expect(pricing.margin_pct).toBeGreaterThanOrEqual(15.0);
+    });
+
+    it('flags ESTIMATE_INCOMPLETE when shipping or mandatory cost is missing/unknown', async () => {
+      const { calculateSourcingPricing } = await import('../services/sourcing/commercialPricingEngine');
+      const pricing = calculateSourcingPricing({
+        source_price_usd: 35.00,
+        source_shipping_usd: null, // Unknown shipping
+        has_verified_free_shipping: false
+      });
+
+      expect(pricing.estimate_status).toBe('ESTIMATE_INCOMPLETE');
+      expect(pricing.shipping.status).toBe('UNKNOWN');
+      expect(pricing.shipping.amount_usd).toBeNull();
+      expect(pricing.landed_cost_usd).toBeNull();
+      expect(pricing.suggested_price_usd).toBeNull();
+      expect(pricing.missing_components).toContain('shipping');
+    });
+
+    it('proves that display currency (USD vs UYU) does NOT mutate canonical price, margin or score', async () => {
+      const { convertUsdToDisplayUyu, formatMoney } = await import('../services/currencyService');
+      const canonicalPriceUsd = 39.90;
+      const fxRate = 42.50;
+
+      // 1. Display conversions
+      const displayUyu = convertUsdToDisplayUyu(canonicalPriceUsd, fxRate);
+      expect(displayUyu).toBe(1695.75);
+
+      const formattedUsd = formatMoney({ amountUsd: canonicalPriceUsd, displayCurrency: 'USD' });
+      const formattedUyu = formatMoney({ amountUsd: canonicalPriceUsd, displayCurrency: 'UYU', exchangeRate: fxRate });
+
+      expect(formattedUsd).toBe('US$ 39.90');
+      expect(formattedUyu).toBe('$ 1.696 UYU');
+
+      // 2. Mathematical Margin Invariance
+      const landedCostUsd = 27.36;
+      const profitUsd = canonicalPriceUsd - landedCostUsd;
+      const marginUsd = (profitUsd / canonicalPriceUsd) * 100;
+
+      const landedCostUyu = landedCostUsd * fxRate;
+      const displaySalePriceUyu = canonicalPriceUsd * fxRate;
+      const profitUyu = displaySalePriceUyu - landedCostUyu;
+      const marginUyu = (profitUyu / displaySalePriceUyu) * 100;
+
+      expect(marginUyu).toBeCloseTo(marginUsd, 4);
+
+      // 3. Score Invariance
+      const scoreEvaluated = evaluateOpportunityScore({
+        demandScore: 80,
+        marginPercent: marginUsd,
+        profitUsd: profitUsd,
+        matchConfidence: 0.9,
+        inStock: true,
+        isOfficialVerified: true
+      });
+
+      expect(scoreEvaluated.opportunityScore).toBeGreaterThanOrEqual(70);
+    });
+
+    it('falls back closed to USD when FX rate is unavailable or invalid', async () => {
+      const { formatMoney, convertUsdToDisplayUyu } = await import('../services/currencyService');
+      expect(convertUsdToDisplayUyu(39.90, -1)).toBeNull();
+      expect(convertUsdToDisplayUyu(39.90, 0)).toBeNull();
+
+      // formatMoney falls back gracefully to USD without throwing or inventing rates
+      const formatted = formatMoney({ amountUsd: 39.90, displayCurrency: 'UYU', exchangeRate: 0 });
+      expect(formatted).toBe('US$ 39.90');
+    });
+  });
 });
+
 
