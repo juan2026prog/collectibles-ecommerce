@@ -1,5 +1,6 @@
 import type { RawProductExtraction } from './SourceAdapter';
 import type { SourceOffer } from '../../../types/sourcing';
+import { supabase } from '../../../lib/supabase';
 
 export interface EbayLiveLookupParams {
   itemId: string;
@@ -31,39 +32,52 @@ export interface EbayLiveProductDetails {
 
 /**
  * EbayLiveSourceAdapter
- * Resolución server-side de eBay utilizando Zinc API (retailer: ebay).
- * Utiliza la misma infraestructura de fulfillment y live check activa en Zinc.
+ * Resolución server-side de eBay utilizando Zinc API (retailer: ebay) o Edge Function.
  */
 export class EbayLiveSourceAdapter {
   source = 'ebay' as const;
 
   /**
-   * Resuelve los datos en vivo de un Item de eBay a través de Zinc.
+   * Resuelve los datos en vivo de un Item de eBay a través de Edge Function sourcing-retailer-live-check.
    */
   async resolveLiveItem(params: EbayLiveLookupParams): Promise<EbayLiveProductDetails> {
     const checkedAt = new Date().toISOString();
 
     try {
-      const response = await fetch('/api/sourcing/zinc-live-check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
+      const { data, error } = await supabase.functions.invoke('sourcing-retailer-live-check', {
+        body: { 
           product_id: params.itemId, 
           retailer: 'ebay',
-          force_refresh: params.forceRefresh 
-        })
+          force_refresh: params.forceRefresh ?? true 
+        }
       });
 
-      if (response.ok) {
-        const data = await response.json();
+      if (!error && data && (data.data_source === 'LIVE' || data.title)) {
         return {
-          ...data,
+          item_id: data.source_product_id || params.itemId,
+          title: data.title || `eBay Item ${params.itemId}`,
+          price: data.price_usd || 0,
+          currency: data.currency || 'USD',
+          seller: data.seller || 'eBay Seller',
+          seller_feedback: data.seller_rating ? `${data.seller_rating}%` : undefined,
+          condition: data.condition_normalized === 'NEW' ? 'new' : 'used',
+          availability: data.availability_normalized === 'IN_STOCK' ? 'in_stock' : 'out_of_stock',
+          quantity: data.availability_normalized === 'IN_STOCK' ? 5 : 0,
+          domestic_shipping: data.usa_shipping_usd ?? 0,
+          image_url: data.image_url,
+          brand: data.brand,
+          gtin: data.upc,
+          upc: data.upc,
+          mpn: data.mpn,
+          estimated_delivery: data.delivery_min ? `${data.delivery_min} - ${data.delivery_max}` : '4-7 días (USA)',
+          item_url: data.product_url || `https://www.ebay.com/itm/${params.itemId}`,
+          checked_at: data.last_checked_at || checkedAt,
           status: 'LIVE',
-          checked_at: checkedAt
+          error_message: undefined
         };
       }
     } catch {
-      // Fallback transparente a cache / status previo
+      // Fallback transparente a fallback
     }
 
     return this.createFallbackItem(params.itemId);

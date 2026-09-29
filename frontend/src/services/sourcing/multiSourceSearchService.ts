@@ -46,6 +46,7 @@ export interface MultiSourceOfferDetail extends SourceOffer {
   is_auction: boolean;
   landed_cost_estimated_usd: number;
   sale_price_suggested_usd: number;
+  data_origin?: 'LIVE' | 'CACHE' | 'DATABASE';
 }
 
 export interface MultiSourceCanonicalProduct {
@@ -69,6 +70,13 @@ export interface MultiSourceCanonicalProduct {
   // Ofertas agrupadas
   offers: MultiSourceOfferDetail[];
   matched_sources: RetailerSource[];
+  
+  // Origen de datos e integridad
+  data_origin: 'LIVE' | 'CACHE' | 'DATABASE';
+  rating?: number | null;
+  review_count?: number | null;
+  seller?: string;
+  prime?: boolean;
   
   // Precios agregados ("Nuevo desde" / "Usado desde")
   lowest_new_price: number | null;
@@ -99,6 +107,8 @@ export interface MultiSourceCanonicalProduct {
 
 export interface MultiSourceSearchResult {
   query: string;
+  page: number;
+  hasMore: boolean;
   selectedSource: SearchSourceOption;
   sourceStatus: {
     amazon: SourceSearchStatus;
@@ -117,7 +127,9 @@ export class MultiSourceSearchService {
   async searchProducts(
     query: string,
     source: SearchSourceOption = 'all',
-    existingCatalogTitles: string[] = []
+    existingCatalogTitles: string[] = [],
+    page: number = 1,
+    maxResults: number = 20
   ): Promise<MultiSourceSearchResult> {
     const cleanQuery = query.trim();
 
@@ -135,6 +147,8 @@ export class MultiSourceSearchService {
     if (!cleanQuery) {
       return {
         query: '',
+        page: 1,
+        hasMore: false,
         selectedSource: source,
         sourceStatus: resultStatus,
         canonicalProducts: [],
@@ -147,7 +161,7 @@ export class MultiSourceSearchService {
     const promises: Promise<{ source: RetailerSource; items: any[]; error?: string; status?: 'AVAILABLE' | 'NOT_CONFIGURED' | 'ERROR' | 'UNAVAILABLE'; message?: string }>[] = [];
 
     if (source === 'all' || source === 'amazon') {
-      promises.push(this.searchAmazon(cleanQuery));
+      promises.push(this.searchAmazon(cleanQuery, page, maxResults));
     }
     if (source === 'all' || source === 'ebay') {
       promises.push(this.searchEbay(cleanQuery));
@@ -194,11 +208,12 @@ export class MultiSourceSearchService {
 
     // Agrupar y canonizar resultados
     const canonicalProducts = this.aggregateCanonicalProducts(allExtractedItems, existingCatalogTitles);
-
     const totalOffersCount = canonicalProducts.reduce((acc, p) => acc + p.offers.length, 0);
 
     return {
       query: cleanQuery,
+      page,
+      hasMore: canonicalProducts.length >= maxResults,
       selectedSource: source,
       sourceStatus: resultStatus,
       canonicalProducts,
@@ -210,10 +225,14 @@ export class MultiSourceSearchService {
   /**
    * Búsqueda en Amazon vía Zinc API / Edge Functions
    */
-  private async searchAmazon(query: string): Promise<{ source: RetailerSource; items: any[]; error?: string; status?: 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_CONFIGURED' | 'ERROR' }> {
+  private async searchAmazon(
+    query: string,
+    page: number = 1,
+    maxResults: number = 20
+  ): Promise<{ source: RetailerSource; items: any[]; error?: string; status?: 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_CONFIGURED' | 'ERROR' }> {
     try {
       const { data, error } = await supabase.functions.invoke('zinc-search-products', {
-        body: { query, max_results: 25, retailer: 'amazon' }
+        body: { query, max_results: maxResults, page, retailer: 'amazon' }
       });
 
       if (error) {
@@ -239,18 +258,24 @@ export class MultiSourceSearchService {
             asin: r.external_product_id || r.product_id,
             image_url: r.image_url || r.main_image_url_external || r.image,
             availability: r.availability || (r.prime ? 'in_stock' : 'unknown'),
-            condition: 'new'
+            condition: 'new',
+            rating: r.rating || r.stars || null,
+            review_count: r.review_count || r.num_reviews || 0,
+            seller: r.seller || 'Amazon.com',
+            prime: Boolean(r.prime || r.amazon_delivery_type === 'prime'),
+            category: r.category || r.category_path || null,
+            data_origin: 'LIVE'
           })),
           status: 'AVAILABLE'
         };
       }
 
-      // Fallback: Query real candidates previously ingested in international_import_candidates
+      // Fallback a candidatos previamente guardados en base de datos
       const { data: dbCandidates } = await supabase
         .from('international_import_candidates')
         .select('*')
         .ilike('title', `%${query.trim()}%`)
-        .limit(25);
+        .limit(maxResults);
 
       if (dbCandidates && dbCandidates.length > 0) {
         return {
@@ -260,11 +285,16 @@ export class MultiSourceSearchService {
             retailer: 'amazon',
             title: c.title,
             price: Number(c.price_usd || 0),
-            brand: c.brand || 'Jada',
+            brand: c.brand || 'Collectibles',
             asin: c.external_product_id,
             image_url: c.image_url || c.main_image_url_external,
             availability: c.availability || 'available',
-            condition: 'new'
+            condition: 'new',
+            rating: c.rating || null,
+            review_count: c.review_count || 0,
+            seller: 'Amazon.com (DB Cache)',
+            prime: c.amazon_delivery_type === 'prime',
+            data_origin: 'DATABASE'
           })),
           status: 'AVAILABLE'
         };

@@ -62,13 +62,6 @@ export class RadarIntegrationService {
       return filtered.slice(0, limit);
     }
 
-async function withTimeout<T>(promise: PromiseLike<T> | Promise<T>, ms = 300): Promise<T> {
-  return Promise.race([
-    Promise.resolve(promise),
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('DB Timeout')), ms))
-  ]);
-}
-
     // 2. Si no hay datos locales, intentar consulta a Supabase
     try {
       let query = supabase.from('canonical_products').select('*');

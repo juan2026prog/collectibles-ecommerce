@@ -35,7 +35,7 @@ export class BestBuySourceAdapter implements ISourceAdapter {
     raw?: any;
   }): RawProductExtraction {
     const sku = this.extractProductId(input.url) || input.raw?.sku || 'BBY-' + Math.random().toString(36).substring(2, 9).toUpperCase();
-    const price = Number(input.price ?? input.raw?.price ?? 29.99);
+    const price = Number(input.price ?? input.raw?.price ?? 0);
     // Best Buy free shipping threshold often $35+, or $0 for My Best Buy members
     const domesticShipping = Number(input.shipping ?? input.raw?.shipping ?? 0);
 
@@ -50,9 +50,9 @@ export class BestBuySourceAdapter implements ISourceAdapter {
       currency: 'USD',
       domestic_shipping: domesticShipping,
       seller: input.seller || input.raw?.seller || 'Best Buy Official Store',
-      availability: (input.raw?.availability || 'in_stock') as any,
+      availability: (input.raw?.availability || (price > 0 ? 'in_stock' : 'unknown')) as any,
       condition: 'new',
-      image_url: input.raw?.image_url || input.raw?.images?.[0] || 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop',
+      image_url: input.raw?.image_url || input.raw?.images?.[0] || '',
       gallery_images: input.raw?.images || [],
       estimated_delivery: '3-5 días (USA)',
       raw_metadata: input.raw

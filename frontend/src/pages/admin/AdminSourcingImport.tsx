@@ -245,19 +245,14 @@ export default function AdminSourcingImport() {
       console.warn('Could not fetch existing catalog titles from Supabase:', e);
     }
 
-    const initialNormalized = await sourcingService.processResearchPack(
-      SAMPLE_MCFARLANE_RESEARCH_PACK,
-      existingTitles
-    );
-    setProducts(initialNormalized);
-    setActivePackTitle(SAMPLE_MCFARLANE_RESEARCH_PACK.title);
-
-    // Inicializar búsqueda multifuente (con urlQuery si proviene de Radar o query por defecto)
-    const initialQuery = urlQuery || 'Street Fighter Jada Toys';
-    multiSourceSearchService.searchProducts(initialQuery, 'all', existingTitles)
-      .then(res => setMultiSourceResult(res))
-      .catch(err => console.warn('Could not initialize multi-source demo:', err))
-      .finally(() => setLoading(false));
+    if (urlQuery) {
+      multiSourceSearchService.searchProducts(urlQuery, 'all', existingTitles)
+        .then(res => setMultiSourceResult(res))
+        .catch(err => console.warn('Could not execute initial search:', err))
+        .finally(() => setLoading(false));
+    } else {
+      setLoading(false);
+    }
   };
 
   // Ejecutor de búsqueda multifuente interactiva

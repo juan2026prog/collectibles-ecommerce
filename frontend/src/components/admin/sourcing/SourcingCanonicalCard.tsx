@@ -46,6 +46,22 @@ export const SourcingCanonicalCard: React.FC<SourcingCanonicalCardProps> = ({
               className="rounded border-gray-300 text-[#f00856] focus:ring-[#f00856] w-4 h-4 cursor-pointer"
             />
             
+            {/* Origin Badge (LIVE / CACHE / DATABASE) */}
+            {product.data_origin && (
+              <span
+                className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded tracking-wider border ${
+                  product.data_origin === 'LIVE'
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                    : product.data_origin === 'CACHE'
+                    ? 'bg-amber-50 text-amber-700 border-amber-300'
+                    : 'bg-blue-50 text-blue-700 border-blue-300'
+                }`}
+                title={`Origen de datos: ${product.data_origin}`}
+              >
+                {product.data_origin}
+              </span>
+            )}
+
             {/* Badges de Retailers Encontrados */}
             <div className="flex items-center gap-1">
               {product.matched_sources.map(src => (
@@ -110,11 +126,18 @@ export const SourcingCanonicalCard: React.FC<SourcingCanonicalCardProps> = ({
         {/* Imagen, Título y Taxonomía */}
         <div className="flex gap-3.5 items-start">
           <div className="w-20 h-20 rounded-xl bg-gray-50 border border-gray-200 p-1.5 shrink-0 flex items-center justify-center overflow-hidden">
-            <img
-              src={product.image_url || 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=200'}
-              alt={product.title}
-              className="max-h-full max-w-full object-contain"
-            />
+            {product.image_url ? (
+              <img
+                src={product.image_url}
+                alt={product.title}
+                className="max-h-full max-w-full object-contain"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
+            ) : (
+              <div className="text-[10px] text-gray-400 font-medium text-center">Sin imagen</div>
+            )}
           </div>
 
           <div className="min-w-0 flex-1 space-y-1">

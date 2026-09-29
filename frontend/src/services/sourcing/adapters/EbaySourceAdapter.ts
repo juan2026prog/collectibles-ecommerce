@@ -67,7 +67,7 @@ export class EbaySourceAdapter implements ISourceAdapter {
       seller: sellerName,
       availability: (input.raw?.availability || (price > 0 ? 'in_stock' : 'unknown')) as any,
       condition: (input.raw?.condition || 'new') as any,
-      image_url: input.raw?.image_url || input.raw?.images?.[0] || 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop',
+      image_url: input.raw?.image_url || input.raw?.images?.[0] || '',
       gallery_images: input.raw?.images || [],
       estimated_delivery: input.raw?.estimated_delivery || '4-7 días (USA)',
       raw_metadata: {
