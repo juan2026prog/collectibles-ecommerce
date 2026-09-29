@@ -806,6 +806,7 @@ export default function AdminAIControlCenter() {
                     <tr>
                       <th className="p-2.5">Modelo</th>
                       <th className="p-2.5 text-right">Input / 1M</th>
+                      <th className="p-2.5 text-right">Cached In / 1M</th>
                       <th className="p-2.5 text-right">Output / 1M</th>
                       <th className="p-2.5">Fuente</th>
                       <th className="p-2.5">Fecha Snapshot</th>
@@ -819,24 +820,33 @@ export default function AdminAIControlCenter() {
                         <tr key={p.model} className="hover:bg-gray-800/30">
                           <td className="p-2.5 font-mono text-purple-300 font-bold">{p.model}</td>
                           <td className="p-2.5 text-right font-mono text-emerald-400">${p.input_price_per_1m.toFixed(2)}</td>
+                          <td className="p-2.5 text-right font-mono text-emerald-300/80">
+                            {(p as any).cached_input_price_per_1m ? `$${(p as any).cached_input_price_per_1m.toFixed(3)}` : '—'}
+                          </td>
                           <td className="p-2.5 text-right font-mono text-emerald-400">${p.output_price_per_1m.toFixed(2)}</td>
-                          <td className="p-2.5 font-mono text-[10px] text-gray-400">{p.source}</td>
+                          <td className="p-2.5 font-mono text-[10px] text-gray-400">
+                            <span className="truncate max-w-[140px] block" title={p.source}>
+                              {p.source}
+                            </span>
+                          </td>
                           <td className="p-2.5 font-mono text-gray-400">{p.verified_at}</td>
                           <td className="p-2.5 text-center font-mono text-gray-400">{p.age_days}d / max {p.max_age_days}d</td>
                           <td className="p-2.5 text-center">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                               p.status === 'VERIFIED'
                                 ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                                : p.status === 'STALE'
+                                ? 'bg-amber-950 text-amber-300 border border-amber-800'
                                 : 'bg-rose-950 text-rose-400 border border-rose-800'
                             }`}>
-                              {p.status}
+                              {p.status === 'VERIFIED' ? 'VERIFIED' : (p.status === 'STALE' ? 'PRECIOS DESACTUALIZADOS' : 'PRECIO NO VERIFICADO')}
                             </span>
                           </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={7} className="p-4 text-center text-gray-500 font-medium">
+                        <td colSpan={8} className="p-4 text-center text-gray-500 font-medium">
                           No hay detalles de precios disponibles del servidor.
                         </td>
                       </tr>

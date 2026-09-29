@@ -21,6 +21,43 @@ const ENGINE_COUNTRY_FLAG = {
   RELEASE_INTELLIGENCE: 'release_intelligence_enabled'
 };
 
+function extractAllowedEvidenceIds(evidence) {
+  const allowed = new Set();
+  if (!evidence || typeof evidence !== 'object') return allowed;
+
+  const traverse = (item) => {
+    if (!item) return;
+    if (typeof item === 'string' || typeof item === 'number') {
+      allowed.add(String(item));
+    } else if (Array.isArray(item)) {
+      item.forEach(traverse);
+    } else if (typeof item === 'object') {
+      if (item.id) allowed.add(String(item.id));
+      if (item.canonical_sku) allowed.add(String(item.canonical_sku));
+      if (item.sku) allowed.add(String(item.sku));
+      if (item.product_id) allowed.add(String(item.product_id));
+      if (item.source_product_id) allowed.add(String(item.source_product_id));
+      if (item.external_product_id) allowed.add(String(item.external_product_id));
+      if (item.asin) allowed.add(String(item.asin));
+      if (item.item_id) allowed.add(String(item.item_id));
+      if (item.gap_id) allowed.add(String(item.gap_id));
+      if (item.event_id) allowed.add(String(item.event_id));
+      if (item.wishlist_id) allowed.add(String(item.wishlist_id));
+      if (item.source_id) allowed.add(String(item.source_id));
+      if (item.candidate_id) allowed.add(String(item.candidate_id));
+
+      for (const [k, v] of Object.entries(item)) {
+        if (Array.isArray(v) || (typeof v === 'object' && v !== null)) {
+          traverse(v);
+        }
+      }
+    }
+  };
+
+  traverse(evidence);
+  return allowed;
+}
+
 function instructionsFor(engine, operation) {
   const common = 'You are the Collectibles 2026 AI engine. Never invent inventory, price, stock, release dates, retailer availability, shipping, customs or product facts. Treat supplied catalog/context data as authoritative. Reply in Spanish unless the user explicitly requests another language.';
   if (engine === 'AI_SEARCH') {
@@ -105,7 +142,7 @@ export default async function handler(req, res) {
           return res.status(503).json({
             success: false,
             status: 'CIRCUIT_OPEN',
-            error: 'AI Circuit Bre Breaker is OPEN due to budget/error thresholds.'
+            error: 'AI Circuit Breaker is OPEN due to budget/error thresholds.'
           });
         }
         if (sysData.default_timeout_ms) {
@@ -254,9 +291,67 @@ export default async function handler(req, res) {
       }
     }
 
+    const isStructuredAdvisoryEngine = ['PRODUCT_DISCOVERY','TREND_ANALYSIS','PRODUCT_CURATION','COUNTRY_INTELLIGENCE','RADAR_INTELLIGENCE','RELEASE_INTELLIGENCE'].includes(engine);
+    const evidenceObj = payload?.evidence || {};
+    const evidenceFingerprint = generateEvidenceFingerprint(evidenceObj);
+
+    // 2. Fingerprint Cache Lookup for Advisory Analysis
+    if (isStructuredAdvisoryEngine && client && context?.force_refresh !== true && context?.certification !== true) {
+      try {
+        const cacheTtlHours = 2;
+        const cacheCutoff = new Date(Date.now() - (cacheTtlHours * 3600 * 1000)).toISOString();
+        const { data: cachedRun } = await client
+          .from('ai_intelligence_runs')
+          .select('*')
+          .eq('evidence_fingerprint', evidenceFingerprint)
+          .eq('engine', engine)
+          .eq('status', 'SUCCESS')
+          .gte('created_at', cacheCutoff)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (cachedRun) {
+          return res.status(200).json({
+            success: true,
+            status: 'SUCCESS',
+            provider: 'OPENAI',
+            model: cachedRun.model,
+            cached: true,
+            data: {
+              summary: cachedRun.summary,
+              confidence: cachedRun.confidence,
+              scoreAdjustment: cachedRun.score_adjustment,
+              action: cachedRun.advisory_action,
+              signals: cachedRun.signals,
+              risks: cachedRun.risks,
+              recommendations: cachedRun.recommendations,
+              evidenceIds: cachedRun.evidence_ids
+            },
+            request_id: cachedRun.request_id,
+            latency_ms: 1,
+            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+            pricing: {
+              model: cachedRun.model,
+              input_tokens: 0,
+              output_tokens: 0,
+              total_tokens: 0,
+              input_cost_usd: 0,
+              output_cost_usd: 0,
+              estimated_cost_usd: 0,
+              pricing_status: 'PRICED',
+              pricing_source: 'EVIDENCE_FINGERPRINT_CACHE'
+            }
+          });
+        }
+      } catch (cacheErr) {
+        console.warn('[AI Execute] Fingerprint cache lookup skipped:', cacheErr.message);
+      }
+    }
+
     const resolvedInstructions = instructionsFor(engine, operation);
 
-    // 2. Call OpenAI Responses API server-side
+    // 3. Call OpenAI Responses API server-side
     const result = await callOpenAIResponses({
       model: selectedModel,
       input: resolvedInput,
@@ -274,7 +369,7 @@ export default async function handler(req, res) {
     const elapsedMs = Date.now() - startTime;
     const finalRequestId = result.requestId || requestId;
 
-    // 3. Log Success Telemetry to ai_usage_events
+    // 4. Log Success Telemetry to ai_usage_events
     if (client) {
       try {
         const usagePayload = {
@@ -324,23 +419,49 @@ export default async function handler(req, res) {
       }
     }
 
-    // 4. Parse structured Part 3 outputs server-side before returning them.
+    // 5. Parse structured Part 3 outputs server-side and Validate Evidence IDs
     let structuredData = null;
-    if (['PRODUCT_DISCOVERY','TREND_ANALYSIS','PRODUCT_CURATION','COUNTRY_INTELLIGENCE','RADAR_INTELLIGENCE','RELEASE_INTELLIGENCE'].includes(engine)) {
+    let intelligenceRunStatus = 'SUCCESS';
+
+    if (isStructuredAdvisoryEngine) {
       try {
         const clean = String(result.outputText || '').trim().replace(/^\`\`\`(?:json)?/i, '').replace(/\`\`\`$/i, '').trim();
         structuredData = JSON.parse(clean);
       } catch {
         throw new OpenAIError('INVALID_OUTPUT', 502, 'OpenAI returned invalid structured intelligence output.');
       }
+
+      // Evidence ID Strict Validation: returnedEvidenceIds ⊆ allowedEvidenceIds
+      const allowedEvidenceIds = extractAllowedEvidenceIds(evidenceObj);
+      const returnedEvidenceIds = Array.isArray(structuredData.evidenceIds) ? structuredData.evidenceIds : [];
+
+      let invalidEvidenceDetected = false;
+      if (returnedEvidenceIds.length > 0 && allowedEvidenceIds.size > 0) {
+        for (const returnedId of returnedEvidenceIds) {
+          if (!allowedEvidenceIds.has(String(returnedId))) {
+            invalidEvidenceDetected = true;
+            break;
+          }
+        }
+      }
+
+      if (invalidEvidenceDetected) {
+        // Neutralize AI adjustment; deterministic Collectibles score remains authoritative.
+        structuredData.scoreAdjustment = 0;
+        structuredData.action = 'REVIEW';
+        structuredData.risks = [
+          ...(structuredData.risks || []),
+          'Alerta de Integridad: OpenAI retornó identificadores de evidencia no sustentados en los datos suministrados.'
+        ];
+        intelligenceRunStatus = 'INVALID_AI_EVIDENCE';
+      }
     }
 
     // Persist advisory Part 3 result separately from raw provider telemetry.
     if (structuredData && client) {
       try {
-        const evidence = payload?.evidence || {};
-        const evidenceCount = Object.values(evidence).reduce((sum, value) => sum + (Array.isArray(value) ? value.length : 0), 0);
-        const evidenceFingerprint = generateEvidenceFingerprint(evidence);
+        const evidenceCount = Object.values(evidenceObj).reduce((sum, value) => sum + (Array.isArray(value) ? value.length : 0), 0);
+        const scoreAdjustment = Math.max(-10, Math.min(10, Number(structuredData.scoreAdjustment || 0)));
         const intelligencePayload = {
           engine,
           country_code: country || 'GLOBAL',
@@ -349,7 +470,7 @@ export default async function handler(req, res) {
           evidence_count: evidenceCount,
           summary: structuredData.summary || null,
           confidence: Number(structuredData.confidence || 0),
-          score_adjustment: Math.max(-10, Math.min(10, Number(structuredData.scoreAdjustment || 0))),
+          score_adjustment: scoreAdjustment,
           advisory_action: ['REVIEW','WATCH','IGNORE'].includes(structuredData.action) ? structuredData.action : 'WATCH',
           signals: Array.isArray(structuredData.signals) ? structuredData.signals : [],
           risks: Array.isArray(structuredData.risks) ? structuredData.risks : [],
@@ -357,8 +478,12 @@ export default async function handler(req, res) {
           evidence_ids: Array.isArray(structuredData.evidenceIds) ? structuredData.evidenceIds : [],
           request_id: finalRequestId,
           model: result.model,
-          status: 'SUCCESS',
-          metadata: { operation, decision_mode: 'ADVISORY_ONLY' }
+          status: intelligenceRunStatus,
+          metadata: { 
+            operation, 
+            decision_mode: 'ADVISORY_ONLY',
+            invalid_evidence_neutralized: intelligenceRunStatus === 'INVALID_AI_EVIDENCE'
+          }
         };
 
         const { error: runInsertError } = await client.from('ai_intelligence_runs').insert(intelligencePayload);
@@ -373,10 +498,10 @@ export default async function handler(req, res) {
       }
     }
 
-    // 5. Return sanitized safe result
+    // 6. Return sanitized safe result
     return res.status(200).json({
       success: true,
-      status: 'SUCCESS',
+      status: intelligenceRunStatus,
       provider: 'OPENAI',
       model: result.model,
       text: result.outputText,
