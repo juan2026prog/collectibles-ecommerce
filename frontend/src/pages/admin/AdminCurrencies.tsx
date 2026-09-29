@@ -405,24 +405,24 @@ export default function AdminCurrencies() {
               {/* Source & Metadata Grid */}
               <div className="space-y-3 text-xs">
                 <div className="flex justify-between py-1 border-b border-white/5">
-                  <span className="text-gray-400">Fuente Oficial:</span>
+                  <span className="text-gray-400">Referencia Institucional:</span>
                   <span className="text-white font-medium text-right">{activeDetail.source_name}</span>
                 </div>
 
                 <div className="flex justify-between py-1 border-b border-white/5">
-                  <span className="text-gray-400">Proveedor API:</span>
+                  <span className="text-gray-400">Data Provider (API):</span>
                   <span className="font-mono text-gray-300">{activeDetail.provider}</span>
                 </div>
 
                 <div className="flex justify-between py-1 border-b border-white/5">
-                  <span className="text-gray-400">URL Institucional:</span>
+                  <span className="text-gray-400">Portal del Banco Central:</span>
                   <a
                     href={activeDetail.source_url}
                     target="_blank"
                     rel="noreferrer"
                     className="text-[#f00856] hover:underline flex items-center gap-1 font-mono text-[11px] truncate max-w-[200px]"
                   >
-                    Ver Fuente <ExternalLink className="w-3 h-3" />
+                    Ver Portal <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
 

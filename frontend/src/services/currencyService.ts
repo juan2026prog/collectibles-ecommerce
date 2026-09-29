@@ -73,7 +73,7 @@ export const COUNTRY_CURRENCY_CONFIG: Record<DisplayCurrency, CountryCurrencyMet
     symbol: '$',
     is_active: true,
     is_auto_sync: true,
-    source_name: 'Banco Central del Uruguay / Open Exchange Rates',
+    source_name: 'Banco Central del Uruguay (BCU)',
     source_url: 'https://www.bcu.gub.uy/Estadisticas-e-Indicadores/Paginas/Cotizaciones.aspx'
   },
   ARS: {
@@ -83,7 +83,7 @@ export const COUNTRY_CURRENCY_CONFIG: Record<DisplayCurrency, CountryCurrencyMet
     symbol: '$',
     is_active: false,
     is_auto_sync: true,
-    source_name: 'Banco Central de la República Argentina / Open Exchange Rates',
+    source_name: 'Banco Central de la República Argentina (BCRA)',
     source_url: 'https://www.bcra.gob.ar/'
   },
   CLP: {
@@ -93,7 +93,7 @@ export const COUNTRY_CURRENCY_CONFIG: Record<DisplayCurrency, CountryCurrencyMet
     symbol: '$',
     is_active: false,
     is_auto_sync: true,
-    source_name: 'Banco Central de Chile / Open Exchange Rates',
+    source_name: 'Banco Central de Chile',
     source_url: 'https://www.bcentral.cl/'
   },
   PEN: {
@@ -103,7 +103,7 @@ export const COUNTRY_CURRENCY_CONFIG: Record<DisplayCurrency, CountryCurrencyMet
     symbol: 'S/',
     is_active: false,
     is_auto_sync: true,
-    source_name: 'Banco Central de Reserva del Perú / Open Exchange Rates',
+    source_name: 'Banco Central de Reserva del Perú (BCRP)',
     source_url: 'https://www.bcrp.gob.pe/'
   },
   MXN: {
@@ -113,7 +113,7 @@ export const COUNTRY_CURRENCY_CONFIG: Record<DisplayCurrency, CountryCurrencyMet
     symbol: '$',
     is_active: false,
     is_auto_sync: true,
-    source_name: 'Banco de México (Banxico) / Open Exchange Rates',
+    source_name: 'Banco de México (Banxico)',
     source_url: 'https://www.banxico.org.mx/'
   }
 };

@@ -1,4 +1,4 @@
-﻿// ==============================================================================
+// ==============================================================================
 // COLLECTIBLES 2026 — SERVER-SIDE FX SYNC & OVERRIDE HANDLER
 // Path: /api/currency-sync.js
 // GET: Publicly read verified exchange rates & status
@@ -21,7 +21,7 @@ export const COUNTRY_CURRENCIES = [
     country_code: 'UY',
     country_name: 'Uruguay',
     quote_currency: 'UYU',
-    source_name: 'Banco Central del Uruguay / Open Exchange Rates',
+    source_name: 'Banco Central del Uruguay (BCU)',
     source_url: 'https://www.bcu.gub.uy/Estadisticas-e-Indicadores/Paginas/Cotizaciones.aspx',
     is_active: true
   },
@@ -29,7 +29,7 @@ export const COUNTRY_CURRENCIES = [
     country_code: 'AR',
     country_name: 'Argentina',
     quote_currency: 'ARS',
-    source_name: 'Banco Central de la República Argentina / Open Exchange Rates',
+    source_name: 'Banco Central de la República Argentina (BCRA)',
     source_url: 'https://www.bcra.gob.ar/',
     is_active: false
   },
@@ -37,7 +37,7 @@ export const COUNTRY_CURRENCIES = [
     country_code: 'CL',
     country_name: 'Chile',
     quote_currency: 'CLP',
-    source_name: 'Banco Central de Chile / Open Exchange Rates',
+    source_name: 'Banco Central de Chile',
     source_url: 'https://www.bcentral.cl/',
     is_active: false
   },
@@ -45,7 +45,7 @@ export const COUNTRY_CURRENCIES = [
     country_code: 'PE',
     country_name: 'Perú',
     quote_currency: 'PEN',
-    source_name: 'Banco Central de Reserva del Perú / Open Exchange Rates',
+    source_name: 'Banco Central de Reserva del Perú (BCRP)',
     source_url: 'https://www.bcrp.gob.pe/',
     is_active: false
   },
@@ -53,7 +53,7 @@ export const COUNTRY_CURRENCIES = [
     country_code: 'MX',
     country_name: 'México',
     quote_currency: 'MXN',
-    source_name: 'Banco de México (Banxico) / Open Exchange Rates',
+    source_name: 'Banco de México (Banxico)',
     source_url: 'https://www.banxico.org.mx/',
     is_active: false
   },
