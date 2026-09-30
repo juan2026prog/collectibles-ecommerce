@@ -31,57 +31,82 @@ export default function AdminDashboard() {
   async function fetchDashboardData() {
     setLoading(true);
     try {
+      // 1. Try fetching aggregated metrics directly via RPC
+      const { data: rpcMetrics, error: rpcErr } = await supabase.rpc('get_admin_dashboard_metrics');
+
+      // 2. Fetch list data (recent orders, low stock, top products)
       const [
-        { count: productCount },
-        { count: customerCount },
         { data: orders },
         { data: products },
-        { data: lowStock },
-        { data: suborders },
+        { data: lowStock }
       ] = await Promise.all([
-        supabase.from('products').select('*', { count: 'exact', head: true }),
-        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_admin', false),
         supabase.from('orders').select('id, total_amount, status, created_at, customer:profiles(email, first_name, last_name)').order('created_at', { ascending: false }).limit(10),
         supabase.from('products').select('id, title, base_price, status, product_variants(inventory_count)').order('created_at', { ascending: false }).limit(5),
         supabase.from('product_variants').select('id, sku, inventory_count, products(title)').lt('inventory_count', 5).order('inventory_count').limit(5),
-        supabase.from('order_suborders').select('id, status, vendor_name, parentOrder:orders(payment_status, status)'),
       ]);
 
       const allOrders = orders || [];
-      const revenue = allOrders.reduce((sum: number, o: any) => sum + (o.status === 'paid' || o.status === 'shipped' || o.status === 'delivered' ? Number(o.total_amount) || 0 : 0), 0);
-      const pending = allOrders.filter((o: any) => o.status === 'pending').length;
 
-      const colPending = (suborders || []).filter((s: any) => 
-        (!s.vendor_name || s.vendor_name?.toLowerCase().includes('collectibles')) &&
-        (s.parentOrder?.payment_status === 'approved' || s.parentOrder?.status === 'paid') &&
-        (!s.status || s.status === 'pendiente' || s.status === 'preparando')
-      ).length;
+      if (!rpcErr && rpcMetrics) {
+        setStats({
+          totalRevenue: Number(rpcMetrics.totalRevenue) || 0,
+          activeOrders: Number(rpcMetrics.activeOrders) || 0,
+          totalProducts: Number(rpcMetrics.totalProducts) || 0,
+          totalCustomers: Number(rpcMetrics.totalCustomers) || 0,
+          lowStockCount: Number(rpcMetrics.lowStockCount) || 0,
+          pendingOrders: Number(rpcMetrics.pendingOrders) || 0,
+          collectiblesPending: Number(rpcMetrics.collectiblesPending) || 0,
+          mktPendingOrders: Number(rpcMetrics.mktPendingOrders) || 0,
+          mktPendingVendors: Number(rpcMetrics.mktPendingVendors) || 0,
+        });
+      } else {
+        // Fallback: Scoped queries avoiding full table scans
+        const [
+          { count: productCount },
+          { count: customerCount },
+          { data: suborders }
+        ] = await Promise.all([
+          supabase.from('products').select('*', { count: 'exact', head: true }).eq('is_active', true),
+          supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_admin', false),
+          supabase.from('order_suborders')
+            .select('id, status, vendor_name, parentOrder:orders(payment_status, status)')
+            .in('status', ['pending', 'pendiente', 'preparando'])
+            .limit(100),
+        ]);
 
-      const mktOrders = (suborders || []).filter((s: any) => 
-        s.vendor_name && !s.vendor_name?.toLowerCase().includes('collectibles') &&
-        (s.parentOrder?.payment_status === 'approved' || s.parentOrder?.status === 'paid') &&
-        (!s.status || s.status === 'pendiente' || s.status === 'preparando')
-      ).length;
+        const revenue = allOrders.reduce((sum: number, o: any) => sum + (o.status === 'paid' || o.status === 'shipped' || o.status === 'delivered' ? Number(o.total_amount) || 0 : 0), 0);
+        const pending = allOrders.filter((o: any) => o.status === 'pending').length;
 
-      const mktVendors = new Set(
-        (suborders || []).filter((s: any) => 
+        const colPending = (suborders || []).filter((s: any) => 
+          (!s.vendor_name || s.vendor_name?.toLowerCase().includes('collectibles')) &&
+          (s.parentOrder?.payment_status === 'approved' || s.parentOrder?.status === 'paid')
+        ).length;
+
+        const mktOrders = (suborders || []).filter((s: any) => 
           s.vendor_name && !s.vendor_name?.toLowerCase().includes('collectibles') &&
-          (s.parentOrder?.payment_status === 'approved' || s.parentOrder?.status === 'paid') &&
-          (!s.status || s.status === 'pendiente' || s.status === 'preparando')
-        ).map((s: any) => s.vendor_name)
-      ).size;
+          (s.parentOrder?.payment_status === 'approved' || s.parentOrder?.status === 'paid')
+        ).length;
 
-      setStats({
-        totalRevenue: revenue,
-        activeOrders: allOrders.length,
-        totalProducts: productCount || 0,
-        totalCustomers: customerCount || 0,
-        lowStockCount: (lowStock || []).length,
-        pendingOrders: pending,
-        collectiblesPending: colPending,
-        mktPendingOrders: mktOrders,
-        mktPendingVendors: mktVendors,
-      });
+        const mktVendors = new Set(
+          (suborders || []).filter((s: any) => 
+            s.vendor_name && !s.vendor_name?.toLowerCase().includes('collectibles') &&
+            (s.parentOrder?.payment_status === 'approved' || s.parentOrder?.status === 'paid')
+          ).map((s: any) => s.vendor_name)
+        ).size;
+
+        setStats({
+          totalRevenue: revenue,
+          activeOrders: allOrders.length,
+          totalProducts: productCount || 0,
+          totalCustomers: customerCount || 0,
+          lowStockCount: (lowStock || []).length,
+          pendingOrders: pending,
+          collectiblesPending: colPending,
+          mktPendingOrders: mktOrders,
+          mktPendingVendors: mktVendors,
+        });
+      }
+
       setRecentOrders(allOrders.slice(0, 8));
       setTopProducts(products || []);
     } catch (err) {

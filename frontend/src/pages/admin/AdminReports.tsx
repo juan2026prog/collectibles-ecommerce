@@ -22,73 +22,110 @@ export default function AdminReports() {
 
   async function fetchReports() {
     setLoading(true);
-    const [
-      { data: orders },
-      { count: productCount },
-      { count: customerCount },
-      { data: orderItems },
-      { data: alertData },
-      { data: cartsData },
-    ] = await Promise.all([
-      supabase.from('orders').select('id, total_amount, status, created_at'),
-      supabase.from('products').select('*', { count: 'exact', head: true }),
-      supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_admin', false),
-      supabase.from('order_items').select('quantity, unit_price, products(title)').limit(100),
-      supabase.from('admin_alerts').select('*').order('created_at', { ascending: false }).limit(5),
-      supabase.from('abandoned_checkouts').select('*').order('created_at', { ascending: false }).limit(10),
-    ]);
+    try {
+      // 1. Try server-side aggregation RPC
+      const { data: rpcReports, error: rpcErr } = await supabase.rpc('get_admin_reports_metrics');
 
-    const allOrders = orders || [];
-    const paidStatuses = ['paid', 'shipped', 'delivered'];
-    const paid = allOrders.filter(o => paidStatuses.includes(o.status));
-    const revenue = paid.reduce((s, o) => s + (Number(o.total_amount) || 0), 0);
-    const pending = allOrders.filter(o => o.status === 'pending').length;
-    const cancelled = allOrders.filter(o => o.status === 'cancelled').length;
+      const [
+        { count: productCount },
+        { count: customerCount },
+        { data: orderItems },
+        { data: alertData },
+        { data: cartsData },
+      ] = await Promise.all([
+        supabase.from('products').select('*', { count: 'exact', head: true }).eq('is_active', true),
+        supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_admin', false),
+        supabase.from('order_items').select('quantity, unit_price, products(title)').limit(100),
+        supabase.from('admin_alerts').select('*').order('created_at', { ascending: false }).limit(5),
+        supabase.from('abandoned_checkouts').select('*').order('created_at', { ascending: false }).limit(10),
+      ]);
 
-    const allCarts = cartsData || [];
-    const abanRev = allCarts.reduce((s, c) => s + (Number(c.total_amount) || 0), 0);
+      const allCarts = cartsData || [];
+      const abanRev = allCarts.reduce((s, c) => s + (Number(c.total_amount) || 0), 0);
 
-    setAlerts(alertData || []);
-    setAbandonedCarts(allCarts);
+      setAlerts(alertData || []);
+      setAbandonedCarts(allCarts);
 
-    setStats({
-      totalRevenue: revenue,
-      orderCount: allOrders.length,
-      avgTicket: paid.length ? Math.round(revenue / paid.length) : 0,
-      productCount: productCount || 0,
-      customerCount: customerCount || 0,
-      paidOrders: paid.length,
-      pendingOrders: pending,
-      cancelledOrders: cancelled,
-      abandonedTotal: abanRev,
-      abandonedCount: allCarts.length
-    });
+      // Compute Top Products
+      const productSales: Record<string, { title: string; qty: number; revenue: number }> = {};
+      (orderItems || []).forEach((item: any) => {
+        const title = item.products?.title || 'Desconocido';
+        if (!productSales[title]) productSales[title] = { title, qty: 0, revenue: 0 };
+        productSales[title].qty += item.quantity || 0;
+        productSales[title].revenue += (item.quantity || 0) * (Number(item.unit_price) || 0);
+      });
+      setTopProducts(Object.values(productSales).sort((a, b) => b.revenue - a.revenue).slice(0, 10));
 
-    // Group by month
-    const monthMap: Record<string, { revenue: number; orders: number }> = {};
-    allOrders.forEach(o => {
-      const d = new Date(o.created_at);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (!monthMap[key]) monthMap[key] = { revenue: 0, orders: 0 };
-      monthMap[key].orders++;
-      if (paidStatuses.includes(o.status)) monthMap[key].revenue += Number(o.total_amount) || 0;
-    });
-    const monthly = Object.entries(monthMap)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-6)
-      .map(([month, data]) => ({ month, ...data }));
-    setMonthlyData(monthly);
+      if (!rpcErr && rpcReports) {
+        setStats({
+          totalRevenue: Number(rpcReports.totalRevenue) || 0,
+          orderCount: Number(rpcReports.orderCount) || 0,
+          avgTicket: Number(rpcReports.avgTicket) || 0,
+          productCount: productCount || 0,
+          customerCount: customerCount || 0,
+          paidOrders: Number(rpcReports.paidOrders) || 0,
+          pendingOrders: Number(rpcReports.pendingOrders) || 0,
+          cancelledOrders: Number(rpcReports.cancelledOrders) || 0,
+          abandonedTotal: abanRev,
+          abandonedCount: allCarts.length
+        });
 
-    // Top products by order frequency
-    const productSales: Record<string, { title: string; qty: number; revenue: number }> = {};
-    (orderItems || []).forEach((item: any) => {
-      const title = item.products?.title || 'Desconocido';
-      if (!productSales[title]) productSales[title] = { title, qty: 0, revenue: 0 };
-      productSales[title].qty += item.quantity || 0;
-      productSales[title].revenue += (item.quantity || 0) * (Number(item.unit_price) || 0);
-    });
-    setTopProducts(Object.values(productSales).sort((a, b) => b.revenue - a.revenue).slice(0, 10));
-    setLoading(false);
+        const rpcMonthly = Array.isArray(rpcReports.monthlyData) ? rpcReports.monthlyData : [];
+        setMonthlyData(rpcMonthly.map((m: any) => ({
+          month: m.month,
+          revenue: Number(m.revenue) || 0,
+          orders: Number(m.orders) || 0
+        })));
+      } else {
+        // Fallback: Scoped orders query (last 6 months)
+        const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: orders } = await supabase
+          .from('orders')
+          .select('id, total_amount, status, created_at')
+          .gte('created_at', sixMonthsAgo)
+          .limit(500);
+
+        const allOrders = orders || [];
+        const paidStatuses = ['paid', 'shipped', 'delivered'];
+        const paid = allOrders.filter(o => paidStatuses.includes(o.status));
+        const revenue = paid.reduce((s, o) => s + (Number(o.total_amount) || 0), 0);
+        const pending = allOrders.filter(o => o.status === 'pending').length;
+        const cancelled = allOrders.filter(o => o.status === 'cancelled').length;
+
+        setStats({
+          totalRevenue: revenue,
+          orderCount: allOrders.length,
+          avgTicket: paid.length ? Math.round(revenue / paid.length) : 0,
+          productCount: productCount || 0,
+          customerCount: customerCount || 0,
+          paidOrders: paid.length,
+          pendingOrders: pending,
+          cancelledOrders: cancelled,
+          abandonedTotal: abanRev,
+          abandonedCount: allCarts.length
+        });
+
+        // Group by month
+        const monthMap: Record<string, { revenue: number; orders: number }> = {};
+        allOrders.forEach(o => {
+          const d = new Date(o.created_at);
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          if (!monthMap[key]) monthMap[key] = { revenue: 0, orders: 0 };
+          monthMap[key].orders++;
+          if (paidStatuses.includes(o.status)) monthMap[key].revenue += Number(o.total_amount) || 0;
+        });
+        const monthly = Object.entries(monthMap)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .slice(-6)
+          .map(([month, data]) => ({ month, ...data }));
+        setMonthlyData(monthly);
+      }
+    } catch (err) {
+      console.error('Reports fetch error:', err);
+      toast({ title: 'Error cargando reportes', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function exportCSV() {

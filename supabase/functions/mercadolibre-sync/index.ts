@@ -1500,7 +1500,11 @@ Deno.serve(async (req) => {
           throw new Error(`Failed to query sync queue: ${qErr.message}`);
         }
 
-        // Backlog check and alert
+        if (!queueItems || queueItems.length === 0) {
+          return new Response(JSON.stringify({ success: true, count: 0, message: "Queue is empty." }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
+        }
+
+        // Backlog check and alert only when items exist
         const { count: backlogCount, error: cntErr } = await supabase
           .from('ml_sync_queue')
           .select('*', { count: 'exact', head: true })

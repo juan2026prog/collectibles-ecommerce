@@ -36,24 +36,28 @@ export function useProducts(filters: ProductFilters = {}) {
   const fetchProducts = useCallback(async () => {
     setLoading(true);
 
-    // ── Step 1: resolve slug → id (Supabase can't filter on join paths) ──
+    // ── Step 1: resolve filter entities in parallel ──
     let categoryId: string | null = null;
     let brandId: string | null = null;
     let productIds: string[] | null = null;
+    let categoryIds: string[] | null = null;
 
+    const [groupRes, catRes, brandRes, licRes, themeRes, colRes] = await Promise.all([
+      filters.group ? supabase.from('product_groups').select('id').eq('slug', filters.group).eq('is_active', true).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      filters.category ? supabase.from('categories').select('id').eq('slug', filters.category).eq('is_active', true).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      filters.brand ? supabase.from('brands').select('id').eq('slug', filters.brand).eq('status', 'approved').eq('is_active', true).eq('is_public', true).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      filters.license ? supabase.from('licenses').select('id').eq('slug', filters.license).eq('is_active', true).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      filters.theme ? supabase.from('themes').select('id').eq('slug', filters.theme).eq('is_active', true).maybeSingle() : Promise.resolve({ data: null, error: null }),
+      filters.collection_id ? supabase.from('vendor_store_collection_products').select('product_id').eq('collection_id', filters.collection_id) : Promise.resolve({ data: null, error: null })
+    ]);
+
+    // Handle group
     if (filters.group) {
-      const { data: groupData } = await supabase
-        .from('product_groups')
-        .select('id')
-        .eq('slug', filters.group)
-        .eq('is_active', true)
-        .single();
-
-      if (groupData) {
+      if (groupRes.data) {
         const { data: items } = await supabase
           .from('product_group_items')
           .select('product_id')
-          .eq('group_id', groupData.id);
+          .eq('group_id', groupRes.data.id);
         
         if (items && items.length > 0) {
           productIds = items.map(x => x.product_id);
@@ -71,66 +75,37 @@ export function useProducts(filters: ProductFilters = {}) {
       }
     }
 
-    let categoryIds: string[] | null = null;
+    // Handle category & subcategories
     if (filters.category) {
-      const { data } = await supabase
-        .from('categories')
-        .select('id')
-        .eq('slug', filters.category)
-        .eq('is_active', true)
-        .single();
-      categoryId = data?.id ?? null;
+      categoryId = catRes.data?.id ?? null;
       if (!categoryId) { setProducts([]); setCount(0); setLoading(false); return; }
       
-      // Fetch subcategories
       const { data: subcats } = await supabase
         .from('categories')
         .select('id')
         .eq('parent_id', categoryId)
         .eq('is_active', true);
       
-      if (subcats && subcats.length > 0) {
-        categoryIds = [categoryId, ...subcats.map(x => x.id)];
-      } else {
-        categoryIds = [categoryId];
-      }
+      categoryIds = subcats && subcats.length > 0 ? [categoryId, ...subcats.map(x => x.id)] : [categoryId];
     }
 
+    // Handle brand
     if (filters.brand) {
-      const { data } = await supabase
-        .from('brands')
-        .select('id')
-        .eq('slug', filters.brand)
-        .eq('status', 'approved')
-        .eq('is_active', true)
-        .eq('is_public', true)
-        .single();
-      brandId = data?.id ?? null;
+      brandId = brandRes.data?.id ?? null;
       if (!brandId) { setProducts([]); setCount(0); setLoading(false); return; }
     }
 
+    // Handle license
     if (filters.license) {
-      const { data: licData } = await supabase
-        .from('licenses')
-        .select('id')
-        .eq('slug', filters.license)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (licData) {
+      if (licRes.data) {
         const { data: directProds } = await supabase
           .from('products')
           .select('id')
-          .eq('license_id', licData.id);
+          .eq('license_id', licRes.data.id);
         
         const licProdIds = directProds?.map(x => x.id) || [];
-
         if (licProdIds.length > 0) {
-          if (productIds) {
-            productIds = productIds.filter(id => licProdIds.includes(id));
-          } else {
-            productIds = licProdIds;
-          }
+          productIds = productIds ? productIds.filter(id => licProdIds.includes(id)) : licProdIds;
         } else {
           setProducts([]);
           setCount(0);
@@ -145,19 +120,13 @@ export function useProducts(filters: ProductFilters = {}) {
       }
     }
 
+    // Handle theme
     if (filters.theme) {
-      const { data: themeData } = await supabase
-        .from('themes')
-        .select('id')
-        .eq('slug', filters.theme)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (themeData) {
+      if (themeRes.data) {
         const { data: ltItems } = await supabase
           .from('license_themes')
           .select('license_id')
-          .eq('theme_id', themeData.id);
+          .eq('theme_id', themeRes.data.id);
 
         const licIds = ltItems?.map(x => x.license_id) || [];
         if (licIds.length > 0) {
@@ -167,13 +136,8 @@ export function useProducts(filters: ProductFilters = {}) {
             .in('license_id', licIds);
 
           const themeProdIds = directProds?.map(x => x.id) || [];
-
           if (themeProdIds.length > 0) {
-            if (productIds) {
-              productIds = productIds.filter(id => themeProdIds.includes(id));
-            } else {
-              productIds = themeProdIds;
-            }
+            productIds = productIds ? productIds.filter(id => themeProdIds.includes(id)) : themeProdIds;
           } else {
             setProducts([]);
             setCount(0);
@@ -194,30 +158,21 @@ export function useProducts(filters: ProductFilters = {}) {
       }
     }
 
+    // Handle collection
     if (filters.collection_id) {
-      const { data: colProds } = await supabase
-        .from('vendor_store_collection_products')
-        .select('product_id')
-        .eq('collection_id', filters.collection_id);
-      
-      const collectionProductIds = colProds?.map(x => x.product_id) || [];
+      const collectionProductIds = colRes.data?.map((x: any) => x.product_id) || [];
       if (collectionProductIds.length === 0) {
         setProducts([]);
         setCount(0);
         setLoading(false);
         return;
       }
-
-      if (productIds) {
-        productIds = productIds.filter(x => collectionProductIds.includes(x));
-        if (productIds.length === 0) {
-          setProducts([]);
-          setCount(0);
-          setLoading(false);
-          return;
-        }
-      } else {
-        productIds = collectionProductIds;
+      productIds = productIds ? productIds.filter(x => collectionProductIds.includes(x)) : collectionProductIds;
+      if (productIds.length === 0) {
+        setProducts([]);
+        setCount(0);
+        setLoading(false);
+        return;
       }
     }
 
