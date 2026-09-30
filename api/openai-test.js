@@ -6,8 +6,8 @@
 // ============================================================
 
 import { createClient } from '@supabase/supabase-js';
-import { callOpenAIResponses, getOpenAIConfig, OpenAIError } from './lib/openai.js';
-import { getAllModelPricingDetails } from './lib/openaiPricing.js';
+import { callOpenAIResponses, getOpenAIConfig, OpenAIError } from '../server/lib/openai.js';
+import { getAllModelPricingDetails } from '../server/lib/openaiPricing.js';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
