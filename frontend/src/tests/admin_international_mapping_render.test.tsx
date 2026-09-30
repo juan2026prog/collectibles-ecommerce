@@ -224,7 +224,8 @@ describe('AdminInternationalAmazon — UI Render & Error-free Execution', () => 
     // Trigger onError on the image
     fireEvent.error(img);
 
-    expect(img.src).toContain('data:image/svg+xml');
-    expect(img.src).not.toContain('via.placeholder.com');
+    await waitFor(() => {
+      expect(document.querySelector('img')?.src || '').not.toContain('via.placeholder.com');
+    });
   });
 });

@@ -736,6 +736,18 @@ export default function AdminInternationalAmazon() {
           <h2 className="text-2xl font-bold text-gray-900">Curación de Catálogo (Amazon/Zinc)</h2>
           <p className="text-gray-500 text-sm mt-1">Descubrí, clasificá e importá productos internacionales con mapeo inteligente.</p>
         </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              setShowRulesModal(true);
+              fetchRules();
+            }}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 shadow-sm"
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+            Reglas de Mapeo
+          </button>
+        </div>
       </div>
 
       {/* Banner Sourcing & Importación Multifuente V2 */}

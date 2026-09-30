@@ -45,14 +45,14 @@ export default function AdminInternationalSync() {
           auto_sync_enabled: !!data.auto_sync_enabled,
           international_operating_limit_usd: Number(data.international_operating_limit_usd || 500),
           international_safety_reserve_usd: Number(data.international_safety_reserve_usd || 50),
-          target_margin_percent: Number(data.target_margin_percent ?? 15),
-          min_absolute_profit_usd: Number(data.min_absolute_profit_usd ?? data.min_profit_usd ?? 3.99),
+          target_margin_percent: Number(data.target_margin_percent ?? 3),
+          min_absolute_profit_usd: Number(data.min_absolute_profit_usd ?? data.min_profit_usd ?? 0),
           zinc_fee_usd: Number(data.zinc_fee_usd ?? 1.00),
           financial_fee_percent: Number(data.financial_fee_percent ?? 2.50),
           financial_fee_fixed_usd: Number(data.financial_fee_fixed_usd ?? 0.50),
           financial_fee_tax_rate: Number(data.financial_fee_tax_rate ?? 0.22),
           florida_sales_tax_percent: Number(data.florida_sales_tax_percent ?? 0.0),
-          fixed_markup_usd: Number(data.fixed_markup_usd ?? 6.00)
+          fixed_markup_usd: Number(data.fixed_markup_usd ?? 0)
         });
       }
 

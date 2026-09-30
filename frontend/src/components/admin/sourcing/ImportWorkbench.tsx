@@ -97,7 +97,7 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
   const [detailItem, setDetailItem] = useState<ImportCandidateItem | null>(null);
   const [showBulkReviewModal, setShowBulkReviewModal] = useState<boolean>(false);
   const [batchCategory, setBatchCategory] = useState<string>('');
-  const [batchMarkup, setBatchMarkup] = useState<number>(pricingSettings?.target_margin_percent ?? 15);
+  const [batchMarkup, setBatchMarkup] = useState<number>(pricingSettings?.target_margin_percent ?? 3);
   const [isImporting, setIsImporting] = useState<boolean>(false);
 
   // Sync initial items when provided
@@ -153,18 +153,23 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
   // Pricing helper for candidate items
   const getItemFinancials = useCallback((item: ImportCandidateItem, overrideMarkup?: number) => {
     const amazonPrice = Number(item.price_usd || 0);
+    const markup = overrideMarkup ?? pricingSettings?.target_margin_percent ?? 3;
     const settings = {
       ...pricingSettings,
-      target_margin_percent: overrideMarkup ?? pricingSettings?.target_margin_percent ?? 15,
-      percentage_markup: overrideMarkup ?? pricingSettings?.percentage_markup ?? 15
+      target_margin_percent: markup,
+      percentage_markup: markup
     };
     const pricing = calculateInternationalPricing({ amazonPrice, usaShipping: 0 }, settings);
+    const realCost = pricing.realCost;
+    const finalPrice = Number((realCost * (1 + (markup / 100))).toFixed(2));
+    const estimatedProfit = Number((finalPrice - realCost).toFixed(2));
+
     return {
       amazonPrice,
-      realCost: pricing.realCost,
-      markupPercent: overrideMarkup ?? settings.target_margin_percent,
-      estimatedProfit: pricing.estimatedProfit,
-      finalPrice: pricing.finalPrice
+      realCost,
+      markupPercent: markup,
+      estimatedProfit,
+      finalPrice
     };
   }, [pricingSettings]);
 
