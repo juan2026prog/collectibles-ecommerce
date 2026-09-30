@@ -1,4 +1,4 @@
-import { createGoogleAuthClient, testGoogleAuth, sanitizeGoogleAuthError } from './lib/google-auth.js';
+import { createGoogleAuthClient, testGoogleAuth, sanitizeGoogleAuthError } from '../server/lib/google-auth.js';
 import {
   findCollectiblesProperty,
   listSitemaps,
@@ -6,7 +6,7 @@ import {
   querySearchAnalytics,
   inspectUrl,
   inspectUrlBatch
-} from './lib/google-search-console.js';
+} from '../server/lib/google-search-console.js';
 
 // Priority URL Sample for automated inspection
 const PRIORITY_URL_SAMPLE = [
