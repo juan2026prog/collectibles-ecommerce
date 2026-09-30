@@ -5,7 +5,7 @@ import {
   Tag, Image, CreditCard, LayoutTemplate, Star, Percent, Megaphone,
   Mail, BarChart3, Search, ShieldCheck, Store, Share2, ExternalLink, Library, FileText,
   Globe, Download, RefreshCw, Award, Layers, KeyRound, Scale,
-  Sparkles, Radio, Archive, GraduationCap, Sliders, Truck, MessageSquare, Brain
+  Sparkles, Radio, Archive, GraduationCap, Sliders, Truck, MessageSquare, Brain, DollarSign
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from '../components/LocaleSwitcher';
