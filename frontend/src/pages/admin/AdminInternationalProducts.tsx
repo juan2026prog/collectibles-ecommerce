@@ -158,7 +158,7 @@ export default function AdminInternationalProducts() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-gray-900">Productos Internacionales (Amazon)</h2>
+        <h2 className="text-xl font-bold text-gray-900">Productos Int. Incorporados (Amazon)</h2>
         <div className="flex gap-2 items-center flex-wrap">
           {selectedIds.size > 0 && (
             <>

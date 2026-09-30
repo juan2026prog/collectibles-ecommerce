@@ -109,7 +109,7 @@ export default function AdminLayout() {
           {[
             { name: 'Sourcing Intelligence', path: '/admin/sourcing', icon: Download },
             { name: 'Productos para Importar', path: '/admin/internacional/amazon', icon: Search },
-            { name: 'Productos Internacionales', path: '/admin/internacional/productos', icon: Globe },
+            { name: 'Productos Int. Incorporados', path: '/admin/internacional/productos', icon: Globe },
             { name: 'Configuración y Cupos', path: '/admin/internacional/sync', icon: Settings },
             { name: 'Mercados Internacionales', path: '/admin/international-markets', icon: Globe, iconColor: 'text-amber-400' },
             { name: 'Zinc API 2.0', path: '/admin/internacional/zinc', icon: KeyRound },
