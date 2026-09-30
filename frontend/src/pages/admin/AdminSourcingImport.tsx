@@ -247,14 +247,11 @@ export default function AdminSourcingImport() {
       console.warn('Could not fetch existing catalog titles from Supabase:', e);
     }
 
-    if (urlQuery) {
-      multiSourceSearchService.searchProducts(urlQuery, 'all', existingTitles)
-        .then(res => setMultiSourceResult(res))
-        .catch(err => console.warn('Could not execute initial search:', err))
-        .finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
+    const queryToSearch = urlQuery || multiSourceQuery || 'Street Fighter Jada Toys';
+    multiSourceSearchService.searchProducts(queryToSearch, 'all', existingTitles)
+      .then(res => setMultiSourceResult(res))
+      .catch(err => console.warn('Could not execute initial search:', err))
+      .finally(() => setLoading(false));
   };
 
   // Ejecutor de búsqueda multifuente interactiva
@@ -921,39 +918,73 @@ export default function AdminSourcingImport() {
 
 
         {/* Main Tab Switcher */}
-        <div className="flex items-center gap-2 bg-gray-100 p-1.5 rounded-xl border border-gray-200">
+        <div className="flex items-center gap-2 bg-gray-100 p-1.5 rounded-xl border border-gray-200 overflow-x-auto">
           <button
-            onClick={() => setActiveMainTab('sourcing')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition ${
-              activeMainTab === 'sourcing' 
-                ? 'bg-white text-indigo-600 shadow-sm' 
+            onClick={() => { setActiveTab('mesa'); setActiveMainTab('sourcing'); }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition shrink-0 ${
+              activeMainTab === 'sourcing' && activeTab === 'mesa'
+                ? 'bg-white text-[#f00856] shadow-sm font-extrabold' 
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >
-            <BrainCircuit className="w-4 h-4" />
-            Investigación & Sourcing
+            <Layers className="w-4 h-4 text-[#f00856]" />
+            <span>Mesa de Importación</span>
+            <span className="text-[10px] bg-[#f00856] text-white px-1.5 py-0.2 rounded-full font-black">
+              {mappedWorkbenchItems.length}
+            </span>
           </button>
+
+          <button
+            onClick={() => { setActiveTab('watchlist'); setActiveMainTab('sourcing'); }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition shrink-0 ${
+              activeMainTab === 'sourcing' && activeTab === 'watchlist'
+                ? 'bg-white text-amber-600 shadow-sm' 
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Bookmark className="w-4 h-4 text-amber-500" />
+            <span>Watchlist & Pipeline</span>
+            {watchlistIds.length > 0 && (
+              <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-full font-bold">
+                {watchlistIds.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('conexiones'); setActiveMainTab('sourcing'); }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition shrink-0 ${
+              activeMainTab === 'sourcing' && activeTab === 'conexiones'
+                ? 'bg-white text-blue-600 shadow-sm' 
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            <Server className="w-4 h-4 text-blue-500" />
+            <span>Conexiones & Servicios</span>
+          </button>
+
           <button
             onClick={() => setActiveMainTab('adaptive')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition shrink-0 ${
               activeMainTab === 'adaptive' 
                 ? 'bg-gradient-to-r from-indigo-600 to-[#f00856] text-white shadow-sm' 
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >
             <Sparkles className="w-4 h-4 text-amber-300" />
-            Adaptive Sourcing
+            <span>Adaptive Sourcing</span>
           </button>
+
           <button
             onClick={() => setActiveMainTab('autopilot')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition shrink-0 ${
               activeMainTab === 'autopilot' 
                 ? 'bg-slate-900 text-white shadow-sm' 
                 : 'text-gray-600 hover:text-gray-900'
             }`}
           >
             <Bot className="w-4 h-4 text-emerald-400" />
-            AUTOPILOT Control Hub
+            <span>Autopilot Hub</span>
           </button>
         </div>
       </div>
@@ -1021,153 +1052,9 @@ export default function AdminSourcingImport() {
         </div>
       )}
 
-      {/* VISTA MAIN TAB 1: INVESTIGACIÓN & SOURCING (FASE 1/2) */}
+      {/* VISTA MAIN TAB 1: INVESTIGACIÓN & SOURCING */}
       {activeMainTab === 'sourcing' && (
       <div className="space-y-6">
-      {/* PESTAÑAS DE NAVEGACIÓN PRINCIPALES (FASE 7A) */}
-
-      <div className="flex items-center gap-2 border-b border-gray-200 overflow-x-auto pb-0.5">
-        <button
-          onClick={() => setActiveTab('mesa')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === 'mesa'
-              ? 'border-[#f00856] text-[#f00856] bg-pink-50/50 rounded-t-xl'
-              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
-          }`}
-        >
-          <Layers className="w-4 h-4 text-[#f00856]" />
-          <span>Mesa de Importación</span>
-          <span className="text-[10px] bg-[#f00856] text-white px-1.5 py-0.2 rounded-full font-extrabold">
-            {mappedWorkbenchItems.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('dashboard')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === 'dashboard'
-              ? 'border-[#f00856] text-[#f00856] bg-pink-50/50 rounded-t-xl'
-              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
-          }`}
-        >
-          <LayoutDashboard className="w-4 h-4" />
-          <span>Dashboard</span>
-        </button>
-
-
-        <button
-          onClick={() => setActiveTab('terminal')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === 'terminal'
-              ? 'border-[#f00856] text-[#f00856] bg-pink-50/50 rounded-t-xl'
-              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
-          }`}
-        >
-          <Search className="w-4 h-4" />
-          <span>Terminal</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('oportunidades')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === 'oportunidades'
-              ? 'border-[#f00856] text-[#f00856] bg-pink-50/50 rounded-t-xl'
-              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
-          }`}
-        >
-          <Sparkles className="w-4 h-4 text-emerald-600" />
-          <span>Oportunidades</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('productos')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === 'productos'
-              ? 'border-[#f00856] text-[#f00856] bg-pink-50/50 rounded-t-xl'
-              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          <span>Productos</span>
-          <span className="text-[10px] bg-gray-200 text-gray-700 px-1.5 py-0.2 rounded-full font-extrabold">
-            {products.length}
-          </span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('watchlist')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === 'watchlist'
-              ? 'border-[#f00856] text-[#f00856] bg-pink-50/50 rounded-t-xl'
-              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
-          }`}
-        >
-          <Bookmark className="w-4 h-4 text-amber-600" />
-          <span>Watchlist</span>
-          {watchlistIds.length > 0 && (
-            <span className="text-[10px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-full font-bold">
-              {watchlistIds.length}
-            </span>
-          )}
-        </button>
-
-        <button
-          onClick={() => setActiveTab('pipeline')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === 'pipeline'
-              ? 'border-[#f00856] text-[#f00856] bg-pink-50/50 rounded-t-xl'
-              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
-          }`}
-        >
-          <SlidersHorizontal className="w-4 h-4 text-indigo-600" />
-          <span>Pipeline</span>
-        </button>
-
-        <button
-          onClick={() => setShowHistoryModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl shrink-0 cursor-pointer"
-        >
-          <History className="w-4 h-4 text-purple-600" />
-          <span>Historial</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('alertas')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === 'alertas'
-              ? 'border-[#f00856] text-[#f00856] bg-pink-50/50 rounded-t-xl'
-              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
-          }`}
-        >
-          <AlertTriangle className="w-4 h-4 text-rose-600" />
-          <span>Alertas</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('autopilot')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === 'autopilot'
-              ? 'border-[#f00856] text-[#f00856] bg-pink-50/50 rounded-t-xl'
-              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
-          }`}
-        >
-          <Activity className="w-4 h-4 text-emerald-600" />
-          <span>Autopilot</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('conexiones')}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
-            activeTab === 'conexiones'
-              ? 'border-[#f00856] text-[#f00856] bg-pink-50/50 rounded-t-xl'
-              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
-          }`}
-        >
-          <Server className="w-4 h-4 text-blue-600" />
-          <span>Conexiones</span>
-        </button>
-      </div>
-
       {/* PESTAÑA PRINCIPAL: MESA DE IMPORTACIÓN & SOURCING INTELLIGENCE */}
       {activeTab === 'mesa' && (
         <div className="space-y-6">
@@ -1273,83 +1160,6 @@ export default function AdminSourcingImport() {
               isLoading={isMultiSourceSearching}
               onImportSuccess={() => loadInitialCatalogAndPack()}
             />
-          </div>
-        </div>
-      )}
-
-      {/* PESTAÑA 2: DASHBOARD & OPPORTUNITY FEED */}
-      {activeTab === 'dashboard' && (
-
-
-        <div className="space-y-6">
-          {/* Banner de Research Pack Activo y Métricas Operacionales */}
-          <div className="bg-white border border-gray-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs font-semibold text-gray-500">Investigación Activa:</span>
-                <strong className="text-sm font-bold text-gray-900">{activePackTitle}</strong>
-              </div>
-              <div className="flex items-center gap-2 text-xs">
-                <span className="bg-gray-100 text-gray-700 px-2.5 py-1 rounded-md font-medium">
-                  <strong>{products.length}</strong> detectados
-                </span>
-                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-md font-semibold">
-                  <strong>{profitableCount}</strong> rentables
-                </span>
-                {reviewCount > 0 && (
-                  <span className="bg-amber-50 text-amber-700 border border-amber-200 px-2.5 py-1 rounded-md font-semibold">
-                    <strong>{reviewCount}</strong> a revisar
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <button
-              onClick={() => setActiveTab('terminal')}
-              className="px-4 py-2 bg-[#f00856] hover:bg-[#d0074a] text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-1.5 self-start sm:self-auto"
-            >
-              <span>Ir a Terminal de Oportunidades</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Conexiones de Sourcing Resumidas */}
-          <SourcingConnectionStatus />
-
-          {/* Opportunity Feed Cards (Top Opportunities) */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#f00856]" />
-                <span>Opportunity Feed (Top Oportunidades Comercializables)</span>
-              </h3>
-              <button
-                onClick={() => setActiveTab('terminal')}
-                className="text-xs text-[#f00856] font-bold hover:underline"
-              >
-                Ver todas ({products.length})
-              </button>
-            </div>
-
-            {loading ? (
-              <SourcingCardGridSkeleton />
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {products.slice(0, 8).map(prod => (
-                  <SourcingOpportunityCard
-                    key={prod.id}
-                    product={prod}
-                    isSelected={selectedIds.includes(prod.id)}
-                    onToggleSelect={() => handleToggleSelectOne(prod.id)}
-                    onOpenAnalysisModal={(p) => { setAnalysisProduct(p); setShowAnalysisModal(true); }}
-                    onImportProduct={handleImportSingle}
-                    onPublishPreorder={handlePublishPreorderSingle}
-                    onToggleWatchlist={handleToggleWatchlist}
-                    isInWatchlist={watchlistIds.includes(prod.id)}
-                  />
-                ))}
-              </div>
-            )}
           </div>
         </div>
       )}

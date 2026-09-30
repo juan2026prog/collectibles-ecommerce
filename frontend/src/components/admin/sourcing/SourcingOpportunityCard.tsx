@@ -148,12 +148,12 @@ export const SourcingOpportunityCard: React.FC<SourcingOpportunityCardProps> = (
           </div>
 
           <div className="flex items-center justify-between pt-1 border-t border-gray-100">
-            <span className="text-gray-600 font-medium">Margen Proyectado:</span>
+            <span className="text-gray-600 font-medium">Markup (3%):</span>
             <span className={`font-mono font-extrabold ${
-              product.financials.margin_percent >= 20 ? 'text-emerald-600' :
+              product.financials.margin_percent >= 3 ? 'text-emerald-600' :
               product.financials.margin_percent > 0 ? 'text-amber-600' : 'text-rose-600'
             }`}>
-              +${product.financials.profit_usd.toFixed(2)} USD ({product.financials.margin_percent.toFixed(0)}%)
+              +${product.financials.profit_usd.toFixed(2)} USD ({product.financials.margin_percent.toFixed(1)}%)
             </span>
           </div>
         </div>
@@ -168,25 +168,14 @@ export const SourcingOpportunityCard: React.FC<SourcingOpportunityCardProps> = (
           Analizar Ficha
         </button>
 
-        {isPreorder ? (
-          <button
-            onClick={() => onPublishPreorder(product)}
-            disabled={!isVerifiedOfficial || product.financials.profit_usd <= 0}
-            className="flex-1 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1 shadow-xs"
-          >
-            <Clock className="w-3.5 h-3.5" />
-            <span>Pre-order</span>
-          </button>
-        ) : (
-          <button
-            onClick={() => onImportProduct(product)}
-            disabled={!isVerifiedOfficial || product.financials.profit_usd <= 0}
-            className="flex-1 py-1.5 bg-[#f00856] hover:bg-[#d0074a] disabled:opacity-40 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1 shadow-xs"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Publicar</span>
-          </button>
-        )}
+        <button
+          onClick={() => onImportProduct(product)}
+          disabled={!isVerifiedOfficial || product.financials.profit_usd <= 0}
+          className="flex-1 py-1.5 bg-[#f00856] hover:bg-[#d0074a] disabled:opacity-40 text-white text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-1 shadow-xs"
+        >
+          <Download className="w-3.5 h-3.5" />
+          <span>Importar (Revisión)</span>
+        </button>
       </div>
     </div>
   );
