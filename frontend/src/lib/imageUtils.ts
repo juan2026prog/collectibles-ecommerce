@@ -12,10 +12,67 @@
 const SUPABASE_URL = 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const STORAGE_BUCKET = 'product-images';
 
-/** Local inline SVG fallback — no external requests, no via.placeholder.com */
-const FALLBACK_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' fill='none'%3E%3Crect width='400' height='400' rx='24' fill='%23111827'/%3E%3Cpath d='M200 160c-22 0-40 18-40 40s18 40 40 40 40-18 40-40-18-40-40-40zm0 64c-13.3 0-24-10.7-24-24s10.7-24 24-24 24 10.7 24 24-10.7 24-24 24z' fill='%231f2937'/%3E%3Cpath d='M280 136h-33.4l-12.8-16H166.2l-12.8 16H120c-8.8 0-16 7.2-16 16v112c0 8.8 7.2 16 16 16h160c8.8 0 16-7.2 16-16V152c0-8.8-7.2-16-16-16z' fill='%231f2937' opacity='.5'/%3E%3C/svg%3E";
+/** Local inline SVG fallback — clean neutral background, crisp icon, no external requests */
+const FALLBACK_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400' fill='none'%3E%3Crect width='400' height='400' rx='16' fill='%23f8fafc' stroke='%23e2e8f0' stroke-width='2'/%3E%3Cg opacity='0.45' transform='translate(136, 120)'%3E%3Crect x='10' y='26' width='108' height='88' rx='12' stroke='%2364748b' stroke-width='6' fill='%23ffffff'/%3E%3Ccircle cx='46' cy='56' r='14' fill='%2394a3b8'/%3E%3Cpath d='M20 98l28-28 20 20 32-34 18 18v24H20v-0z' fill='%23cbd5e1'/%3E%3Cpath d='M44 14h40l8 12h18a10 10 0 0110 10v4' stroke='%2364748b' stroke-width='5' stroke-linecap='round' fill='none'/%3E%3C/g%3E%3Ctext x='200' y='276' text-anchor='middle' fill='%2394a3b8' font-family='system-ui, -apple-system, sans-serif' font-size='13' font-weight='600' letter-spacing='0.5'%3ESIN IMAGEN%3C/text%3E%3C/svg%3E";
 
 export type ImageSizeVariant = 'thumbnail' | 'card' | 'detail' | 'raw';
+
+/**
+ * Extracts all possible candidate image URLs from a raw or normalized product object in priority order.
+ */
+export function extractCandidateImages(product: any): string[] {
+  if (!product) return [];
+  const urls: string[] = [];
+
+  const add = (u: any) => {
+    if (typeof u === 'string') {
+      const trimmed = u.trim();
+      if (trimmed && !trimmed.includes('via.placeholder.com') && !trimmed.startsWith('data:image/svg+xml') && !urls.includes(trimmed)) {
+        urls.push(trimmed);
+      }
+    } else if (u && typeof u === 'object' && typeof u.url === 'string') {
+      add(u.url);
+    } else if (u && typeof u === 'object' && typeof u.link === 'string') {
+      add(u.link);
+    }
+  };
+
+  // 1. Direct fields
+  add(product.image_url);
+  add(product.main_image_url_external);
+  add(product.image);
+
+  // 2. Images arrays
+  if (Array.isArray(product.images)) {
+    product.images.forEach((img: any) => add(img));
+  }
+  if (Array.isArray(product.gallery_images)) {
+    product.gallery_images.forEach((img: any) => add(img));
+  }
+  if (Array.isArray(product.image_urls_external)) {
+    product.image_urls_external.forEach((img: any) => add(img));
+  }
+
+  // 3. Raw data nested structures from Zinc / Amazon
+  if (product.raw_data) {
+    add(product.raw_data.image);
+    add(product.raw_data.main_image);
+    if (Array.isArray(product.raw_data.images)) {
+      product.raw_data.images.forEach((img: any) => add(img));
+    }
+    if (Array.isArray(product.raw_data.additional_images)) {
+      product.raw_data.additional_images.forEach((img: any) => add(img));
+    }
+    if (product.raw_data._enriched_details) {
+      add(product.raw_data._enriched_details.main_image);
+      if (Array.isArray(product.raw_data._enriched_details.images)) {
+        product.raw_data._enriched_details.images.forEach((img: any) => add(img));
+      }
+    }
+  }
+
+  return urls;
+}
 
 /**
  * Resolves a single URL string to a usable image src with optional size transformation.
@@ -40,16 +97,6 @@ function resolveImageUrl(url: string | null | undefined, variant: ImageSizeVaria
     rawUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}${cleanPath}`;
   }
 
-  // Always serve the original public object URL.
-  //
-  // IMPORTANT: Supabase Image Transformations (/render/image/) are a paid-plan
-  // feature. Collectibles must remain functional on the Free plan, so image
-  // rendering must never depend on that endpoint. The browser can still size
-  // images through the existing UI/CSS without changing the stored asset.
-  //
-  // Keeping the variant parameter in the API preserves compatibility with
-  // callers; variants can be reintroduced later through a plan-independent
-  // image CDN/optimizer with the original URL as a fallback.
   return rawUrl;
 }
 
@@ -60,28 +107,10 @@ function resolveImageUrl(url: string | null | undefined, variant: ImageSizeVaria
 export function getProductImage(product: any, variant: ImageSizeVariant = 'card'): string {
   if (!product) return FALLBACK_IMAGE;
 
-  const images = product.images;
-
-  // Handle images array
-  if (Array.isArray(images) && images.length > 0) {
-    // Try primary image first
-    const primary = images.find((img: any) => img.is_primary);
-    if (primary?.url) {
-      const resolved = resolveImageUrl(primary.url, variant);
-      if (resolved !== FALLBACK_IMAGE) return resolved;
-    }
-
-    // Fall through sorted images
-    const sorted = [...images].sort((a: any, b: any) => (a.sort_order || 0) - (b.sort_order || 0));
-    for (const img of sorted) {
-      const resolved = resolveImageUrl(img?.url, variant);
-      if (resolved !== FALLBACK_IMAGE) return resolved;
-    }
+  const candidates = extractCandidateImages(product);
+  if (candidates.length > 0) {
+    return resolveImageUrl(candidates[0], variant);
   }
-
-  // Fallback: product.image_url or product.image (single field)
-  if (product.image_url) return resolveImageUrl(product.image_url, variant);
-  if (product.image) return resolveImageUrl(product.image, variant);
 
   return FALLBACK_IMAGE;
 }
@@ -95,4 +124,5 @@ export function resolveImage(url: string | null | undefined, variant: ImageSizeV
 
 /** Exported fallback for direct use */
 export { FALLBACK_IMAGE };
+
 

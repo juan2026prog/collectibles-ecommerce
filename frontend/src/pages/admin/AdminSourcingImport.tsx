@@ -28,6 +28,7 @@ import { SourcingBulkBar } from '../../components/admin/sourcing/SourcingBulkBar
 import { SourcingResearchPackModal } from '../../components/admin/sourcing/SourcingResearchPackModal';
 import { SourcingHistoryModal } from '../../components/admin/sourcing/SourcingHistoryModal';
 import { SourcingOpenAIModal } from '../../components/admin/sourcing/SourcingOpenAIModal';
+import { ImportWorkbench, type ImportCandidateItem } from '../../components/admin/sourcing/ImportWorkbench';
 
 // Multi-Source Sourcing Terminal Components & Services
 import { SourcingMultiSourceHeader } from '../../components/admin/sourcing/SourcingMultiSourceHeader';
@@ -76,7 +77,7 @@ const DEFAULT_COLUMNS: ColumnDefinition[] = [
   { id: 'source', label: 'FUENTE', visible: true, category: 'core' },
   { id: 'cost_puesto', label: 'COSTO PUESTO UY', visible: true, category: 'costs' },
   { id: 'sale_price', label: 'PRECIO VENTA', visible: true, category: 'costs' },
-  { id: 'margin', label: 'MARGEN', visible: true, category: 'costs' },
+  { id: 'margin', label: 'MARKUP', visible: true, category: 'costs' },
   { id: 'ml_uruguay', label: 'MERCADO LIBRE UY', visible: true, category: 'market' },
   { id: 'difference', label: 'DIFERENCIA', visible: true, category: 'market' },
   { id: 'actions', label: 'ACCIONES', visible: true, category: 'core' },
@@ -89,7 +90,7 @@ const DEFAULT_COLUMNS: ColumnDefinition[] = [
 ];
 
 type MainTabType = 
-
+  | 'mesa'
   | 'dashboard' 
   | 'terminal' 
   | 'oportunidades' 
@@ -111,7 +112,8 @@ export default function AdminSourcingImport() {
 
   // Active Main Navigation Tab
   const [activeMainTab, setActiveMainTab] = useState<'sourcing' | 'adaptive' | 'autopilot'>('sourcing');
-  const [activeTab, setActiveTab] = useState<MainTabType>(urlQuery ? 'terminal' : 'dashboard');
+  const [activeTab, setActiveTab] = useState<MainTabType>('mesa');
+
   const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [openAIEnabled, setOpenAIEnabled] = useState(false);
   const [showOpenAIModal, setShowOpenAIModal] = useState(false);
@@ -370,6 +372,73 @@ export default function AdminSourcingImport() {
     if (!multiSourceResult) return [];
     return Array.from(new Set(multiSourceResult.canonicalProducts.map(p => p.license))).filter(Boolean);
   }, [multiSourceResult]);
+
+  const mappedWorkbenchItems: ImportCandidateItem[] = useMemo(() => {
+    if (multiSourceResult?.canonicalProducts && multiSourceResult.canonicalProducts.length > 0) {
+      return multiSourceResult.canonicalProducts.map(p => {
+        const bestOffer = p.offers?.[0];
+        const imgs = p.gallery_images && p.gallery_images.length > 0 ? p.gallery_images : (p.image_url ? [p.image_url] : []);
+        return {
+          id: p.id,
+          external_product_id: p.asin || p.canonical_sku || p.id,
+          title: p.title,
+          brand: p.brand || 'Collectibles',
+          franchise: p.license || p.character || '',
+          category: p.category_name,
+          amazon_category: p.category_name,
+          image_url: p.image_url,
+          gallery_images: imgs,
+          product_url_external: bestOffer?.url || (p.asin ? `https://www.amazon.com/dp/${p.asin}` : undefined),
+          price_usd: p.lowest_new_price || bestOffer?.price || 0,
+          rating: p.rating,
+          review_count: p.review_count || 0,
+          availability: p.stock_verdict === 'IN_STOCK' ? 'in_stock' : 'available',
+          prime: p.prime,
+          seller: p.seller || bestOffer?.seller || 'Amazon.com',
+          source: p.matched_sources?.[0] || 'amazon',
+          data_origin: p.data_origin || 'LIVE',
+          opportunity_score: p.opportunity_score,
+          sourcing_score: p.opportunity_score,
+          ranking_score: p.opportunity_score,
+          search_query: multiSourceQuery,
+          already_imported: p.already_in_catalog,
+          status: p.already_in_catalog ? 'imported' : 'review',
+          raw_data: p
+        };
+      });
+    }
+
+    if (products.length > 0) {
+      return products.map(p => {
+        const activeOffer = p.offers?.find(o => o.id === p.selected_source_id) || p.offers?.[0];
+        return {
+          id: p.id,
+          external_product_id: p.sku || p.id,
+          title: p.title,
+          brand: p.brand,
+          franchise: p.franchise,
+          category: p.category,
+          image_url: p.image_url,
+          gallery_images: p.image_url ? [p.image_url] : [],
+          product_url_external: activeOffer?.url,
+          price_usd: activeOffer?.price || p.financials?.cost_puesto_uy || 0,
+          rating: p.authenticity?.score ? p.authenticity.score / 20 : 4.5,
+          review_count: 50,
+          availability: 'in_stock',
+          prime: true,
+          seller: activeOffer?.seller || 'Amazon.com',
+          source: activeOffer?.source || 'amazon',
+          data_origin: 'LIVE',
+          opportunity_score: p.opportunity_score || 85,
+          status: 'review',
+          raw_data: p
+        };
+      });
+    }
+
+    return [];
+  }, [multiSourceResult, products, multiSourceQuery]);
+
 
   // Manejo de Selección Canónica
   const handleToggleSelectCanonical = (id: string) => {
@@ -959,6 +1028,21 @@ export default function AdminSourcingImport() {
 
       <div className="flex items-center gap-2 border-b border-gray-200 overflow-x-auto pb-0.5">
         <button
+          onClick={() => setActiveTab('mesa')}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
+            activeTab === 'mesa'
+              ? 'border-[#f00856] text-[#f00856] bg-pink-50/50 rounded-t-xl'
+              : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded-t-xl'
+          }`}
+        >
+          <Layers className="w-4 h-4 text-[#f00856]" />
+          <span>Mesa de Importación</span>
+          <span className="text-[10px] bg-[#f00856] text-white px-1.5 py-0.2 rounded-full font-extrabold">
+            {mappedWorkbenchItems.length}
+          </span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('dashboard')}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-all shrink-0 ${
             activeTab === 'dashboard'
@@ -969,6 +1053,7 @@ export default function AdminSourcingImport() {
           <LayoutDashboard className="w-4 h-4" />
           <span>Dashboard</span>
         </button>
+
 
         <button
           onClick={() => setActiveTab('terminal')}
@@ -1083,9 +1168,118 @@ export default function AdminSourcingImport() {
         </button>
       </div>
 
+      {/* PESTAÑA PRINCIPAL: MESA DE IMPORTACIÓN & SOURCING INTELLIGENCE */}
+      {activeTab === 'mesa' && (
+        <div className="space-y-6">
+          {/* SOURCING INTELLIGENCE SEARCH HEADER */}
+          <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-purple-100 text-purple-700">
+                  <BrainCircuit className="w-5 h-5" />
+                </span>
+                <div>
+                  <h2 className="text-sm font-black text-gray-900 uppercase tracking-wide">
+                    Sourcing Intelligence
+                  </h2>
+                  <p className="text-xs text-gray-500">
+                    ¿Qué querés buscar? Ingresá instrucciones en lenguaje natural o términos de producto.
+                  </p>
+                </div>
+              </div>
+              {openAIEnabled && (
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                  OpenAI Search Planner Activo
+                </span>
+              )}
+            </div>
 
-      {/* PESTAÑA 1: DASHBOARD & OPPORTUNITY FEED */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={multiSourceQuery}
+                  onChange={(e) => setMultiSourceQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleExecuteMultiSourceSearch(multiSourceQuery);
+                  }}
+                  placeholder="Ej: Buscá figuras Marvel Legends de menos de USD 50 con buen potencial..."
+                  className="w-full pl-4 pr-10 py-3 bg-gray-50 border border-gray-300 rounded-xl text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-[#f00856] transition"
+                />
+                {multiSourceQuery && (
+                  <button
+                    onClick={() => setMultiSourceQuery('')}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+
+              {openAIEnabled && (
+                <button
+                  onClick={() => setShowOpenAIModal(true)}
+                  disabled={isMultiSourceSearching}
+                  className="flex items-center justify-center gap-2 px-5 py-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition disabled:opacity-50"
+                >
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>BUSCAR CON IA</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => handleExecuteMultiSourceSearch(multiSourceQuery)}
+                disabled={isMultiSourceSearching}
+                className="flex items-center justify-center gap-2 px-6 py-3 bg-[#f00856] hover:bg-[#d0074a] text-white rounded-xl text-xs font-black shadow-sm transition disabled:opacity-50"
+              >
+                {isMultiSourceSearching ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+                <span>BUSCAR</span>
+              </button>
+            </div>
+
+            <p className="text-[11px] text-gray-500 italic">
+              "OpenAI interpreta la solicitud y genera el plan de búsqueda. Los productos, precios, reviews y disponibilidad provienen de las fuentes reales conectadas; OpenAI no inventa estos datos."
+            </p>
+
+            {/* Metrics summary card after search */}
+            {multiSourceResult && (
+              <div className="pt-3 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/70 p-3.5 rounded-xl">
+                <div className="flex items-center gap-4 text-xs font-medium text-gray-700 flex-wrap">
+                  <div>Productos encontrados: <strong className="text-gray-900">{multiSourceResult.canonicalProducts.length}</strong></div>
+                  <div>ASIN únicos: <strong className="text-gray-900">{new Set(multiSourceResult.canonicalProducts.map(p => p.asin)).size}</strong></div>
+                  <div>Top candidatos (Score ≥ 80): <strong className="text-purple-700">{multiSourceResult.canonicalProducts.filter(p => p.opportunity_score >= 80).length}</strong></div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    const el = document.getElementById('import-workbench-anchor');
+                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold transition shadow-xs self-start sm:self-auto"
+                >
+                  <span>VER EN MESA DE IMPORTACIÓN</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-pink-400" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* MESA DE IMPORTACIÓN */}
+          <div id="import-workbench-anchor">
+            <ImportWorkbench
+              initialItems={mappedWorkbenchItems}
+              searchQuery={multiSourceQuery}
+              onRefresh={() => handleExecuteMultiSourceSearch(multiSourceQuery)}
+              isLoading={isMultiSourceSearching}
+              onImportSuccess={() => loadInitialCatalogAndPack()}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* PESTAÑA 2: DASHBOARD & OPPORTUNITY FEED */}
       {activeTab === 'dashboard' && (
+
 
         <div className="space-y-6">
           {/* Banner de Research Pack Activo y Métricas Operacionales */}

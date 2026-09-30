@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { 
   Search, Loader2, Import, XCircle, Eye, AlertCircle, RefreshCw, Wand2, ArrowRight, 
@@ -8,6 +8,8 @@ import {
 import { useToast } from '../../components/admin/Toast';
 import { resolveInternationalCategory } from '../../../../supabase/functions/_shared/categoryResolver';
 import { FALLBACK_IMAGE } from '../../lib/imageUtils';
+import { ImportWorkbench, type ImportCandidateItem } from '../../components/admin/sourcing/ImportWorkbench';
+
 
 const QUICK_COLLECTIONS = [
   { name: '🔥 Top Marvel', query: 'marvel', category: 'Action Figures' },
@@ -696,6 +698,37 @@ export default function AdminInternationalAmazon() {
 
   const extractedBrands = Array.from(new Set(candidates.map(c => c.brand || 'Sin Marca'))).filter(Boolean).sort();
 
+  const mappedWorkbenchItems: ImportCandidateItem[] = useMemo(() => {
+    return candidates.map(c => ({
+      id: c.id,
+      external_product_id: c.external_product_id,
+      title: c.title,
+      brand: c.brand || 'Collectibles',
+      franchise: c.franchise || c.raw_data?.franchise || '',
+      category: c.category || c.amazon_category,
+      amazon_category: c.amazon_category,
+      amazon_subcategory: c.amazon_subcategory,
+      amazon_category_path: c.amazon_category_path,
+      image_url: c.image_url || c.main_image_url_external || c.raw_data?.image || '',
+      gallery_images: c.raw_data?.images || c.gallery_images || [],
+      product_url_external: c.product_url_external || `https://www.amazon.com/dp/${c.external_product_id}`,
+      price_usd: Number(c.price_usd || 0),
+      rating: c.rating,
+      review_count: c.review_count || 0,
+      availability: c.availability || 'available',
+      prime: c.amazon_delivery_type === 'prime' || c.prime,
+      seller: c.seller || (c.raw_data?.first_party_seller === true ? 'Amazon.com' : 'Terceros'),
+      source: 'amazon',
+      data_origin: 'LIVE',
+      sourcing_score: c.mapping_confidence || 80,
+      ranking_score: c.mapping_confidence || 80,
+      opportunity_score: c.mapping_confidence || 80,
+      status: c.status,
+      raw_data: c.raw_data
+    }));
+  }, [candidates]);
+
+
   return (
     <div className="space-y-6 pb-20">
       <div className="flex items-center justify-between">
@@ -859,317 +892,15 @@ export default function AdminInternationalAmazon() {
         </form>
       </div>
 
-      {/* Results Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center flex-wrap gap-3">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h3 className="font-bold text-gray-800 flex items-center gap-2 text-base">
-              Candidatos ({filteredCandidates.length})
-              <button onClick={fetchCandidates} className="text-gray-500 hover:text-primary-600 ml-1" title="Refrescar">
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-              </button>
-            </h3>
+      {/* Mesa de Importación Unificada */}
+      <ImportWorkbench
+        initialItems={mappedWorkbenchItems}
+        searchQuery={searchParams.query}
+        onRefresh={fetchCandidates}
+        isLoading={loading}
+        onImportSuccess={fetchCandidates}
+      />
 
-            {/* Quick Mapping State Filter */}
-            <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 shadow-sm text-xs font-semibold">
-              <button
-                type="button"
-                onClick={() => setCandidateCategoryFilter('all')}
-                className={`px-3 py-1 rounded-md transition-all ${
-                  candidateCategoryFilter === 'all'
-                    ? 'bg-gray-900 text-white shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                Todos ({candidates.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setCandidateCategoryFilter('unmapped')}
-                className={`px-3 py-1 rounded-md transition-all flex items-center gap-1 ${
-                  candidateCategoryFilter === 'unmapped'
-                    ? 'bg-rose-600 text-white shadow-xs'
-                    : 'text-rose-700 hover:bg-rose-50'
-                }`}
-              >
-                <AlertCircle className="w-3.5 h-3.5" />
-                Sin Mapping ({candidates.filter(c => !c.suggested_category_id || c.category_mapping_source === 'unmapped').length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setCandidateCategoryFilter('suggested')}
-                className={`px-3 py-1 rounded-md transition-all flex items-center gap-1 ${
-                  candidateCategoryFilter === 'suggested'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-emerald-700 hover:bg-emerald-50'
-                }`}
-              >
-                <Check className="w-3.5 h-3.5" />
-                Con Sugerencia ({candidates.filter(c => c.suggested_category_id && c.category_mapping_source !== 'unmapped').length})
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            <button 
-              onClick={() => { setShowRulesModal(true); fetchRules(); }}
-              className="px-3 py-1.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold rounded-lg hover:bg-indigo-100 inline-flex items-center shadow-sm"
-              title="Administrar reglas automáticas de mapeo"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5 mr-1.5" /> Reglas de Mapeo
-            </button>
-            <button 
-              onClick={handleRecalculateSuggestions}
-              disabled={recalculating}
-              className="px-3 py-1.5 bg-sky-50 border border-sky-200 text-sky-700 text-xs font-semibold rounded-lg hover:bg-sky-100 disabled:opacity-50 inline-flex items-center shadow-sm"
-              title="Re-evaluar sugerencias de categoría para candidatos pendientes"
-            >
-              <Sparkles className={`w-3.5 h-3.5 mr-1.5 ${recalculating ? 'animate-spin' : ''}`} />
-              {recalculating ? 'Recalculando...' : 'Recalcular'}
-            </button>
-            <button 
-              onClick={() => {
-                const toSelect = filteredCandidates.filter(c => c.status === 'review' && c.price_usd != null).slice(0, 20).map(c => c.id);
-                setSelectedIds(toSelect);
-              }}
-              className="px-3 py-1.5 bg-white border border-gray-300 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-50 inline-flex items-center"
-            >
-              Top 20
-            </button>
-            <button 
-              onClick={() => setShowImportModal(true)} 
-              disabled={selectedIds.length === 0} 
-              className="px-3 py-1.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 disabled:opacity-50 inline-flex items-center shadow-sm"
-            >
-              <Import className="w-3.5 h-3.5 mr-1.5" /> Importar ({selectedIds.length})
-            </button>
-            <button 
-              onClick={handleReject} 
-              disabled={selectedIds.length === 0} 
-              className="px-3 py-1.5 bg-red-600 text-white text-xs font-bold rounded-lg hover:bg-red-700 disabled:opacity-50 inline-flex items-center shadow-sm"
-            >
-              <XCircle className="w-3.5 h-3.5 mr-1.5" /> Rechazar
-            </button>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left w-12">
-                  <input type="checkbox" onChange={e => {
-                    if (e.target.checked) setSelectedIds(filteredCandidates.filter(c => c.status === 'review' && c.price_usd != null).map(c => c.id));
-                    else setSelectedIds([]);
-                  }} checked={selectedIds.length > 0 && selectedIds.length === filteredCandidates.filter(c => c.status === 'review' && c.price_usd != null).length} className="rounded text-primary-600 focus:ring-primary-500" />
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Imagen</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Producto / Marca</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-40">Categoría Amazon</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-48">Mapeo Collectibles</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider w-32">Entrega</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Métricas</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Estado</th>
-                <th className="px-4 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredCandidates.map((c) => (
-                <tr key={c.id} className={`${c.status !== 'review' ? 'bg-gray-50 opacity-75' : 'hover:bg-blue-50/30'} transition-colors`}>
-                  <td className="px-4 py-4">
-                    <input 
-                      type="checkbox" 
-                      className="rounded text-primary-600 focus:ring-primary-500"
-                      disabled={c.status !== 'review' || c.price_usd == null}
-                      checked={selectedIds.includes(c.id)}
-                      onChange={e => {
-                        if (e.target.checked) setSelectedIds([...selectedIds, c.id]);
-                        else setSelectedIds(selectedIds.filter(id => id !== c.id));
-                      }} 
-                    />
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="w-16 h-16 bg-white border rounded overflow-hidden flex items-center justify-center p-1 relative">
-                      {getCandidateImageUrl(c) ? (
-                         <img 
-                           src={getCandidateImageUrl(c)} 
-                           alt="" 
-                           className="max-w-full max-h-full object-contain" 
-                           loading="lazy" 
-                           referrerPolicy="no-referrer" 
-                           onError={(e) => { 
-                             const target = e.target as HTMLImageElement;
-                             target.onerror = null;
-                             target.src = FALLBACK_IMAGE;
-                           }}
-                         />
-                      ) : (
-                         <span className="text-[10px] text-gray-400 text-center leading-tight">Sin<br/>imagen</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="text-sm font-medium text-gray-900 line-clamp-2 leading-tight" title={c.title}>
-                      <a href={`https://www.amazon.com/dp/${c.external_product_id}`} target="_blank" rel="noreferrer" className="hover:text-primary-600 hover:underline flex items-center gap-1">
-                        {c.title}
-                        <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                      </a>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{c.brand || 'Sin Marca'}</span>
-                      <span className="text-xs text-gray-400">ASIN: {c.external_product_id}</span>
-                      <span className="text-xs text-blue-500 bg-blue-50 px-2 py-0.5 rounded">
-                        Vendido por: {c.raw_data?.first_party_seller === true ? 'Amazon' : 'Terceros (Ver en Amazon)'}
-                      </span>
-                    </div>
-                    {c.price_usd == null && <div className="text-xs text-red-500 mt-1 flex items-center"><AlertCircle className="w-3 h-3 mr-1"/> Sin precio, no importable</div>}
-                  </td>
-                  <td className="px-4 py-4">
-                    {c.amazon_category_path ? (
-                      <div className="text-[11px] text-gray-700 bg-gray-100 p-1.5 rounded line-clamp-3 leading-tight" title={c.amazon_category_path}>
-                        {c.amazon_category_path}
-                      </div>
-                    ) : c.amazon_category ? (
-                      <div className="text-[11px] text-gray-700 bg-gray-100 p-1.5 rounded">
-                        {c.amazon_category}
-                      </div>
-                    ) : (
-                      <div className="text-xs text-gray-400 italic">No disponible en búsqueda</div>
-                    )}
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="space-y-1.5">
-                      {c.suggested_category_id ? (
-                        <div>
-                          <div className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 inline-flex items-center px-2 py-1 rounded border border-emerald-200">
-                            {getCategoryName(c.suggested_category_id)}
-                            {c.suggested_subcategory_id && <><ArrowRight className="w-3 h-3 inline mx-0.5" />{getCategoryName(c.suggested_subcategory_id)}</>}
-                          </div>
-                          <div className="flex items-center gap-1 mt-1 flex-wrap">
-                            {c.category_mapping_source === 'manual' ? (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-extrabold bg-indigo-100 text-indigo-800 border border-indigo-200">MANUAL (100%)</span>
-                            ) : c.category_mapping_source === 'category_mapping' ? (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800">Path Exacto ({c.mapping_confidence || 90}%)</span>
-                            ) : c.category_mapping_source === 'category_mapping_leaf' ? (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-teal-100 text-teal-800">Subcategoría ({c.mapping_confidence || 80}%)</span>
-                            ) : c.category_mapping_source === 'brand_mapping' ? (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800">Marca ({c.mapping_confidence || 70}%)</span>
-                            ) : c.category_mapping_source === 'keyword_mapping' ? (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800">Keyword ({c.mapping_confidence || 50}%)</span>
-                            ) : (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-800">Sugerido ({c.mapping_confidence || 0}%)</span>
-                            )}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 px-2 py-1 rounded-md inline-flex items-center font-bold">
-                          Sin mapeo (0%)
-                        </div>
-                      )}
-
-                      {/* Quick Inspection & Rule Creation Actions */}
-                      <div className="flex items-center gap-1 pt-1 flex-wrap">
-                        <button
-                          type="button"
-                          onClick={() => handleInspectCandidateResolution(c)}
-                          className="px-1.5 py-0.5 text-[10px] font-medium bg-gray-100 hover:bg-gray-200 text-gray-700 rounded border border-gray-200 inline-flex items-center gap-1 shadow-xs"
-                          title="Inspeccionar paso a paso por qué se asignó o bloqueó esta categoría"
-                        >
-                          <HelpCircle className="w-3 h-3 text-indigo-600" /> Ver por qué
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenCreateRuleFromCandidate(c)}
-                          className="px-1.5 py-0.5 text-[10px] font-medium bg-amber-50 hover:bg-amber-100 text-amber-800 rounded border border-amber-200 inline-flex items-center gap-1 shadow-xs"
-                          title="Crear regla de path, marca o exclusión a partir de este producto"
-                        >
-                          <BookmarkPlus className="w-3 h-3 text-amber-600" /> Crear regla
-                        </button>
-                      </div>
-
-                      {/* Quick Inline Manual Category Assignment */}
-                      {c.status === 'review' && (
-                        <div className="pt-0.5">
-                          <select
-                            className="w-full text-[10px] rounded border-gray-200 py-0.5 px-1 bg-white text-gray-700 focus:ring-primary-500"
-                            value={c.category_mapping_source === 'manual' ? (c.suggested_category_id || '') : ''}
-                            onChange={e => {
-                              if (e.target.value) {
-                                handleAssignCandidateCategory(c.id, e.target.value);
-                              }
-                            }}
-                          >
-                            <option value="">⚙️ Asignar Manual...</option>
-                            {parentCategories.map(cat => (
-                              <option key={cat.id} value={cat.id}>{cat.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-start gap-1.5">
-                      <span className="text-sm shrink-0 mt-0.5">
-                        {c.amazon_delivery_type === 'prime' ? '⭐' : 
-                         c.amazon_delivery_type === 'in_stock' ? '📦' :
-                         c.amazon_delivery_type === 'preorder' ? '⏳' :
-                         c.amazon_delivery_type === 'backorder' ? '⏳' :
-                         c.amazon_delivery_type === 'unknown' ? '🚚' : '❌'}
-                      </span>
-                      <div className="text-xs text-gray-700 leading-tight">
-                        <span className="font-bold block capitalize">{c.amazon_delivery_type === 'in_stock' ? 'En Stock' : c.amazon_delivery_type}</span>
-                        {c.amazon_delivery_text}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="text-sm font-bold text-gray-900">${c.price_usd} USD</div>
-                    <div className="text-xs text-yellow-600 font-medium flex items-center mt-1">
-                       ★ {c.rating || '-'} <span className="text-gray-400 ml-1 font-normal">({c.review_count} revs)</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 text-sm">
-                    <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                      c.status === 'imported' ? 'bg-green-100 text-green-800 border border-green-200' :
-                      c.status === 'rejected' ? 'bg-red-100 text-red-800 border border-red-200' :
-                      'bg-blue-50 text-blue-700 border border-blue-200'
-                    }`}>
-                      {c.status === 'imported' ? 'Ya Importado' : c.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4 text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <button 
-                        onClick={() => handleEnrich(c.id)} 
-                        disabled={enrichingId === c.id}
-                        className="text-indigo-600 hover:text-indigo-800 p-1.5 bg-indigo-50 border border-indigo-100 rounded shadow-sm hover:shadow disabled:opacity-50" 
-                        title="Enriquecer Detalle (Zinc Product Endpoint)"
-                      >
-                        {enrichingId === c.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                      </button>
-                      <button onClick={() => setRawModalData(c.raw_data)} className="text-gray-600 hover:text-gray-800 p-1.5 bg-gray-50 border border-gray-200 rounded shadow-sm hover:shadow" title="Ver Datos en Bruto (JSON)">
-                        <Code className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {candidates.length === 0 && !loading && (
-                <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
-                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 mb-4">
-                      <Search className="w-6 h-6 text-gray-400" />
-                    </div>
-                    <h3 className="text-sm font-medium text-gray-900">No hay candidatos en la cola</h3>
-                    <p className="mt-1 text-sm text-gray-500">Buscá productos en Amazon o usá las colecciones rápidas.</p>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
 
       {/* Import Settings Modal */}
       {showImportModal && (

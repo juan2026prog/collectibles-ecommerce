@@ -1,19 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Save, RefreshCw, DollarSign, ShieldAlert, Sparkles, Activity, Globe, Check, AlertTriangle } from 'lucide-react';
-import { fetchInternationalSettings } from '../../hooks/useInternationalSettings';
+import { 
+  Save, RefreshCw, DollarSign, ShieldAlert, Sparkles, Activity, Globe, Check, 
+  AlertTriangle, Sliders, Info, ArrowRight, Lock, CheckCircle2, XCircle, ShieldCheck, 
+  HelpCircle, ExternalLink, X, Settings2
+} from 'lucide-react';
 import { calculateInternationalPricing } from '../../lib/internationalPricing';
 
 export default function AdminInternationalSync() {
   const [settings, setSettings] = useState<any>(null);
   const [capacitySummary, setCapacitySummary] = useState<any>(null);
-  const [waitlistCount, setWaitlistCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [showAdvancedModal, setShowAdvancedModal] = useState(false);
+  const [activeAdvancedTab, setActiveAdvancedTab] = useState<'budget' | 'pricing' | 'costs' | 'ai' | 'automation'>('budget');
+
   const [openAiConfig, setOpenAiConfig] = useState({
-    enabled: false,
+    enabled: true,
     model: 'gpt-4o',
     webSearch: false,
     maxResults: 100,
@@ -35,25 +40,29 @@ export default function AdminInternationalSync() {
         setSettings({
           ...data,
           international_public_enabled: !!data.international_public_enabled,
-          international_purchases_enabled: data.international_purchases_enabled ?? true,
-          international_capacity_enabled: data.international_capacity_enabled ?? true,
+          international_purchases_enabled: !!data.international_purchases_enabled,
+          auto_purchase_enabled: !!data.auto_purchase_enabled,
+          auto_sync_enabled: !!data.auto_sync_enabled,
           international_operating_limit_usd: Number(data.international_operating_limit_usd || 500),
           international_safety_reserve_usd: Number(data.international_safety_reserve_usd || 50),
+          target_margin_percent: Number(data.target_margin_percent ?? 15),
+          min_absolute_profit_usd: Number(data.min_absolute_profit_usd ?? data.min_profit_usd ?? 3.99),
+          zinc_fee_usd: Number(data.zinc_fee_usd ?? 1.00),
+          financial_fee_percent: Number(data.financial_fee_percent ?? 2.50),
+          financial_fee_fixed_usd: Number(data.financial_fee_fixed_usd ?? 0.50),
+          financial_fee_tax_rate: Number(data.financial_fee_tax_rate ?? 0.22),
+          florida_sales_tax_percent: Number(data.florida_sales_tax_percent ?? 0.0),
+          fixed_markup_usd: Number(data.fixed_markup_usd ?? 6.00)
         });
       }
 
-      // Fetch capacity summary RPC
-      const { data: capData, error: capErr } = await supabase.rpc('get_international_capacity_summary');
-      if (!capErr && capData) {
-        setCapacitySummary(capData);
+      // Fetch capacity summary RPC if available
+      try {
+        const { data: capData } = await supabase.rpc('get_international_capacity_summary');
+        if (capData) setCapacitySummary(capData);
+      } catch {
+        // Fallback calculation if RPC is missing
       }
-
-      // Fetch pending waitlist count
-      const { count } = await supabase
-        .from('international_capacity_waitlist')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
-      setWaitlistCount(count || 0);
 
       // Fetch OpenAI Sourcing configuration from site_settings
       const { data: openAiRows } = await supabase
@@ -72,7 +81,7 @@ export default function AdminInternationalSync() {
         const m: Record<string, string> = {};
         for (const r of openAiRows) m[r.key] = r.value;
         setOpenAiConfig({
-          enabled: m['sourcing_openai_enabled'] === 'true',
+          enabled: m['sourcing_openai_enabled'] !== 'false',
           model: m['sourcing_openai_model'] || 'gpt-4o',
           webSearch: m['sourcing_openai_web_search_enabled'] === 'true',
           maxResults: Number(m['sourcing_openai_max_results'] || 100),
@@ -87,749 +96,636 @@ export default function AdminInternationalSync() {
     }
   }
 
+  // Real-time calculation example for pricing preview
+  const samplePricing = useMemo(() => {
+    if (!settings) return null;
+    return calculateInternationalPricing(
+      { amazonPrice: 50.00, usaShipping: 0, salesTax: 0 },
+      settings
+    );
+  }, [settings]);
+
   async function handleSave() {
     setSaving(true);
     setError('');
     setSuccess('');
     
-    // Client-side strict financial validation
-    const targetMargin = Number(settings.target_margin_percent);
-    const minProfit = Number(settings.min_absolute_profit_usd ?? settings.min_profit_usd ?? 3.99);
-    const zincFee = Number(settings.zinc_fee_usd ?? 1.00);
-    const prexFeePct = Number(settings.financial_fee_percent ?? 2.50);
-    const prexFeeFixed = Number(settings.financial_fee_fixed_usd ?? 0.50);
-    const prexFeeTax = Number(settings.financial_fee_tax_rate ?? 0.22);
-    const floridaTax = Number(settings.florida_sales_tax_percent ?? 0.0);
-    const fixedMarkup = Number(settings.fixed_markup_usd ?? 6.0);
-    const operatingLimit = Number(settings.international_operating_limit_usd ?? 500);
-    const safetyReserve = Number(settings.international_safety_reserve_usd ?? 50);
-
-    if (isNaN(targetMargin) || targetMargin < 0 || targetMargin >= 100) {
-      setError('El margen objetivo debe estar entre 0% y 99,99%.');
-      setSaving(false);
-      return;
-    }
-
-    if (isNaN(minProfit) || minProfit < 0) {
-      setError('La ganancia mínima no puede ser negativa.');
-      setSaving(false);
-      return;
-    }
-
-    if (isNaN(zincFee) || zincFee < 0) {
-      setError('El costo de Zinc no puede ser negativo.');
-      setSaving(false);
-      return;
-    }
-
-    if (isNaN(prexFeePct) || prexFeePct < 0 || prexFeePct >= 100) {
-      setError('El porcentaje financiero debe estar entre 0% y 99,99%.');
-      setSaving(false);
-      return;
-    }
-
-    if (isNaN(prexFeeFixed) || prexFeeFixed < 0) {
-      setError('El fee fijo financiero no puede ser negativo.');
-      setSaving(false);
-      return;
-    }
-
-    if (isNaN(prexFeeTax) || prexFeeTax < 0 || prexFeeTax >= 1) {
-      setError('La tasa de IVA financiero debe ser un valor decimal entre 0 y 0.99 (ej. 0.22 para 22%).');
-      setSaving(false);
-      return;
-    }
-
-    if (isNaN(floridaTax) || floridaTax < 0 || floridaTax >= 100) {
-      setError('El porcentaje de sales tax estimado debe estar entre 0% y 99,99%.');
-      setSaving(false);
-      return;
-    }
-
-    if (isNaN(fixedMarkup) || fixedMarkup < 0) {
-      setError('El markup comercial base no puede ser negativo.');
-      setSaving(false);
-      return;
-    }
-
-    if (isNaN(operatingLimit) || operatingLimit <= 0) {
-      setError('El límite de capital operativo debe ser un monto estrictamente positivo.');
-      setSaving(false);
-      return;
-    }
-
-    if (isNaN(safetyReserve) || safetyReserve < 0) {
-      setError('La reserva de seguridad no puede ser negativa.');
-      setSaving(false);
-      return;
-    }
-
     try {
-      const updatePayload = {
-        auto_sync_enabled: settings.auto_sync_enabled,
-        sync_interval_minutes: settings.sync_interval_minutes,
-        safety_margin_percent: settings.safety_margin_percent,
-        auto_purchase_enabled: settings.auto_purchase_enabled,
-        block_payment_on_price_change: settings.block_payment_on_price_change,
-        allow_price_update_before_payment: settings.allow_price_update_before_payment,
-        only_prime: settings.only_prime,
-        include_non_prime: settings.include_non_prime,
-        pricing_mode: settings.pricing_mode,
-        fixed_markup_usd: Number(settings.fixed_markup_usd || 6),
-        percentage_markup: settings.percentage_markup,
-        tiered_markup_rules: settings.tiered_markup_rules,
-        target_margin_percent: targetMargin,
-        min_profit_usd: minProfit,
-        min_absolute_profit_usd: minProfit,
-        never_sell_at_loss: true,
-        max_price_variation_percent: settings.max_price_variation_percent,
-        price_variation_action: settings.price_variation_action,
-        urubox_price_per_kg: settings.urubox_price_per_kg,
-        urubox_handling_fee: settings.urubox_handling_fee,
-        zinc_fee_usd: Number(settings.zinc_fee_usd || 1),
-        financial_fee_percent: Number(settings.financial_fee_percent ?? 2.5),
-        financial_fee_fixed_usd: Number(settings.financial_fee_fixed_usd ?? 0.5),
-        financial_fee_tax_rate: Number(settings.financial_fee_tax_rate ?? 0.22),
-        florida_sales_tax_percent: Number(settings.florida_sales_tax_percent ?? 0),
-        international_operating_limit_usd: operatingLimit,
-        international_safety_reserve_usd: safetyReserve,
-        international_capacity_enabled: !!settings.international_capacity_enabled,
-        international_purchases_enabled: !!settings.international_purchases_enabled,
-        international_public_enabled: !!settings.international_public_enabled,
+      const payload = {
+        target_margin_percent: Number(settings.target_margin_percent),
+        percentage_markup: Number(settings.target_margin_percent),
+        min_absolute_profit_usd: Number(settings.min_absolute_profit_usd),
+        min_profit_usd: Number(settings.min_absolute_profit_usd),
+        zinc_fee_usd: Number(settings.zinc_fee_usd),
+        financial_fee_percent: Number(settings.financial_fee_percent),
+        financial_fee_fixed_usd: Number(settings.financial_fee_fixed_usd),
+        financial_fee_tax_rate: Number(settings.financial_fee_tax_rate),
+        florida_sales_tax_percent: Number(settings.florida_sales_tax_percent),
+        fixed_markup_usd: Number(settings.fixed_markup_usd),
+        international_operating_limit_usd: Number(settings.international_operating_limit_usd),
+        international_safety_reserve_usd: Number(settings.international_safety_reserve_usd),
+        auto_purchase_enabled: false, // strictly enforce OFF
+        international_purchases_enabled: false, // strictly enforce OFF
+        international_public_enabled: false, // strictly enforce OFF
         updated_at: new Date().toISOString()
       };
 
-      const { error } = await supabase
+      const { error: saveError } = await supabase
         .from('international_sync_settings')
-        .update(updatePayload)
+        .update(payload)
         .eq('id', 1);
 
-      if (error) throw error;
+      if (saveError) throw saveError;
 
-      // Save OpenAI config to site_settings
-      const openAiUpdates = [
-        { key: 'sourcing_openai_enabled', value: String(openAiConfig.enabled), updated_at: new Date().toISOString() },
-        { key: 'sourcing_openai_model', value: openAiConfig.model, updated_at: new Date().toISOString() },
-        { key: 'sourcing_openai_web_search_enabled', value: String(openAiConfig.webSearch), updated_at: new Date().toISOString() },
-        { key: 'sourcing_openai_max_results', value: String(openAiConfig.maxResults), updated_at: new Date().toISOString() },
-        { key: 'sourcing_openai_daily_request_limit', value: String(openAiConfig.dailyLimit), updated_at: new Date().toISOString() },
-        { key: 'sourcing_openai_daily_budget_usd', value: String(openAiConfig.dailyBudget), updated_at: new Date().toISOString() },
-      ];
-      const { error: openAiErr } = await supabase.from('site_settings').upsert(openAiUpdates);
-      if (openAiErr) console.warn('Could not update OpenAI site_settings:', openAiErr);
+      // Update site_settings for OpenAI Sourcing
+      await supabase.from('site_settings').upsert([
+        { key: 'sourcing_openai_enabled', value: String(openAiConfig.enabled) },
+        { key: 'sourcing_openai_model', value: openAiConfig.model },
+        { key: 'sourcing_openai_web_search_enabled', value: String(openAiConfig.webSearch) },
+        { key: 'sourcing_openai_max_results', value: String(openAiConfig.maxResults) },
+        { key: 'sourcing_openai_daily_request_limit', value: String(openAiConfig.dailyLimit) },
+        { key: 'sourcing_openai_daily_budget_usd', value: String(openAiConfig.dailyBudget) },
+      ]);
 
-      setSuccess('Configuración actualizada correctamente. Los cambios aplican de forma inmediata.');
-      await fetchSettings();
-      await fetchInternationalSettings(true);
+      setSuccess('Configuración guardada exitosamente.');
+      setShowAdvancedModal(false);
+      fetchSettings();
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Error al guardar la configuración');
     } finally {
       setSaving(false);
     }
   }
 
-  if (loading) return <div className="p-8 text-center text-gray-500">Cargando configuración...</div>;
+  if (loading || !settings) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3">
+          <RefreshCw className="w-8 h-8 text-[#f00856] animate-spin" />
+          <p className="text-sm font-semibold text-gray-500">Cargando control internacional...</p>
+        </div>
+      </div>
+    );
+  }
+
+  const operatingLimit = Number(settings.international_operating_limit_usd || 500);
+  const safetyReserve = Number(settings.international_safety_reserve_usd || 50);
+  const reservedAmount = Number(capacitySummary?.reserved_amount_usd || 0);
+  const inPurchasesAmount = Number(capacitySummary?.in_purchases_amount_usd || 0);
+  const spentThisMonth = Number(capacitySummary?.spent_month_usd || 0);
+  const availableBudget = Math.max(0, operatingLimit - safetyReserve - reservedAmount - inPurchasesAmount);
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-6 pb-20 max-w-7xl mx-auto">
+      {/* 1. CABECERA PRINCIPAL */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-5">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Control de Compras Internacionales</h2>
-          <p className="text-sm text-gray-500 mt-1">Configuración de Publicación, Fondo Operativo, Cupos y Precios.</p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+              Control de Compras Internacionales
+            </h1>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              ACTIVO
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 mt-1 font-medium">
+            Supervisión presupuestaria, estado operativo de automatizaciones y gobernanza de compras.
+          </p>
         </div>
-        <button 
-          onClick={fetchSettings} 
-          title="Recargar configuración"
-          className="p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600 transition-colors shadow-sm"
-        >
-          <RefreshCw className="w-5 h-5" />
-        </button>
+
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => setShowAdvancedModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-sm transition-all"
+          >
+            <Settings2 className="w-4 h-4 text-pink-400" />
+            <span>CONFIGURACIÓN AVANZADA</span>
+          </button>
+        </div>
       </div>
 
-      {error && <div className="p-4 bg-red-50 text-red-800 rounded-lg border border-red-200 text-sm font-medium">{error}</div>}
-      {success && <div className="p-4 bg-green-50 text-green-800 rounded-lg border border-green-200 text-sm font-medium">{success}</div>}
+      {error && (
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs font-semibold text-rose-800 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+          <span>{error}</span>
+        </div>
+      )}
 
-      {/* ── CARD RESUMEN DE CAPITAL EN VIVO ── */}
-      {capacitySummary && (
-        <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 rounded-2xl border border-slate-700 text-white shadow-lg space-y-4">
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-2">
-              <Activity className="w-5 h-5 text-primary-400" />
-              <h3 className="text-base font-bold tracking-wide uppercase">Estado del Fondo Operativo de Piloto</h3>
+      {success && (
+        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs font-semibold text-emerald-800 flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+          <span>{success}</span>
+        </div>
+      )}
+
+      {/* 2. INDICADORES PRINCIPALES (4 CUADRANTES) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs">
+          <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Disponible</div>
+          <div className="text-2xl font-black text-emerald-600 mt-2">
+            USD {availableBudget.toFixed(2)}
+          </div>
+          <div className="text-[11px] text-gray-400 mt-1 font-medium">
+            Límite (${operatingLimit}) − Reserva (${safetyReserve})
+          </div>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs">
+          <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Reservado</div>
+          <div className="text-2xl font-black text-amber-600 mt-2">
+            USD {reservedAmount.toFixed(2)}
+          </div>
+          <div className="text-[11px] text-gray-400 mt-1 font-medium">
+            Órdenes en proceso de checkout
+          </div>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs">
+          <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">En compras</div>
+          <div className="text-2xl font-black text-blue-600 mt-2">
+            USD {inPurchasesAmount.toFixed(2)}
+          </div>
+          <div className="text-[11px] text-gray-400 mt-1 font-medium">
+            Pendientes de confirmación origen
+          </div>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-xs">
+          <div className="text-xs font-bold text-gray-500 uppercase tracking-wider">Gastado este mes</div>
+          <div className="text-2xl font-black text-gray-900 mt-2">
+            USD {spentThisMonth.toFixed(2)}
+          </div>
+          <div className="text-[11px] text-gray-400 mt-1 font-medium">
+            Total acumulado facturado
+          </div>
+        </div>
+      </div>
+
+      {/* 3. ESTADO DE CONEXIONES */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-100 border border-orange-200 flex items-center justify-center text-orange-600 font-black text-sm">
+              a
             </div>
-            <div className="flex items-center gap-2">
-              <span className={`px-3 py-1 rounded-full text-xs font-black uppercase ${
-                capacitySummary.status_label === 'AVAILABLE' ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' :
-                capacitySummary.status_label === 'LOW' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40' :
-                capacitySummary.status_label === 'FULL' ? 'bg-red-500/20 text-red-300 border border-red-500/40' :
-                'bg-slate-700 text-slate-300'
-              }`}>
-                {capacitySummary.status_label === 'AVAILABLE' && '🟢 Cupos Disponibles'}
-                {capacitySummary.status_label === 'LOW' && '🟡 Alta Demanda (Pocos Cupos)'}
-                {capacitySummary.status_label === 'FULL' && '🔴 Cupos Completos'}
-                {capacitySummary.status_label === 'PAUSED' && '⏸ Pausado Manualmente'}
+            <div>
+              <div className="text-xs font-bold text-gray-900">Amazon / Zinc API</div>
+              <div className="text-[11px] text-gray-500">Búsqueda en tiempo real y catálogo verificado</div>
+            </div>
+          </div>
+          <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-bold rounded-lg border border-emerald-200">
+            CONECTADO
+          </span>
+        </div>
+
+        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-100 border border-purple-200 flex items-center justify-center text-purple-600">
+              <Sparkles className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-gray-900">OpenAI / Sourcing Intelligence</div>
+              <div className="text-[11px] text-gray-500">Planificador de búsquedas e inferencia de demanda</div>
+            </div>
+          </div>
+          <span className={`px-3 py-1 text-xs font-bold rounded-lg border ${
+            openAiConfig.enabled 
+              ? 'bg-purple-100 text-purple-800 border-purple-200' 
+              : 'bg-gray-100 text-gray-600 border-gray-200'
+          }`}>
+            {openAiConfig.enabled ? 'ACTIVO' : 'DESACTIVADO'}
+          </span>
+        </div>
+      </div>
+
+      {/* 4. ESTADO OPERATIVO & REGLAS COMERCIALES */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* ESTADO OPERATIVO */}
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Estado Operativo</h3>
+            <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
+              Fase Manual Certificada
+            </span>
+          </div>
+
+          <div className="space-y-4">
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs font-bold text-gray-900">Publicación automática</div>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  Permite publicar productos sin revisión manual.
+                </p>
+              </div>
+              <span className="px-2.5 py-1 bg-rose-100 text-rose-800 border border-rose-200 text-xs font-black rounded-lg shrink-0">
+                OFF
               </span>
-              <span className="text-xs text-slate-400 font-mono">
-                {waitlistCount} en lista de espera
+            </div>
+
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs font-bold text-gray-900">Compra automática</div>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  Permite realizar compras en origen sin confirmación manual.
+                </p>
+              </div>
+              <span className="px-2.5 py-1 bg-rose-100 text-rose-800 border border-rose-200 text-xs font-black rounded-lg shrink-0">
+                OFF
               </span>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2">
-            <div className="p-3 bg-white/5 rounded-xl border border-white/10">
-              <span className="text-[10px] text-slate-400 uppercase font-bold block">Límite Total</span>
-              <span className="text-lg font-black text-white">${capacitySummary.operating_limit_usd.toFixed(2)}</span>
+          <p className="text-[11px] text-amber-700 bg-amber-50 p-3 rounded-xl border border-amber-200 font-medium">
+            ℹ️ Durante esta fase de importación y certificación, ambas opciones permanecen estrictamente desactivadas. Todo producto importado ingresa al catálogo administrativo en estado <strong>PENDING_REVIEW</strong>.
+          </p>
+        </div>
+
+        {/* REGLAS COMERCIALES COTIDIANAS */}
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xs space-y-4">
+          <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wide">Reglas Comerciales</h3>
+            <button
+              onClick={() => setShowAdvancedModal(true)}
+              className="text-xs font-bold text-[#f00856] hover:underline flex items-center gap-1"
+            >
+              <span>Editar parámetros</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+              <div>
+                <div className="text-xs font-bold text-gray-700">Markup objetivo</div>
+                <div className="text-[11px] text-gray-400">Porcentaje agregado sobre el costo real</div>
+              </div>
+              <div className="text-sm font-black text-gray-900 bg-white px-3 py-1 rounded-lg border border-gray-200">
+                {settings.target_margin_percent}%
+              </div>
             </div>
-            <div className="p-3 bg-white/5 rounded-xl border border-white/10">
-              <span className="text-[10px] text-slate-400 uppercase font-bold block">Reserva Seg.</span>
-              <span className="text-lg font-black text-amber-400">${capacitySummary.safety_reserve_usd.toFixed(2)}</span>
+
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+              <div>
+                <div className="text-xs font-bold text-gray-700">Reserva de seguridad</div>
+                <div className="text-[11px] text-gray-400">Fondo protegido fuera de operación</div>
+              </div>
+              <div className="text-sm font-black text-gray-900 bg-white px-3 py-1 rounded-lg border border-gray-200">
+                USD {safetyReserve}
+              </div>
             </div>
-            <div className="p-3 bg-white/5 rounded-xl border border-white/10">
-              <span className="text-[10px] text-slate-400 uppercase font-bold block">Capacidad Neta</span>
-              <span className="text-lg font-black text-white">${capacitySummary.usable_limit_usd.toFixed(2)}</span>
+
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
+              <div>
+                <div className="text-xs font-bold text-gray-700">Ganancia mínima por producto</div>
+                <div className="text-[11px] text-gray-400">Piso de rentabilidad protegido</div>
+              </div>
+              <div className="text-sm font-black text-gray-900 bg-white px-3 py-1 rounded-lg border border-gray-200">
+                USD {settings.min_absolute_profit_usd}
+              </div>
             </div>
-            <div className="p-3 bg-white/5 rounded-xl border border-white/10">
-              <span className="text-[10px] text-slate-400 uppercase font-bold block">En Checkout (15m)</span>
-              <span className="text-lg font-black text-sky-400">${capacitySummary.active_reserved_usd.toFixed(2)}</span>
+          </div>
+
+          {/* EJEMPLO REAL DE CÁLCULO DE PRECIO */}
+          {samplePricing && (
+            <div className="p-3.5 bg-slate-900 text-white rounded-xl text-xs space-y-1.5 font-mono">
+              <div className="text-[10px] text-pink-400 uppercase font-bold tracking-wider font-sans">
+                Ejemplo en vivo (Producto Amazon $50.00):
+              </div>
+              <div className="flex justify-between text-slate-300 text-[11px]">
+                <span>Costo real (Amazon + fees):</span>
+                <span>USD {samplePricing.realCost.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-slate-300 text-[11px]">
+                <span>Markup ({settings.target_margin_percent}%):</span>
+                <span>USD {samplePricing.estimatedProfit.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-emerald-400 pt-1 border-t border-slate-800">
+                <span>Precio de venta final:</span>
+                <span>USD {samplePricing.finalPrice.toFixed(2)}</span>
+              </div>
             </div>
-            <div className="p-3 bg-white/5 rounded-xl border border-white/10">
-              <span className="text-[10px] text-slate-400 uppercase font-bold block">Comprometido / Gastado</span>
-              <span className="text-lg font-black text-purple-400">${(capacitySummary.committed_usd + capacitySummary.spent_usd).toFixed(2)}</span>
+          )}
+        </div>
+      </div>
+
+      {/* 5. MODAL DE CONFIGURACIÓN AVANZADA */}
+      {showAdvancedModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl border border-gray-200 shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-gray-200 flex items-center justify-between bg-slate-50">
+              <div>
+                <h2 className="text-base font-black text-gray-900 flex items-center gap-2">
+                  <Settings2 className="w-5 h-5 text-[#f00856]" />
+                  <span>Configuración Avanzada de Parámetros</span>
+                </h2>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Parámetros técnicos agrupados con descripción, unidad y efecto en el sistema.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAdvancedModal(false)}
+                className="p-1.5 rounded-xl hover:bg-gray-200 text-gray-400 hover:text-gray-700 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <div className="p-3 bg-emerald-500/15 rounded-xl border border-emerald-500/30">
-              <span className="text-[10px] text-emerald-300 uppercase font-bold block">Disponible Real</span>
-              <span className="text-lg font-black text-emerald-400">${capacitySummary.available_capacity_usd.toFixed(2)}</span>
+
+            {/* Modal Tabs */}
+            <div className="flex border-b border-gray-200 bg-white px-5 gap-2 overflow-x-auto text-xs font-bold">
+              {[
+                { id: 'budget', label: 'A. Presupuesto & Seguridad' },
+                { id: 'pricing', label: 'B. Pricing & Rentabilidad' },
+                { id: 'costs', label: 'C. Costos & Medios de Pago' },
+                { id: 'ai', label: 'D. IA & Sourcing' },
+                { id: 'automation', label: 'E. Automatización' }
+              ].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveAdvancedTab(tab.id as any)}
+                  className={`py-3 px-3 border-b-2 transition whitespace-nowrap ${
+                    activeAdvancedTab === tab.id
+                      ? 'border-[#f00856] text-[#f00856]'
+                      : 'border-transparent text-gray-500 hover:text-gray-800'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto space-y-6 text-xs text-gray-700 flex-1">
+              {/* SECCIÓN A: PRESUPUESTO Y SEGURIDAD */}
+              {activeAdvancedTab === 'budget' && (
+                <div className="space-y-4">
+                  <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-gray-900">Límite operativo total (USD)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="10"
+                        value={settings.international_operating_limit_usd}
+                        onChange={e => setSettings({ ...settings, international_operating_limit_usd: e.target.value })}
+                        className="w-32 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-right font-bold text-gray-900"
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-500">
+                      <strong>Para qué sirve:</strong> Define el saldo máximo de compras internacionales simultáneas permitido para el sistema.
+                    </p>
+                  </div>
+
+                  <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-gray-900">Reserva de seguridad (USD)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="5"
+                        value={settings.international_safety_reserve_usd}
+                        onChange={e => setSettings({ ...settings, international_safety_reserve_usd: e.target.value })}
+                        className="w-32 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-right font-bold text-gray-900"
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-500">
+                      <strong>Explicación:</strong> Dinero que el sistema mantiene fuera del presupuesto disponible para evitar comprometer todo el saldo en nuevas operaciones ante fluctuaciones imprevistas.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* SECCIÓN B: PRICING Y RENTABILIDAD */}
+              {activeAdvancedTab === 'pricing' && (
+                <div className="space-y-4">
+                  <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="font-bold text-gray-900">Markup objetivo (%)</label>
+                        <div className="text-[10px] text-gray-500">Porcentaje agregado sobre el costo real</div>
+                      </div>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.5"
+                        value={settings.target_margin_percent}
+                        onChange={e => setSettings({ ...settings, target_margin_percent: e.target.value })}
+                        className="w-32 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-right font-bold text-gray-900"
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-500">
+                      <strong>Efecto en el sistema:</strong> Se suma al costo real para obtener el precio de venta sugerido. Ejemplo: Costo real USD 100 + Markup 3% = Ganancia USD 3 → Precio venta USD 103.
+                    </p>
+                  </div>
+
+                  <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="font-bold text-gray-900">Ganancia mínima garantizada (USD)</label>
+                        <div className="text-[10px] text-gray-500">Piso absoluto de utilidad</div>
+                      </div>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={settings.min_absolute_profit_usd}
+                        onChange={e => setSettings({ ...settings, min_absolute_profit_usd: e.target.value })}
+                        className="w-32 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-right font-bold text-gray-900"
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-500">
+                      <strong>Interacción con markup:</strong> Si el cálculo del markup genera una ganancia inferior a este valor (ej. en productos de bajo costo), el sistema aplica automáticamente este piso de rentabilidad.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* SECCIÓN C: COSTOS DE COMPRA / MEDIOS DE PAGO */}
+              {activeAdvancedTab === 'costs' && (
+                <div className="space-y-4">
+                  <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-gray-900">Zinc Fee (USD)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={settings.zinc_fee_usd}
+                        onChange={e => setSettings({ ...settings, zinc_fee_usd: e.target.value })}
+                        className="w-32 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-right font-bold text-gray-900"
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-500">
+                      <strong>Explicación:</strong> Costo considerado por el sistema para operaciones procesadas mediante Zinc. Forma parte integral del cálculo del costo real.
+                    </p>
+                  </div>
+
+                  <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-gray-900">Prex % (Comisión financiera)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={settings.financial_fee_percent}
+                        onChange={e => setSettings({ ...settings, financial_fee_percent: e.target.value })}
+                        className="w-32 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-right font-bold text-gray-900"
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-500">
+                      <strong>Explicación:</strong> Representa la comisión porcentual cobrada por el procesador de tarjetas por compra internacional.
+                    </p>
+                  </div>
+
+                  <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-gray-900">IVA sobre comisión (Tasa decimal, ej 0.22 = 22%)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="0.99"
+                        step="0.01"
+                        value={settings.financial_fee_tax_rate}
+                        onChange={e => setSettings({ ...settings, financial_fee_tax_rate: e.target.value })}
+                        className="w-32 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-right font-bold text-gray-900"
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-500">
+                      <strong>Explicación:</strong> Corresponde al Impuesto al Valor Agregado aplicado sobre la comisión de pago en Uruguay (22%).
+                    </p>
+                  </div>
+
+                  <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="font-bold text-gray-900">Florida Sales Tax (%)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="10"
+                        step="0.5"
+                        value={settings.florida_sales_tax_percent}
+                        onChange={e => setSettings({ ...settings, florida_sales_tax_percent: e.target.value })}
+                        className="w-32 px-3 py-1.5 bg-white border border-gray-300 rounded-lg text-right font-bold text-gray-900"
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-500">
+                      <strong>Explicación:</strong> Impuesto estimado en origen (EEUU). Usualmente 0% si el casillero logístico está exento.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* SECCIÓN D: IA Y SOURCING */}
+              {activeAdvancedTab === 'ai' && (
+                <div className="space-y-4">
+                  <div className="border border-gray-200 rounded-xl p-4 bg-gray-50/50 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <label className="font-bold text-gray-900">Sourcing con OpenAI</label>
+                        <div className="text-[10px] text-gray-500">Intérprete y generador de estrategias de búsqueda</div>
+                      </div>
+                      <button
+                        onClick={() => setOpenAiConfig({ ...openAiConfig, enabled: !openAiConfig.enabled })}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                          openAiConfig.enabled ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-700'
+                        }`}
+                      >
+                        {openAiConfig.enabled ? 'ON' : 'OFF'}
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-gray-500">
+                      <strong>Explicación:</strong> Permite que OpenAI interprete instrucciones en lenguaje natural y genere planes de búsqueda. Los productos, precios, reviews y disponibilidad provienen de las fuentes reales conectadas (Amazon/Zinc); OpenAI no inventa estos datos.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="border border-gray-200 rounded-xl p-3 bg-white">
+                      <label className="text-[11px] font-bold text-gray-700 block">Modelo OpenAI</label>
+                      <input
+                        type="text"
+                        value={openAiConfig.model}
+                        onChange={e => setOpenAiConfig({ ...openAiConfig, model: e.target.value })}
+                        className="mt-1 w-full px-2.5 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-xs font-semibold"
+                      />
+                    </div>
+
+                    <div className="border border-gray-200 rounded-xl p-3 bg-white">
+                      <label className="text-[11px] font-bold text-gray-700 block">Límite diario de consultas</label>
+                      <input
+                        type="number"
+                        value={openAiConfig.dailyLimit}
+                        onChange={e => setOpenAiConfig({ ...openAiConfig, dailyLimit: Number(e.target.value) })}
+                        className="mt-1 w-full px-2.5 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-xs font-semibold"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* SECCIÓN E: AUTOMATIZACIÓN */}
+              {activeAdvancedTab === 'automation' && (
+                <div className="space-y-4">
+                  <div className="p-4 bg-rose-50 border border-rose-200 rounded-xl text-xs space-y-2">
+                    <div className="font-bold text-rose-900 flex items-center gap-1.5">
+                      <Lock className="w-4 h-4 text-rose-600" />
+                      <span>Automatizaciones Bloqueadas en Fase de Certificación</span>
+                    </div>
+                    <p className="text-[11px] text-rose-800 leading-relaxed">
+                      Para garantizar la máxima seguridad operativa y cero compras o publicaciones accidentales, todos los flags de automatización permanecen desactivados.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-between">
+                      <div>
+                        <div className="font-bold text-gray-900">Auto-Publish</div>
+                        <div className="text-[11px] text-gray-500">Publica automáticamente en la tienda pública sin revisión previa.</div>
+                      </div>
+                      <span className="px-3 py-1 bg-gray-200 text-gray-700 text-xs font-bold rounded-lg">OFF (Bloqueado)</span>
+                    </div>
+
+                    <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-between">
+                      <div>
+                        <div className="font-bold text-gray-900">Auto-Purchase</div>
+                        <div className="text-[11px] text-gray-500">Ordena automáticamente en Amazon/Zinc al recibir pago del cliente.</div>
+                      </div>
+                      <span className="px-3 py-1 bg-gray-200 text-gray-700 text-xs font-bold rounded-lg">OFF (Bloqueado)</span>
+                    </div>
+
+                    <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-between">
+                      <div>
+                        <div className="font-bold text-gray-900">Cron / Shadow Autopilot</div>
+                        <div className="text-[11px] text-gray-500">Ejecución desatendida periódica en segundo plano.</div>
+                      </div>
+                      <span className="px-3 py-1 bg-gray-200 text-gray-700 text-xs font-bold rounded-lg">OFF (Bloqueado)</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-5 border-t border-gray-200 bg-slate-50 flex items-center justify-between">
+              <button
+                onClick={() => setShowAdvancedModal(false)}
+                className="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-900"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 px-5 py-2.5 bg-[#f00856] hover:bg-[#d0074a] text-white rounded-xl text-xs font-bold shadow-sm transition disabled:opacity-50"
+              >
+                {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                <span>Guardar Parámetros</span>
+              </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* ── SECCIÓN 1: ESTADO DEL MÓDULO INTERNACIONAL (SWITCHES PRINCIPALES) ── */}
-      <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-5">
-        <div className="flex items-center justify-between border-b pb-3">
-          <div className="flex items-center gap-2">
-            <Globe className="w-5 h-5 text-primary-600" />
-            <h3 className="text-base font-bold text-gray-900">Estado del Módulo Internacional</h3>
-          </div>
-          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
-            Controles Principales
-          </span>
-        </div>
-
-        {/* Advertencia Fuerte si Compras = ON y Control de Cupos = OFF */}
-        {settings?.international_purchases_enabled && !settings?.international_capacity_enabled && (
-          <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-xl flex items-start gap-3">
-            <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-            <div className="text-sm text-amber-900 font-medium leading-relaxed">
-              <strong className="block font-bold text-amber-950 mb-0.5">⚠️ Advertencia de Riesgo Operativo</strong>
-              Las compras internacionales están activas sin control de cupos. Esto puede superar el límite operativo de capital.
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          
-          {/* Switch 1: Publicación Pública */}
-          <div className={`p-4 rounded-xl border-2 transition-all flex flex-col justify-between ${
-            settings?.international_public_enabled 
-              ? 'bg-emerald-50/50 border-emerald-500/40 shadow-sm' 
-              : 'bg-gray-50/60 border-gray-200'
-          }`}>
-            <div>
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Publicación Pública</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={settings?.international_public_enabled || false}
-                  onClick={() => setSettings({ ...settings, international_public_enabled: !settings?.international_public_enabled })}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    settings?.international_public_enabled ? 'bg-emerald-600' : 'bg-gray-300'
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      settings?.international_public_enabled ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
-              </div>
-              <h4 className="font-bold text-sm text-gray-900 mb-1">Publicar módulo internacional</h4>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Hace visible la sección Internacional en la tienda y habilita la página pública <code className="text-[11px] font-mono bg-white px-1 py-0.5 rounded border border-gray-200">/intl</code>.
-              </p>
-            </div>
-            <div className="mt-4 pt-2.5 border-t border-gray-200/60 flex items-center justify-between text-[11px] font-bold">
-              <span className="text-gray-500">Estado:</span>
-              <span className={settings?.international_public_enabled ? 'text-emerald-700' : 'text-gray-500'}>
-                {settings?.international_public_enabled ? '🟢 PUBLICADO (Visible)' : '⚪ OCULTO (Default)'}
-              </span>
-            </div>
-          </div>
-
-          {/* Switch 2: Compras */}
-          <div className={`p-4 rounded-xl border-2 transition-all flex flex-col justify-between ${
-            settings?.international_purchases_enabled 
-              ? 'bg-blue-50/50 border-blue-500/40 shadow-sm' 
-              : 'bg-gray-50/60 border-gray-200'
-          }`}>
-            <div>
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Compras y Checkout</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={settings?.international_purchases_enabled ?? true}
-                  onClick={() => setSettings({ ...settings, international_purchases_enabled: !(settings?.international_purchases_enabled ?? true) })}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    settings?.international_purchases_enabled ? 'bg-blue-600' : 'bg-gray-300'
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      settings?.international_purchases_enabled ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
-              </div>
-              <h4 className="font-bold text-sm text-gray-900 mb-1">Habilitar compras internacionales</h4>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Permite o bloquea nuevas compras internacionales en el checkout.
-              </p>
-            </div>
-            <div className="mt-4 pt-2.5 border-t border-gray-200/60 flex items-center justify-between text-[11px] font-bold">
-              <span className="text-gray-500">Estado:</span>
-              <span className={settings?.international_purchases_enabled ? 'text-blue-700' : 'text-amber-700'}>
-                {settings?.international_purchases_enabled ? '🟢 COMPRAS HABILITADAS' : '⏸ COMPRAS PAUSADAS'}
-              </span>
-            </div>
-          </div>
-
-          {/* Switch 3: Control de Cupos */}
-          <div className={`p-4 rounded-xl border-2 transition-all flex flex-col justify-between ${
-            settings?.international_capacity_enabled 
-              ? 'bg-purple-50/50 border-purple-500/40 shadow-sm' 
-              : 'bg-amber-50/60 border-amber-300'
-          }`}>
-            <div>
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">Control de Cupos</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={settings?.international_capacity_enabled ?? true}
-                  onClick={() => setSettings({ ...settings, international_capacity_enabled: !(settings?.international_capacity_enabled ?? true) })}
-                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                    settings?.international_capacity_enabled ? 'bg-purple-600' : 'bg-gray-300'
-                  }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                      settings?.international_capacity_enabled ? 'translate-x-5' : 'translate-x-0'
-                    }`}
-                  />
-                </button>
-              </div>
-              <h4 className="font-bold text-sm text-gray-900 mb-1">Habilitar control de cupos</h4>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Aplica el límite operativo de capital y reservas concurrentes de 15 minutos.
-              </p>
-            </div>
-            <div className="mt-4 pt-2.5 border-t border-gray-200/60 flex items-center justify-between text-[11px] font-bold">
-              <span className="text-gray-500">Estado:</span>
-              <span className={settings?.international_capacity_enabled ? 'text-purple-700' : 'text-red-700'}>
-                {settings?.international_capacity_enabled ? '🟢 CONTROL ACTIVO' : '⚠️ SIN CONTROL'}
-              </span>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-6">
-        
-        {/* ── FONDO DE CAPITAL Y RESERVAS ── */}
-        <div className="space-y-4">
-          <h3 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2">
-            <DollarSign className="w-4 h-4 text-emerald-600" />
-            Parámetros del Fondo Operativo (USD)
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Límite Operativo Total (USD)</label>
-              <input
-                type="number"
-                step="10"
-                min="1"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                value={settings?.international_operating_limit_usd ?? 500}
-                onChange={e => setSettings({...settings, international_operating_limit_usd: Number(e.target.value)})}
-              />
-              <p className="text-xs text-gray-500 mt-1">Fondo máximo para compras de prueba durante el piloto.</p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Reserva de Seguridad Intocable (USD)</label>
-              <input
-                type="number"
-                step="5"
-                min="0"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                value={settings?.international_safety_reserve_usd ?? 50}
-                onChange={e => setSettings({...settings, international_safety_reserve_usd: Number(e.target.value)})}
-              />
-              <p className="text-xs text-gray-500 mt-1">Margen reservado para absorber fluctuaciones imprevistas.</p>
-            </div>
-          </div>
-        </div>
-
-        {/* ── REGLAS DE PRICING Y MARGEN ── */}
-        <div className="pt-6 border-t border-gray-100 space-y-4">
-          <h3 className="text-sm font-bold text-gray-900 border-b pb-2 flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-primary-600" />
-            Protección de Rentabilidad y Margen Dinámico
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-gray-700">Ganancia objetivo (USD)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0.1"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                value={settings?.min_profit_usd ?? 3.99}
-                onChange={e => setSettings({...settings, min_profit_usd: Number(e.target.value), min_absolute_profit_usd: Number(e.target.value)})}
-              />
-              <p className="text-[10px] text-gray-500 mt-1">
-                Ganancia neta mínima garantizada por compra.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-700">Fee Comercial Mínimo (USD)</label>
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                value={settings?.fixed_markup_usd ?? 6.0}
-                onChange={e => setSettings({...settings, fixed_markup_usd: Number(e.target.value)})}
-              />
-              <p className="text-[10px] text-gray-500 mt-1">
-                Recargo comercial base sobre Amazon.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-700">Margen objetivo (%)</label>
-              <input
-                type="number"
-                step="0.5"
-                min="0"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                value={settings?.target_margin_percent ?? 15.0}
-                onChange={e => setSettings({...settings, target_margin_percent: Number(e.target.value)})}
-              />
-              <p className="text-[10px] text-gray-500 mt-1">
-                Porcentaje mínimo de ganancia sobre el precio final de venta.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-700">Zinc API Fee (USD)</label>
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                value={settings?.zinc_fee_usd ?? 1.0}
-                onChange={e => setSettings({...settings, zinc_fee_usd: Number(e.target.value)})}
-              />
-              <p className="text-[10px] text-gray-500 mt-1">
-                Costo fijo por orden de compra automatizada.
-              </p>
-            </div>
-          </div>
-
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-900">
-            <p className="font-semibold flex items-center gap-1.5">
-              <ShieldAlert className="w-4 h-4 text-blue-700 flex-shrink-0" />
-              Regla Canónica de Rentabilidad:
-            </p>
-            <p className="text-[11px] text-blue-800 mt-0.5">
-              Profit Protection utiliza siempre la condición más exigente entre el fee comercial base, la ganancia mínima absoluta y el margen mínimo configurado.
-            </p>
-          </div>
-
-          {/* ── PARÁMETROS FINANCIEROS (PREX / PROCESAMIENTO) ── */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-            <div>
-              <label className="block text-xs font-bold text-gray-700">Comisión Tarjeta Prex (%)</label>
-              <input
-                type="number"
-                step="0.1"
-                min="0"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                value={settings?.financial_fee_percent ?? 2.5}
-                onChange={e => setSettings({...settings, financial_fee_percent: Number(e.target.value)})}
-              />
-              <p className="text-[10px] text-gray-500 mt-1">
-                Porcentaje por transacción internacional en Prex.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-700">Cargo Fijo Prex (USD)</label>
-              <input
-                type="number"
-                step="0.05"
-                min="0"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                value={settings?.financial_fee_fixed_usd ?? 0.50}
-                onChange={e => setSettings({...settings, financial_fee_fixed_usd: Number(e.target.value)})}
-              />
-              <p className="text-[10px] text-gray-500 mt-1">
-                Cargo fijo por operación de tarjeta en el exterior.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-700">IVA Financiero Prex (%)</label>
-              <input
-                type="number"
-                step="1"
-                min="0"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
-                value={Math.round((settings?.financial_fee_tax_rate ?? 0.22) * 100)}
-                onChange={e => setSettings({...settings, financial_fee_tax_rate: Number(e.target.value) / 100})}
-              />
-              <p className="text-[10px] text-gray-500 mt-1">
-                IVA uruguayo aplicado sobre cargos financieros (22%).
-              </p>
-            </div>
-          </div>
-
-          {/* ── EJEMPLOS DINÁMICOS DE PRICING EN VIVO ── */}
-          {(() => {
-            const sim1 = calculateInternationalPricing({ amazonPrice: 34.99, usaShipping: 0 }, settings || {});
-            const sim2 = calculateInternationalPricing({ amazonPrice: 34.99, usaShipping: 0 }, { ...(settings || {}), zinc_fee_usd: 4.00 });
-
-            return (
-              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 mt-4">
-                <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-                  Simulación de Precios Dinámica con Parámetros Actuales
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
-                  <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1">
-                    <div className="font-bold text-slate-900 border-b pb-1">Caso 1: Amazon $34.99 (Zinc = ${settings?.zinc_fee_usd || 1})</div>
-                    <div className="text-slate-600">Costo real: <span className="font-bold text-slate-900">${sim1.realCost.toFixed(2)} USD</span></div>
-                    <div className="text-slate-600">1. Comercial Base: ${sim1.commercialPrice.toFixed(2)} USD</div>
-                    <div className="text-slate-600">2. Ganancia Mínima ($3.99): ${sim1.absoluteProtectedPrice.toFixed(2)} USD</div>
-                    <div className="text-slate-600">3. Margen {sim1.targetMarginPercent}%: <span className="font-bold text-indigo-700">${sim1.marginProtectedPrice.toFixed(2)} USD</span></div>
-                    <div className="text-slate-900 font-bold pt-1 border-t flex justify-between">
-                      <span>Precio Final: ${sim1.finalPrice.toFixed(2)} USD</span>
-                      <span className={sim1.profitProtectionTriggered ? 'text-indigo-600 font-black' : 'text-emerald-600'}>
-                        {sim1.pricingProtectionReason === 'target_margin' ? '🛡 Margen 15%' : sim1.pricingProtectionReason === 'absolute_profit' ? '🛡 Mínimo $3.99' : '✓ Base OK'}
-                      </span>
-                    </div>
-                    <div className="text-emerald-700 text-[11px]">Ganancia real: ${sim1.estimatedProfit.toFixed(2)} USD ({sim1.netMarginPercentage.toFixed(1)}%)</div>
-                  </div>
-
-                  <div className="bg-white p-3 rounded-lg border border-slate-200 space-y-1">
-                    <div className="font-bold text-slate-900 border-b pb-1">Caso 2: Amazon $34.99 (Zinc Sube a $4.00)</div>
-                    <div className="text-slate-600">Costo real: <span className="font-bold text-slate-900">${sim2.realCost.toFixed(2)} USD</span></div>
-                    <div className="text-slate-600">1. Comercial Base: ${sim2.commercialPrice.toFixed(2)} USD</div>
-                    <div className="text-slate-600">2. Ganancia Mínima ($3.99): ${sim2.absoluteProtectedPrice.toFixed(2)} USD</div>
-                    <div className="text-slate-600">3. Margen {sim2.targetMarginPercent}%: <span className="font-bold text-indigo-700">${sim2.marginProtectedPrice.toFixed(2)} USD</span></div>
-                    <div className="text-slate-900 font-bold pt-1 border-t flex justify-between">
-                      <span>Precio Final: ${sim2.finalPrice.toFixed(2)} USD</span>
-                      <span className="text-indigo-600 font-black">
-                        🛡 Margen 15% (+${(sim2.appliedFee - sim2.minimumCommercialFee).toFixed(2)})
-                      </span>
-                    </div>
-                    <div className="text-emerald-700 text-[11px]">Ganancia real: ${sim2.estimatedProfit.toFixed(2)} USD ({sim2.netMarginPercentage.toFixed(1)}%)</div>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-
-        {/* ── AUTOMATIZACIÓN DE COMPRA Y SINCRONIZACIÓN ── */}
-        <div className="pt-6 border-t border-gray-100">
-          <h3 className="text-sm font-bold text-gray-900 border-b pb-2 mb-4">Automatización de Compra en Origen</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <label className="flex items-center gap-3 cursor-pointer p-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100">
-              <input
-                type="checkbox"
-                className="w-5 h-5 text-primary-600 rounded"
-                checked={settings?.auto_purchase_enabled || false}
-                onChange={e => setSettings({...settings, auto_purchase_enabled: e.target.checked})}
-              />
-              <div>
-                <span className="block text-sm font-medium text-gray-900">Compra Automática al Confirmar Pago</span>
-                <span className="block text-xs text-gray-500">Envía la orden inmediatamente tras webhook de pago aprobado.</span>
-              </div>
-            </label>
-
-            <label className="flex items-center gap-3 cursor-pointer p-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100">
-              <input
-                type="checkbox"
-                className="w-5 h-5 text-primary-600 rounded"
-                checked={settings?.only_prime || false}
-                onChange={e => setSettings({...settings, only_prime: e.target.checked})}
-              />
-              <div>
-                <span className="block text-sm font-medium text-gray-900">Solo Productos Prime</span>
-                <span className="block text-xs text-gray-500">Descarta ofertas que no tengan envío rápido Prime en EE.UU.</span>
-              </div>
-            </label>
-          </div>
-        </div>
-
-        {/* ── INVESTIGACIÓN CON OPENAI (SOURCING) ── */}
-        <div className="pt-6 border-t border-gray-100">
-          <div className="flex items-center justify-between border-b pb-2 mb-4">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-purple-600" />
-              <h3 className="text-sm font-bold text-gray-900">Investigación con OpenAI (Sourcing Center)</h3>
-            </div>
-            <span className={`px-2.5 py-0.5 rounded text-[11px] font-bold border ${
-              openAiConfig.enabled
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                : 'bg-gray-100 text-gray-500 border-gray-200'
-            }`}>
-              {openAiConfig.enabled ? 'ACTIVO' : 'OFF (DESACTIVADO)'}
-            </span>
-          </div>
-
-          <p className="text-xs text-gray-500 mb-4">
-            Permite descubrir productos candidatos con OpenAI directamente desde el Sourcing Center.
-            Desactivado por defecto. Requiere <code className="font-mono bg-gray-100 px-1 py-0.5 rounded">OPENAI_API_KEY</code> en Supabase Secrets.
-          </p>
-
-          <div className="space-y-4">
-            <label className="flex items-center gap-3 cursor-pointer p-3 bg-purple-50/50 rounded-lg border border-purple-100 hover:bg-purple-50">
-              <input
-                type="checkbox"
-                className="w-5 h-5 text-purple-600 rounded"
-                checked={openAiConfig.enabled}
-                onChange={e => setOpenAiConfig({ ...openAiConfig, enabled: e.target.checked })}
-              />
-              <div>
-                <span className="block text-sm font-medium text-gray-900">Activar OpenAI Research</span>
-                <span className="block text-xs text-gray-500">Habilita el botón de búsqueda con IA en la pantalla de Sourcing & Importación.</span>
-              </div>
-            </label>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-700">Modelo OpenAI</label>
-                <select
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-xs sm:text-xs"
-                  value={openAiConfig.model}
-                  onChange={e => setOpenAiConfig({ ...openAiConfig, model: e.target.value })}
-                >
-                  <option value="gpt-4o">gpt-4o (Recomendado)</option>
-                  <option value="gpt-4o-mini">gpt-4o-mini</option>
-                  <option value="gpt-4-turbo">gpt-4-turbo</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-700">Máx. productos por búsqueda</label>
-                <input
-                  type="number"
-                  min={10}
-                  max={200}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-xs sm:text-xs"
-                  value={openAiConfig.maxResults}
-                  onChange={e => setOpenAiConfig({ ...openAiConfig, maxResults: Number(e.target.value) })}
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-gray-700">Límite diario de búsquedas</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-xs sm:text-xs"
-                  value={openAiConfig.dailyLimit}
-                  onChange={e => setOpenAiConfig({ ...openAiConfig, dailyLimit: Number(e.target.value) })}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-700">Presupuesto diario máx. (USD)</label>
-                <input
-                  type="number"
-                  step="1"
-                  min={1}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-xs sm:text-xs"
-                  value={openAiConfig.dailyBudget}
-                  onChange={e => setOpenAiConfig({ ...openAiConfig, dailyBudget: Number(e.target.value) })}
-                />
-              </div>
-
-              <div className="flex items-center pt-5">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="w-4 h-4 text-purple-600 rounded"
-                    checked={openAiConfig.webSearch}
-                    onChange={e => setOpenAiConfig({ ...openAiConfig, webSearch: e.target.checked })}
-                  />
-                  <span className="text-xs font-medium text-gray-700">Web Research habilitado por defecto</span>
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ── COURIER ESTIMATION (URUBOX) ── */}
-        <div className="pt-6 border-t border-gray-100">
-          <h3 className="text-sm font-bold text-gray-900 border-b pb-2 mb-4">Estimador de Courier Referencial (Urubox)</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Tarifa Urubox (USD por Kg)</label>
-              <input
-                type="number"
-                step="0.1"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm"
-                value={settings?.urubox_price_per_kg || 20.0}
-                onChange={e => setSettings({...settings, urubox_price_per_kg: Number(e.target.value)})}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">Handling Fee Urubox (USD)</label>
-              <input
-                type="number"
-                step="0.1"
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm sm:text-sm"
-                value={settings?.urubox_handling_fee || 5.0}
-                onChange={e => setSettings({...settings, urubox_handling_fee: Number(e.target.value)})}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="pt-6 border-t border-gray-100 flex justify-end">
-          <button 
-            onClick={handleSave} 
-            disabled={saving}
-            className="flex items-center px-6 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium disabled:opacity-50 shadow-sm transition-all"
-          >
-            <Save className="w-5 h-5 mr-2" />
-            {saving ? 'Guardando...' : 'Guardar Configuración'}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
