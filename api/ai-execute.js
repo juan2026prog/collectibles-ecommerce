@@ -600,6 +600,15 @@ export default async function handler(req, res) {
             structuredData = JSON.parse(match[1].trim());
           } catch {}
         }
+        if (!structuredData) {
+          const firstBrace = (result.outputText || '').indexOf('{');
+          const lastBrace = (result.outputText || '').lastIndexOf('}');
+          if (firstBrace !== -1 && lastBrace > firstBrace) {
+            try {
+              structuredData = JSON.parse(result.outputText.slice(firstBrace, lastBrace + 1));
+            } catch {}
+          }
+        }
         if (!structuredData && isStructuredAdvisoryEngine) {
           throw new OpenAIError('INVALID_OUTPUT', 502, 'OpenAI returned invalid structured intelligence output.');
         }
