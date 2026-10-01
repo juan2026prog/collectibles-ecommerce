@@ -14,6 +14,7 @@ import {
   buildOptimizedResearchPrompt,
   calculatePreFlightEstimate 
 } from '../server/lib/researchCostOptimizer.js';
+import { validateRequestedModel } from '../server/lib/openaiPricing.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_f_7xF86CT0DFwT7YupNh_Q_TzmemHNf';
@@ -139,6 +140,7 @@ export default async function handler(req, res) {
     country = 'UY',
     operation = 'execute',
     research_depth,
+    requested_model,
     prompt,
     payload,
     context = {}
@@ -146,6 +148,8 @@ export default async function handler(req, res) {
 
   const effectiveDepth = research_depth || payload?.research_depth || context?.research_depth || 'ECONOMICO';
   const modeConfig = resolveResearchMode(effectiveDepth);
+
+  const effectiveRequestedModel = requested_model || req.body?.model || payload?.requested_model || context?.requested_model || 'AUTO';
 
   const resolvedInput = prompt || (typeof payload === 'string' ? payload : JSON.stringify(payload || {}));
 
@@ -157,10 +161,33 @@ export default async function handler(req, res) {
     });
   }
 
-  // Default model & tokens derived from modeConfig for cheap-first routing
-  let selectedModel = (engine === 'SOURCING_WEB_RESEARCH' || (operation && /^(sourcing_research|web_research|sourcing_market_research)$/i.test(operation)))
-    ? modeConfig.model
-    : 'gpt-5.6-terra';
+  const isSourcingResearch = engine === 'SOURCING_WEB_RESEARCH' || (operation && /^(sourcing_research|web_research|sourcing_market_research)$/i.test(operation));
+  const isWebSearchNeeded = engine === 'SOURCING_WEB_RESEARCH' || 
+    (operation && /^(sourcing_research|web_research|sourcing_market_research)$/i.test(operation)) ||
+    /\b(latest|new|preorder|announced|released|trending|this week|today|recent|2026|preventa|lanzamiento)\b/i.test(resolvedInput);
+
+  // Validate manual model override against Central Registry
+  const modelValidation = validateRequestedModel(effectiveRequestedModel, {
+    engine,
+    requiresWebSearch: isWebSearchNeeded
+  });
+
+  if (!modelValidation.valid) {
+    return res.status(400).json({
+      success: false,
+      status: 'MODEL_NOT_ALLOWED',
+      error: modelValidation.message,
+      requested_model: effectiveRequestedModel
+    });
+  }
+
+  const isManualOverride = !modelValidation.isAuto && modelValidation.valid;
+  const automaticOrManual = isManualOverride ? 'MANUAL' : 'AUTO';
+
+  // Default model & tokens derived from modeConfig for cheap-first routing, or manual override
+  let selectedModel = isManualOverride 
+    ? modelValidation.model 
+    : (isSourcingResearch ? modeConfig.model : 'gpt-5.6-terra');
   let engineTimeoutMs = modeConfig.timeoutMs || 45000;
   let dynamicMaxTokens = modeConfig.maxOutputTokens || 750;
   let sysData = null;
@@ -553,6 +580,9 @@ export default async function handler(req, res) {
           fallback_used: false,
           metadata: {
             operation,
+            requested_model: effectiveRequestedModel,
+            automatic_or_manual: automaticOrManual,
+            research_depth: modeConfig.key,
             response_id: result.responseId,
             pricing_status: result.pricing.pricing_status,
             pricing_source: result.pricing.pricing_source,
@@ -751,6 +781,10 @@ export default async function handler(req, res) {
       status: intelligenceRunStatus,
       provider: 'OPENAI',
       model: result.model,
+      requested_model: effectiveRequestedModel,
+      actual_model: result.model,
+      automatic_or_manual: automaticOrManual,
+      research_depth: modeConfig.key,
       text: result.outputText,
       data: structuredData,
       sources: classifiedSources,

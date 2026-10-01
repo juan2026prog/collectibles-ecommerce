@@ -6,7 +6,7 @@
 // ============================================================
 
 import crypto from 'crypto';
-import { getModelPricingRates, calculateOpenAICost } from './openaiPricing.js';
+import { getModelPricingRates, calculateOpenAICost, validateRequestedModel } from './openaiPricing.js';
 
 export const RESEARCH_MODES = Object.freeze({
   ECONOMICO: {
@@ -143,12 +143,22 @@ export function calculatePreFlightEstimate({
   query,
   country = 'UY',
   researchDepth = 'ECONOMICO',
+  requestedModel = 'AUTO',
   isWebSearch = true,
   cacheInfo = null
 }) {
   const mode = resolveResearchMode(researchDepth);
   const prompt = buildOptimizedResearchPrompt(query, country, mode);
   const basePromptTokens = estimateTokensLocally(prompt);
+
+  // Validate manual model override
+  const modelValidation = validateRequestedModel(requestedModel, {
+    engine: 'RESEARCH_INTELLIGENCE',
+    requiresWebSearch: isWebSearch
+  });
+
+  const isManualOverride = !modelValidation.isAuto && modelValidation.valid;
+  const targetModel = isManualOverride ? modelValidation.model : mode.model;
 
   // Web search tool brings extra document tokens depending on research depth
   const minWebTokens = isWebSearch ? (mode.expectedWebInputTokensMin || mode.expectedWebInputTokens) : 0;
@@ -163,7 +173,7 @@ export function calculatePreFlightEstimate({
   const expectedMinOutputTokens = Math.max(150, Math.floor(maxOutputTokens * 0.45));
   const expectedAvgOutputTokens = Math.floor(maxOutputTokens * 0.8);
 
-  const rates = getModelPricingRates(mode.model);
+  const rates = getModelPricingRates(targetModel);
   const inputRate = rates?.inputPer1M || 0.15;
   const outputRate = rates?.outputPer1M || 0.60;
 
@@ -182,28 +192,63 @@ export function calculatePreFlightEstimate({
   const avgTotalUsd = Number((avgInputCostUsd + avgOutputCostUsd).toFixed(5));
 
   const isCacheHit = Boolean(cacheInfo && (cacheInfo.status === 'HIT' || cacheInfo.status === 'HIT_DISCOVERIES'));
-  const requiresConfirmation = !isCacheHit && maxTotalUsd > COST_THRESHOLDS.CONFIRMATION_WARNING_USD;
+  const requiresConfirmation = !isCacheHit && (maxTotalUsd > COST_THRESHOLDS.CONFIRMATION_WARNING_USD || (isManualOverride && maxTotalUsd > 0.015));
   const isHardLimit = !isCacheHit && maxTotalUsd > COST_THRESHOLDS.HARD_LIMIT_USD;
 
-  // Alternative cheaper calculation if currently in standard or profundo
+  // Compute cheaper alternative comparison against AUTO / ECONOMICO
   let cheaperAlternative = null;
-  if (mode.key !== 'ECONOMICO' && !isCacheHit) {
-    const ecoMode = RESEARCH_MODES.ECONOMICO;
-    const ecoRates = getModelPricingRates(ecoMode.model);
-    const ecoInputTokens = basePromptTokens + ecoMode.expectedWebInputTokensMax;
-    const ecoInputCost = (ecoInputTokens / 1_000_000) * (ecoRates?.inputPer1M || 0.15);
-    const ecoOutputCost = (ecoMode.maxOutputTokens / 1_000_000) * (ecoRates?.outputPer1M || 0.60);
-    const ecoMaxTotal = Number((ecoInputCost + ecoOutputCost).toFixed(5));
-    cheaperAlternative = {
-      mode: 'ECONOMICO',
-      model: ecoMode.model,
-      estimated_max_cost_usd: ecoMaxTotal,
-      savings_percent: Math.round(((maxTotalUsd - ecoMaxTotal) / maxTotalUsd) * 100)
-    };
+  if (!isCacheHit) {
+    if (isManualOverride) {
+      const autoRates = getModelPricingRates(mode.model);
+      const autoInputCost = (estimatedInputTokensMax / 1_000_000) * (autoRates?.inputPer1M || 0.15);
+      const autoOutputCost = (mode.maxOutputTokens / 1_000_000) * (autoRates?.outputPer1M || 0.60);
+      const autoMaxTotal = Number((autoInputCost + autoOutputCost).toFixed(5));
+      const costMultiplier = autoMaxTotal > 0 ? Number((maxTotalUsd / autoMaxTotal).toFixed(1)) : 1;
+      const savingsPercent = maxTotalUsd > autoMaxTotal 
+        ? Math.round(((maxTotalUsd - autoMaxTotal) / maxTotalUsd) * 100)
+        : 0;
+
+      if (savingsPercent > 10 || costMultiplier > 1.2) {
+        cheaperAlternative = {
+          mode: mode.key,
+          model: mode.model,
+          label: `🤖 Automático (${mode.model})`,
+          estimated_max_cost_usd: autoMaxTotal,
+          cost_multiplier: costMultiplier,
+          savings_percent: savingsPercent
+        };
+      }
+    } else if (mode.key !== 'ECONOMICO') {
+      const econMode = RESEARCH_MODES.ECONOMICO;
+      const econRates = getModelPricingRates(econMode.model);
+      const econInputCost = (estimatedInputTokensMax / 1_000_000) * (econRates?.inputPer1M || 0.15);
+      const econOutputCost = (econMode.maxOutputTokens / 1_000_000) * (econRates?.outputPer1M || 0.60);
+      const econMaxTotal = Number((econInputCost + econOutputCost).toFixed(5));
+      const costMultiplier = econMaxTotal > 0 ? Number((maxTotalUsd / econMaxTotal).toFixed(1)) : 1;
+      const savingsPercent = maxTotalUsd > econMaxTotal 
+        ? Math.round(((maxTotalUsd - econMaxTotal) / maxTotalUsd) * 100)
+        : 0;
+
+      if (savingsPercent > 10 || costMultiplier > 1.2) {
+        cheaperAlternative = {
+          mode: 'ECONOMICO',
+          model: econMode.model,
+          label: '⚡ Modo Económico (gpt-4o-mini)',
+          estimated_max_cost_usd: econMaxTotal,
+          cost_multiplier: costMultiplier,
+          savings_percent: savingsPercent
+        };
+      }
+    }
   }
 
   return {
-    model: mode.model,
+    model: targetModel,
+    display_name: modelValidation.display_name || targetModel,
+    requested_model: requestedModel || 'AUTO',
+    automatic_or_manual: isManualOverride ? 'MANUAL' : 'AUTO',
+    is_manual_override: isManualOverride,
+    model_validation: modelValidation,
     fallback_model: mode.fallbackModel,
     research_depth: mode.key,
     research_depth_label: mode.label,

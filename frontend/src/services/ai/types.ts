@@ -230,16 +230,47 @@ export interface AIModelPricingDetail {
   status: 'VERIFIED' | 'STALE' | 'UNKNOWN';
 }
 
+export interface AIModelCapabilityInfo {
+  id: string;
+  display_name: string;
+  badge: string;
+  description: string;
+  enabled: boolean;
+  allowed: boolean;
+  web_search: boolean;
+  research_intelligence: boolean;
+  structured_output: boolean;
+  incompatible_reason?: string | null;
+  pricing: {
+    input_per_million: number;
+    cached_input_per_million?: number;
+    output_per_million: number;
+    status: string;
+  };
+}
+
+export interface AIModelsResponse {
+  success: boolean;
+  default: string;
+  engine: string;
+  models: AIModelCapabilityInfo[];
+}
+
 export type ResearchDepthMode = 'ECONOMICO' | 'ESTANDAR' | 'PROFUNDO';
 
 export interface AIPreFlightEstimate {
   success: boolean;
   model: string;
+  display_name?: string;
+  requested_model?: string;
+  is_manual_override?: boolean;
   fallback_model?: string;
   research_depth: ResearchDepthMode;
   research_depth_label: string;
   max_candidates: number;
   estimated_input_tokens: number;
+  estimated_input_tokens_min?: number;
+  estimated_input_tokens_max?: number;
   max_output_tokens: number;
   estimated_input_cost_usd: number;
   estimated_output_cost_usd: number;
@@ -259,9 +290,11 @@ export interface AIPreFlightEstimate {
   hard_limit_exceeded: boolean;
   warning_threshold_usd: number;
   cheaper_alternative?: {
-    mode: ResearchDepthMode;
+    mode: string;
     model: string;
+    label?: string;
     estimated_max_cost_usd: number;
+    cost_multiplier?: number;
     savings_percent: number;
   } | null;
   pricing_source: string;

@@ -278,20 +278,127 @@ export class AIGateway {
   }
 
   /**
+   * Fetches available, enabled models catalog from Central AI Gateway
+   */
+  public async getAvailableModels(engine = 'RESEARCH_INTELLIGENCE'): Promise<AIModelsResponse> {
+    try {
+      let token: string | undefined;
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        token = sessionData?.session?.access_token;
+      } catch (_) {}
+
+      const res = await fetch(`/api/ai-models?engine=${encodeURIComponent(engine)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+
+      if (!res.ok) {
+        throw new Error(`Models HTTP error ${res.status}`);
+      }
+
+      return await res.json();
+    } catch (err: any) {
+      console.warn('[AIGateway] Failed to fetch live models from backend:', err);
+      // Safe fallback catalog when network is unreachable
+      return {
+        success: true,
+        default: 'AUTO',
+        engine,
+        models: [
+          {
+            id: 'gpt-4o-mini',
+            display_name: 'GPT-4o mini',
+            badge: '⚡ Más económico',
+            description: 'Baja latencia, costo mínimo y excelente rendimiento en búsqueda',
+            enabled: true,
+            allowed: true,
+            web_search: true,
+            research_intelligence: true,
+            structured_output: true,
+            pricing: {
+              input_per_million: 0.15,
+              cached_input_per_million: 0.075,
+              output_per_million: 0.60,
+              status: 'VERIFIED'
+            }
+          },
+          {
+            id: 'gpt-5.6-terra',
+            display_name: 'GPT-5.6 Terra',
+            badge: '🔎 Mayor capacidad',
+            description: 'Modelo balanceado con amplio contexto y alta precisión de análisis',
+            enabled: true,
+            allowed: true,
+            web_search: true,
+            research_intelligence: true,
+            structured_output: true,
+            pricing: {
+              input_per_million: 2.00,
+              cached_input_per_million: 0.20,
+              output_per_million: 12.00,
+              status: 'VERIFIED'
+            }
+          },
+          {
+            id: 'gpt-5.6-sol',
+            display_name: 'GPT-5.6 Sol',
+            badge: '🧠 Razonamiento profundo',
+            description: 'Modelo insignia para investigación compleja y síntesis multidominio',
+            enabled: true,
+            allowed: true,
+            web_search: true,
+            research_intelligence: true,
+            structured_output: true,
+            pricing: {
+              input_per_million: 4.00,
+              cached_input_per_million: 0.40,
+              output_per_million: 20.00,
+              status: 'VERIFIED'
+            }
+          },
+          {
+            id: 'gpt-4o',
+            display_name: 'GPT-4o',
+            badge: 'Omni Standard',
+            description: 'Modelo multimodal estándar de alta fidelidad',
+            enabled: true,
+            allowed: true,
+            web_search: true,
+            research_intelligence: true,
+            structured_output: true,
+            pricing: {
+              input_per_million: 2.50,
+              cached_input_per_million: 1.25,
+              output_per_million: 10.00,
+              status: 'VERIFIED'
+            }
+          }
+        ]
+      };
+    }
+  }
+
+  /**
    * Pre-flight Live Token & Cost Estimator (Zero OpenAI Cost Guarantee)
    */
   public async estimateCost(params: {
     query: string;
     country?: string;
     research_depth?: 'ECONOMICO' | 'ESTANDAR' | 'PROFUNDO';
+    requested_model?: string;
     engine?: string;
     operation?: string;
     force_refresh?: boolean;
-  }) {
+  }): Promise<AIPreFlightEstimate> {
     const {
       query,
       country = 'UY',
       research_depth = 'ECONOMICO',
+      requested_model = 'AUTO',
       engine = 'RESEARCH_INTELLIGENCE',
       operation = 'sourcing_market_research',
       force_refresh = false
@@ -314,6 +421,7 @@ export class AIGateway {
           query,
           country,
           research_depth,
+          requested_model,
           engine,
           operation,
           force_refresh
@@ -328,17 +436,28 @@ export class AIGateway {
     } catch (err: any) {
       console.warn('[AIGateway] Pre-flight estimation error:', err);
       // Local fallback estimate without network
+      const isAuto = !requested_model || requested_model === 'AUTO';
+      const fallbackModel = isAuto 
+        ? (research_depth === 'ECONOMICO' ? 'gpt-4o-mini' : 'gpt-5.6-terra')
+        : requested_model;
+
       return {
         success: true,
-        model: research_depth === 'ECONOMICO' ? 'gpt-4o-mini' : 'gpt-5.6-terra',
+        model: fallbackModel,
+        requested_model: requested_model || 'AUTO',
+        is_manual_override: !isAuto,
         research_depth,
         research_depth_label: research_depth === 'ECONOMICO' ? '⚡ Económico' : (research_depth === 'ESTANDAR' ? '🔎 Estándar' : '🧠 Profundo'),
         max_candidates: research_depth === 'ECONOMICO' ? 5 : (research_depth === 'ESTANDAR' ? 8 : 15),
-        estimated_input_tokens: research_depth === 'ECONOMICO' ? 2600 : 5700,
-        max_output_tokens: research_depth === 'ECONOMICO' ? 400 : 750,
-        estimated_total_min_usd: research_depth === 'ECONOMICO' ? 0.0004 : 0.012,
-        estimated_total_max_usd: research_depth === 'ECONOMICO' ? 0.0006 : 0.020,
-        estimated_total_avg_usd: research_depth === 'ECONOMICO' ? 0.0005 : 0.016,
+        estimated_input_tokens: research_depth === 'ECONOMICO' ? 7900 : 15000,
+        estimated_input_tokens_min: research_depth === 'ECONOMICO' ? 6700 : 12000,
+        estimated_input_tokens_max: research_depth === 'ECONOMICO' ? 9200 : 18000,
+        max_output_tokens: research_depth === 'ECONOMICO' ? 600 : 750,
+        estimated_input_cost_usd: research_depth === 'ECONOMICO' ? 0.0012 : 0.03,
+        estimated_output_cost_usd: research_depth === 'ECONOMICO' ? 0.0003 : 0.009,
+        estimated_total_min_usd: research_depth === 'ECONOMICO' ? 0.0011 : 0.025,
+        estimated_total_max_usd: research_depth === 'ECONOMICO' ? 0.0016 : 0.045,
+        estimated_total_avg_usd: research_depth === 'ECONOMICO' ? 0.0014 : 0.035,
         web_search_planned: true,
         cache: { status: 'MISS', age_seconds: null },
         requires_confirmation: false,

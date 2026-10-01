@@ -40,6 +40,7 @@ export default async function handler(req, res) {
     query = '',
     country = 'UY',
     research_depth = 'ECONOMICO',
+    requested_model = 'AUTO',
     is_web_search = true,
     force_refresh = false
   } = req.body || {};
@@ -140,6 +141,7 @@ export default async function handler(req, res) {
     query: cleanQuery,
     country,
     researchDepth: mode.key,
+    requestedModel: requested_model,
     isWebSearch: is_web_search,
     cacheInfo
   });

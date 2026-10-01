@@ -50,6 +50,8 @@ export class OpenAIProvider implements AIProviderAdapter {
           temperature: context?.temperature,
           maxTokens: context?.maxTokens,
           model: context?.model,
+          requested_model: context?.requested_model || payload?.requested_model,
+          research_depth: context?.research_depth || payload?.research_depth,
           context
         })
       });

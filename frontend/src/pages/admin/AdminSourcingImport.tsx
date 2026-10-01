@@ -145,6 +145,9 @@ export default function AdminSourcingImport() {
   // Execution Telemetry
   const [lastExecutionTelemetry, setLastExecutionTelemetry] = useState<{
     model: string;
+    requested_model?: string;
+    actual_model?: string;
+    automatic_or_manual?: 'AUTO' | 'MANUAL';
     cost_usd: number;
     latency_ms: number;
     input_tokens?: number;
@@ -158,6 +161,7 @@ export default function AdminSourcingImport() {
   const handleExecuteSearch = async (
     queryOverride?: string, 
     modeOverride?: 'ECONOMICO' | 'ESTANDAR' | 'PROFUNDO', 
+    requestedModel?: string,
     forceRefresh = false
   ) => {
     const q = (queryOverride !== undefined ? queryOverride : searchQuery).trim();
@@ -171,6 +175,7 @@ export default function AdminSourcingImport() {
         category: selectedCategory !== 'Todas' ? selectedCategory : undefined,
         period: selectedPeriod,
         research_depth: modeOverride || 'ECONOMICO',
+        requested_model: requestedModel,
         force_refresh: forceRefresh
       });
 
@@ -180,6 +185,9 @@ export default function AdminSourcingImport() {
 
       setLastExecutionTelemetry({
         model: res.model,
+        requested_model: res.requested_model,
+        actual_model: res.actual_model,
+        automatic_or_manual: res.automatic_or_manual,
         cost_usd: res.cost_usd,
         latency_ms: res.latency_ms,
         input_tokens: res.input_tokens,
@@ -341,7 +349,7 @@ export default function AdminSourcingImport() {
         onCategoryChange={setSelectedCategory}
         searchQuery={searchQuery}
         onSearchQueryChange={setSearchQuery}
-        onExecuteSearch={(mode, forceRefresh) => handleExecuteSearch(undefined, mode, forceRefresh)}
+        onExecuteSearch={(mode, requestedModel, forceRefresh) => handleExecuteSearch(undefined, mode, requestedModel, forceRefresh)}
         isSearching={isSearching}
         activeCounts={activeCounts}
         activeFilterState={quickFilterState}

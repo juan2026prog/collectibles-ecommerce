@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { 
   Sparkles, Search, Globe, Calendar, Filter, BrainCircuit, 
   Flame, Rocket, TrendingUp, Sparkle, Clock, Gem, X, RefreshCw,
-  Zap, AlertTriangle, CheckCircle2, ShieldAlert, ChevronRight, RotateCcw
+  Zap, AlertTriangle, CheckCircle2, ShieldAlert, ChevronRight, RotateCcw,
+  Bot, ChevronDown
 } from 'lucide-react';
 import { aiGateway } from '../../../services/ai/aiGateway';
-import type { AIPreFlightEstimate, ResearchDepthMode } from '../../../services/ai/types';
+import type { AIPreFlightEstimate, ResearchDepthMode, AIModelCapabilityInfo } from '../../../services/ai/types';
 
 interface SourcingIntelligenceHeaderProps {
   country: string;
@@ -16,7 +17,7 @@ interface SourcingIntelligenceHeaderProps {
   onCategoryChange: (cat: string) => void;
   searchQuery: string;
   onSearchQueryChange: (q: string) => void;
-  onExecuteSearch: (mode?: ResearchDepthMode, forceRefresh?: boolean) => void;
+  onExecuteSearch: (mode?: ResearchDepthMode, requestedModel?: string, forceRefresh?: boolean) => void;
   isSearching: boolean;
   activeCounts: {
     trending: number;
@@ -30,6 +31,9 @@ interface SourcingIntelligenceHeaderProps {
   onSelectQuickFilter?: (state: string) => void;
   lastExecutionTelemetry?: {
     model: string;
+    requested_model?: string;
+    actual_model?: string;
+    automatic_or_manual?: 'AUTO' | 'MANUAL';
     cost_usd: number;
     latency_ms: number;
     input_tokens?: number;
@@ -76,9 +80,29 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
   lastExecutionTelemetry
 }) => {
   const [researchMode, setResearchMode] = useState<ResearchDepthMode>('ECONOMICO');
+  const [selectedModel, setSelectedModel] = useState<string>('AUTO');
+  const [availableModels, setAvailableModels] = useState<AIModelCapabilityInfo[]>([]);
   const [preFlightEstimate, setPreFlightEstimate] = useState<AIPreFlightEstimate | null>(null);
   const [isEstimating, setIsEstimating] = useState<boolean>(false);
   const [showConfirmationWarning, setShowConfirmationWarning] = useState<boolean>(false);
+
+  // Fetch Central Models Catalog on Mount (Zero Hardcoded List)
+  useEffect(() => {
+    let isMounted = true;
+    aiGateway.getAvailableModels('RESEARCH_INTELLIGENCE')
+      .then(res => {
+        if (isMounted && res && Array.isArray(res.models)) {
+          setAvailableModels(res.models);
+        }
+      })
+      .catch(err => {
+        console.warn('[SourcingHeader] Models fetch error:', err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Live Zero-Cost Pre-Flight Estimator Trigger (Debounced)
   useEffect(() => {
@@ -96,7 +120,8 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
         const est = await aiGateway.estimateCost({
           query: clean,
           country,
-          research_depth: researchMode
+          research_depth: researchMode,
+          requested_model: selectedModel
         });
         if (isMounted) {
           setPreFlightEstimate(est);
@@ -117,7 +142,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [searchQuery, country, researchMode]);
+  }, [searchQuery, country, researchMode, selectedModel]);
 
   const handleRunSearch = (forceRefresh = false) => {
     if (preFlightEstimate?.requires_confirmation && !showConfirmationWarning && !forceRefresh) {
@@ -125,7 +150,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
       return;
     }
     setShowConfirmationWarning(false);
-    onExecuteSearch(researchMode, forceRefresh);
+    onExecuteSearch(researchMode, selectedModel, forceRefresh);
   };
 
   return (
@@ -214,33 +239,67 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
 
       {/* CUADRO PROMINENTE: ¿QUÉ QUERÉS INVESTIGAR? + COST CONTROL SUITE */}
       <div className="bg-white border border-gray-200/90 rounded-3xl p-6 shadow-sm space-y-4">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <label className="text-base font-extrabold text-gray-900 flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-[#f00856]" />
             <span>¿Qué querés investigar hoy?</span>
           </label>
 
-          {/* SELECTOR DE MODO DE INVESTIGACIÓN (CHEAP-FIRST DEFAULT) */}
-          <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-gray-200 text-xs font-bold">
-            <span className="text-[11px] text-gray-500 font-extrabold uppercase px-2">Modo:</span>
-            {[
-              { id: 'ECONOMICO', label: '⚡ Económico', desc: 'gpt-4o-mini · ~$0.001 - $0.002' },
-              { id: 'ESTANDAR', label: '🔎 Estándar', desc: 'gpt-5.6-terra · ~$0.02 - $0.05' },
-              { id: 'PROFUNDO', label: '🧠 Profundo', desc: 'gpt-5.6-terra max · ~$0.05 - $0.09' }
-            ].map(m => (
-              <button
-                key={m.id}
-                onClick={() => setResearchMode(m.id as ResearchDepthMode)}
-                className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
-                  researchMode === m.id
-                    ? 'bg-slate-900 text-white shadow-xs font-black'
-                    : 'text-gray-700 hover:text-gray-900 hover:bg-white'
+          {/* CONTROLES DE MODO Y MODELO DE IA */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* SELECTOR DE MODO DE INVESTIGACIÓN (CHEAP-FIRST DEFAULT) */}
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-gray-200 text-xs font-bold">
+              <span className="text-[11px] text-gray-500 font-extrabold uppercase px-2">Modo:</span>
+              {[
+                { id: 'ECONOMICO', label: '⚡ Económico', desc: 'gpt-4o-mini · ~$0.001 - $0.002' },
+                { id: 'ESTANDAR', label: '🔎 Estándar', desc: 'gpt-5.6-terra · ~$0.02 - $0.05' },
+                { id: 'PROFUNDO', label: '🧠 Profundo', desc: 'gpt-5.6-terra max · ~$0.05 - $0.09' }
+              ].map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => setResearchMode(m.id as ResearchDepthMode)}
+                  className={`px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 ${
+                    researchMode === m.id
+                      ? 'bg-slate-900 text-white shadow-xs font-black'
+                      : 'text-gray-700 hover:text-gray-900 hover:bg-white'
+                  }`}
+                  title={m.desc}
+                >
+                  <span>{m.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* SELECTOR MANUAL DE MODELO DE IA (SUPERADMIN) */}
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-gray-200 text-xs font-bold">
+              <span className="text-[11px] text-gray-500 font-extrabold uppercase px-2 flex items-center gap-1">
+                <Bot className="w-3.5 h-3.5 text-slate-700" />
+                <span>Modelo:</span>
+              </span>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className={`bg-white border text-xs font-extrabold rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#f00856] cursor-pointer ${
+                  selectedModel !== 'AUTO' 
+                    ? 'border-pink-500 text-pink-700 bg-pink-50/50' 
+                    : 'border-gray-200 text-slate-800'
                 }`}
-                title={m.desc}
               >
-                <span>{m.label}</span>
-              </button>
-            ))}
+                <option value="AUTO" className="font-bold">
+                  🤖 Automático (Recomendado)
+                </option>
+                {availableModels.map(m => (
+                  <option 
+                    key={m.id} 
+                    value={m.id} 
+                    disabled={!m.allowed}
+                    className="font-medium"
+                  >
+                    {m.display_name} {m.badge ? `· ${m.badge}` : ''} {!m.allowed ? `(${m.incompatible_reason || 'No compatible'})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -286,11 +345,14 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
         {preFlightEstimate && (
           <div className="bg-slate-900 text-white rounded-2xl p-4 border border-slate-800 shadow-md space-y-2.5">
             <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
                   <Zap className="w-3.5 h-3.5 text-amber-400" />
                   <span className="text-slate-400 font-medium">Modelo:</span>
-                  <span className="text-white font-bold">{preFlightEstimate.model}</span>
+                  <span className="text-white font-bold">
+                    {preFlightEstimate.model}
+                    {preFlightEstimate.is_manual_override ? ' (Manual)' : ''}
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
@@ -350,24 +412,26 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
                   <div>
                     <span className="font-black text-white">Aviso de Presupuesto: </span>
                     <span>
-                      Esta consulta en modo <b>{preFlightEstimate.research_depth_label}</b> puede superar el límite sugerido de ${preFlightEstimate.warning_threshold_usd.toFixed(2)}.
+                      {selectedModel !== 'AUTO' && preFlightEstimate.cheaper_alternative
+                        ? `El modelo manual '${preFlightEstimate.model}' (${preFlightEstimate.cheaper_alternative.cost_multiplier || 10}x más caro) incrementa el costo a ~$${preFlightEstimate.estimated_total_max_usd.toFixed(4)}. Usando Automático costaría ~$${preFlightEstimate.cheaper_alternative.estimated_max_cost_usd.toFixed(4)} (-${preFlightEstimate.cheaper_alternative.savings_percent}% ahorro).`
+                        : `Esta consulta en modo ${preFlightEstimate.research_depth_label} puede superar el límite sugerido de $${preFlightEstimate.warning_threshold_usd.toFixed(2)}.`
+                      }
                     </span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {preFlightEstimate.cheaper_alternative && (
-                    <button
-                      onClick={() => {
-                        setResearchMode('ECONOMICO');
-                        setShowConfirmationWarning(false);
-                      }}
-                      className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-lg transition cursor-pointer shadow-xs flex items-center gap-1.5"
-                    >
-                      <Zap className="w-3.5 h-3.5" />
-                      <span>SIMPLIFICAR PARA AHORRAR (-{preFlightEstimate.cheaper_alternative.savings_percent}%)</span>
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      setSelectedModel('AUTO');
+                      setResearchMode('ECONOMICO');
+                      setShowConfirmationWarning(false);
+                    }}
+                    className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-lg transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>VOLVER A AUTOMÁTICO</span>
+                  </button>
                   <button
                     onClick={() => setShowConfirmationWarning(false)}
                     className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-lg transition cursor-pointer"
@@ -377,7 +441,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
                   <button
                     onClick={() => {
                       setShowConfirmationWarning(false);
-                      onExecuteSearch(researchMode, false);
+                      onExecuteSearch(researchMode, selectedModel, false);
                     }}
                     className="px-3.5 py-1.5 bg-[#f00856] hover:bg-[#d0074a] text-white font-black rounded-lg transition cursor-pointer"
                   >
@@ -392,13 +456,19 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
         {/* POST-EXECUTION COST & TELEMETRY BADGE */}
         {lastExecutionTelemetry && (
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs font-semibold">
-            <div className="flex items-center gap-3 text-slate-700">
+            <div className="flex items-center gap-3 text-slate-700 flex-wrap">
               <span className="font-extrabold text-slate-900 flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 Última Ejecución:
               </span>
               <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-800">
-                Modelo: <b>{lastExecutionTelemetry.model}</b>
+                Modo: <b>{lastExecutionTelemetry.research_depth || 'ECONOMICO'}</b>
+              </span>
+              <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-800">
+                Modelo Solicitado: <b>{lastExecutionTelemetry.requested_model || 'Automático'}</b>
+              </span>
+              <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-800">
+                Modelo Utilizado: <b>{lastExecutionTelemetry.actual_model || lastExecutionTelemetry.model}</b>
               </span>
               <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-800">
                 Latencia: <b>{lastExecutionTelemetry.latency_ms}ms</b>

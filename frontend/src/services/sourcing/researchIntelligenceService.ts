@@ -46,6 +46,7 @@ export class ResearchIntelligenceService {
       category, 
       period = '7d',
       research_depth = 'ECONOMICO',
+      requested_model = 'AUTO',
       force_refresh = false
     } = request;
 
@@ -60,7 +61,9 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
 
     let aiResult: any = null;
     let providerName = 'OPENAI';
-    let modelName = research_depth === 'ECONOMICO' ? 'gpt-4o-mini' : 'gpt-5.6-terra';
+    let modelName = requested_model && requested_model !== 'AUTO' 
+      ? requested_model 
+      : (research_depth === 'ECONOMICO' ? 'gpt-4o-mini' : 'gpt-5.6-terra');
     let latencyMs = 0;
     let costUsd = 0;
     let isCached = false;
@@ -81,6 +84,7 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
           category,
           period,
           research_depth,
+          requested_model,
           evidence: {
             search_query: query,
             target_country: country,
@@ -89,6 +93,7 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
         },
         context: {
           research_depth,
+          requested_model,
           force_refresh
         },
         fallbackHandler: () => this.generateLocalResearchFallback(query, country)
@@ -304,6 +309,9 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
       cost_usd: costUsd,
       provider: providerName,
       model: modelName,
+      requested_model: gatewayResponse?.requested_model || requested_model || 'AUTO',
+      actual_model: gatewayResponse?.actual_model || modelName,
+      automatic_or_manual: gatewayResponse?.automatic_or_manual || (requested_model && requested_model !== 'AUTO' ? 'MANUAL' : 'AUTO'),
       cached: isCached,
       research_depth,
       input_tokens: inputTokens,

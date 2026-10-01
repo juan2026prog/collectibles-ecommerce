@@ -53,6 +53,202 @@ export const DEFAULT_MODEL_PRICING = {
 };
 
 /**
+ * Centralized Model Capability & Access Registry
+ * Governs which models are enabled, compatible with Web Search, and allowed for Superadmin manual selection.
+ */
+export const MODEL_CAPABILITY_REGISTRY = Object.freeze({
+  'gpt-4o-mini': {
+    id: 'gpt-4o-mini',
+    display_name: 'GPT-4o mini',
+    badge: '⚡ Más económico',
+    description: 'Baja latencia, costo mínimo y excelente rendimiento en búsqueda',
+    enabled: true,
+    capabilities: {
+      research_intelligence: true,
+      web_search: true,
+      structured_output: true
+    },
+    pricing: {
+      input_per_million: 0.15,
+      cached_input_per_million: 0.075,
+      output_per_million: 0.60
+    }
+  },
+  'gpt-5.6-terra': {
+    id: 'gpt-5.6-terra',
+    display_name: 'GPT-5.6 Terra',
+    badge: '🔎 Mayor capacidad',
+    description: 'Modelo balanceado con amplio contexto y alta precisión de análisis',
+    enabled: true,
+    capabilities: {
+      research_intelligence: true,
+      web_search: true,
+      structured_output: true
+    },
+    pricing: {
+      input_per_million: 2.00,
+      cached_input_per_million: 0.20,
+      output_per_million: 12.00
+    }
+  },
+  'gpt-5.6-sol': {
+    id: 'gpt-5.6-sol',
+    display_name: 'GPT-5.6 Sol',
+    badge: '🧠 Razonamiento profundo',
+    description: 'Modelo insignia para investigación compleja y síntesis multidominio',
+    enabled: true,
+    capabilities: {
+      research_intelligence: true,
+      web_search: true,
+      structured_output: true
+    },
+    pricing: {
+      input_per_million: 4.00,
+      cached_input_per_million: 0.40,
+      output_per_million: 20.00
+    }
+  },
+  'gpt-4o': {
+    id: 'gpt-4o',
+    display_name: 'GPT-4o',
+    badge: 'Omni Standard',
+    description: 'Modelo multimodal estándar de alta fidelidad',
+    enabled: true,
+    capabilities: {
+      research_intelligence: true,
+      web_search: true,
+      structured_output: true
+    },
+    pricing: {
+      input_per_million: 2.50,
+      cached_input_per_million: 1.25,
+      output_per_million: 10.00
+    }
+  },
+  'gpt-5.6-luna': {
+    id: 'gpt-5.6-luna',
+    display_name: 'GPT-5.6 Luna',
+    badge: 'Ultra-rápido',
+    description: 'Modelo ultraliviano para tareas de baja complejidad',
+    enabled: false,
+    capabilities: {
+      research_intelligence: false,
+      web_search: false,
+      structured_output: true
+    },
+    pricing: {
+      input_per_million: 0.20,
+      cached_input_per_million: 0.02,
+      output_per_million: 1.20
+    }
+  }
+});
+
+/**
+ * Returns list of active, compatible models for an AI engine without exposing credentials
+ */
+export function getAvailableAIModels(options = {}) {
+  const { engine = 'RESEARCH_INTELLIGENCE', requiresWebSearch = true } = options;
+
+  const models = Object.values(MODEL_CAPABILITY_REGISTRY).map(m => {
+    const liveRates = getModelPricingRates(m.id);
+    const isWebSearchCompatible = Boolean(m.capabilities?.web_search);
+    const isResearchCompatible = Boolean(m.capabilities?.research_intelligence);
+    const isAllowed = m.enabled && (requiresWebSearch ? isWebSearchCompatible : isResearchCompatible);
+
+    return {
+      id: m.id,
+      display_name: m.display_name,
+      badge: m.badge,
+      description: m.description,
+      enabled: m.enabled,
+      allowed: isAllowed,
+      web_search: isWebSearchCompatible,
+      research_intelligence: isResearchCompatible,
+      structured_output: Boolean(m.capabilities?.structured_output),
+      incompatible_reason: !m.enabled 
+        ? 'Modelo deshabilitado' 
+        : (requiresWebSearch && !isWebSearchCompatible ? 'No compatible con investigación web' : null),
+      pricing: {
+        input_per_million: liveRates?.inputPer1M ?? m.pricing.input_per_million,
+        cached_input_per_million: liveRates?.cachedInputPer1M ?? m.pricing.cached_input_per_million,
+        output_per_million: liveRates?.outputPer1M ?? m.pricing.output_per_million,
+        status: liveRates?.status || 'VERIFIED'
+      }
+    };
+  });
+
+  return {
+    default: 'AUTO',
+    engine,
+    models
+  };
+}
+
+/**
+ * Validates a user-requested model against the Central Registry.
+ * Fails closed on unknown, disabled, or incompatible models.
+ */
+export function validateRequestedModel(requestedModel, options = {}) {
+  const { engine = 'RESEARCH_INTELLIGENCE', requiresWebSearch = true } = options;
+
+  if (!requestedModel || typeof requestedModel !== 'string' || requestedModel.trim().toUpperCase() === 'AUTO') {
+    return {
+      valid: true,
+      isAuto: true,
+      model: null
+    };
+  }
+
+  const cleanModel = requestedModel.trim().toLowerCase();
+  const modelConfig = MODEL_CAPABILITY_REGISTRY[cleanModel];
+
+  if (!modelConfig) {
+    return {
+      valid: false,
+      isAuto: false,
+      error: 'MODEL_NOT_FOUND',
+      message: `El modelo '${requestedModel}' no existe en el registro central de IA.`
+    };
+  }
+
+  if (!modelConfig.enabled) {
+    return {
+      valid: false,
+      isAuto: false,
+      error: 'MODEL_DISABLED',
+      message: `El modelo '${modelConfig.display_name}' (${cleanModel}) está actualmente deshabilitado.`
+    };
+  }
+
+  if (!modelConfig.capabilities?.research_intelligence) {
+    return {
+      valid: false,
+      isAuto: false,
+      error: 'MODEL_INCOMPATIBLE',
+      message: `El modelo '${modelConfig.display_name}' no está habilitado para Research Intelligence.`
+    };
+  }
+
+  if (requiresWebSearch && !modelConfig.capabilities?.web_search) {
+    return {
+      valid: false,
+      isAuto: false,
+      error: 'MODEL_INCOMPATIBLE_WITH_WEB_SEARCH',
+      message: `El modelo '${modelConfig.display_name}' no es compatible con herramientas de investigación web.`
+    };
+  }
+
+  return {
+    valid: true,
+    isAuto: false,
+    model: modelConfig.id,
+    display_name: modelConfig.display_name,
+    config: modelConfig
+  };
+}
+
+/**
  * Normalizes model name into env variable suffix
  * e.g. "gpt-5.6-terra" -> "GPT_5_6_TERRA"
  */

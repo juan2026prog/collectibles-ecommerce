@@ -148,6 +148,7 @@ export interface SourcingResearchQueryRequest {
   category?: string;
   period?: '24h' | '7d' | '30d' | '90d';
   research_depth?: 'ECONOMICO' | 'ESTANDAR' | 'PROFUNDO';
+  requested_model?: string;
   force_refresh?: boolean;
 }
 
@@ -163,6 +164,9 @@ export interface SourcingResearchResponse {
   cost_usd: number;
   provider: string;
   model: string;
+  requested_model?: string;
+  actual_model?: string;
+  automatic_or_manual?: 'AUTO' | 'MANUAL';
   cached?: boolean;
   research_depth?: string;
   input_tokens?: number;
