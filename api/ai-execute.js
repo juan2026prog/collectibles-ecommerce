@@ -600,13 +600,36 @@ export default async function handler(req, res) {
             structuredData = JSON.parse(match[1].trim());
           } catch {}
         }
-        if (!structuredData) {
-          const firstBrace = (result.outputText || '').indexOf('{');
-          const lastBrace = (result.outputText || '').lastIndexOf('}');
-          if (firstBrace !== -1 && lastBrace > firstBrace) {
-            try {
-              structuredData = JSON.parse(result.outputText.slice(firstBrace, lastBrace + 1));
-            } catch {}
+        if (!structuredData && isSourcingResearch) {
+          // Robust JSON repair for research outputs (e.g. if truncated by token limit)
+          try {
+            let repaired = (result.outputText || '').trim();
+            const firstBrace = repaired.indexOf('{');
+            if (firstBrace !== -1) {
+              repaired = repaired.slice(firstBrace);
+              // Find the last complete item in "items": [...]
+              const itemsMatch = repaired.match(/"items"\s*:\s*\[([\s\S]*)/i);
+              if (itemsMatch) {
+                const rawItemsBlock = itemsMatch[1];
+                const lastItemClose = rawItemsBlock.lastIndexOf('}');
+                if (lastItemClose !== -1) {
+                  const validItemsString = rawItemsBlock.slice(0, lastItemClose + 1);
+                  const parsedItems = JSON.parse(`[${validItemsString}]`);
+                  
+                  // Extract summary and subtrends if available
+                  const summaryMatch = repaired.match(/"summary"\s*:\s*"([^"]*)"/i);
+                  const confMatch = repaired.match(/"confidence"\s*:\s*([0-9.]+)/i);
+                  structuredData = {
+                    summary: summaryMatch ? summaryMatch[1] : 'Investigación de mercado completada.',
+                    confidence: confMatch ? parseFloat(confMatch[1]) : 0.85,
+                    subtrends: [],
+                    items: parsedItems
+                  };
+                }
+              }
+            }
+          } catch (repairErr) {
+            console.warn('[AI Execute] JSON repair attempt failed:', repairErr.message);
           }
         }
         if (!structuredData && isStructuredAdvisoryEngine) {

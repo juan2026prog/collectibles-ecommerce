@@ -15,7 +15,7 @@ export const RESEARCH_MODES = Object.freeze({
     model: 'gpt-4o-mini',
     fallbackModel: 'gpt-5.6-luna',
     maxCandidates: 5,
-    maxOutputTokens: 400,
+    maxOutputTokens: 600,
     searchDepth: 'QUICK',
     expectedWebInputTokensMin: 6500,
     expectedWebInputTokensMax: 9000,
