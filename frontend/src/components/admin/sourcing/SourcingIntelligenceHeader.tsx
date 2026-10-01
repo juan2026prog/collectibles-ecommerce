@@ -146,8 +146,9 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
             <span>¿Qué querés investigar hoy?</span>
           </label>
           <span className="text-xs text-gray-500 font-semibold bg-gray-100 px-2.5 py-1 rounded-full">
-            AI Gateway Central · Datos en tiempo real · Scoring determinístico
+            AI Gateway Central · Evidencia Verificada · Scoring determinístico
           </span>
+
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2.5">

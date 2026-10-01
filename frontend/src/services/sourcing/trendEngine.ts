@@ -174,85 +174,36 @@ export class TrendEngine {
   }
 
   /**
-   * Genera las tarjetas de tendencias oficiales para el mercado objetivo.
+   * Genera las tarjetas de tendencias oficiales para el mercado objetivo a partir de tópicos con señales reales.
+   * Si no se proporcionan tópicos con señales observables, retorna un array vacío [] (cero mock data).
    */
   public static buildTrendCards(
     country: string = 'UY',
-    customTopics: Array<{ topic: string; category: string; signals: SourcingSignal[]; subtrends?: string[] }> = []
+    customTopics: Array<{ 
+      topic: string; 
+      category: string; 
+      signals: SourcingSignal[]; 
+      subtrends?: string[];
+      internalSearchesCount?: number;
+      internalWishlistCount?: number;
+      isPreorder?: boolean;
+      isNewRelease?: boolean;
+    }> = []
   ): SourcingTrendCard[] {
-    const defaultTopics = [
-      {
-        topic: 'Pokémon TCG & Collectibles',
-        category: 'Trading Cards & Figuras',
-        signals: [
-          { id: 'sig-1', source: 'Amazon US', source_type: 'RETAILER' as const, country: 'GLOBAL', signal_name: 'Top Sellers TCG', confidence: 95, observed_at: new Date().toISOString() },
-          { id: 'sig-2', source: `Mercado Libre ${country}`, source_type: 'MARKETPLACE' as const, country, signal_name: 'Búsquedas crecientes', confidence: 90, observed_at: new Date().toISOString() },
-          { id: 'sig-3', source: 'The Pokémon Company', source_type: 'OFFICIAL' as const, country: 'GLOBAL', signal_name: 'Nuevo set confirmado', confidence: 100, observed_at: new Date().toISOString() },
-          { id: 'sig-4', source: 'Collectibles Searches', source_type: 'INTERNAL_DATA' as const, country, signal_name: 'Top 1 en queries', confidence: 98, observed_at: new Date().toISOString() }
-        ],
-        subtrends: ['Elite Trainer Box', 'Charizard Ex', 'Mega Evolution', 'Booster Bundles', 'Prismatic Evolutions']
-      },
-      {
-        topic: 'McFarlane Toys & DC Multiverse',
-        category: 'Figuras de Acción 7"',
-        signals: [
-          { id: 'sig-5', source: 'Amazon US Preorder', source_type: 'RETAILER' as const, country: 'GLOBAL', signal_name: 'Preorders abiertos', confidence: 92, observed_at: new Date().toISOString() },
-          { id: 'sig-6', source: 'McFarlane Official', source_type: 'OFFICIAL' as const, country: 'GLOBAL', signal_name: 'Wave Lara Croft & Batman', confidence: 98, observed_at: new Date().toISOString() },
-          { id: 'sig-7', source: 'Reddit /r/ActionFigures', source_type: 'COMMUNITY' as const, country: 'GLOBAL', signal_name: 'Conversación +45%', confidence: 80, observed_at: new Date().toISOString() }
-        ],
-        subtrends: ['Lara Croft Collector Edition', 'Batman Hush 2.0', 'Superman Red Son', 'Spawn 30th Anniversary']
-      },
-      {
-        topic: 'NECA Horror & Sci-Fi',
-        category: 'Figuras Articuladas 7"',
-        signals: [
-          { id: 'sig-8', source: 'NECA Official', source_type: 'OFFICIAL' as const, country: 'GLOBAL', signal_name: 'Alien Romulus Ultimate', confidence: 95, observed_at: new Date().toISOString() },
-          { id: 'sig-9', source: 'Best Buy US', source_type: 'RETAILER' as const, country: 'GLOBAL', signal_name: 'In stock alert', confidence: 88, observed_at: new Date().toISOString() },
-          { id: 'sig-10', source: 'Collectibles Wishlist', source_type: 'INTERNAL_DATA' as const, country, signal_name: 'Alta recurrencia en UY', confidence: 91, observed_at: new Date().toISOString() }
-        ],
-        subtrends: ['Alien Romulus Offspring', 'Predator Prey', 'TMNT The Last Ronin', 'Chucky Ultimate']
-      },
-      {
-        topic: 'Jada Toys Street Fighter 1:12',
-        category: 'Figuras de Acción 1:12',
-        signals: [
-          { id: 'sig-11', source: 'Amazon US', source_type: 'RETAILER' as const, country: 'GLOBAL', signal_name: 'Alta rotación de stock', confidence: 94, observed_at: new Date().toISOString() },
-          { id: 'sig-12', source: 'YouTube Toy Reviews', source_type: 'WEB_EDITORIAL' as const, country: 'GLOBAL', signal_name: 'Reviews unánimes 9.5/10', confidence: 85, observed_at: new Date().toISOString() }
-        ],
-        subtrends: ['Ryu Ultra SFII', 'Chun-Li Player 2', 'Ken Masters', 'Dhalsim Wave 3']
-      },
-      {
-        topic: 'Marvel Legends Retro 6"',
-        category: 'Figuras de Acción 6"',
-        signals: [
-          { id: 'sig-13', source: 'Hasbro Pulse', source_type: 'OFFICIAL' as const, country: 'GLOBAL', signal_name: 'Lanzamiento Retro Spider-Man', confidence: 96, observed_at: new Date().toISOString() },
-          { id: 'sig-14', source: 'eBay US Sold Listings', source_type: 'MARKETPLACE' as const, country: 'GLOBAL', signal_name: 'Precio secundario +20%', confidence: 89, observed_at: new Date().toISOString() }
-        ],
-        subtrends: ['Spider-Man Animated', 'Wolverine 97', 'Deadpool Legacy', 'Cyclops Astonishing']
-      },
-      {
-        topic: 'Hot Toys 1:6 Masterpiece',
-        category: 'Figuras Premium 1:6',
-        signals: [
-          { id: 'sig-15', source: 'Sideshow Official', source_type: 'OFFICIAL' as const, country: 'GLOBAL', signal_name: 'Preorders Star Wars & Marvel', confidence: 99, observed_at: new Date().toISOString() },
-          { id: 'sig-16', source: 'Collectibles AI Search', source_type: 'INTERNAL_DATA' as const, country, signal_name: 'Consultas de alta gama', confidence: 86, observed_at: new Date().toISOString() }
-        ],
-        subtrends: ['Darth Vader Episode III', 'Wolverine Deluxe', 'Iron Man Mark VII', 'Batman The Dark Knight']
-      }
-    ];
+    if (!customTopics || customTopics.length === 0) {
+      return [];
+    }
 
-    const sourceTopics = customTopics.length > 0 ? customTopics : defaultTopics;
-
-    return sourceTopics.map((t, index) => {
+    return customTopics.map((t, index) => {
       const evalRes = TrendEngine.evaluateTrend({
         topic: t.topic,
         category: t.category,
         country,
-        signals: t.signals,
-        internalSearchesCount: 15 + (index * 4),
-        internalWishlistCount: 8 + (index * 2),
-        isPreorder: t.topic.includes('McFarlane') || t.topic.includes('Hot Toys'),
-        isNewRelease: t.topic.includes('NECA') || t.topic.includes('Pokémon')
+        signals: t.signals || [],
+        internalSearchesCount: t.internalSearchesCount || 0,
+        internalWishlistCount: t.internalWishlistCount || 0,
+        isPreorder: t.isPreorder ?? false,
+        isNewRelease: t.isNewRelease ?? false
       });
 
       return {
@@ -266,10 +217,10 @@ export class TrendEngine {
         composite_trend_score: evalRes.composite_trend_score,
         confidence: evalRes.confidence,
         drivers: evalRes.drivers,
-        subtrends: t.subtrends || ['Línea regular', 'Exclusivos', 'Ediciones especiales'],
+        subtrends: t.subtrends || [],
         country,
-        evidence_count: t.signals.length,
-        observed_signals: t.signals,
+        evidence_count: (t.signals || []).length,
+        observed_signals: t.signals || [],
         why_summary: evalRes.why_summary,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -277,3 +228,4 @@ export class TrendEngine {
     });
   }
 }
+

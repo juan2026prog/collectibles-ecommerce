@@ -26,6 +26,7 @@ import { SourcingHistoryModal } from '../../components/admin/sourcing/SourcingHi
 // Sourcing Services & Engines
 import { researchIntelligenceService } from '../../services/sourcing/researchIntelligenceService';
 import { TrendEngine } from '../../services/sourcing/trendEngine';
+import { sourcingDiscoveryEngine } from '../../services/sourcing/sourcingDiscoveryEngine';
 import { sourcingWatchlistService } from '../../services/sourcing/sourcingWatchlistService';
 import { sourcingService } from '../../services/sourcing/sourcingService';
 import { checkOpenAIStatus } from '../../services/sourcing/openaiResearchService';
@@ -95,46 +96,43 @@ export default function AdminSourcingImport() {
   const loadIntelligenceForCountry = async (countryCode: string) => {
     setIsSearching(true);
     try {
-      // 1. Generate data-driven trend cards for target country
-      const generatedTrends = TrendEngine.buildTrendCards(countryCode);
-      setTrends(generatedTrends);
+      // 1. Cargar tendencias dinámicas reales desde Supabase / señales observables
+      const dynamicTrends = await sourcingDiscoveryEngine.loadLiveTrends(countryCode);
+      setTrends(dynamicTrends);
 
-      // 2. Initial research query on top trending topic
-      const initialTopic = searchQuery || 'Pokémon TCG & Collectibles';
-      const res = await researchIntelligenceService.research({
-        query: initialTopic,
-        country: countryCode,
-        category: selectedCategory !== 'Todas' ? selectedCategory : undefined,
-        period: selectedPeriod
-      });
+      // 2. Cargar descubrimientos reales persistidos
+      const liveCandidates = await sourcingDiscoveryEngine.loadLiveDiscoveries(countryCode);
+      setCandidates(liveCandidates);
 
-      setCandidates(res.candidates);
-
-      // 3. Populate initial workbench candidates
-      const mapped = res.candidates.map(c => ({
-        id: c.id,
-        external_product_id: c.asin || c.sku || c.id,
-        title: c.title,
-        brand: c.brand,
-        franchise: c.franchise,
-        category: c.category,
-        image_url: c.image_url,
-        gallery_images: c.gallery_images || [c.image_url],
-        product_url_external: c.retailer_url,
-        price_usd: c.pricing.amazon_price_usd || 0,
-        rating: 4.8,
-        review_count: 85,
-        availability: c.stock_status === 'IN_STOCK' ? 'in_stock' : 'available',
-        prime: true,
-        seller: c.retailer_source.toUpperCase(),
-        source: c.retailer_source,
-        data_origin: 'LIVE',
-        opportunity_score: c.opportunity_score,
-        sourcing_score: c.opportunity_score,
-        status: 'review',
-        raw_data: c
-      }));
-      setWorkbenchItems(mapped);
+      // 3. Poblar workbench con candidatos reales si existen
+      if (liveCandidates.length > 0) {
+        const mapped = liveCandidates.map(c => ({
+          id: c.id,
+          external_product_id: c.asin || c.sku || c.id,
+          title: c.title,
+          brand: c.brand,
+          franchise: c.franchise,
+          category: c.category,
+          image_url: c.image_url,
+          gallery_images: c.gallery_images || [c.image_url],
+          product_url_external: c.retailer_url,
+          price_usd: c.pricing.amazon_price_usd || 0,
+          rating: 4.8,
+          review_count: 85,
+          availability: c.stock_status === 'IN_STOCK' ? 'in_stock' : 'available',
+          prime: true,
+          seller: c.retailer_source.toUpperCase(),
+          source: c.retailer_source,
+          data_origin: 'LIVE',
+          opportunity_score: c.opportunity_score,
+          sourcing_score: c.opportunity_score,
+          status: 'review',
+          raw_data: c
+        }));
+        setWorkbenchItems(mapped);
+      } else {
+        setWorkbenchItems([]);
+      }
 
     } catch (err: any) {
       console.warn('Error loading country intelligence:', err);
@@ -142,6 +140,7 @@ export default function AdminSourcingImport() {
       setIsSearching(false);
     }
   };
+
 
   // Handle Manual Research Execution
   const handleExecuteSearch = async (queryOverride?: string) => {
@@ -253,17 +252,18 @@ export default function AdminSourcingImport() {
     });
   };
 
-  // KPI Active Counts
+  // KPI Active Counts (Estricto: si no hay registros, devuelve 0)
   const activeCounts = useMemo(() => {
     return {
-      trending: candidates.filter(c => c.status === 'TRENDING').length || 8,
-      emerging: candidates.filter(c => c.status === 'EMERGING').length || 4,
-      growing: candidates.filter(c => c.status === 'GROWING').length || 12,
-      newReleases: candidates.filter(c => c.status === 'NEW').length || 6,
-      preorders: candidates.filter(c => c.status === 'PREORDER').length || 5,
-      opportunities: candidates.filter(c => c.status === 'OPPORTUNITY' || c.opportunity_score >= 80).length || 9
+      trending: candidates.filter(c => c.status === 'TRENDING').length,
+      emerging: candidates.filter(c => c.status === 'EMERGING').length,
+      growing: candidates.filter(c => c.status === 'GROWING').length,
+      newReleases: candidates.filter(c => c.status === 'NEW').length,
+      preorders: candidates.filter(c => c.status === 'PREORDER').length,
+      opportunities: candidates.filter(c => c.status === 'OPPORTUNITY' || c.opportunity_score >= 80).length
     };
   }, [candidates]);
+
 
   return (
     <div className="space-y-6 pb-28">

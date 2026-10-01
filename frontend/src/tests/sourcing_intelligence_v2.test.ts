@@ -115,6 +115,29 @@ describe('SOURCING INTELLIGENCE V2 — CERTIFICATION SUITE', () => {
 
   describe('5. Research Intelligence & Central Gateway', () => {
     it('ejecuta research estructurado para Pokémon en UY y produce candidatos tipados', async () => {
+      vi.spyOn(aiGateway, 'execute').mockResolvedValueOnce({
+        success: true,
+        data: {
+          summary: 'Oportunidad verificada para Pokémon TCG',
+          subtrends: ['Scarlet & Violet', 'Elite Trainer Box'],
+          items: [
+            {
+              title: 'Pokémon TCG: Scarlet & Violet ETB',
+              brand: 'The Pokémon Company',
+              franchise: 'Pokémon',
+              origin_price_usd: 49.99,
+              asin: 'B0BSV2QZ1W',
+              category: 'Trading Cards',
+              is_preorder: false
+            }
+          ]
+        },
+        provider: 'OPENAI',
+        model: 'gpt-4o',
+        latency_ms: 120,
+        pricing: { estimated_cost_usd: 0.003 }
+      } as any);
+
       const res = await researchIntelligenceService.research({
         query: 'Pokémon TCG',
         country: 'UY',
@@ -123,7 +146,7 @@ describe('SOURCING INTELLIGENCE V2 — CERTIFICATION SUITE', () => {
 
       expect(res.success).toBe(true);
       expect(res.country).toBe('UY');
-      expect(res.candidates.length).toBeGreaterThan(0);
+      expect(res.candidates.length).toBe(1);
       expect(res.trends.length).toBeGreaterThan(0);
 
       const firstCand = res.candidates[0];
@@ -132,6 +155,7 @@ describe('SOURCING INTELLIGENCE V2 — CERTIFICATION SUITE', () => {
       expect(firstCand.why_explanation.evidence_sources.length).toBeGreaterThan(0);
     });
   });
+
 
   describe('6. Integración Radar', () => {
     it('permite a Radar crear una solicitud de investigación en Sourcing sin romper dependencias', async () => {

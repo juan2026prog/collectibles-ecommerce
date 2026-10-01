@@ -152,9 +152,7 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
     };
 
     // 4. Construir Productos Candidatos con Pricing y Opportunity Score determinístico
-    const rawItems = Array.isArray(aiResult?.items) && aiResult.items.length > 0
-      ? aiResult.items
-      : this.getSeedCandidatesForQuery(query, country);
+    const rawItems: any[] = Array.isArray(aiResult?.items) ? aiResult.items : [];
 
     const candidates: SourcingProductCandidate[] = await Promise.all(
       rawItems.map(async (item: any, idx: number) => {
@@ -278,114 +276,13 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
 
   private generateLocalResearchFallback(query: string, country: string): any {
     return {
-      summary: `Análisis de mercado generado a partir de catálogo y observables de ${country}.`,
-      confidence: 0.88,
-      subtrends: ['Sets principales', 'Figuras articuladas', 'Edición Coleccionista', 'Preorders 2026'],
-      items: this.getSeedCandidatesForQuery(query, country)
+      summary: `Sin registros remotos directos para "${query}" en ${country}. Mostrando estado real vacío.`,
+      confidence: 0.50,
+      subtrends: [],
+      items: []
     };
-  }
-
-  private getSeedCandidatesForQuery(query: string, country: string): any[] {
-    const q = query.toLowerCase();
-
-    if (q.includes('pokémon') || q.includes('pokemon')) {
-      return [
-        {
-          title: 'Pokémon TCG: Scarlet & Violet Elite Trainer Box',
-          brand: 'The Pokémon Company',
-          franchise: 'Pokémon',
-          origin_price_usd: 49.99,
-          asin: 'B0BSV2QZ1W',
-          category: 'Trading Cards',
-          is_preorder: false,
-          image_url: 'https://images.unsplash.com/photo-1613771404784-3a5686aa2be3?w=600&auto=format&fit=crop&q=80'
-        },
-        {
-          title: 'Pokémon TCG: Charizard ex Super-Premium Collection',
-          brand: 'The Pokémon Company',
-          franchise: 'Pokémon',
-          origin_price_usd: 79.99,
-          asin: 'B0CHY5Z1M2',
-          category: 'Trading Cards',
-          is_preorder: false,
-          image_url: 'https://images.unsplash.com/photo-1613771404784-3a5686aa2be3?w=600&auto=format&fit=crop&q=80'
-        },
-        {
-          title: 'Pokémon Select Series 6" Articulated Lucario',
-          brand: 'Jazwares',
-          franchise: 'Pokémon',
-          origin_price_usd: 24.99,
-          asin: 'B08T6Z3X11',
-          category: 'Figuras Articuladas',
-          is_preorder: false,
-          image_url: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80'
-        }
-      ];
-    }
-
-    if (q.includes('lara croft') || q.includes('mcfarlane')) {
-      return [
-        {
-          title: 'McFarlane Toys - Tomb Raider Lara Croft 7" Collector Figure',
-          brand: 'McFarlane Toys',
-          franchise: 'Tomb Raider',
-          origin_price_usd: 29.99,
-          asin: 'B0DFR89Z14',
-          category: 'Figuras de Acción 7"',
-          is_preorder: true,
-          image_url: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80'
-        },
-        {
-          title: 'McFarlane DC Multiverse Batman Hush 7" Action Figure',
-          brand: 'McFarlane Toys',
-          franchise: 'DC Comics',
-          origin_price_usd: 22.99,
-          asin: 'B0B3MZ591Q',
-          category: 'Figuras de Acción 7"',
-          is_preorder: false,
-          image_url: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80'
-        }
-      ];
-    }
-
-    if (q.includes('neca') || q.includes('alien')) {
-      return [
-        {
-          title: 'NECA Alien: Romulus Ultimate Xenomorph 7" Scale Action Figure',
-          brand: 'NECA',
-          franchise: 'Alien',
-          origin_price_usd: 37.99,
-          asin: 'B0DF9X411A',
-          category: 'Figuras Articuladas 7"',
-          is_preorder: true,
-          image_url: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80'
-        },
-        {
-          title: 'NECA Teenage Mutant Ninja Turtles - The Last Ronin Ultimate',
-          brand: 'NECA',
-          franchise: 'TMNT',
-          origin_price_usd: 36.99,
-          asin: 'B0B1V4891Z',
-          category: 'Figuras Articuladas 7"',
-          is_preorder: false,
-          image_url: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80'
-        }
-      ];
-    }
-
-    return [
-      {
-        title: `${query} - Collector Premium Edition`,
-        brand: 'Collectibles Certified',
-        franchise: query,
-        origin_price_usd: 34.99,
-        asin: 'B09XYZ1234',
-        category: 'Figuras de Colección',
-        is_preorder: false,
-        image_url: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80'
-      }
-    ];
   }
 }
 
 export const researchIntelligenceService = ResearchIntelligenceService.getInstance();
+

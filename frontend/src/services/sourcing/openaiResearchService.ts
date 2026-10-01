@@ -79,10 +79,27 @@ export async function checkOpenAIStatus(): Promise<OpenAIFeatureStatus> {
         model: 'gpt-4o'
       };
     }
+
+    // Fallback: check site_settings for sourcing_openai_enabled
+    const { data: siteSetting } = await supabase
+      .from('site_settings')
+      .select('value')
+      .eq('key', 'sourcing_openai_enabled')
+      .single();
+
+    if (siteSetting) {
+      const enabled = siteSetting.value === 'true' || siteSetting.value === true;
+      return {
+        enabled,
+        reason: enabled ? 'OK' : 'FEATURE_DISABLED',
+        model: 'gpt-4o'
+      };
+    }
   } catch {}
 
   return { enabled: false, reason: 'FEATURE_DISABLED' };
 }
+
 
 /**
  * Executes an OpenAI-powered product research query through the central AI Gateway.
