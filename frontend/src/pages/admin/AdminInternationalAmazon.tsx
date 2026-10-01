@@ -3,7 +3,8 @@ import { supabase } from '../../lib/supabase';
 import { 
   Search, Loader2, Import, XCircle, Eye, AlertCircle, RefreshCw, Wand2, ArrowRight, 
   ExternalLink, Code, Sparkles, Filter, SlidersHorizontal, Trash2, Plus, CheckCircle2,
-  HelpCircle, BookmarkPlus, Tag, ShieldAlert, Check, ChevronRight, Pencil
+  HelpCircle, BookmarkPlus, Tag, ShieldAlert, Check, ChevronRight, Pencil, ChevronDown, ChevronUp,
+  CheckSquare, ArrowDown, PackageCheck
 } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { resolveInternationalCategory } from '../../../../supabase/functions/_shared/categoryResolver';
@@ -11,17 +12,26 @@ import { FALLBACK_IMAGE } from '../../lib/imageUtils';
 import { sanitizeBrand } from '../../lib/brandUtils';
 import { ImportWorkbench, type ImportCandidateItem } from '../../components/admin/sourcing/ImportWorkbench';
 
+const QUICK_SEARCHES = [
+  { name: 'Marvel', query: 'marvel' },
+  { name: 'Star Wars', query: 'star wars' },
+  { name: 'Pokémon', query: 'pokemon' },
+  { name: 'Funko', query: 'funko pop', brand: 'Funko' },
+  { name: 'NECA', query: 'neca action figures', brand: 'NECA' },
+  { name: 'DC', query: 'dc comics' },
+  { name: 'Anime', query: 'anime figures' },
+];
 
 const QUICK_COLLECTIONS = [
-  { name: '🔥 Top Marvel', query: 'marvel', category: 'Action Figures' },
-  { name: '🔥 Top DC', query: 'dc comics', category: 'Action Figures' },
-  { name: '🔥 Top Star Wars', query: 'star wars black series' },
-  { name: '🔥 Top Pokémon', query: 'pokemon figures' },
-  { name: '🔥 Top Anime', query: 'anime figures bandai' },
-  { name: '🔥 Top Horror', query: 'horror action figures neca' },
-  { name: '🔥 Top Gaming', query: 'video game action figures' },
-  { name: '🔥 Top Funko', query: 'funko pop', brand: 'Funko' },
-  { name: '🔥 Top Neca', query: 'neca action figures', brand: 'NECA' },
+  { name: 'Top Marvel', query: 'marvel', category: 'Action Figures' },
+  { name: 'Top DC', query: 'dc comics', category: 'Action Figures' },
+  { name: 'Top Star Wars', query: 'star wars black series' },
+  { name: 'Top Pokémon', query: 'pokemon figures' },
+  { name: 'Top Anime', query: 'anime figures bandai' },
+  { name: 'Top Horror', query: 'horror action figures neca' },
+  { name: 'Top Gaming', query: 'video game action figures' },
+  { name: 'Top Funko', query: 'funko pop', brand: 'Funko' },
+  { name: 'Top NECA', query: 'neca action figures', brand: 'NECA' },
 ];
 
 const SUGGESTED_BRANDS = [
@@ -31,9 +41,14 @@ const SUGGESTED_BRANDS = [
 export default function AdminInternationalAmazon() {
   const { addToast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [importing, setImporting] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   
+  // Selection and flow state from workbench
+  const [selectedCount, setSelectedCount] = useState(0);
+  const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [isImportingInProgress, setIsImportingInProgress] = useState(false);
+
   const [searchParams, setSearchParams] = useState({
     query: '',
     brand: '',
@@ -51,10 +66,7 @@ export default function AdminInternationalAmazon() {
   });
 
   const [candidates, setCandidates] = useState<any[]>([]);
-  const [candidateCategoryFilter, setCandidateCategoryFilter] = useState<'all' | 'unmapped' | 'suggested'>('all');
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [showImportModal, setShowImportModal] = useState(false);
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [activeRuleTab, setActiveRuleTab] = useState<'category' | 'brand' | 'keyword'>('category');
   const [dbCategories, setDbCategories] = useState<any[]>([]);
@@ -114,18 +126,6 @@ export default function AdminInternationalAmazon() {
     applies_to: 'title' as 'title' | 'external_path' | 'brand' | 'all',
     blocks: 'brand_mapping' as 'brand_mapping' | 'all'
   });
-
-  const [importSettings, setImportSettings] = useState({
-    collectibles_fee_usd: 5,
-    usa_domestic_shipping_usd: 0,
-    exchange_rate: 42,
-    estimated_delivery_min_days: 5,
-    estimated_delivery_max_days: 12,
-    target_category_id: '',
-    target_subcategory_id: ''
-  });
-
-  const [rawModalData, setRawModalData] = useState<any>(null);
 
   useEffect(() => {
     fetchCandidates();
@@ -282,36 +282,6 @@ export default function AdminInternationalAmazon() {
       fetchRules();
     } catch (err: any) {
       addToast({ title: 'Error guardando regla', message: err.message, type: 'error' });
-    }
-  }
-
-  function handleInspectCandidateResolution(candidate: any) {
-    const traceResult = resolveInternationalCategory({
-      category_path: candidate.amazon_category_path,
-      brand: candidate.brand,
-      title: candidate.title,
-      category_mappings: catRules,
-      brand_mappings: brandRules,
-      keyword_rules: keywordRules
-    });
-    setCandidateTraceModal({ candidate, traceResult });
-  }
-
-  async function handleAssignCandidateCategory(candidateId: string, categoryId: string, subcategoryId?: string) {
-    try {
-      const { error } = await supabase.from('international_import_candidates').update({
-        suggested_category_id: categoryId,
-        suggested_subcategory_id: subcategoryId || null,
-        category_mapping_source: 'manual',
-        mapping_confidence: 100,
-        updated_at: new Date().toISOString()
-      }).eq('id', candidateId);
-
-      if (error) throw error;
-      addToast({ title: 'Categoría asignada', message: 'Candidato actualizado manualmente (manual / 100).', type: 'success' });
-      fetchCandidates();
-    } catch (err: any) {
-      addToast({ title: 'Error asignando', message: err.message, type: 'error' });
     }
   }
 
@@ -551,15 +521,20 @@ export default function AdminInternationalAmazon() {
       if (error) throw error;
       if (data.error) throw new Error(data.error);
 
-      // El filtrado principal ahora ocurre en la renderización (filteredCandidates)
-      addToast({ title: 'Búsqueda completada', message: `Se obtuvieron los resultados de Zinc.`, type: 'success' });
+      addToast({ title: 'Búsqueda completada', message: 'Se obtuvieron los resultados de Amazon.', type: 'success' });
       fetchCandidates();
     } catch (err: any) {
       console.error(err);
-      addToast({ title: 'Error buscando', message: err.message || 'No se pudo consultar Zinc', type: 'error' });
+      addToast({ title: 'Error buscando', message: err.message || 'No se pudo consultar Amazon/Zinc', type: 'error' });
     } finally {
       setLoading(false);
     }
+  }
+
+  function handleQuickSearchTag(tag: { query: string; brand?: string }) {
+    const newParams = { ...searchParams, query: tag.query, brand: tag.brand || '' };
+    setSearchParams(newParams);
+    handleSearch(undefined, newParams);
   }
 
   function handleQuickCollection(col: any) {
@@ -568,134 +543,12 @@ export default function AdminInternationalAmazon() {
     handleSearch(undefined, newParams);
   }
 
-  async function handleImport() {
-    if (selectedIds.length === 0) return;
-    setImporting(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('zinc-import-candidates', {
-        body: {
-          candidate_ids: selectedIds,
-          ...importSettings,
-          target_category_id: importSettings.target_category_id || undefined,
-          target_subcategory_id: importSettings.target_subcategory_id || undefined
-        }
-      });
-
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
-
-      addToast({ 
-        title: 'Importación completada', 
-        message: `Importados: ${data.imported}. Ignorados/Duplicados: ${data.skipped}.`, 
-        type: 'success' 
-      });
-      setShowImportModal(false);
-      setSelectedIds([]);
-      fetchCandidates();
-    } catch (err: any) {
-      console.error(err);
-      addToast({ title: 'Error importando', message: err.message, type: 'error' });
-    } finally {
-      setImporting(false);
-    }
-  }
-
-  async function handleReject() {
-    if (selectedIds.length === 0) return;
-    try {
-      const { error } = await supabase
-        .from('international_import_candidates')
-        .update({ status: 'rejected' })
-        .in('id', selectedIds);
-      if (error) throw error;
-      
-      addToast({ title: 'Rechazados', message: 'Se han rechazado los candidatos seleccionados.', type: 'info' });
-      setSelectedIds([]);
-      fetchCandidates();
-    } catch (err: any) {
-      addToast({ title: 'Error', message: err.message, type: 'error' });
-    }
-  }
-
-  const [enrichingId, setEnrichingId] = useState<string | null>(null);
-
-  async function handleEnrich(id: string) {
-    setEnrichingId(id);
-    try {
-      const { data, error } = await supabase.functions.invoke('zinc-enrich-candidate', {
-        body: { candidate_ids: [id] }
-      });
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
-
-      addToast({ title: 'Enriquecimiento completado', message: 'Categoría e imágenes originales obtenidas.', type: 'success' });
-      fetchCandidates();
-    } catch (err: any) {
-      addToast({ title: 'Error', message: err.message, type: 'error' });
-    } finally {
-      setEnrichingId(null);
-    }
-  }
-
-  async function handleCreateCategory(candidateId: string, suggestedName: string) {
-    if (!suggestedName) return;
-    if (!confirm(`¿Crear categoría "${suggestedName}" automáticamente?`)) return;
-
-    try {
-      const { data, error } = await supabase.functions.invoke('zinc-create-category', {
-        body: { name: suggestedName }
-      });
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
-      
-      addToast({ title: 'Categoría creada', message: 'Se ha creado la categoría exitosamente.', type: 'success' });
-      fetchCategories();
-    } catch (err: any) {
-      addToast({ title: 'Error', message: err.message, type: 'error' });
-    }
-  }
-
-  const getCandidateImageUrl = (c: any) => {
-    return c?.image_url || c?.main_image_url_external || c?.raw_data?.image || '';
-  };
-
   const getCategoryName = (id: string) => {
     const cat = dbCategories.find(c => c.id === id);
     return cat ? cat.name : 'Desconocida';
   };
 
   const parentCategories = dbCategories.filter(c => !c.parent_id);
-  const importSubCategories = dbCategories.filter(c => c.parent_id === importSettings.target_category_id);
-
-  const filteredCandidates = candidates.filter(c => {
-    // Basic local filters
-    if (searchParams.min_reviews && c.review_count < Number(searchParams.min_reviews)) return false;
-    if (searchParams.availability === 'in_stock' && !(c.raw_data?.availability?.toLowerCase().includes('in stock') || !c.raw_data?.availability)) return false;
-    if (searchParams.availability === 'preorder' && !c.raw_data?.availability?.toLowerCase().includes('pre-order')) return false;
-
-    // Brand logic
-    const b = sanitizeBrand(c.brand);
-    
-    if (searchParams.onlyRecognizedBrands) {
-      if (!b) return false;
-    } else if (!searchParams.includeGenerics) {
-      if (!b) return false;
-    }
-
-    if (selectedBrands.length > 0) {
-      const displayBrand = b || 'Sin Marca';
-      const match = selectedBrands.includes(displayBrand);
-      if (!match) return false;
-    }
-
-    if (candidateCategoryFilter === 'unmapped') {
-      if (c.suggested_category_id && c.category_mapping_source !== 'unmapped') return false;
-    } else if (candidateCategoryFilter === 'suggested') {
-      if (!c.suggested_category_id || c.category_mapping_source === 'unmapped') return false;
-    }
-    
-    return true;
-  });
 
   const extractedBrands = useMemo(() => {
     const s = new Set<string>();
@@ -736,13 +589,25 @@ export default function AdminInternationalAmazon() {
     }));
   }, [candidates]);
 
+  // Current Step for the 4-step horizontal indicator
+  const currentStep = useMemo(() => {
+    if (isImportingInProgress) return 4;
+    if (isReviewModalOpen) return 3;
+    if (selectedCount > 0) return 2;
+    return 1;
+  }, [isImportingInProgress, isReviewModalOpen, selectedCount]);
 
   return (
     <div className="space-y-6 pb-20">
-      <div className="flex items-center justify-between">
+      {/* 1. ENCABEZADO */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Curación de Catálogo (Amazon/Zinc)</h2>
-          <p className="text-gray-500 text-sm mt-1">Descubrí, clasificá e importá productos internacionales con mapeo inteligente.</p>
+          <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
+            Curación de Catálogo · Amazon/Zinc
+          </h2>
+          <p className="text-gray-500 text-sm mt-1">
+            Descubrí productos, analizá su rentabilidad y decidí qué incorporar al catálogo.
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -750,144 +615,288 @@ export default function AdminInternationalAmazon() {
               setShowRulesModal(true);
               fetchRules();
             }}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 shadow-sm"
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 bg-white hover:bg-gray-50 shadow-xs transition"
           >
-            <SlidersHorizontal className="w-4 h-4" />
-            Reglas de Mapeo
+            <SlidersHorizontal className="w-4 h-4 text-gray-500" />
+            <span>Reglas de Mapeo</span>
           </button>
         </div>
       </div>
 
-      {/* Banner Sourcing & Importación Multifuente V2 */}
-      <div className="bg-pink-50/60 p-4 rounded-xl border border-pink-200 flex items-center justify-between text-gray-900 shadow-sm">
-        <div className="flex items-center gap-3">
-          <Sparkles className="w-5 h-5 text-[#f00856] shrink-0" />
-          <div>
-            <h3 className="text-sm font-bold text-gray-900">NUEVA HERRAMIENTA DISPONIBLE: SOURCING & IMPORTACIÓN MULTIFUENTE V2</h3>
-            <p className="text-xs text-gray-600">Selección multifuente (Amazon, Best Buy, eBay) · Deduplicación · Authenticity Gate · Costo puesto · Margen · Mercado Uruguay.</p>
+      {/* 2. INDICADOR DE FLUJO (1 Buscar → 2 Seleccionar → 3 Revisar → 4 Importar) */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-3 shadow-xs">
+        <div className="grid grid-cols-4 gap-2 text-center text-xs">
+          {/* Step 1: Buscar */}
+          <div className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl transition ${
+            currentStep === 1 
+              ? 'bg-gray-900 text-white font-bold shadow-xs' 
+              : currentStep > 1 
+              ? 'text-emerald-700 bg-emerald-50 font-semibold' 
+              : 'text-gray-400 font-medium'
+          }`}>
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
+              currentStep === 1 
+                ? 'bg-white text-gray-900 font-bold' 
+                : currentStep > 1 
+                ? 'bg-emerald-600 text-white font-bold' 
+                : 'bg-gray-200 text-gray-600'
+            }`}>
+              {currentStep > 1 ? '✓' : '1'}
+            </span>
+            <span>1. Buscar</span>
+          </div>
+
+          {/* Step 2: Seleccionar */}
+          <div className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl transition ${
+            currentStep === 2 
+              ? 'bg-gray-900 text-white font-bold shadow-xs' 
+              : currentStep > 2 
+              ? 'text-emerald-700 bg-emerald-50 font-semibold' 
+              : 'text-gray-400 font-medium'
+          }`}>
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
+              currentStep === 2 
+                ? 'bg-white text-gray-900 font-bold' 
+                : currentStep > 2 
+                ? 'bg-emerald-600 text-white font-bold' 
+                : 'bg-gray-200 text-gray-600'
+            }`}>
+              {currentStep > 2 ? '✓' : '2'}
+            </span>
+            <span>2. Seleccionar {selectedCount > 0 && `(${selectedCount})`}</span>
+          </div>
+
+          {/* Step 3: Revisar */}
+          <div className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl transition ${
+            currentStep === 3 
+              ? 'bg-gray-900 text-white font-bold shadow-xs' 
+              : currentStep > 3 
+              ? 'text-emerald-700 bg-emerald-50 font-semibold' 
+              : 'text-gray-400 font-medium'
+          }`}>
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
+              currentStep === 3 
+                ? 'bg-white text-gray-900 font-bold' 
+                : currentStep > 3 
+                ? 'bg-emerald-600 text-white font-bold' 
+                : 'bg-gray-200 text-gray-600'
+            }`}>
+              {currentStep > 3 ? '✓' : '3'}
+            </span>
+            <span>3. Revisar</span>
+          </div>
+
+          {/* Step 4: Importar */}
+          <div className={`flex items-center justify-center gap-2 py-2 px-3 rounded-xl transition ${
+            currentStep === 4 
+              ? 'bg-[#f00856] text-white font-bold shadow-xs' 
+              : 'text-gray-400 font-medium'
+          }`}>
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] ${
+              currentStep === 4 
+                ? 'bg-white text-[#f00856] font-bold' 
+                : 'bg-gray-200 text-gray-600'
+            }`}>
+              4
+            </span>
+            <span>4. Importar</span>
           </div>
         </div>
-        <a
-          href="/admin/sourcing"
-          className="px-4 py-2 bg-[#f00856] hover:bg-[#d0074a] text-white rounded-lg text-xs font-bold whitespace-nowrap shadow-sm transition-all"
-        >
-          Ir a Sourcing & Importación →
-        </a>
       </div>
 
-      {/* Quick Collections */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-        <h3 className="text-sm font-bold text-gray-700 mb-3 uppercase tracking-wide">Colecciones Rápidas</h3>
-        <div className="flex flex-wrap gap-2">
-          {QUICK_COLLECTIONS.map((c, i) => (
-            <button
-              key={i}
-              onClick={() => handleQuickCollection(c)}
-              className="px-3 py-1.5 bg-orange-50 text-orange-700 hover:bg-orange-100 rounded-full text-sm font-medium transition-colors border border-orange-200"
-            >
-              {c.name}
-            </button>
-          ))}
+      {/* 3. BUSCADOR PRINCIPAL (CARD PRINCIPAL LIMPIA) */}
+      <div className="bg-white p-6 rounded-2xl shadow-xs border border-gray-200 space-y-4">
+        <div>
+          <h3 className="text-base font-bold text-gray-900">Buscar productos en Amazon</h3>
+          <p className="text-xs text-gray-500 mt-0.5">Ingresá términos de búsqueda, colecciones o códigos ASIN para consultar en vivo.</p>
         </div>
-      </div>
 
-      {/* Advanced Filters Form */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-        <h3 className="text-sm font-bold text-gray-700 mb-4 uppercase tracking-wide">Búsqueda Avanzada</h3>
-        <form onSubmit={(e) => handleSearch(e)} className="grid grid-cols-1 md:grid-cols-12 gap-4">
-          <div className="md:col-span-12">
-            <label className="block text-sm font-medium text-gray-700">Término de búsqueda (Obligatorio)</label>
-            <input type="text" required placeholder="Ej: Marvel Legends Wolverine" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500" value={searchParams.query} onChange={e => setSearchParams({...searchParams, query: e.target.value})} />
-          </div>
-          
-          <div className="md:col-span-4">
-            <label className="block text-sm font-medium text-gray-700">Marca</label>
-            <input list="brands-list" type="text" placeholder="Ej: Funko" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500" value={searchParams.brand} onChange={e => setSearchParams({...searchParams, brand: e.target.value})} />
-            <datalist id="brands-list">
-              {SUGGESTED_BRANDS.map(b => <option key={b} value={b} />)}
-            </datalist>
-          </div>
-
-          <div className="md:col-span-4">
-            <label className="block text-sm font-medium text-gray-700">Categoría Amazon</label>
-            <select className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500" value={searchParams.category} onChange={e => setSearchParams({...searchParams, category: e.target.value})}>
-              <option value="">Todas</option>
-              <option value="Action Figures">Action Figures</option>
-              <option value="Statues">Statues & Busts</option>
-              <option value="Trading Cards">Trading Cards</option>
-              <option value="Clothing">Clothing</option>
-            </select>
-          </div>
-
-          <div className="md:col-span-4">
-            <label className="block text-sm font-medium text-gray-700">Ordenar por</label>
-            <select className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500" value={searchParams.sort_by} onChange={e => setSearchParams({...searchParams, sort_by: e.target.value})}>
-              <option value="">Relevancia</option>
-              <option value="price_asc">Menor Precio</option>
-              <option value="price_desc">Mayor Precio</option>
-              <option value="reviews">Más Reviews</option>
-              <option value="newest">Más Recientes</option>
-            </select>
-          </div>
-
-          <div className="md:col-span-3">
-            <label className="block text-sm font-medium text-gray-700">Precio Mín (USD)</label>
-            <input type="number" step="0.01" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value={searchParams.min_price} onChange={e => setSearchParams({...searchParams, min_price: e.target.value})} />
-          </div>
-          <div className="md:col-span-3">
-            <label className="block text-sm font-medium text-gray-700">Precio Máx (USD)</label>
-            <input type="number" step="0.01" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value={searchParams.max_price} onChange={e => setSearchParams({...searchParams, max_price: e.target.value})} />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700">Rating Mín</label>
-            <input type="number" step="0.1" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value={searchParams.min_rating} onChange={e => setSearchParams({...searchParams, min_rating: e.target.value})} />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700">Reviews Mín</label>
-            <input type="number" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value={searchParams.min_reviews} onChange={e => setSearchParams({...searchParams, min_reviews: e.target.value})} />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700">Disponibilidad</label>
-            <select className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" value={searchParams.availability} onChange={e => setSearchParams({...searchParams, availability: e.target.value})}>
-              <option value="">Cualquiera</option>
-              <option value="in_stock">In Stock</option>
-              <option value="preorder">Preorder</option>
-            </select>
-          </div>
-
-          <div className="md:col-span-12 bg-gray-50 rounded-lg border border-gray-200 mt-2 p-4">
-            <div className="flex items-center text-sm font-bold text-gray-800 mb-3 border-b pb-2">
-              <Filter className="w-4 h-4 mr-2" />
-              Filtros Locales (Aplicados sobre resultados)
+        <form onSubmit={(e) => handleSearch(e)} className="space-y-4">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                <Search className="w-5 h-5" />
+              </div>
+              <input
+                type="text"
+                required
+                value={searchParams.query}
+                onChange={e => setSearchParams({ ...searchParams, query: e.target.value })}
+                placeholder="Producto, personaje, colección, marca o ASIN"
+                className="w-full pl-11 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-medium text-gray-900 focus:bg-white focus:border-gray-900 focus:ring-0 transition"
+              />
             </div>
-            
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-wrap items-center gap-6">
-                <label className="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-                  <input type="checkbox" className="rounded text-primary-600 focus:ring-primary-500" checked={searchParams.onlyRecognizedBrands} onChange={e => setSearchParams({...searchParams, onlyRecognizedBrands: e.target.checked})} />
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex items-center justify-center gap-2 px-6 py-3 bg-gray-900 hover:bg-gray-800 text-white font-bold text-sm rounded-xl transition shadow-xs disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+              <span>{loading ? 'Buscando...' : 'Buscar en Amazon'}</span>
+            </button>
+          </div>
+
+          {/* Accesos rápidos debajo del input */}
+          <div className="flex items-center gap-2 flex-wrap text-xs pt-1">
+            <span className="text-gray-400 font-semibold text-[11px]">Accesos rápidos:</span>
+            {QUICK_SEARCHES.map(item => (
+              <button
+                key={item.name}
+                type="button"
+                onClick={() => handleQuickSearchTag(item)}
+                className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium rounded-lg transition"
+              >
+                {item.name}
+              </button>
+            ))}
+
+            {/* Toggle Filtros Avanzados */}
+            <button
+              type="button"
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className="ml-auto flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-gray-900"
+            >
+              <span>{showAdvancedFilters ? 'Ocultar filtros avanzados' : 'Filtros avanzados'}</span>
+              {showAdvancedFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
+
+          {/* 4. FILTROS AVANZADOS COLAPSABLES */}
+          {showAdvancedFilters && (
+            <div className="pt-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 text-xs animate-in fade-in">
+              <div className="md:col-span-3">
+                <label className="block text-[11px] font-medium text-gray-600 mb-1">Marca</label>
+                <input
+                  list="suggested-brands"
+                  type="text"
+                  placeholder="Ej: Funko, NECA"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs"
+                  value={searchParams.brand}
+                  onChange={e => setSearchParams({ ...searchParams, brand: e.target.value })}
+                />
+                <datalist id="suggested-brands">
+                  {SUGGESTED_BRANDS.map(b => <option key={b} value={b} />)}
+                </datalist>
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-[11px] font-medium text-gray-600 mb-1">Categoría Amazon</label>
+                <select
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs"
+                  value={searchParams.category}
+                  onChange={e => setSearchParams({ ...searchParams, category: e.target.value })}
+                >
+                  <option value="">Todas las categorías</option>
+                  <option value="Action Figures">Action Figures</option>
+                  <option value="Statues">Statues & Busts</option>
+                  <option value="Trading Cards">Trading Cards</option>
+                  <option value="Clothing">Clothing</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-[11px] font-medium text-gray-600 mb-1">Ordenar por</label>
+                <select
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs"
+                  value={searchParams.sort_by}
+                  onChange={e => setSearchParams({ ...searchParams, sort_by: e.target.value })}
+                >
+                  <option value="">Relevancia</option>
+                  <option value="price_asc">Menor Precio</option>
+                  <option value="price_desc">Mayor Precio</option>
+                  <option value="reviews">Más Reviews</option>
+                  <option value="newest">Más Recientes</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-[11px] font-medium text-gray-600 mb-1">Disponibilidad</label>
+                <select
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs"
+                  value={searchParams.availability}
+                  onChange={e => setSearchParams({ ...searchParams, availability: e.target.value })}
+                >
+                  <option value="">Cualquiera</option>
+                  <option value="in_stock">In Stock</option>
+                  <option value="preorder">Preorder</option>
+                </select>
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-[11px] font-medium text-gray-600 mb-1">Precio Mín (USD)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs"
+                  value={searchParams.min_price}
+                  onChange={e => setSearchParams({ ...searchParams, min_price: e.target.value })}
+                />
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-[11px] font-medium text-gray-600 mb-1">Precio Máx (USD)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs"
+                  value={searchParams.max_price}
+                  onChange={e => setSearchParams({ ...searchParams, max_price: e.target.value })}
+                />
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-[11px] font-medium text-gray-600 mb-1">Rating Mínimo</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs"
+                  value={searchParams.min_rating}
+                  onChange={e => setSearchParams({ ...searchParams, min_rating: e.target.value })}
+                />
+              </div>
+
+              <div className="md:col-span-3">
+                <label className="block text-[11px] font-medium text-gray-600 mb-1">Reviews Mínimas</label>
+                <input
+                  type="number"
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs"
+                  value={searchParams.min_reviews}
+                  onChange={e => setSearchParams({ ...searchParams, min_reviews: e.target.value })}
+                />
+              </div>
+
+              <div className="md:col-span-12 flex flex-wrap items-center gap-4 pt-2">
+                <label className="flex items-center space-x-2 text-xs text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="rounded text-[#f00856] focus:ring-[#f00856]"
+                    checked={searchParams.onlyRecognizedBrands}
+                    onChange={e => setSearchParams({ ...searchParams, onlyRecognizedBrands: e.target.checked })}
+                  />
                   <span>Solo Marcas Reconocidas</span>
                 </label>
-                <label className="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
-                  <input type="checkbox" className="rounded text-primary-600 focus:ring-primary-500" checked={searchParams.includeGenerics} onChange={e => setSearchParams({...searchParams, includeGenerics: e.target.checked})} />
+
+                <label className="flex items-center space-x-2 text-xs text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="rounded text-[#f00856] focus:ring-[#f00856]"
+                    checked={searchParams.includeGenerics}
+                    onChange={e => setSearchParams({ ...searchParams, includeGenerics: e.target.checked })}
+                  />
                   <span>Incluir Genéricos / Sin Marca</span>
                 </label>
-                {searchParams.onlyRecognizedBrands && searchParams.includeGenerics && (
-                  <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded border border-orange-200">
-                    <AlertCircle className="w-3 h-3 inline mr-1" />
-                    Los genéricos están ocultos porque "Solo marcas reconocidas" tiene prioridad.
-                  </span>
-                )}
               </div>
 
               {extractedBrands.length > 0 && (
-                <div>
-                  <div className="text-xs font-semibold text-gray-500 mb-2 uppercase">Marcas encontradas:</div>
-                  <div className="flex flex-wrap gap-2">
+                <div className="md:col-span-12 pt-2">
+                  <div className="text-[10px] font-bold text-gray-500 uppercase mb-1.5">Marcas encontradas en los resultados:</div>
+                  <div className="flex flex-wrap gap-1.5">
                     {extractedBrands.map(b => (
-                      <label key={b} className="flex items-center space-x-1.5 text-sm bg-white border border-gray-200 px-2.5 py-1 rounded-md hover:bg-gray-50 cursor-pointer">
+                      <label key={b} className="flex items-center space-x-1 text-xs bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-md hover:bg-gray-100 cursor-pointer">
                         <input 
                           type="checkbox" 
-                          className="rounded text-primary-600" 
+                          className="rounded text-[#f00856]" 
                           checked={selectedBrands.includes(b)}
                           onChange={e => {
                             if (e.target.checked) setSelectedBrands([...selectedBrands, b]);
@@ -901,116 +910,54 @@ export default function AdminInternationalAmazon() {
                 </div>
               )}
             </div>
-          </div>
-
-          <div className="md:col-span-12 flex justify-end pt-2 border-t mt-2">
-            <button type="submit" disabled={loading} className="flex items-center px-6 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-50 font-medium">
-              {loading ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Search className="w-5 h-5 mr-2" />}
-              Buscar en Amazon
-            </button>
-          </div>
+          )}
         </form>
       </div>
 
-      {/* Mesa de Importación Unificada */}
+      {/* 5. COLECCIONES RÁPIDAS (ELEMENTO VISUALMENTE SECUNDARIO DEBAJO DEL BUSCADOR) */}
+      <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-xs">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">Colecciones Rápidas</span>
+          <span className="text-[11px] text-gray-400">· Exploración directa</span>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {QUICK_COLLECTIONS.map((c, i) => (
+            <button
+              key={i}
+              onClick={() => handleQuickCollection(c)}
+              className="px-3 py-1 bg-gray-50 text-gray-700 hover:bg-gray-100 hover:text-gray-900 rounded-lg text-xs font-medium transition border border-gray-200"
+            >
+              {c.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 6. MESA DE IMPORTACIÓN (CORAZÓN DE LA PANTALLA) */}
       <ImportWorkbench
         initialItems={mappedWorkbenchItems}
         searchQuery={searchParams.query}
         onRefresh={fetchCandidates}
         isLoading={loading}
         onImportSuccess={fetchCandidates}
+        onSelectionChange={setSelectedCount}
+        onReviewModalToggle={setIsReviewModalOpen}
+        onImportingStateChange={setIsImportingInProgress}
       />
 
-
-      {/* Import Settings Modal */}
-      {showImportModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden">
-            <div className="p-6 border-b border-gray-100 bg-gray-50/50">
-              <h3 className="text-xl font-bold text-gray-900">Importación Masiva Inteligente</h3>
-              <p className="text-sm text-gray-500 mt-1">Vas a importar {selectedIds.length} productos a Collectibles.</p>
-            </div>
-            
-            <div className="p-6 space-y-6">
-              <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                <h4 className="text-sm font-bold text-blue-900 mb-3">Mapeo Masivo de Categoría (Opcional)</h4>
-                <p className="text-xs text-blue-700 mb-3">
-                  Si dejás esto en blanco, se usará la categoría sugerida automáticamente para cada producto. Si elegís una categoría aquí, se forzará para TODOS los {selectedIds.length} productos.
-                </p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-blue-900 mb-1">Categoría Padre</label>
-                    <select className="block w-full text-sm rounded-lg border-blue-200 focus:border-blue-500 focus:ring-blue-500 bg-white" value={importSettings.target_category_id} onChange={e => setImportSettings({...importSettings, target_category_id: e.target.value, target_subcategory_id: ''})}>
-                      <option value="">-- Usar Auto-Detección --</option>
-                      {parentCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-blue-900 mb-1">Subcategoría</label>
-                    <select className="block w-full text-sm rounded-lg border-blue-200 focus:border-blue-500 focus:ring-blue-500 bg-white" disabled={!importSettings.target_category_id} value={importSettings.target_subcategory_id} onChange={e => setImportSettings({...importSettings, target_subcategory_id: e.target.value})}>
-                      <option value="">-- Usar Auto-Detección --</option>
-                      {importSubCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                <div className="col-span-2">
-                  <h4 className="text-sm font-bold text-gray-900 border-b pb-2">Configuración Financiera y Logística</h4>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Fee Collectibles (USD)</label>
-                  <input type="number" step="0.01" className="mt-1 block w-full text-sm rounded-md border-gray-300 shadow-sm" value={importSettings.collectibles_fee_usd} onChange={e => setImportSettings({...importSettings, collectibles_fee_usd: Number(e.target.value)})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Envío USA Doméstico (USD)</label>
-                  <input type="number" step="0.01" className="mt-1 block w-full text-sm rounded-md border-gray-300 shadow-sm" value={importSettings.usa_domestic_shipping_usd} onChange={e => setImportSettings({...importSettings, usa_domestic_shipping_usd: Number(e.target.value)})} />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Tipo de Cambio a UYU</label>
-                  <input type="number" step="0.01" className="mt-1 block w-full text-sm rounded-md border-gray-300 shadow-sm" value={importSettings.exchange_rate} onChange={e => setImportSettings({...importSettings, exchange_rate: Number(e.target.value)})} />
-                </div>
-                <div className="col-span-2 mt-4 bg-orange-50 border border-orange-200 p-3 rounded-lg flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-orange-600 shrink-0 mt-0.5" />
-                  <div>
-                    <h5 className="text-sm font-bold text-orange-900">Sobre Tiempos de Entrega</h5>
-                    <p className="text-xs text-orange-800 mt-1">
-                      El tiempo de entrega desde el courier en USA hasta Uruguay depende del servicio final contratado por el cliente y no está incluido en la estimación provista por Amazon/Zinc. Los días mínimos y máximos genéricos han sido removidos.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-            
-            <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-between items-center">
-              <span className="text-xs text-gray-500">Imágenes se mantendrán servidas por proxy externo</span>
-              <div className="flex space-x-3">
-                <button onClick={() => setShowImportModal(false)} className="px-5 py-2 text-gray-600 hover:text-gray-900 font-medium rounded-lg hover:bg-gray-100">Cancelar</button>
-                <button onClick={handleImport} disabled={importing} className="px-5 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium disabled:opacity-50 shadow-sm flex items-center">
-                  {importing ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Import className="w-5 h-5 mr-2" />} 
-                  {importing ? 'Importando...' : 'Confirmar e Importar'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Rules Manager Modal */}
+      {/* 7. MODAL DE REGLAS DE MAPEO */}
       {showRulesModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95">
             {/* Modal Header */}
-            <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+            <div className="p-5 border-b border-gray-200 flex justify-between items-center bg-gray-50">
               <div>
-                <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
                   <SlidersHorizontal className="w-5 h-5 text-indigo-600" />
                   Mapeos de Catálogo Internacional (Taxonomía Collectibles)
                 </h3>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Gestiona reglas automáticas, audita candidatos afectados y configura modos seguros para marcas y palabras clave.
+                  Gestioná reglas automáticas, audita candidatos afectados y configurá modos seguros para marcas y palabras clave.
                 </p>
               </div>
               <button onClick={() => setShowRulesModal(false)} className="text-gray-400 hover:text-gray-700 p-1">
@@ -1021,34 +968,34 @@ export default function AdminInternationalAmazon() {
             {/* Summary Metrics Cards */}
             <div className="bg-slate-50 border-b border-gray-200 p-4">
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-center">
-                <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm">
+                <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-2xs">
                   <div className="text-[11px] font-medium text-gray-500">Mapeos Categoría</div>
                   <div className="text-lg font-bold text-indigo-700 mt-0.5">{rulesSummary.category_rules_count || catRules.length}</div>
                 </div>
-                <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm">
+                <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-2xs">
                   <div className="text-[11px] font-medium text-gray-500">Mapeos Marca</div>
                   <div className="text-lg font-bold text-blue-700 mt-0.5">{rulesSummary.brand_rules_count || brandRules.length}</div>
                 </div>
-                <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm">
+                <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-2xs">
                   <div className="text-[11px] font-medium text-gray-500">Mapeos Keyword</div>
                   <div className="text-lg font-bold text-amber-700 mt-0.5">{rulesSummary.keyword_rules_count || keywordRules.length}</div>
                 </div>
-                <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm">
+                <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-2xs">
                   <div className="text-[11px] font-medium text-gray-500">Reglas Activas</div>
                   <div className="text-lg font-bold text-emerald-700 mt-0.5">{rulesSummary.active_rules_count || 0}</div>
                 </div>
-                <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm">
+                <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-2xs">
                   <div className="text-[11px] font-medium text-gray-500">Requieren Revisión</div>
                   <div className="text-lg font-bold text-orange-600 mt-0.5">{rulesSummary.review_required_rules_count || 0}</div>
                 </div>
-                <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-sm">
+                <div className="bg-white p-2.5 rounded-xl border border-gray-200 shadow-2xs">
                   <div className="text-[11px] font-medium text-gray-500">Candidatos Sin Mapping</div>
                   <div className="text-lg font-bold text-red-600 mt-0.5">{rulesSummary.unmapped_candidates_count || 0}</div>
                 </div>
               </div>
 
               {/* Resolver Distribution Bar */}
-              <div className="mt-3 bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between flex-wrap gap-2 text-xs">
+              <div className="mt-3 bg-white p-3 rounded-xl border border-gray-200 shadow-2xs flex items-center justify-between flex-wrap gap-2 text-xs">
                 <span className="font-bold text-gray-700 flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-indigo-600" />
                   Resultado Actual del Resolver ({candidates.length} en cola):
@@ -1080,7 +1027,7 @@ export default function AdminInternationalAmazon() {
                   onClick={() => setActiveRuleTab('category')}
                   className={`px-4 py-2 text-xs font-bold rounded-t-lg border-b-2 transition-all ${
                     activeRuleTab === 'category'
-                      ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm'
+                      ? 'border-indigo-600 text-indigo-600 bg-white shadow-2xs'
                       : 'border-transparent text-gray-500 hover:text-gray-700'
                   }`}
                 >
@@ -1090,7 +1037,7 @@ export default function AdminInternationalAmazon() {
                   onClick={() => setActiveRuleTab('brand')}
                   className={`px-4 py-2 text-xs font-bold rounded-t-lg border-b-2 transition-all ${
                     activeRuleTab === 'brand'
-                      ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm'
+                      ? 'border-indigo-600 text-indigo-600 bg-white shadow-2xs'
                       : 'border-transparent text-gray-500 hover:text-gray-700'
                   }`}
                 >
@@ -1100,7 +1047,7 @@ export default function AdminInternationalAmazon() {
                   onClick={() => setActiveRuleTab('keyword')}
                   className={`px-4 py-2 text-xs font-bold rounded-t-lg border-b-2 transition-all ${
                     activeRuleTab === 'keyword'
-                      ? 'border-indigo-600 text-indigo-600 bg-white shadow-sm'
+                      ? 'border-indigo-600 text-indigo-600 bg-white shadow-2xs'
                       : 'border-transparent text-gray-500 hover:text-gray-700'
                   }`}
                 >
@@ -1114,7 +1061,7 @@ export default function AdminInternationalAmazon() {
                   <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Buscar regla o categoría..."
+                    placeholder="Buscar regla..."
                     className="text-xs pl-8 pr-3 py-1.5 rounded-lg border-gray-300 w-44 md:w-56"
                     value={ruleSearchQuery}
                     onChange={e => setRuleSearchQuery(e.target.value)}
@@ -1216,7 +1163,7 @@ export default function AdminInternationalAmazon() {
                         />
                       </div>
                       <div className="flex items-end">
-                        <button type="submit" className="w-full py-2 bg-indigo-600 text-white font-bold text-xs rounded-lg hover:bg-indigo-700 shadow-sm flex items-center justify-center gap-1.5">
+                        <button type="submit" className="w-full py-2 bg-indigo-600 text-white font-bold text-xs rounded-lg hover:bg-indigo-700 shadow-xs flex items-center justify-center gap-1.5">
                           <Plus className="w-4 h-4" /> Guardar Mapeo
                         </button>
                       </div>
@@ -1224,7 +1171,7 @@ export default function AdminInternationalAmazon() {
                   </form>
 
                   {/* Category Mappings Table */}
-                  <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                  <div className="border border-gray-200 rounded-xl overflow-hidden shadow-2xs">
                     <table className="min-w-full divide-y divide-gray-200 text-xs">
                       <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px]">
                         <tr>
@@ -1399,7 +1346,7 @@ export default function AdminInternationalAmazon() {
                         />
                       </div>
                       <div className="flex items-end">
-                        <button type="submit" className="w-full py-2 bg-blue-600 text-white font-bold text-xs rounded-lg hover:bg-blue-700 shadow-sm flex items-center justify-center gap-1.5">
+                        <button type="submit" className="w-full py-2 bg-blue-600 text-white font-bold text-xs rounded-lg hover:bg-blue-700 shadow-xs flex items-center justify-center gap-1.5">
                           <Plus className="w-4 h-4" /> Guardar Mapeo de Marca
                         </button>
                       </div>
@@ -1407,7 +1354,7 @@ export default function AdminInternationalAmazon() {
                   </form>
 
                   {/* Brand Mappings Table */}
-                  <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                  <div className="border border-gray-200 rounded-xl overflow-hidden shadow-2xs">
                     <table className="min-w-full divide-y divide-gray-200 text-xs">
                       <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px]">
                         <tr>
@@ -1613,7 +1560,7 @@ export default function AdminInternationalAmazon() {
                       )}
 
                       <div className="md:col-span-4 flex justify-end">
-                        <button type="submit" className={`px-6 py-2 text-white font-bold text-xs rounded-lg shadow-sm flex items-center gap-1.5 ${newKeywordRule.rule_type === 'exclude' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'}`}>
+                        <button type="submit" className={`px-6 py-2 text-white font-bold text-xs rounded-lg shadow-2xs flex items-center gap-1.5 ${newKeywordRule.rule_type === 'exclude' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-amber-600 hover:bg-amber-700'}`}>
                           <Plus className="w-4 h-4" /> {newKeywordRule.rule_type === 'exclude' ? 'Guardar Regla de Exclusión' : 'Guardar Mapeo de Palabra Clave'}
                         </button>
                       </div>
@@ -1621,7 +1568,7 @@ export default function AdminInternationalAmazon() {
                   </form>
 
                   {/* Keyword Mappings Table */}
-                  <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                  <div className="border border-gray-200 rounded-xl overflow-hidden shadow-2xs">
                     <table className="min-w-full divide-y divide-gray-200 text-xs">
                       <thead className="bg-gray-50 text-gray-500 font-bold uppercase text-[10px]">
                         <tr>
@@ -1757,13 +1704,13 @@ export default function AdminInternationalAmazon() {
                   setShowRulesModal(false);
                   handleRecalculateSuggestions();
                 }}
-                className="px-4 py-2 bg-indigo-600 text-white font-bold text-xs rounded-lg hover:bg-indigo-700 shadow-sm flex items-center gap-1.5"
+                className="px-4 py-2 bg-indigo-600 text-white font-bold text-xs rounded-xl hover:bg-indigo-700 shadow-xs flex items-center gap-1.5"
               >
                 <Sparkles className="w-4 h-4" /> Aplicar y Recalcular Sugerencias
               </button>
               <button
                 onClick={() => setShowRulesModal(false)}
-                className="px-4 py-2 bg-gray-200 text-gray-700 font-medium text-xs rounded-lg hover:bg-gray-300"
+                className="px-4 py-2 bg-gray-200 text-gray-700 font-medium text-xs rounded-xl hover:bg-gray-300"
               >
                 Cerrar
               </button>
@@ -1774,8 +1721,8 @@ export default function AdminInternationalAmazon() {
 
       {/* Edit Rule Sub-Modal */}
       {editingRule && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95">
             <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
               <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
                 <Pencil className="w-4 h-4 text-indigo-600" />
@@ -1980,13 +1927,13 @@ export default function AdminInternationalAmazon() {
                 <button
                   type="button"
                   onClick={() => setEditingRule(null)}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 font-semibold"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 shadow-sm"
+                  className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-xs"
                 >
                   Guardar Cambios
                 </button>
@@ -1998,8 +1945,8 @@ export default function AdminInternationalAmazon() {
 
       {/* Candidate Resolution Trace Inspector Modal ("Ver por qué") */}
       {candidateTraceModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl overflow-hidden animate-in fade-in zoom-in-95">
             <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
               <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
                 <HelpCircle className="w-5 h-5 text-indigo-600" />
@@ -2011,7 +1958,6 @@ export default function AdminInternationalAmazon() {
             </div>
 
             <div className="p-6 space-y-4 text-xs">
-              {/* Product summary card */}
               <div className="bg-gray-50 border border-gray-200 p-3 rounded-xl space-y-1.5">
                 <div className="font-bold text-gray-900 text-sm line-clamp-2">
                   {candidateTraceModal.candidate.title}
@@ -2027,7 +1973,6 @@ export default function AdminInternationalAmazon() {
                 )}
               </div>
 
-              {/* Resolution Outcome Banner */}
               <div className={`p-4 rounded-xl border flex items-start gap-3 ${
                 candidateTraceModal.traceResult.source === 'unmapped'
                   ? 'bg-rose-50 border-rose-200 text-rose-900'
@@ -2057,12 +2002,11 @@ export default function AdminInternationalAmazon() {
                 </div>
               </div>
 
-              {/* Resolution Steps Trace */}
               <div className="space-y-2">
                 <h4 className="font-bold text-gray-800 uppercase tracking-wide text-[10px]">
                   Cascada de Decisión Evaluada
                 </h4>
-                <div className="border border-gray-200 rounded-xl divide-y divide-gray-100 bg-white overflow-hidden shadow-xs">
+                <div className="border border-gray-200 rounded-xl divide-y divide-gray-100 bg-white overflow-hidden shadow-2xs">
                   {candidateTraceModal.traceResult.trace?.map((step: any, index: number) => (
                     <div key={index} className={`p-3 flex items-start justify-between gap-3 text-xs ${
                       step.matched
@@ -2106,14 +2050,14 @@ export default function AdminInternationalAmazon() {
                     setCandidateTraceModal(null);
                     handleOpenCreateRuleFromCandidate(c);
                   }}
-                  className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-lg border border-amber-200 flex items-center gap-1.5 shadow-xs"
+                  className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-xl border border-amber-200 flex items-center gap-1.5 shadow-2xs"
                 >
                   <BookmarkPlus className="w-4 h-4 text-amber-600" /> Crear regla a partir de este caso
                 </button>
                 <button
                   type="button"
                   onClick={() => setCandidateTraceModal(null)}
-                  className="px-4 py-2 bg-gray-900 text-white font-bold rounded-lg hover:bg-gray-800"
+                  className="px-4 py-2 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800"
                 >
                   Entendido
                 </button>
@@ -2125,8 +2069,8 @@ export default function AdminInternationalAmazon() {
 
       {/* Create Rule From Candidate Modal */}
       {createRuleCandidate && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95">
             <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
               <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
                 <BookmarkPlus className="w-5 h-5 text-amber-600" />
@@ -2201,7 +2145,6 @@ export default function AdminInternationalAmazon() {
                 </div>
               </div>
 
-              {/* Dynamic Form fields based on selected ruleType */}
               {createRuleCandidate.ruleType === 'category' && (
                 <div className="space-y-3 bg-emerald-50/40 border border-emerald-200 p-3 rounded-xl">
                   <div>
@@ -2326,13 +2269,13 @@ export default function AdminInternationalAmazon() {
                 <button
                   type="button"
                   onClick={() => setCreateRuleCandidate(null)}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 font-semibold"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-amber-600 text-white font-bold rounded-lg hover:bg-amber-700 shadow-sm"
+                  className="px-4 py-2 bg-amber-600 text-white font-bold rounded-xl hover:bg-amber-700 shadow-xs"
                 >
                   Crear y Aplicar Regla
                 </button>
