@@ -120,6 +120,15 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
                       <span className="text-[10px] bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded-md uppercase truncate">
                         {cand.brand}
                       </span>
+                      {cand.why_explanation?.opportunity_type === 'EARLY_MARKET_OPPORTUNITY' ? (
+                        <span className="text-[9px] bg-emerald-50 text-emerald-800 font-black px-1.5 py-0.5 rounded-md border border-emerald-200" title="Alta tracción global sin oferta local en plaza">
+                          🎯 Oportunidad Temprana
+                        </span>
+                      ) : (
+                        <span className="text-[9px] bg-blue-50 text-blue-800 font-bold px-1.5 py-0.5 rounded-md border border-blue-200">
+                          🌟 Oportunidad {cand.country_code}
+                        </span>
+                      )}
                       {isOutsideWatchlist && (
                         <span className="text-[9px] bg-amber-100 text-amber-800 font-extrabold px-1.5 py-0.5 rounded-md border border-amber-200">
                           Fuera de Watchlist

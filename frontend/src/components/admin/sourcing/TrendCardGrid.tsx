@@ -57,6 +57,13 @@ export const TrendCardGrid: React.FC<TrendCardGridProps> = ({
                     }`}>
                       {trend.status}
                     </span>
+                    <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-bold border ${
+                      trend.country === 'GLOBAL' 
+                        ? 'bg-indigo-50 text-indigo-700 border-indigo-200' 
+                        : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                    }`}>
+                      {trend.country === 'GLOBAL' ? '🌍 Radar Global' : `🇺🇾 Local ${trend.country}`}
+                    </span>
                     <span className="text-[11px] bg-slate-100 text-slate-700 px-2.5 py-0.5 rounded-full font-bold">
                       {trend.category}
                     </span>
