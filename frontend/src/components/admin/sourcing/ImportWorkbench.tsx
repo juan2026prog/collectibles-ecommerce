@@ -10,6 +10,7 @@ import { useToast } from '../../admin/Toast';
 import { ProductImage } from '../../common/ProductImage';
 import { extractCandidateImages } from '../../../lib/imageUtils';
 import { calculateInternationalPricing } from '../../../lib/internationalPricing';
+import { sanitizeBrand } from '../../../lib/brandUtils';
 
 export interface ImportCandidateItem {
   id: string;
@@ -102,10 +103,17 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
 
   // Sync initial items when provided
   useEffect(() => {
-    if (initialItems && initialItems.length > 0) {
+    if (initialItems) {
       setCandidates(initialItems);
     }
   }, [initialItems]);
+
+  // Sync searchQuery prop changes with searchTerm
+  useEffect(() => {
+    if (searchQuery !== undefined) {
+      setSearchTerm(searchQuery);
+    }
+  }, [searchQuery]);
 
   // Fetch Categories & Existing ASINs from DB
   useEffect(() => {
@@ -132,11 +140,12 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
     }
   }
 
-  // Derive unique brands & franchises for filters
+  // Derive unique brands & franchises for filters with strict sanitization
   const uniqueBrands = useMemo(() => {
     const s = new Set<string>();
     candidates.forEach(c => {
-      if (c.brand && c.brand !== 'Generic' && c.brand !== 'Sin Marca') s.add(c.brand);
+      const b = sanitizeBrand(c.brand);
+      if (b) s.add(b);
     });
     return Array.from(s).sort();
   }, [candidates]);
@@ -214,23 +223,24 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
   // 1. FILTERING ENGINE (COMBINABLE INTERSECTIONS)
   const filteredCandidates = useMemo(() => {
     return candidates.filter(item => {
-      // Search term (Title, ASIN, Brand, Franchise)
+      // Search term (Title, ASIN, Brand, Franchise, Category) with robust token matching
       if (searchTerm.trim()) {
-        const q = searchTerm.toLowerCase();
-        const matchesTitle = (item.title || '').toLowerCase().includes(q);
-        const matchesAsin = (item.external_product_id || '').toLowerCase().includes(q);
-        const matchesBrand = (item.brand || '').toLowerCase().includes(q);
-        const matchesFranchise = (item.franchise || item.raw_data?.franchise || '').toLowerCase().includes(q);
-        if (!matchesTitle && !matchesAsin && !matchesBrand && !matchesFranchise) return false;
+        const tokens = searchTerm.toLowerCase().split(/\s+/).filter(Boolean);
+        const targetText = `${item.title || ''} ${item.external_product_id || ''} ${item.brand || ''} ${item.franchise || item.raw_data?.franchise || ''} ${item.category || item.amazon_category || ''}`.toLowerCase();
+        const matchesAllTokens = tokens.every(token => targetText.includes(token));
+        if (!matchesAllTokens) return false;
       }
 
-      // Brand filter
-      if (filterBrand !== 'all' && item.brand !== filterBrand) return false;
+      // Brand filter (clean, case-insensitive comparison)
+      if (filterBrand !== 'all') {
+        const itemBrand = sanitizeBrand(item.brand);
+        if (!itemBrand || itemBrand.toLowerCase() !== filterBrand.toLowerCase()) return false;
+      }
 
       // Franchise filter
       if (filterFranchise !== 'all') {
         const itemFran = item.franchise || item.raw_data?.franchise || '';
-        if (itemFran !== filterFranchise) return false;
+        if (itemFran.toLowerCase() !== filterFranchise.toLowerCase()) return false;
       }
 
       // Category filter

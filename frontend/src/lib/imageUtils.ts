@@ -17,6 +17,20 @@ const FALLBACK_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/
 
 export type ImageSizeVariant = 'thumbnail' | 'card' | 'detail' | 'raw';
 
+const INVALID_IMAGE_PATTERNS = [
+  /via\.placeholder\.com/i,
+  /example\.jpg/i,
+  /xyz\.jpg/i,
+  /sample\.jpg/i,
+  /test\.jpg/i,
+  /placeholder/i,
+];
+
+function isInvalidImageUrl(url: string): boolean {
+  if (!url) return true;
+  return INVALID_IMAGE_PATTERNS.some(p => p.test(url));
+}
+
 /**
  * Extracts all possible candidate image URLs from a raw or normalized product object in priority order.
  */
@@ -27,7 +41,7 @@ export function extractCandidateImages(product: any): string[] {
   const add = (u: any) => {
     if (typeof u === 'string') {
       const trimmed = u.trim();
-      if (trimmed && !trimmed.includes('via.placeholder.com') && !trimmed.startsWith('data:image/svg+xml') && !urls.includes(trimmed)) {
+      if (trimmed && !isInvalidImageUrl(trimmed) && !trimmed.startsWith('data:image/svg+xml') && !urls.includes(trimmed)) {
         urls.push(trimmed);
       }
     } else if (u && typeof u === 'object' && typeof u.url === 'string') {
@@ -85,8 +99,8 @@ function resolveImageUrl(url: string | null | undefined, variant: ImageSizeVaria
 
   let rawUrl = trimmed;
 
-  // Block via.placeholder.com in production
-  if (rawUrl.includes('via.placeholder.com')) return FALLBACK_IMAGE;
+  // Block invalid / mock / placeholder image URLs in production
+  if (isInvalidImageUrl(rawUrl)) return FALLBACK_IMAGE;
 
   // UUID-only pattern (e.g. "a1b2c3d4-e5f6-...")
   if (/^[a-f0-9-]{36}$/i.test(trimmed)) {

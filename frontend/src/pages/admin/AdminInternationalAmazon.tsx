@@ -8,6 +8,7 @@ import {
 import { useToast } from '../../components/admin/Toast';
 import { resolveInternationalCategory } from '../../../../supabase/functions/_shared/categoryResolver';
 import { FALLBACK_IMAGE } from '../../lib/imageUtils';
+import { sanitizeBrand } from '../../lib/brandUtils';
 import { ImportWorkbench, type ImportCandidateItem } from '../../components/admin/sourcing/ImportWorkbench';
 
 
@@ -673,16 +674,16 @@ export default function AdminInternationalAmazon() {
     if (searchParams.availability === 'preorder' && !c.raw_data?.availability?.toLowerCase().includes('pre-order')) return false;
 
     // Brand logic
-    const b = (c.brand || '').toLowerCase();
+    const b = sanitizeBrand(c.brand);
     
     if (searchParams.onlyRecognizedBrands) {
-      if (!b || b === 'sin marca' || b === 'generic' || b === 'n/a') return false;
+      if (!b) return false;
     } else if (!searchParams.includeGenerics) {
-      if (b === 'generic' || b === 'sin marca' || !b) return false;
+      if (!b) return false;
     }
 
     if (selectedBrands.length > 0) {
-      const displayBrand = c.brand || 'Sin Marca';
+      const displayBrand = b || 'Sin Marca';
       const match = selectedBrands.includes(displayBrand);
       if (!match) return false;
     }
@@ -696,14 +697,21 @@ export default function AdminInternationalAmazon() {
     return true;
   });
 
-  const extractedBrands = Array.from(new Set(candidates.map(c => c.brand || 'Sin Marca'))).filter(Boolean).sort();
+  const extractedBrands = useMemo(() => {
+    const s = new Set<string>();
+    candidates.forEach(c => {
+      const b = sanitizeBrand(c.brand);
+      if (b) s.add(b);
+    });
+    return Array.from(s).sort();
+  }, [candidates]);
 
   const mappedWorkbenchItems: ImportCandidateItem[] = useMemo(() => {
     return candidates.map(c => ({
       id: c.id,
       external_product_id: c.external_product_id,
       title: c.title,
-      brand: c.brand || 'Collectibles',
+      brand: sanitizeBrand(c.brand) || 'Sin Marca',
       franchise: c.franchise || c.raw_data?.franchise || '',
       category: c.category || c.amazon_category,
       amazon_category: c.amazon_category,

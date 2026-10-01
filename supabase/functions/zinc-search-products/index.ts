@@ -3,6 +3,7 @@ import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { verifyAdmin } from "../_shared/auth.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { resolveInternationalCategory } from "../_shared/categoryResolver.ts";
+import { getNormalizedBrand } from "../_shared/brandUtils.ts";
 
 serve(async (req) => {
   const optionsResponse = handleOptions(req);
@@ -76,21 +77,6 @@ serve(async (req) => {
       supabase.from('keyword_mapping_rules').select('*').order('priority', { ascending: false })
     ]);
 
-    const inferBrandFromTitle = (title: string) => {
-      const t = title.toLowerCase();
-      if (t.includes('pokemon') || t.includes('pokémon')) return 'Pokémon';
-      if (t.includes('neca')) return 'NECA';
-      if (t.includes('funko')) return 'Funko';
-      if (t.includes('hasbro')) return 'Hasbro';
-      if (t.includes('marvel')) return 'Marvel';
-      if (t.includes('star wars')) return 'Star Wars';
-      if (t.includes('dc multiverse') || t.includes('dc comics')) return 'DC Comics';
-      if (t.includes('lego')) return 'LEGO';
-      if (t.includes('bandai')) return 'Bandai';
-      if (t.includes('mcfarlane')) return 'McFarlane Toys';
-      return null;
-    };
-
     const products = rawResponse.results || [];
     const candidates = [];
 
@@ -103,12 +89,28 @@ serve(async (req) => {
       if (max_price && price !== null && price > max_price) continue;
       if (min_rating && p.stars && p.stars < min_rating) continue;
       
-      // Normalize Brand
-      let normalizedBrand = p.brand || p.manufacturer || p.raw_data?.brand || p.raw_data?.manufacturer || inferBrandFromTitle(p.title) || null;
-      if (brand && normalizedBrand && !normalizedBrand.toLowerCase().includes(brand.toLowerCase())) continue;
+      // Normalize Brand: strictly sanitized against book authors and invalid strings
+      const normalizedBrand = getNormalizedBrand({
+        brand: p.brand || p.raw_data?.brand,
+        manufacturer: p.manufacturer || p.raw_data?.manufacturer,
+        title: p.title
+      });
 
-      // Normalize Image
-      const normalizedImageUrl = p.image_url || p.main_image_url_external || p.image || p.raw_data?.image || p.raw_data?.main_image || p.raw_data?.images?.[0] || null;
+      // Flexible brand filter: match against normalized brand, raw brand, manufacturer, or title
+      if (brand && String(brand).trim()) {
+        const bTarget = String(brand).toLowerCase().trim();
+        const brandMatch = (normalizedBrand && normalizedBrand.toLowerCase().includes(bTarget)) ||
+                           (p.brand && String(p.brand).toLowerCase().includes(bTarget)) ||
+                           (p.manufacturer && String(p.manufacturer).toLowerCase().includes(bTarget)) ||
+                           (p.title && String(p.title).toLowerCase().includes(bTarget));
+        if (!brandMatch) continue;
+      }
+
+      // Normalize Image: reject mock / placeholder / broken test URLs
+      let normalizedImageUrl = p.image_url || p.main_image_url_external || p.image || p.raw_data?.image || p.raw_data?.main_image || p.raw_data?.images?.[0] || null;
+      if (normalizedImageUrl && (normalizedImageUrl.includes('example.jpg') || normalizedImageUrl.includes('xyz.jpg') || normalizedImageUrl.includes('placeholder'))) {
+        normalizedImageUrl = null;
+      }
 
       // Centralized Category Resolution
       const resolution = resolveInternationalCategory({
