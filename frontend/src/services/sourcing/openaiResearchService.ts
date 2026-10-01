@@ -130,8 +130,10 @@ export async function executeOpenAIResearch(
     if (!response.success) {
       let mappedStatus: OpenAIResearchStatus = 'FAILED';
       if (response.status === 'BUDGET_EXCEEDED') mappedStatus = 'BUDGET_EXCEEDED';
+      if (response.status === 'RATE_LIMITED') mappedStatus = 'RATE_LIMITED';
+      if (response.status === 'FORBIDDEN') mappedStatus = 'FORBIDDEN';
       if (response.status === 'AI_DISABLED' || response.status === 'ENGINE_DISABLED') mappedStatus = 'FEATURE_DISABLED';
-      if (response.status === 'PROVIDER_NOT_CONFIGURED') mappedStatus = 'PENDING_CREDENTIAL';
+      if (response.status === 'PROVIDER_NOT_CONFIGURED' || response.status === 'PENDING_CREDENTIAL' || response.status === 'NOT_CONFIGURED') mappedStatus = 'PENDING_CREDENTIAL';
 
       return {
         success: false,

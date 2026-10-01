@@ -104,9 +104,9 @@ export class EbaySourceCollector implements ISourcingSourceCollector {
 
   async getHealthStatus() {
     return {
-      status: 'CONNECTED' as SourceHealthStatus,
-      lastSuccessAt: new Date().toISOString(),
-      message: 'eBay Finding API / Search connected'
+      status: 'PARTIAL' as SourceHealthStatus,
+      lastSuccessAt: null,
+      message: 'Integración eBay declarada; polling pasivo no activado en último run'
     };
   }
 
@@ -126,9 +126,9 @@ export class BestBuySourceCollector implements ISourcingSourceCollector {
 
   async getHealthStatus() {
     return {
-      status: 'CONNECTED' as SourceHealthStatus,
-      lastSuccessAt: new Date().toISOString(),
-      message: 'Best Buy API connected for collectibles & gaming'
+      status: 'PARTIAL' as SourceHealthStatus,
+      lastSuccessAt: null,
+      message: 'Integración Best Buy declarada; pendiente de polling activo'
     };
   }
 
@@ -148,9 +148,9 @@ export class MercadoLibreUruguayCollector implements ISourcingSourceCollector {
 
   async getHealthStatus() {
     return {
-      status: 'CONNECTED' as SourceHealthStatus,
-      lastSuccessAt: new Date().toISOString(),
-      message: 'Mercado Libre Uruguay (MLU) API connected'
+      status: 'PARTIAL' as SourceHealthStatus,
+      lastSuccessAt: null,
+      message: 'Mercado Libre Uruguay conectado vía API/research bajo demanda'
     };
   }
 
@@ -172,7 +172,7 @@ export class McFarlaneOfficialCollector implements ISourcingSourceCollector {
     return {
       status: 'CONNECTED' as SourceHealthStatus,
       lastSuccessAt: new Date().toISOString(),
-      message: 'McFarlane Store Feed & Announcements connected'
+      message: 'McFarlane investigado en tiempo real vía Web Search oficial'
     };
   }
 
@@ -192,9 +192,9 @@ export class NecaOfficialCollector implements ISourcingSourceCollector {
 
   async getHealthStatus() {
     return {
-      status: 'CONNECTED' as SourceHealthStatus,
-      lastSuccessAt: new Date().toISOString(),
-      message: 'NECA Official News & Solicitations connected'
+      status: 'PARTIAL' as SourceHealthStatus,
+      lastSuccessAt: null,
+      message: 'NECA solicitations investigado bajo demanda'
     };
   }
 
@@ -214,9 +214,9 @@ export class HasbroPulseCollector implements ISourcingSourceCollector {
 
   async getHealthStatus() {
     return {
-      status: 'CONNECTED' as SourceHealthStatus,
-      lastSuccessAt: new Date().toISOString(),
-      message: 'Hasbro Pulse Announcements & Fan Streams connected'
+      status: 'PARTIAL' as SourceHealthStatus,
+      lastSuccessAt: null,
+      message: 'Hasbro Pulse investigado bajo demanda'
     };
   }
 
@@ -236,9 +236,9 @@ export class FunkoOfficialCollector implements ISourcingSourceCollector {
 
   async getHealthStatus() {
     return {
-      status: 'CONNECTED' as SourceHealthStatus,
-      lastSuccessAt: new Date().toISOString(),
-      message: 'Funko Exclusives & Drops connected'
+      status: 'PARTIAL' as SourceHealthStatus,
+      lastSuccessAt: null,
+      message: 'Funko Drops investigado bajo demanda'
     };
   }
 

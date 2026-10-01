@@ -16,6 +16,61 @@ vi.mock('../lib/supabase', () => {
   };
 
   const mockFrom = vi.fn().mockImplementation((table: string) => {
+    if (table === 'ai_system_config') {
+      return {
+        select: vi.fn().mockReturnValue({
+          order: vi.fn().mockReturnValue({
+            limit: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockImplementation(() => {
+                const enabled = siteSettingsMock.sourcing_openai_enabled === 'true';
+                return Promise.resolve({
+                  data: {
+                    global_enabled: enabled,
+                    provider: enabled ? 'OPENAI' : 'NONE',
+                    circuit_breaker_enabled: false,
+                    circuit_breaker_state: 'CLOSED'
+                  },
+                  error: null
+                });
+              })
+            })
+          })
+        })
+      };
+    }
+    if (table === 'ai_country_config') {
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                country_code: 'UY',
+                ai_enabled: true,
+                status: 'ACTIVE',
+                product_discovery_enabled: true
+              },
+              error: null
+            })
+          })
+        })
+      };
+    }
+    if (table === 'ai_engine_config') {
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: {
+                engine_key: 'RESEARCH_INTELLIGENCE',
+                enabled: true,
+                model: 'gpt-4o'
+              },
+              error: null
+            })
+          })
+        })
+      };
+    }
     if (table === 'site_settings') {
       return {
         select: vi.fn().mockReturnValue({
@@ -107,6 +162,11 @@ describe('Sourcing OpenAI Optional Research — Architecture & Safety Tests', ()
 
   // TEST 3: Edge function returns PENDING_CREDENTIAL when API key is missing
   it('3. OpenAI ON without API key -> Edge Function returns status PENDING_CREDENTIAL', async () => {
+    (supabase as any).__setSiteSettings({
+      sourcing_openai_enabled: 'true',
+      sourcing_openai_model: 'gpt-4o',
+    });
+
     (global.fetch as any).mockResolvedValueOnce({
       ok: false,
       status: 503,
@@ -124,6 +184,11 @@ describe('Sourcing OpenAI Optional Research — Architecture & Safety Tests', ()
 
   // TEST 4: Non-admin request is forbidden
   it('4. Non-admin request -> Edge Function returns FORBIDDEN / 403', async () => {
+    (supabase as any).__setSiteSettings({
+      sourcing_openai_enabled: 'true',
+      sourcing_openai_model: 'gpt-4o',
+    });
+
     (global.fetch as any).mockResolvedValueOnce({
       ok: false,
       status: 403,
@@ -223,6 +288,11 @@ describe('Sourcing OpenAI Optional Research — Architecture & Safety Tests', ()
 
   // TEST 7: Daily search rate limiting
   it('7. Rate limit reached -> returns RATE_LIMITED status', async () => {
+    (supabase as any).__setSiteSettings({
+      sourcing_openai_enabled: 'true',
+      sourcing_openai_model: 'gpt-4o',
+    });
+
     (global.fetch as any).mockResolvedValueOnce({
       ok: false,
       status: 429,
@@ -239,6 +309,11 @@ describe('Sourcing OpenAI Optional Research — Architecture & Safety Tests', ()
 
   // TEST 8: Budget exceeded
   it('8. Daily budget exceeded -> returns BUDGET_EXCEEDED', async () => {
+    (supabase as any).__setSiteSettings({
+      sourcing_openai_enabled: 'true',
+      sourcing_openai_model: 'gpt-4o',
+    });
+
     (global.fetch as any).mockResolvedValueOnce({
       ok: false,
       status: 429,

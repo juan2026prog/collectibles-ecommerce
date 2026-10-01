@@ -148,17 +148,22 @@ export default async function handler(req, res) {
 
   let selectedModel = 'gpt-5.6-terra';
   let engineTimeoutMs = 25000;
+  let sysData = null;
+  let cntrData = null;
+  let engData = null;
 
   try {
     // 1. Validate System, Country, and Engine configs from Database
     if (client) {
       // Global switch & Circuit breaker
-      const { data: sysData } = await client
+      const { data: fetchedSysData } = await client
         .from('ai_system_config')
         .select('*')
         .order('created_at', { ascending: true })
         .limit(1)
         .maybeSingle();
+
+      sysData = fetchedSysData;
 
       if (sysData) {
         if (!sysData.global_enabled) {
@@ -182,11 +187,13 @@ export default async function handler(req, res) {
 
       // Country check
       if (country && country !== 'GLOBAL') {
-        const { data: cntrData } = await client
+        const { data: fetchedCntrData } = await client
           .from('ai_country_config')
           .select('*')
           .eq('country_code', country)
           .maybeSingle();
+
+        cntrData = fetchedCntrData;
 
         if (cntrData) {
           if (!cntrData.ai_enabled || cntrData.status !== 'ACTIVE') {
@@ -209,11 +216,13 @@ export default async function handler(req, res) {
       }
 
       // Engine check
-      const { data: engData } = await client
+      const { data: fetchedEngData } = await client
         .from('ai_engine_config')
         .select('*')
         .eq('engine_key', engine)
         .maybeSingle();
+
+      engData = fetchedEngData;
 
       if (engData) {
         if (!engData.enabled) {
