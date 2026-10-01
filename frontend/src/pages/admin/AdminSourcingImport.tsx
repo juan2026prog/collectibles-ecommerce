@@ -176,27 +176,38 @@ export default function AdminSourcingImport() {
     }
   };
 
-  // Handle Discovery Scan
+  // Handle Server-Side Discovery Scan (Calls the exact same pipeline as cron)
   const handleRunDiscoveryScan = async () => {
     setIsDiscoveryScanning(true);
     try {
-      const res = await researchIntelligenceService.research({
-        query: 'Nuevos preorders y lanzamientos McFarlane Lara Croft NECA',
-        country: selectedCountry,
-        category: selectedCategory !== 'Todas' ? selectedCategory : undefined,
-        period: '24h'
+      const response = await fetch('/api/sourcing-discovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trigger: 'MANUAL', country: selectedCountry })
       });
 
-      setCandidates(prev => [...res.candidates, ...prev.filter(c => !res.candidates.some(rc => rc.id === c.id))]);
+      const data = await response.json();
+
+      // Recargar datos reales persistidos
+      await loadIntelligenceForCountry(selectedCountry);
+
       addToast({
-        title: 'Discovery Completado',
-        message: 'Nuevas oportunidades y preorders detectados automáticamente.',
+        title: 'Discovery Server-Side Completado',
+        message: `Escaneo finalizado (${data.status}). Fuentes: ${data.sources_successful?.length || 0} exitosas.`,
         type: 'success'
+      });
+    } catch (err: any) {
+      console.warn('Error en escaneo discovery server-side:', err);
+      addToast({
+        title: 'Error de Discovery',
+        message: err.message || 'No se pudo completar el escaneo.',
+        type: 'error'
       });
     } finally {
       setIsDiscoveryScanning(false);
     }
   };
+
 
   // Handle Sending a Candidate to Import Workbench
   const handleSendCandidateToImport = (cand: SourcingProductCandidate) => {

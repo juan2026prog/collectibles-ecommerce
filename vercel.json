@@ -6,8 +6,13 @@
     {
       "path": "/api/currency-sync",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/sourcing-discovery",
+      "schedule": "0 4 * * *"
     }
   ],
+
   "headers": [
     {
       "source": "/api/:path*",

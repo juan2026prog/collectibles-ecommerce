@@ -11,8 +11,9 @@ import {
   getAllModelPricingDetails, 
   PRICING_SNAPSHOT_DATE 
 } from '../../../server/lib/openaiPricing.js';
-import { generateEvidenceFingerprint } from '../../../api/lib/canonicalJson.js';
+import { generateEvidenceFingerprint } from '../../../server/lib/canonicalJson.js';
 import { mapExternalConditionToCanonical } from '../services/sourcing/conditionMapper';
+
 
 describe('Sourcing Intelligence — Commercial Engine & Safety Gates', () => {
 

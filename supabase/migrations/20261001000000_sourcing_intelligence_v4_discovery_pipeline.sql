@@ -1,7 +1,7 @@
--- ==============================================================================
--- MIGRATION: SOURCING INTELLIGENCE V3 PERSISTENCE
--- Collectibles 2026 — Real Evidence, Dynamic Trends & Autonomous Discoveries
--- ==============================================================================
+// ==============================================================================
+// MIGRATION: SOURCING INTELLIGENCE V4 AUTOMATIC DISCOVERY PERSISTENCE & RUNS
+// Collectibles 2026 — Real Evidence, Source Collectors & Scheduled Runs
+// ==============================================================================
 
 -- 1. Table: sourcing_signals (Evidencia y observaciones atómicas de mercado e internas)
 CREATE TABLE IF NOT EXISTS public.sourcing_signals (
@@ -19,12 +19,14 @@ CREATE TABLE IF NOT EXISTS public.sourcing_signals (
     confidence numeric(5,2) DEFAULT 80.0,
     evidence_text text,
     metadata jsonb DEFAULT '{}'::jsonb,
+    fingerprint text,
     observed_at timestamptz DEFAULT now(),
     collected_at timestamptz DEFAULT now()
 );
 
 CREATE INDEX IF NOT EXISTS idx_sourcing_signals_country_topic ON public.sourcing_signals(country, topic);
 CREATE INDEX IF NOT EXISTS idx_sourcing_signals_observed ON public.sourcing_signals(observed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sourcing_signals_fingerprint ON public.sourcing_signals(fingerprint);
 
 -- 2. Table: sourcing_trends (Tendencias persistidas derivadas de evidencia real)
 CREATE TABLE IF NOT EXISTS public.sourcing_trends (
@@ -86,10 +88,36 @@ CREATE TABLE IF NOT EXISTS public.sourcing_discoveries (
 CREATE INDEX IF NOT EXISTS idx_sourcing_discoveries_country_status ON public.sourcing_discoveries(country, status);
 CREATE INDEX IF NOT EXISTS idx_sourcing_discoveries_opp ON public.sourcing_discoveries(opportunity_score DESC);
 
--- 4. RLS Policies
+-- 4. Table: sourcing_discovery_runs (Trazabilidad y auditoría de ejecuciones de Discovery)
+CREATE TABLE IF NOT EXISTS public.sourcing_discovery_runs (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    started_at timestamptz DEFAULT now(),
+    completed_at timestamptz,
+    status text NOT NULL DEFAULT 'RUNNING', -- 'RUNNING', 'SUCCESS', 'PARTIAL_SUCCESS', 'FAILED'
+    trigger text NOT NULL DEFAULT 'CRON', -- 'CRON', 'MANUAL', 'WEBHOOK'
+    countries text[] DEFAULT ARRAY['UY'],
+    sources_requested text[] DEFAULT '{}',
+    sources_successful text[] DEFAULT '{}',
+    sources_failed text[] DEFAULT '{}',
+    signals_created int DEFAULT 0,
+    signals_updated int DEFAULT 0,
+    products_detected int DEFAULT 0,
+    trends_created int DEFAULT 0,
+    discoveries_created int DEFAULT 0,
+    ai_calls int DEFAULT 0,
+    estimated_ai_cost_usd numeric(8,4) DEFAULT 0.0000,
+    error_summary text,
+    metadata jsonb DEFAULT '{}'::jsonb,
+    created_at timestamptz DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sourcing_discovery_runs_started ON public.sourcing_discovery_runs(started_at DESC);
+
+-- 5. RLS Policies
 ALTER TABLE public.sourcing_signals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sourcing_trends ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sourcing_discoveries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.sourcing_discovery_runs ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow public read sourcing_signals" ON public.sourcing_signals FOR SELECT USING (true);
 CREATE POLICY "Allow public insert sourcing_signals" ON public.sourcing_signals FOR INSERT WITH CHECK (true);
@@ -102,3 +130,7 @@ CREATE POLICY "Allow public manage sourcing_trends" ON public.sourcing_trends FO
 CREATE POLICY "Allow public read sourcing_discoveries" ON public.sourcing_discoveries FOR SELECT USING (true);
 CREATE POLICY "Allow public insert sourcing_discoveries" ON public.sourcing_discoveries FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public manage sourcing_discoveries" ON public.sourcing_discoveries FOR ALL USING (true);
+
+CREATE POLICY "Allow public read sourcing_discovery_runs" ON public.sourcing_discovery_runs FOR SELECT USING (true);
+CREATE POLICY "Allow public insert sourcing_discovery_runs" ON public.sourcing_discovery_runs FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow public manage sourcing_discovery_runs" ON public.sourcing_discovery_runs FOR ALL USING (true);
