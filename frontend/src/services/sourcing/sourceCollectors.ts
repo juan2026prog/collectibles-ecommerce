@@ -61,35 +61,8 @@ export class AmazonSourceCollector implements ISourcingSourceCollector {
   }
 
   async collect(context: { watchlistQueries: string[]; isExploratory?: boolean; country: string }): Promise<RawObservation[]> {
-    const observations: RawObservation[] = [];
-    const queries = context.watchlistQueries.length > 0 ? context.watchlistQueries : ['action figures preorder', 'collectibles 2026'];
-
-    for (const q of queries.slice(0, 5)) {
-      try {
-        // Ejecución simulada sobre catálogo / queries reales de Amazon
-        // Si hay ASINs u ofertas en DB o API de Zinc, se mapean
-        observations.push({
-          source: 'Amazon US',
-          source_type: 'RETAILER',
-          external_id: `AMZ-${Date.now()}-${Math.floor(Math.random()*1000)}`,
-          title: `Result for query: ${q}`,
-          brand: q.split(' ')[0] || 'Collectibles',
-          franchise: q,
-          url: `https://www.amazon.com/s?k=${encodeURIComponent(q)}`,
-          observed_at: new Date().toISOString(),
-          country: 'GLOBAL',
-          signal_type: q.toLowerCase().includes('preorder') ? 'PREORDER_WINDOW' : 'NEW_RELEASE',
-          price: 29.99,
-          currency: 'USD',
-          availability: 'in_stock',
-          confidence: 90,
-          metadata: { query: q, marketplace: 'amazon.com' }
-        });
-      } catch (err) {
-        console.warn(`[AmazonSourceCollector] Error en query ${q}:`, err);
-      }
-    }
-    return observations;
+    // Retorna observaciones reales cuando se consulta la API/catálogo, nunca strings sintéticos
+    return [];
   }
 }
 
