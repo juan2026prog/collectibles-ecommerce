@@ -77,7 +77,7 @@ export const TrendCardGrid: React.FC<TrendCardGridProps> = ({
                       <TrendingDown className="w-4 h-4 text-rose-400" />
                     ) : null}
                   </div>
-                  <span className="text-[10px] text-gray-400 font-bold mt-1">
+                  <span className="text-[10px] text-slate-500 font-bold mt-1">
                     Confianza {trend.confidence}
                   </span>
                 </div>
@@ -85,7 +85,7 @@ export const TrendCardGrid: React.FC<TrendCardGridProps> = ({
 
               {/* DRIVERS DE TENDENCIA */}
               <div className="bg-slate-50/90 border border-slate-200/80 rounded-2xl p-3.5 space-y-2">
-                <span className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider block">
+                <span className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider block">
                   Drivers Detectados ({trend.country}):
                 </span>
                 <ul className="text-xs text-gray-800 space-y-1.5 font-medium">
@@ -101,7 +101,7 @@ export const TrendCardGrid: React.FC<TrendCardGridProps> = ({
               {/* SUBTRENDS PILLS */}
               {trend.subtrends.length > 0 && (
                 <div className="space-y-1.5">
-                  <span className="text-[11px] font-extrabold text-gray-400 uppercase tracking-wider block">
+                  <span className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider block">
                     Subtrends Clave:
                   </span>
                   <div className="flex flex-wrap gap-1.5">

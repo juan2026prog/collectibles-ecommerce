@@ -1,7 +1,7 @@
-// ==============================================================================
-// MIGRATION: SOURCING INTELLIGENCE V4 AUTOMATIC DISCOVERY PERSISTENCE & RUNS
-// Collectibles 2026 — Real Evidence, Source Collectors & Scheduled Runs
-// ==============================================================================
+-- ==============================================================================
+-- MIGRATION: SOURCING INTELLIGENCE V4 AUTOMATIC DISCOVERY PERSISTENCE & RUNS
+-- Collectibles 2026 — Real Evidence, Source Collectors & Scheduled Runs
+-- ==============================================================================
 
 -- 1. Table: sourcing_signals (Evidencia y observaciones atómicas de mercado e internas)
 CREATE TABLE IF NOT EXISTS public.sourcing_signals (

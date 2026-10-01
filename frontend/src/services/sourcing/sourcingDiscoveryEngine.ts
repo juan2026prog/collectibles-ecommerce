@@ -26,10 +26,11 @@ export class SourcingDiscoveryEngine {
    */
   public async loadLiveTrends(country: string = 'UY'): Promise<SourcingTrendCard[]> {
     try {
+      const countryList = country === 'GLOBAL' ? ['GLOBAL', 'UY', 'US'] : [country, 'GLOBAL'];
       const { data: dbTrends, error } = await supabase
         .from('sourcing_trends')
         .select('*')
-        .eq('country', country)
+        .in('country', countryList)
         .order('composite_score', { ascending: false });
 
       if (error) {
@@ -62,7 +63,7 @@ export class SourcingDiscoveryEngine {
       const { data: signalTopics } = await supabase
         .from('sourcing_signals')
         .select('topic, country, source_type')
-        .eq('country', country)
+        .in('country', countryList)
         .not('topic', 'is', null)
         .limit(20);
 
@@ -103,10 +104,11 @@ export class SourcingDiscoveryEngine {
    */
   public async loadLiveDiscoveries(country: string = 'UY'): Promise<SourcingProductCandidate[]> {
     try {
+      const countryList = country === 'GLOBAL' ? ['GLOBAL', 'UY', 'US'] : [country, 'GLOBAL'];
       const { data: dbDiscoveries, error } = await supabase
         .from('sourcing_discoveries')
         .select('*')
-        .eq('country', country)
+        .in('country', countryList)
         .order('opportunity_score', { ascending: false });
 
       if (error) {

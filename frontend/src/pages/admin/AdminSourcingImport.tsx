@@ -180,20 +180,30 @@ export default function AdminSourcingImport() {
   const handleRunDiscoveryScan = async () => {
     setIsDiscoveryScanning(true);
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
       const response = await fetch('/api/sourcing-discovery', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ trigger: 'MANUAL', country: selectedCountry })
       });
 
       const data = await response.json();
+
+      if (!response.ok || data.status === 'FORBIDDEN') {
+        throw new Error(data.error || `Error ${response.status}: Acceso no autorizado o fallo de escaneo.`);
+      }
 
       // Recargar datos reales persistidos
       await loadIntelligenceForCountry(selectedCountry);
 
       addToast({
         title: 'Discovery Server-Side Completado',
-        message: `Escaneo finalizado (${data.status}). Fuentes: ${data.sources_successful?.length || 0} exitosas.`,
+        message: `Escaneo finalizado con éxito (${data.status}). Señales: ${data.signals_created || 0}, Descubrimientos: ${data.discoveries_created || 0}.`,
         type: 'success'
       });
     } catch (err: any) {
@@ -265,15 +275,28 @@ export default function AdminSourcingImport() {
 
   // KPI Active Counts (Estricto: si no hay registros, devuelve 0)
   const activeCounts = useMemo(() => {
+    const trendTrending = trends.filter(t => t.status === 'TRENDING').length;
+    const candTrending = candidates.filter(c => c.status === 'TRENDING').length;
+    const trendEmerging = trends.filter(t => t.status === 'EMERGING').length;
+    const candEmerging = candidates.filter(c => c.status === 'EMERGING').length;
+    const trendGrowing = trends.filter(t => t.status === 'GROWING').length;
+    const candGrowing = candidates.filter(c => c.status === 'GROWING').length;
+    const trendNew = trends.filter(t => t.status === 'NEW').length;
+    const candNew = candidates.filter(c => c.status === 'NEW').length;
+    const trendPreorder = trends.filter(t => t.status === 'PREORDER').length;
+    const candPreorder = candidates.filter(c => c.status === 'PREORDER').length;
+    const trendOpp = trends.filter(t => t.status === 'OPPORTUNITY' || t.composite_trend_score >= 80).length;
+    const candOpp = candidates.filter(c => c.status === 'OPPORTUNITY' || c.opportunity_score >= 80).length;
+
     return {
-      trending: candidates.filter(c => c.status === 'TRENDING').length,
-      emerging: candidates.filter(c => c.status === 'EMERGING').length,
-      growing: candidates.filter(c => c.status === 'GROWING').length,
-      newReleases: candidates.filter(c => c.status === 'NEW').length,
-      preorders: candidates.filter(c => c.status === 'PREORDER').length,
-      opportunities: candidates.filter(c => c.status === 'OPPORTUNITY' || c.opportunity_score >= 80).length
+      trending: candTrending > 0 ? candTrending : trendTrending,
+      emerging: candEmerging > 0 ? candEmerging : trendEmerging,
+      growing: candGrowing > 0 ? candGrowing : trendGrowing,
+      newReleases: candNew > 0 ? candNew : trendNew,
+      preorders: candPreorder > 0 ? candPreorder : trendPreorder,
+      opportunities: candOpp > 0 ? candOpp : trendOpp
     };
-  }, [candidates]);
+  }, [candidates, trends]);
 
 
   return (

@@ -62,20 +62,42 @@ export default async function handler(req, res) {
     try {
       const { data: { user }, error } = await supabase.auth.getUser(token);
       if (user && !error) {
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single();
-        if (profile && (profile.role === 'admin' || profile.role === 'superadmin')) {
+        const jwtRole = user.app_metadata?.role || user.user_metadata?.role;
+        const isSuperAdminEmail = user.email === 'juanmacastillo2008@gmail.com';
+        
+        if (['admin', 'superadmin', 'super_admin', 'god_admin'].includes(jwtRole) || isSuperAdminEmail) {
           isAuthorized = true;
+        } else {
+          // Check profiles table
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role, is_admin')
+            .eq('id', user.id)
+            .maybeSingle();
+            
+          if (profile && (profile.is_admin === true || ['admin', 'superadmin', 'super_admin', 'god_admin'].includes(profile.role))) {
+            isAuthorized = true;
+          } else {
+            // Check user_roles table
+            const { data: roles } = await supabase
+              .from('user_roles')
+              .select('role')
+              .eq('user_id', user.id);
+            if (roles && roles.some(r => ['admin', 'superadmin', 'super_admin', 'god_admin'].includes(r.role))) {
+              isAuthorized = true;
+            }
+          }
         }
       }
-    } catch {}
+    } catch (authErr) {
+      console.warn('[sourcing-discovery] Auth token verification error:', authErr);
+    }
   }
 
-  if (req.query?.local_auth === 'dev_admin_bypass' || process.env.NODE_ENV === 'test') {
-    isAuthorized = true;
+  if (process.env.NODE_ENV === 'test') {
+    if (req.headers['x-test-auth'] === 'admin') {
+      isAuthorized = true;
+    }
   }
 
   if (!isAuthorized) {

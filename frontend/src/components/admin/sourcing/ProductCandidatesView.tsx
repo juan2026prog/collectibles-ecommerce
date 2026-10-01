@@ -56,18 +56,18 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
       {/* BARRA DE FILTRADO INTERNO */}
       <div className="bg-white border border-gray-200 rounded-2xl p-3 shadow-2xs flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 flex-1 min-w-[240px]">
-          <Search className="w-4 h-4 text-gray-400" />
+          <Search className="w-4 h-4 text-gray-500" />
           <input
             type="text"
             value={filterQuery}
             onChange={(e) => setFilterQuery(e.target.value)}
             placeholder="Filtrar candidatos por nombre, marca o franquicia..."
-            className="w-full text-xs font-semibold focus:outline-none text-gray-800 placeholder:text-gray-400"
+            className="w-full text-xs font-semibold focus:outline-none text-gray-900 placeholder:text-gray-500"
           />
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[11px] font-bold text-gray-500">Estado:</span>
+          <span className="text-[11px] font-bold text-gray-700">Estado:</span>
           {['all', 'OPPORTUNITY', 'TRENDING', 'EMERGING', 'PREORDER', 'NEW'].map(st => (
             <button
               key={st}
@@ -75,7 +75,7 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
               className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
                 statusFilter === st 
                   ? 'bg-slate-900 text-white' 
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               {st === 'all' ? 'Todos' : st}
