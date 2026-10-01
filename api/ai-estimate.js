@@ -119,14 +119,15 @@ export default async function handler(req, res) {
             .gte('discovered_at', new Date(Date.now() - (12 * 3600 * 1000)).toISOString())
             .limit(5);
 
-        if (recentDisc && recentDisc.length >= 3) {
-          const ageSec = Math.floor((Date.now() - new Date(recentDisc[0].discovered_at).getTime()) / 1000);
-          cacheInfo = {
-            status: 'HIT_DISCOVERIES',
-            age_seconds: Math.max(0, ageSec),
-            last_researched_at: recentDisc[0].discovered_at,
-            cached_items_count: recentDisc.length
-          };
+          if (recentDisc && recentDisc.length >= 3) {
+            const ageSec = Math.floor((Date.now() - new Date(recentDisc[0].discovered_at).getTime()) / 1000);
+            cacheInfo = {
+              status: 'HIT_DISCOVERIES',
+              age_seconds: Math.max(0, ageSec),
+              last_researched_at: recentDisc[0].discovered_at,
+              cached_items_count: recentDisc.length
+            };
+          }
         }
       }
     } catch (cacheErr) {
