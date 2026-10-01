@@ -44,16 +44,25 @@ export const SourcingDiscoveryView: React.FC<SourcingDiscoveryViewProps> = ({
         <div className="space-y-1.5 max-w-2xl">
           <div className="flex items-center gap-2">
             <span className="p-1.5 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-400/30">
-              <Rocket className="w-4 h-4" />
+              <Rocket className="w-4 h-4 text-purple-300" />
             </span>
-            <span className="text-xs font-black text-purple-300 uppercase tracking-wider">
+            <span 
+              className="text-xs font-black uppercase tracking-wider text-purple-200"
+              style={{ color: '#e9d5ff' }}
+            >
               Automatic Discovery Engine
             </span>
           </div>
-          <h2 className="text-xl font-black text-white tracking-tight">
+          <h2 
+            className="text-xl font-black text-white tracking-tight"
+            style={{ color: '#ffffff' }}
+          >
             Descubrimiento Autónomo de Oportunidades
           </h2>
-          <p className="text-xs text-purple-200/80 leading-relaxed">
+          <p 
+            className="text-xs leading-relaxed text-slate-200"
+            style={{ color: '#e2e8f0' }}
+          >
             Escaneo periódico de nuevos lanzamientos, preorders y picos de demanda en retailers oficiales sin necesidad de introducir términos manuales.
           </p>
         </div>
