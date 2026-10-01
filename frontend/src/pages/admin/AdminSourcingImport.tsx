@@ -289,7 +289,7 @@ export default function AdminSourcingImport() {
       />
 
       {/* 6 CONSOLIDATED NAVIGATION TABS */}
-      <div className="flex items-center gap-2 bg-gray-100 p-1.5 rounded-2xl border border-gray-200 overflow-x-auto shadow-2xs">
+      <div className="flex items-center gap-2 bg-white p-2 rounded-2xl border border-gray-200 shadow-sm overflow-x-auto">
         {[
           { key: 'trends', label: '1. Overview & Trends', icon: Flame, badge: trends.length },
           { key: 'discovery', label: '2. Automatic Discovery', icon: Rocket, badge: candidates.filter(c => c.status === 'PREORDER' || c.status === 'EMERGING').length },
@@ -305,19 +305,19 @@ export default function AdminSourcingImport() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key as SourcingIntelligenceTab)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition shrink-0 cursor-pointer ${
+              className={`flex items-center gap-2.5 px-4.5 py-3 rounded-xl text-xs font-bold transition shrink-0 cursor-pointer ${
                 isActive
                   ? tab.highlight 
-                    ? 'bg-[#f00856] text-white shadow-sm font-black' 
-                    : 'bg-slate-900 text-white shadow-sm font-black'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+                    ? 'bg-[#f00856] text-white shadow-md font-black' 
+                    : 'bg-slate-900 text-white shadow-md font-black'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
               }`}
             >
               <Icon className={`w-4 h-4 ${isActive ? (tab.highlight ? 'text-white' : 'text-pink-400') : 'text-gray-500'}`} />
               <span>{tab.label}</span>
               {tab.badge !== undefined && (
-                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                  isActive ? 'bg-white/20 text-white' : 'bg-gray-200 text-gray-700'
+                <span className={`text-[11px] px-2 py-0.5 rounded-full font-black ${
+                  isActive ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-700'
                 }`}>
                   {tab.badge}
                 </span>
