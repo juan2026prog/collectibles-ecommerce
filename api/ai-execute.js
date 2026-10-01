@@ -161,8 +161,8 @@ export default async function handler(req, res) {
     });
   }
 
-  const isSourcingResearch = engine === 'SOURCING_WEB_RESEARCH' || (operation && /^(sourcing_research|web_research|sourcing_market_research)$/i.test(operation));
-  const isWebSearchNeeded = engine === 'SOURCING_WEB_RESEARCH' || 
+  const isSourcingResearch = engine === 'SOURCING_WEB_RESEARCH' || engine === 'RESEARCH_INTELLIGENCE' || (operation && /^(sourcing_research|web_research|sourcing_market_research)$/i.test(operation));
+  const isWebSearchNeeded = engine === 'SOURCING_WEB_RESEARCH' || engine === 'RESEARCH_INTELLIGENCE' ||
     (operation && /^(sourcing_research|web_research|sourcing_market_research)$/i.test(operation)) ||
     /\b(latest|new|preorder|announced|released|trending|this week|today|recent|2026|preventa|lanzamiento)\b/i.test(resolvedInput);
 
@@ -274,7 +274,7 @@ export default async function handler(req, res) {
             error: `AI Engine ${engine} is disabled.`
           });
         }
-        if (engData.model && engData.model !== 'NOT CONFIGURED') {
+        if (!isManualOverride && !isSourcingResearch && engData.model && engData.model !== 'NOT CONFIGURED') {
           selectedModel = engData.model;
         }
         if (engData.timeout_ms) {
@@ -613,7 +613,11 @@ export default async function handler(req, res) {
       } catch (logErr) {
         console.warn('[AI Execute] Telemetry logging error:', logErr.message);
       }
-    }
+    const classifiedSources = (result.sources || []).map(s => ({
+      ...s,
+      source_type: classifyDomain(s.url),
+      observed_at: new Date().toISOString()
+    }));
 
     // 5. Parse structured Part 3 outputs server-side and Validate Evidence IDs
     let structuredData = null;
@@ -739,13 +743,6 @@ export default async function handler(req, res) {
         console.warn('[AI Execute] Intelligence run logging error:', logErr.message);
       }
     }
-
-    const classifiedSources = (result.sources || []).map(s => ({
-      ...s,
-      source_type: classifyDomain(s.url),
-      observed_at: new Date().toISOString()
-    }));
-
     // Persist Sourcing Research Cache for future instant reuse across countries
     if (isSourcingResearch && researchCacheKey && client && result?.usage?.totalTokens > 0) {
       try {
