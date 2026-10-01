@@ -22,7 +22,7 @@ export interface TiendamiaMatchResult {
 // In-memory session cache to avoid repeating lookups during the same session
 const memoryCache = new Map<string, { data: TiendamiaMatchResult; expiresAt: number }>();
 let isDbCacheAvailable = true;
-let isEdgeFunctionAvailable = true;
+let isEdgeFunctionAvailable = false;
 
 /**
  * Normaliza un ASIN eliminando espacios en blanco y convirtiendo a mayúsculas.

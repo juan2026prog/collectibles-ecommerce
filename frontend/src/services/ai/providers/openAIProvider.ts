@@ -88,6 +88,7 @@ export class OpenAIProvider implements AIProviderAdapter {
         model: data.model,
         text: data.text,
         data: (data.data ?? data.text) as T,
+        sources: data.sources || [],
         latency_ms: data.latency_ms || elapsed,
         usage: data.usage,
         pricing: data.pricing,

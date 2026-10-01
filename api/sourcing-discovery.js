@@ -46,6 +46,15 @@ function classifyDomain(urlStr) {
   }
 }
 
+function sanitizeImageUrl(url) {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) return null;
+  if (trimmed.includes('unsplash.com')) return null;
+  if (trimmed.includes('example.com') || trimmed.includes('placeholder')) return null;
+  return trimmed;
+}
+
 function extractJsonFromText(text) {
   if (!text) return null;
   const str = String(text).trim();
@@ -258,7 +267,7 @@ export default async function handler(req, res) {
     try {
       const { data: releaseEvents, error: releaseErr } = await supabase
         .from('release_events')
-        .select('id, title, manufacturer, franchise, character, product_line, msrp, currency, source_name, source_url, radar_signal')
+        .select('id, title, manufacturer, franchise, character, product_line, msrp, currency, source_name, source_url, radar_signal, official_image_url, image_source_url')
         .limit(20);
 
       if (!releaseErr && releaseEvents && releaseEvents.length > 0) {
@@ -300,7 +309,7 @@ export default async function handler(req, res) {
     try {
       const { data: amzProducts, error: amzErr } = await supabase
         .from('international_products')
-        .select('id, external_product_id, title, brand, base_price_usd, product_url_external, availability, source_retailer')
+        .select('id, external_product_id, title, brand, base_price_usd, product_url_external, availability, source_retailer, image_url, main_image_url_external')
         .limit(15);
 
       if (!amzErr && amzProducts && amzProducts.length > 0) {
@@ -343,7 +352,7 @@ export default async function handler(req, res) {
     try {
       const { data: mluItems, error: mluErr } = await supabase
         .from('ml_raw_items')
-        .select('id, ml_item_id, title, price, currency_id, available_quantity, permalink')
+        .select('id, ml_item_id, title, price, currency_id, available_quantity, permalink, thumbnail')
         .limit(20);
 
       if (!mluErr && mluItems && mluItems.length > 0) {
@@ -606,6 +615,7 @@ Devuelve ÚNICAMENTE un objeto JSON válido con la siguiente estructura:
                 why_explanation: whyExplanation,
                 evidence: { 
                   source_url: itemSourceUrl, 
+                  image_url: sanitizeImageUrl(item.image_url),
                   snippet: item.evidence_snippet,
                   raw_sources: rawSources.slice(0, 3),
                   mlu_matches_count: localMluMatchesCount
@@ -700,7 +710,10 @@ Devuelve ÚNICAMENTE un objeto JSON válido con la siguiente estructura:
                     margin_percent: marginPct,
                     outside_watchlist: false,
                     why_explanation: whyExplanation,
-                    evidence: { raw_source: rel },
+                    evidence: { 
+                      raw_source: rel,
+                      image_url: sanitizeImageUrl(rel.official_image_url || rel.image_source_url)
+                    },
                     discovered_at: new Date().toISOString(),
                     last_verified_at: new Date().toISOString()
                   });

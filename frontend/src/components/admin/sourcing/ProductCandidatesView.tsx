@@ -1,9 +1,37 @@
 import React, { useState } from 'react';
 import { 
   Sparkles, ExternalLink, Bookmark, HelpCircle, ArrowRight, 
-  CheckCircle2, AlertTriangle, Layers, Clock, ShieldCheck, Download, Search
+  CheckCircle2, AlertTriangle, Layers, Clock, ShieldCheck, Download, Search, ImageOff
 } from 'lucide-react';
 import type { SourcingProductCandidate } from '../../types/sourcingIntelligence';
+
+const ProductThumbnail: React.FC<{ src?: string | null; alt: string; isPreorder?: boolean }> = ({ src, alt, isPreorder }) => {
+  const [hasError, setHasError] = useState(false);
+  const isValid = Boolean(src && typeof src === 'string' && src.startsWith('http') && !src.includes('unsplash.com') && !hasError);
+
+  return (
+    <div className="w-20 h-20 rounded-2xl bg-gray-50 border border-gray-100 overflow-hidden shrink-0 flex items-center justify-center relative">
+      {isValid ? (
+        <img
+          src={src!}
+          alt={alt}
+          className="w-full h-full object-contain p-1"
+          onError={() => setHasError(true)}
+        />
+      ) : (
+        <div className="w-full h-full flex flex-col items-center justify-center p-1 text-center bg-slate-50 text-slate-400 text-[9px] font-medium">
+          <ImageOff className="w-4 h-4 mb-0.5 text-slate-300" />
+          <span>Sin imagen</span>
+        </div>
+      )}
+      {isPreorder && (
+        <span className="absolute bottom-1 left-1 bg-pink-600 text-white text-[9px] font-black px-1.5 py-0.2 rounded-md">
+          PREORDER
+        </span>
+      )}
+    </div>
+  );
+};
 
 interface ProductCandidatesViewProps {
   candidates: SourcingProductCandidate[];
@@ -99,21 +127,11 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
               <div className="space-y-3">
                 {/* CABECERA CON IMAGEN Y BADGES */}
                 <div className="flex gap-3 items-start">
-                  <div className="w-20 h-20 rounded-2xl bg-gray-50 border border-gray-100 overflow-hidden shrink-0 flex items-center justify-center relative">
-                    <img
-                      src={cand.image_url}
-                      alt={cand.title}
-                      className="w-full h-full object-contain p-1"
-                      onError={(e) => {
-                        (e.target as any).src = 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80';
-                      }}
-                    />
-                    {isPreorder && (
-                      <span className="absolute bottom-1 left-1 bg-pink-600 text-white text-[9px] font-black px-1.5 py-0.2 rounded-md">
-                        PREORDER
-                      </span>
-                    )}
-                  </div>
+                  <ProductThumbnail
+                    src={cand.image_url}
+                    alt={cand.title}
+                    isPreorder={isPreorder}
+                  />
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 flex-wrap">

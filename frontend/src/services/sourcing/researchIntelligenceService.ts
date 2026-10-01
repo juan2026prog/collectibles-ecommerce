@@ -207,6 +207,8 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
           trendVelocity: trendEval.trend_velocity
         });
 
+        const cleanImg = (item.image_url && typeof item.image_url === 'string' && !item.image_url.includes('unsplash.com') && item.image_url.startsWith('http')) ? item.image_url.trim() : '';
+
         return {
           id: `cand-${idx + 1}-${Date.now()}`,
           title: item.title || item.name || `${query} Item #${idx + 1}`,
@@ -214,8 +216,8 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
           franchise: item.franchise || item.license || query,
           line: item.line || item.manufacturer || '',
           character: item.character || '',
-          image_url: item.image_url || 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80',
-          gallery_images: item.gallery_images || [item.image_url || 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80'],
+          image_url: cleanImg,
+          gallery_images: cleanImg ? [cleanImg] : [],
           category: item.category || category || 'Figuras de Acción',
           status: candStatus,
           discovered_from: item.discovered_from || (query.toLowerCase().includes('lara') ? 'DISCOVERED_OUTSIDE_WATCHLIST' : 'WATCHLIST'),

@@ -190,6 +190,7 @@ export interface AIExecuteResponse<T = any> {
   model: string | null;
   data?: T;
   text?: string;
+  sources?: any[];
   fallback_executed?: boolean;
   error?: string;
   latency_ms?: number;

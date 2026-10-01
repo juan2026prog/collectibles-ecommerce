@@ -116,22 +116,26 @@ export class SourcingDiscoveryEngine {
       }
 
       if (dbDiscoveries && dbDiscoveries.length > 0) {
-        return dbDiscoveries.map(d => ({
-          id: d.id,
-          title: d.title,
-          brand: d.brand || 'Collectibles',
-          franchise: d.franchise || '',
-          line: '',
-          character: '',
-          image_url: d.evidence?.image_url || 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80',
-          gallery_images: [d.evidence?.image_url || 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80'],
-          category: d.category || 'Figuras de Acción',
-          status: d.status as any,
-          discovered_from: d.discovered_from as any,
-          trend_score: d.trend_score || 0,
-          opportunity_score: d.opportunity_score || 0,
-          confidence_score: d.confidence_score || 80,
-          country_code: d.country,
+        return dbDiscoveries.map(d => {
+          const rawImg = d.evidence?.image_url || d.image_url || null;
+          const cleanImg = (rawImg && typeof rawImg === 'string' && !rawImg.includes('unsplash.com') && rawImg.startsWith('http')) ? rawImg.trim() : null;
+
+          return {
+            id: d.id,
+            title: d.title,
+            brand: d.brand || 'Collectibles',
+            franchise: d.franchise || '',
+            line: '',
+            character: '',
+            image_url: cleanImg || '',
+            gallery_images: cleanImg ? [cleanImg] : [],
+            category: d.category || 'Figuras de Acción',
+            status: d.status as any,
+            discovered_from: d.discovered_from as any,
+            trend_score: d.trend_score || 0,
+            opportunity_score: d.opportunity_score || 0,
+            confidence_score: d.confidence_score || 80,
+            country_code: d.country,
           pricing: {
             amazon_price_usd: d.price_usd || 0,
             ebay_price_usd: null,
@@ -158,8 +162,9 @@ export class SourcingDiscoveryEngine {
           },
           raw_evidence: [],
           created_at: d.discovered_at
-        }));
-      }
+        };
+      });
+    }
     } catch (err) {
       console.warn('[SourcingDiscoveryEngine] Error leyendo descubrimientos:', err);
     }

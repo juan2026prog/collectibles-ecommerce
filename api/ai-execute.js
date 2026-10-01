@@ -89,10 +89,10 @@ function instructionsFor(engine, operation) {
   if (engine === 'AI_SEARCH') {
     return common + ' For AI Search, understand collector intent and improve the answer using only supplied products and context. Return ONLY valid JSON with keys headline (string), summary (string), breakdown (array of strings), nextHighlight (string or null), relatedQuestions (array of up to 4 strings).';
   }
-  if (engine === 'SOURCING_WEB_RESEARCH') {
+  if (engine === 'SOURCING_WEB_RESEARCH' || engine === 'RESEARCH_INTELLIGENCE' || (operation && /^(sourcing_research|web_research|sourcing_market_research)$/i.test(operation))) {
     return common + ' Realiza investigación comercial de coleccionables mediante búsqueda web real. Identifica productos oficiales reales, novedades y preorders confirmados. NUNCA inventes precios, landed costs ni stock comercial. Devuelve ÚNICAMENTE un JSON válido con la siguiente estructura: {"summary": string, "confidence": number_0_to_1, "subtrends": string[], "items": [{"title": string, "brand": string, "franchise": string, "category": string, "origin_price_usd": number_or_null, "asin": string_or_null, "url": string_or_null, "retailer": string, "is_preorder": boolean, "is_new": boolean, "release_date": string_or_null, "evidence_snippet": string}]}.';
   }
-  if (['PRODUCT_DISCOVERY','TREND_ANALYSIS','PRODUCT_CURATION','COUNTRY_INTELLIGENCE','RADAR_INTELLIGENCE','RELEASE_INTELLIGENCE','RESEARCH_INTELLIGENCE'].includes(engine)) {
+  if (['PRODUCT_DISCOVERY','TREND_ANALYSIS','PRODUCT_CURATION','COUNTRY_INTELLIGENCE','RADAR_INTELLIGENCE','RELEASE_INTELLIGENCE'].includes(engine)) {
     return common + ' You are advisory only: never publish, buy, change prices, or trigger automation. Reason only from evidence in payload.evidence. Missing evidence must reduce confidence, never be guessed. scoreAdjustment is only a bounded advisory adjustment from -10 to 10; deterministic Collectibles scoring remains authoritative. Return ONLY valid JSON: {"summary":string,"confidence":number_0_to_1,"signals":string[],"risks":string[],"recommendations":string[],"evidenceIds":string[],"scoreAdjustment":number_minus10_to_10,"action":"REVIEW"|"WATCH"|"IGNORE"}.';
   }
   return common + ` Operation: ${operation}. Return concise useful output grounded only in supplied data.`;
@@ -330,7 +330,8 @@ export default async function handler(req, res) {
       }
     }
 
-    const isStructuredAdvisoryEngine = ['PRODUCT_DISCOVERY','TREND_ANALYSIS','PRODUCT_CURATION','COUNTRY_INTELLIGENCE','RADAR_INTELLIGENCE','RELEASE_INTELLIGENCE','RESEARCH_INTELLIGENCE'].includes(engine);
+    const isSourcingResearch = engine === 'SOURCING_WEB_RESEARCH' || (operation && /^(sourcing_research|web_research|sourcing_market_research)$/i.test(operation));
+    const isStructuredAdvisoryEngine = !isSourcingResearch && ['PRODUCT_DISCOVERY','TREND_ANALYSIS','PRODUCT_CURATION','COUNTRY_INTELLIGENCE','RADAR_INTELLIGENCE','RELEASE_INTELLIGENCE'].includes(engine);
     const evidenceObj = payload?.evidence || {};
     const evidenceFingerprint = generateEvidenceFingerprint(evidenceObj);
 
@@ -473,13 +474,24 @@ export default async function handler(req, res) {
     let structuredData = null;
     let intelligenceRunStatus = 'SUCCESS';
 
-    if (isStructuredAdvisoryEngine) {
+    if (isStructuredAdvisoryEngine || isSourcingResearch) {
       try {
         const clean = String(result.outputText || '').trim().replace(/^\`\`\`(?:json)?/i, '').replace(/\`\`\`$/i, '').trim();
         structuredData = JSON.parse(clean);
       } catch {
-        throw new OpenAIError('INVALID_OUTPUT', 502, 'OpenAI returned invalid structured intelligence output.');
+        const match = String(result.outputText || '').match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+        if (match && match[1]) {
+          try {
+            structuredData = JSON.parse(match[1].trim());
+          } catch {}
+        }
+        if (!structuredData && isStructuredAdvisoryEngine) {
+          throw new OpenAIError('INVALID_OUTPUT', 502, 'OpenAI returned invalid structured intelligence output.');
+        }
       }
+    }
+
+    if (isStructuredAdvisoryEngine && structuredData) {
 
       // Evidence ID Strict Validation: returnedEvidenceIds ⊆ allowedEvidenceIds
       const allowedEvidenceIds = extractAllowedEvidenceIds(evidenceObj);
