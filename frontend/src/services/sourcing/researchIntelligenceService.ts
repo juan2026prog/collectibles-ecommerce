@@ -79,6 +79,16 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
       });
 
       aiResult = gatewayResponse.data;
+      if ((!aiResult || typeof aiResult === 'string') && gatewayResponse.text) {
+        try {
+          aiResult = JSON.parse(gatewayResponse.text);
+        } catch {
+          const match = gatewayResponse.text.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+          if (match && match[1]) {
+            try { aiResult = JSON.parse(match[1].trim()); } catch {}
+          }
+        }
+      }
       providerName = gatewayResponse.provider || 'OPENAI';
       modelName = gatewayResponse.model || 'gpt-4o';
       latencyMs = gatewayResponse.latency_ms || Math.round(performance.now() - startTime);
