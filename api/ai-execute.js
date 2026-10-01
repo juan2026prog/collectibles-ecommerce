@@ -399,6 +399,49 @@ export default async function handler(req, res) {
             }
           });
         }
+
+        // Secondary cache lookup in ai_intelligence_runs
+        const { data: cachedRun } = await client
+          .from('ai_intelligence_runs')
+          .select('*')
+          .eq('evidence_fingerprint', researchCacheKey)
+          .eq('status', 'SUCCESS')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (cachedRun && cachedRun.metadata) {
+          const cachedData = {
+            summary: cachedRun.summary,
+            confidence: Number(cachedRun.confidence || 0.85),
+            subtrends: cachedRun.signals || [],
+            items: cachedRun.metadata.items || []
+          };
+          return res.status(200).json({
+            success: true,
+            status: 'SUCCESS',
+            provider: 'OPENAI',
+            model: cachedRun.model || modeConfig.model,
+            cached: true,
+            text: JSON.stringify(cachedData),
+            data: cachedData,
+            sources: cachedRun.metadata.sources || [],
+            request_id: `cached_${cachedRun.request_id || Date.now()}`,
+            latency_ms: 1,
+            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+            pricing: {
+              model: cachedRun.model || modeConfig.model,
+              input_tokens: 0,
+              output_tokens: 0,
+              total_tokens: 0,
+              input_cost_usd: 0,
+              output_cost_usd: 0,
+              estimated_cost_usd: 0,
+              pricing_status: 'PRICED',
+              pricing_source: 'INTELLIGENCE_RUNS_CACHE'
+            }
+          });
+        }
       } catch (cacheErr) {
         console.warn('[AI Execute] Sourcing research cache lookup skipped:', cacheErr.message);
       }
@@ -591,7 +634,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // Persist advisory Part 3 result separately from raw provider telemetry.
+    // Persist research run in ai_intelligence_runs and sourcing_research_cache
     if (structuredData && client) {
       try {
         const evidenceCount = Object.values(evidenceObj).reduce((sum, value) => sum + (Array.isArray(value) ? value.length : 0), 0);
@@ -599,14 +642,14 @@ export default async function handler(req, res) {
         const intelligencePayload = {
           engine,
           country_code: country || 'GLOBAL',
-          objective: payload?.objective || null,
-          evidence_fingerprint: evidenceFingerprint,
-          evidence_count: evidenceCount,
+          objective: payload?.objective || (isSourcingResearch ? resolvedInput : null),
+          evidence_fingerprint: isSourcingResearch ? researchCacheKey : evidenceFingerprint,
+          evidence_count: isSourcingResearch ? (Array.isArray(structuredData.items) ? structuredData.items.length : 0) : evidenceCount,
           summary: structuredData.summary || null,
-          confidence: Number(structuredData.confidence || 0),
+          confidence: Number(structuredData.confidence || 0.85),
           score_adjustment: scoreAdjustment,
           advisory_action: ['REVIEW','WATCH','IGNORE'].includes(structuredData.action) ? structuredData.action : 'WATCH',
-          signals: Array.isArray(structuredData.signals) ? structuredData.signals : [],
+          signals: Array.isArray(structuredData.signals) ? structuredData.signals : (Array.isArray(structuredData.subtrends) ? structuredData.subtrends : []),
           risks: Array.isArray(structuredData.risks) ? structuredData.risks : [],
           recommendations: Array.isArray(structuredData.recommendations) ? structuredData.recommendations : [],
           evidence_ids: Array.isArray(structuredData.evidenceIds) ? structuredData.evidenceIds : [],
@@ -615,8 +658,11 @@ export default async function handler(req, res) {
           status: intelligenceRunStatus,
           metadata: { 
             operation, 
-            decision_mode: 'ADVISORY_ONLY',
-            invalid_evidence_neutralized: intelligenceRunStatus === 'INVALID_AI_EVIDENCE'
+            decision_mode: isSourcingResearch ? 'SOURCING_RESEARCH' : 'ADVISORY_ONLY',
+            invalid_evidence_neutralized: intelligenceRunStatus === 'INVALID_AI_EVIDENCE',
+            research_depth: modeConfig.key,
+            items: Array.isArray(structuredData.items) ? structuredData.items : [],
+            sources: classifiedSources
           }
         };
 

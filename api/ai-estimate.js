@@ -90,13 +90,34 @@ export default async function handler(req, res) {
           cached_cost_usd: cachedRow.cost_usd || 0
         };
       } else {
-        // Fallback check recent sourcing_signals / sourcing_discoveries
-        const { data: recentDisc } = await client
-          .from('sourcing_discoveries')
-          .select('id, title, discovered_at')
-          .ilike('title', `%${cleanQuery.split(' ')[0]}%`)
-          .gte('discovered_at', new Date(Date.now() - (12 * 3600 * 1000)).toISOString())
-          .limit(5);
+        // Check ai_intelligence_runs
+        const { data: cachedRun } = await client
+          .from('ai_intelligence_runs')
+          .select('*')
+          .eq('evidence_fingerprint', cacheKey)
+          .eq('status', 'SUCCESS')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (cachedRun) {
+          const ageSec = Math.floor((Date.now() - new Date(cachedRun.created_at).getTime()) / 1000);
+          cacheInfo = {
+            status: 'HIT',
+            age_seconds: Math.max(0, ageSec),
+            last_researched_at: cachedRun.created_at,
+            cached_items_count: Array.isArray(cachedRun.metadata?.items) ? cachedRun.metadata.items.length : 5,
+            cached_model: cachedRun.model,
+            cached_cost_usd: 0
+          };
+        } else {
+          // Fallback check recent sourcing_discoveries
+          const { data: recentDisc } = await client
+            .from('sourcing_discoveries')
+            .select('id, title, discovered_at')
+            .ilike('title', `%${cleanQuery.split(' ')[0]}%`)
+            .gte('discovered_at', new Date(Date.now() - (12 * 3600 * 1000)).toISOString())
+            .limit(5);
 
         if (recentDisc && recentDisc.length >= 3) {
           const ageSec = Math.floor((Date.now() - new Date(recentDisc[0].discovered_at).getTime()) / 1000);
