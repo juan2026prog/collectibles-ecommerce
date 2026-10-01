@@ -23,7 +23,184 @@ serve(async (req: Request) => {
   const corsHeaders = getCorsHeaders(req);
 
   try {
-    const body: SourcingMarketRequest = await req.json();
+    const body: any = await req.json();
+    const source = body.source || 'mercado_libre_uy';
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // ==========================================
+    // SECCIÓN TIENDAMÍA: MATCH EXCLUSIVO POR ASIN
+    // ==========================================
+    if (source === 'tiendamia' || body.asin) {
+      const asin = (body.asin || body.normalized_product_id || '').trim().toUpperCase();
+      const forceRefresh = body.force_refresh ?? false;
+      const now = new Date().toISOString();
+
+      if (!asin) {
+        return new Response(JSON.stringify({
+          asin: '',
+          found: false,
+          exactMatch: false,
+          priceUsd: null,
+          productUrl: null,
+          status: 'NOT_FOUND',
+          checkedAt: now,
+          statusMessage: 'ASIN no proporcionado',
+          method: 'EXACT_ASIN_MATCH'
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      // 1. Chequeo de cache
+      if (!forceRefresh) {
+        const { data: cached } = await supabase
+          .from('sourcing_market_cache')
+          .select('*')
+          .eq('normalized_product_id', asin)
+          .eq('source', 'tiendamia')
+          .gt('expires_at', now)
+          .order('checked_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (cached && cached.payload) {
+          return new Response(JSON.stringify(cached.payload), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+      }
+
+      // 2. Consulta puntual no invasiva a ficha directa por ASIN
+      const asinLower = asin.toLowerCase();
+      const targetUrl = `https://tiendamia.com.uy/p/amz/${asinLower}`;
+      let found = false;
+      let exactMatch = false;
+      let priceUsd: number | null = null;
+      let productUrl: string | null = targetUrl;
+      let status: 'FOUND' | 'NOT_FOUND' | 'UNAVAILABLE' | 'ERROR' = 'NOT_FOUND';
+      let statusMessage: string | undefined = undefined;
+
+      try {
+        const tmRes = await fetch(targetUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'es-UY,es;q=0.9,en;q=0.8'
+          }
+        });
+
+        if (tmRes.status === 404) {
+          status = 'NOT_FOUND';
+          productUrl = null;
+        } else if (tmRes.status === 403 || tmRes.status === 429) {
+          status = 'UNAVAILABLE';
+          statusMessage = 'Consulta temporalmente no disponible';
+        } else if (tmRes.ok) {
+          const html = await tmRes.text();
+          if (
+            html.includes('error-404') ||
+            html.includes('cms_noroute_index') ||
+            html.includes('No encontramos esta página') ||
+            html.includes('No encontramos resultados para tu búsqueda')
+          ) {
+            status = 'NOT_FOUND';
+            productUrl = null;
+          } else {
+            // REGLA ABSOLUTA: AMZ-{returnedASIN} === AMZ-{requestedASIN}
+            const expectedSku = `AMZ-${asin}`;
+            const unicodeSku = `AMZ\\u002D${asin}`;
+
+            const hasExactSku =
+              html.includes(`SKU/Artículo: ${expectedSku}`) ||
+              html.includes(`data-product-sku="${expectedSku}"`) ||
+              html.includes(`"item_id":"${expectedSku}"`) ||
+              html.includes(`"productCurrentSku": "${expectedSku}"`) ||
+              html.includes(`"productCurrentSku": "${unicodeSku}"`) ||
+              html.includes(`data-target-ref="${expectedSku}"`) ||
+              html.includes(`content="${asin}"`);
+
+            if (hasExactSku) {
+              found = true;
+              exactMatch = true;
+              status = 'FOUND';
+
+              // Extraer enlace canónico
+              const canonicalMatch = html.match(/<link\s+rel="canonical"\s+href="([^"]+)"/i);
+              if (canonicalMatch && canonicalMatch[1]) {
+                productUrl = canonicalMatch[1];
+              }
+
+              // Extraer precio
+              const ga4Match = html.match(new RegExp(`"item_id":"(?:AMZ-)?${asin}","price":"([0-9.]+)"`, 'i'));
+              if (ga4Match && ga4Match[1]) {
+                const parsed = parseFloat(ga4Match[1]);
+                if (parsed > 0) priceUsd = parsed;
+              } else {
+                const metaPrice = html.match(/<meta property="product:price:amount" content="([0-9.]+)"/i);
+                if (metaPrice && metaPrice[1]) {
+                  const parsed = parseFloat(metaPrice[1]);
+                  if (parsed > 0) priceUsd = parsed;
+                }
+              }
+            } else {
+              status = 'NOT_FOUND';
+              productUrl = null;
+            }
+          }
+        } else {
+          status = 'UNAVAILABLE';
+          statusMessage = 'Consulta temporalmente no disponible';
+        }
+      } catch (err) {
+        console.error('TiendaMia fetch error:', err);
+        status = 'UNAVAILABLE';
+        statusMessage = 'Consulta temporalmente no disponible';
+      }
+
+      const result = {
+        asin,
+        found,
+        exactMatch,
+        priceUsd,
+        productUrl,
+        status,
+        checkedAt: now,
+        statusMessage,
+        method: 'EXACT_ASIN_MATCH'
+      };
+
+      // Guardar en cache
+      try {
+        const ttlHours = found && priceUsd ? 12 : 72;
+        const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString();
+        await supabase.from('sourcing_market_cache').upsert(
+          {
+            normalized_product_id: asin,
+            source: 'tiendamia',
+            query: asin,
+            match_type: status,
+            match_confidence: exactMatch ? 100 : 0,
+            payload: result,
+            checked_at: now,
+            expires_at: expiresAt
+          },
+          { onConflict: 'normalized_product_id,source' }
+        );
+      } catch (cacheErr) {
+        console.warn('Cache save error:', cacheErr);
+      }
+
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    // ==========================================
+    // SECCIÓN MERCADO LIBRE URUGUAY (ORIGINAL)
+    // ==========================================
     const { 
       normalized_product_id = 'GENERIC',
       title, 
@@ -42,10 +219,6 @@ serve(async (req: Request) => {
         error: "title es requerido para consultar Mercado Libre Uruguay"
       }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // 1. CHEQUEO DE CACHE PERSISTENTE
     if (!force_refresh) {

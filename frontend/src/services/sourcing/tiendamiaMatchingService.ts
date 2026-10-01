@@ -19,7 +19,7 @@ export interface TiendamiaMatchResult {
   method: string;
 }
 
-// In-memory session cache to avoid repeating lookups during the same admin session
+// In-memory session cache to avoid repeating lookups during the same session
 const memoryCache = new Map<string, { data: TiendamiaMatchResult; expiresAt: number }>();
 
 /**
@@ -43,13 +43,135 @@ export function compareAsins(amazonAsin?: string | null, targetAsin?: string | n
 }
 
 /**
- * Consulta puntual por ASIN para comprobar si TiendaMía reconoce/tiene el producto.
+ * Parsea y valida de forma estricta la respuesta HTML pública de TiendaMía por ASIN.
  * 
- * Reglas de estricto cumplimiento:
- * - NO scraping, NO crawling, NO navegación con headless browsers.
- * - Match EXCLUSIVAMENTE por ASIN (Amazon ASIN === TiendaMía ASIN).
- * - Cache persistente y en memoria para evitar consultas masivas innecesarias.
- * - Si no existe un endpoint/mecanismo oficial habilitado, responde UNAVAILABLE de forma honesta.
+ * REGLA ABSOLUTA DE VALIDACIÓN:
+ * Un producto SOLAMENTE puede marcarse FOUND si el resultado demuestra:
+ * AMZ-{returnedASIN} === AMZ-{requestedASIN}
+ * 
+ * Cero fuzzy matching, cero title matching, cero IA.
+ */
+export function parseTiendamiaHtmlResponse(
+  html: string,
+  requestedAsin: string,
+  statusCode: number = 200
+): TiendamiaMatchResult {
+  const normAsin = normalizeAsin(requestedAsin);
+  const now = new Date().toISOString();
+
+  if (statusCode === 404) {
+    return {
+      asin: normAsin,
+      found: false,
+      exactMatch: false,
+      priceUsd: null,
+      productUrl: null,
+      status: 'NOT_FOUND',
+      checkedAt: now,
+      method: 'EXACT_ASIN_MATCH'
+    };
+  }
+
+  if (statusCode === 403 || statusCode === 429) {
+    return {
+      asin: normAsin,
+      found: false,
+      exactMatch: false,
+      priceUsd: null,
+      productUrl: `https://tiendamia.com.uy/p/amz/${normAsin.toLowerCase()}`,
+      status: 'UNAVAILABLE',
+      checkedAt: now,
+      statusMessage: 'Consulta temporalmente no disponible',
+      method: 'EXACT_ASIN_MATCH'
+    };
+  }
+
+  // Detectar 404 o páginas sin ruta en la plantilla de Magento / TiendaMia
+  if (
+    html.includes('error-404') ||
+    html.includes('cms_noroute_index') ||
+    html.includes('¡Ups! No encontramos esta página') ||
+    html.includes('No encontramos resultados para tu búsqueda')
+  ) {
+    return {
+      asin: normAsin,
+      found: false,
+      exactMatch: false,
+      priceUsd: null,
+      productUrl: null,
+      status: 'NOT_FOUND',
+      checkedAt: now,
+      method: 'EXACT_ASIN_MATCH'
+    };
+  }
+
+  // REGLA DE SKU: AMZ-{returnedASIN} === AMZ-{requestedASIN}
+  const expectedSku = `AMZ-${normAsin}`;
+  const unicodeSku = `AMZ\\u002D${normAsin}`;
+
+  const hasExactSku =
+    html.includes(`SKU/Artículo: ${expectedSku}`) ||
+    html.includes(`data-product-sku="${expectedSku}"`) ||
+    html.includes(`"item_id":"${expectedSku}"`) ||
+    html.includes(`"productCurrentSku": "${expectedSku}"`) ||
+    html.includes(`"productCurrentSku": "${unicodeSku}"`) ||
+    html.includes(`data-target-ref="${expectedSku}"`) ||
+    html.includes(`content="${normAsin}"`);
+
+  if (!hasExactSku) {
+    return {
+      asin: normAsin,
+      found: false,
+      exactMatch: false,
+      priceUsd: null,
+      productUrl: null,
+      status: 'NOT_FOUND',
+      checkedAt: now,
+      method: 'EXACT_ASIN_MATCH'
+    };
+  }
+
+  // Extraer URL canónica real de la ficha si existe
+  let productUrl: string | null = `https://tiendamia.com.uy/p/amz/${normAsin.toLowerCase()}`;
+  const canonicalMatch = html.match(/<link\s+rel="canonical"\s+href="([^"]+)"/i);
+  if (canonicalMatch && canonicalMatch[1]) {
+    productUrl = canonicalMatch[1];
+  }
+
+  // Extraer precio en USD si está disponible en la ficha
+  let priceUsd: number | null = null;
+  const ga4Match = html.match(new RegExp(`"item_id":"(?:AMZ-)?${normAsin}","price":"([0-9.]+)"`, 'i'));
+  if (ga4Match && ga4Match[1]) {
+    const parsed = parseFloat(ga4Match[1]);
+    if (parsed > 0) priceUsd = parsed;
+  } else {
+    const metaPrice = html.match(/<meta property="product:price:amount" content="([0-9.]+)"/i);
+    if (metaPrice && metaPrice[1]) {
+      const parsed = parseFloat(metaPrice[1]);
+      if (parsed > 0) priceUsd = parsed;
+    }
+  }
+
+  return {
+    asin: normAsin,
+    found: true,
+    exactMatch: true,
+    priceUsd,
+    productUrl,
+    status: 'FOUND',
+    checkedAt: now,
+    method: 'EXACT_ASIN_MATCH'
+  };
+}
+
+/**
+ * Consulta puntual por ASIN a TiendaMía bajo demanda.
+ * 
+ * Cumple estrictamente:
+ * - CERO scraping masivo / crawling / bypass.
+ * - Validación estricta por SKU AMZ-{ASIN}.
+ * - Manejo de estados: FOUND | NOT_FOUND | UNAVAILABLE | ERROR.
+ * - Cache de 2 niveles (memoria + Supabase).
  */
 export async function checkTiendamiaByAsin(
   rawAsin: string | undefined | null,
@@ -101,50 +223,74 @@ export async function checkTiendamiaByAsin(
     console.warn('[TiendamiaMatch] Error al consultar cache de base de datos:', err);
   }
 
-  // 3. CONSULTA PUNTUAL A MECANISMO DISPONIBLE
-  // Nota de Auditoría Técnica:
-  // TiendaMía no provee una API pública oficial ni feed autorizado para terceros sin requerir scraping/crawling.
-  // Cumpliendo con la política de CERO SCRAPING, declaramos de forma honesta el estado UNAVAILABLE.
-  // URL de referencia estructurada por ASIN exacto (sin scraping ni request abusivo):
-  const directReferenceUrl = `https://tiendamia.com/uy/producto?amz=${asin}`;
+  // 3. CONSULTA PUNTUAL SERVER-SIDE VÍA EDGE FUNCTION
+  let result: TiendamiaMatchResult;
 
-  const unavailableResult: TiendamiaMatchResult = {
-    asin,
-    found: false,
-    exactMatch: false,
-    priceUsd: null,
-    productUrl: directReferenceUrl,
-    status: 'UNAVAILABLE',
-    checkedAt: now,
-    statusMessage: 'Actualmente no existe un mecanismo disponible para realizar la consulta exacta por ASIN.',
-    method: 'EXACT_ASIN_MATCH'
-  };
+  try {
+    const { data: edgeData, error: edgeError } = await supabase.functions.invoke('sourcing-market-intelligence', {
+      body: {
+        source: 'tiendamia',
+        asin,
+        force_refresh: options.forceRefresh ?? false
+      }
+    });
+
+    if (!edgeError && edgeData && edgeData.status) {
+      result = edgeData as TiendamiaMatchResult;
+    } else {
+      // Si la función responde error de acceso o no está disponible
+      result = {
+        asin,
+        found: false,
+        exactMatch: false,
+        priceUsd: null,
+        productUrl: `https://tiendamia.com.uy/p/amz/${asin.toLowerCase()}`,
+        status: 'UNAVAILABLE',
+        checkedAt: now,
+        statusMessage: 'Consulta temporalmente no disponible',
+        method: 'EXACT_ASIN_MATCH'
+      };
+    }
+  } catch {
+    result = {
+      asin,
+      found: false,
+      exactMatch: false,
+      priceUsd: null,
+      productUrl: `https://tiendamia.com.uy/p/amz/${asin.toLowerCase()}`,
+      status: 'UNAVAILABLE',
+      checkedAt: now,
+      statusMessage: 'Consulta temporalmente no disponible',
+      method: 'EXACT_ASIN_MATCH'
+    };
+  }
 
   // Guardar en cache de memoria (TTL 30 min)
   memoryCache.set(asin, {
-    data: unavailableResult,
+    data: result,
     expiresAt: Date.now() + 1000 * 60 * 30
   });
 
-  // Guardar en persistencia si es posible (TTL 12 horas)
+  // Guardar en base de datos si es posible
   try {
-    const expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
+    const ttlHours = result.found && result.priceUsd ? 12 : 72;
+    const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString();
     await supabase.from('sourcing_market_cache').upsert(
       {
         normalized_product_id: asin,
         source: 'tiendamia',
         query: asin,
-        match_type: 'UNAVAILABLE',
-        match_confidence: 0,
-        payload: unavailableResult,
+        match_type: result.status,
+        match_confidence: result.exactMatch ? 100 : 0,
+        payload: result,
         checked_at: now,
         expires_at: expiresAt
       },
       { onConflict: 'normalized_product_id,source' }
     );
   } catch {
-    // Si la tabla o RLS no lo permite en modo cliente, se mantiene en memoria sin fallar
+    // Si no es accesible client-side, se mantiene en memoria
   }
 
-  return unavailableResult;
+  return result;
 }

@@ -1404,50 +1404,89 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
                     {tiendamiaResult.status === 'FOUND' && (
                       <div className="space-y-2">
                         <div className="text-emerald-700 font-bold flex items-center gap-1">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                          <span>✓ Mismo ASIN encontrado ({tiendamiaResult.asin})</span>
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>✓ ASIN exacto ({tiendamiaResult.asin})</span>
                         </div>
 
                         {tiendamiaResult.priceUsd !== null ? (
                           (() => {
                             const fin = getItemFinancials(detailItem);
                             const diff = fin.finalPrice - tiendamiaResult.priceUsd;
+                            const diffPercent = tiendamiaResult.priceUsd > 0
+                              ? Math.abs((diff / tiendamiaResult.priceUsd) * 100).toFixed(1)
+                              : '0.0';
+                            const isCheaper = diff < 0;
+                            const isSame = Math.abs(diff) < 0.01;
+
                             return (
-                              <div className="grid grid-cols-3 gap-2 bg-white p-2.5 rounded-xl border border-slate-200 font-mono text-center">
-                                <div>
-                                  <div className="text-[10px] text-gray-500 font-sans">TiendaMía</div>
-                                  <div className="font-bold text-gray-900">USD {tiendamiaResult.priceUsd.toFixed(2)}</div>
-                                </div>
-                                <div>
-                                  <div className="text-[10px] text-gray-500 font-sans">Collectibles</div>
-                                  <div className="font-bold text-gray-900">USD {fin.finalPrice.toFixed(2)}</div>
-                                </div>
-                                <div>
-                                  <div className="text-[10px] text-gray-500 font-sans">Diferencia</div>
-                                  <div className={`font-bold ${diff <= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                    {diff <= 0 ? `-USD ${Math.abs(diff).toFixed(2)}` : `+USD ${diff.toFixed(2)}`}
+                              <div className="space-y-2">
+                                <div className="grid grid-cols-3 gap-2 bg-white p-2.5 rounded-xl border border-slate-200 font-mono text-center">
+                                  <div>
+                                    <div className="text-[10px] text-gray-500 font-sans">TiendaMía</div>
+                                    <div className="font-bold text-gray-900">USD {tiendamiaResult.priceUsd.toFixed(2)}</div>
                                   </div>
+                                  <div>
+                                    <div className="text-[10px] text-gray-500 font-sans">Collectibles</div>
+                                    <div className="font-bold text-gray-900">USD {fin.finalPrice.toFixed(2)}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-[10px] text-gray-500 font-sans">Diferencia</div>
+                                    <div className={`font-bold ${isCheaper ? 'text-emerald-600' : isSame ? 'text-gray-700' : 'text-rose-600'}`}>
+                                      {isCheaper ? `-USD ${Math.abs(diff).toFixed(2)}` : `+USD ${diff.toFixed(2)}`}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="text-[11px] font-semibold flex items-center justify-between px-1">
+                                  <span className={isCheaper ? 'text-emerald-700' : isSame ? 'text-gray-600' : 'text-amber-700'}>
+                                    {isSame
+                                      ? 'Mismo precio de mercado'
+                                      : `${diffPercent}% ${isCheaper ? 'más barato en Collectibles' : 'más caro en Collectibles'}`}
+                                  </span>
+                                  {tiendamiaResult.productUrl && (
+                                    <a
+                                      href={tiendamiaResult.productUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex items-center gap-1 text-[#f00856] font-bold hover:underline"
+                                    >
+                                      <span>Ver producto</span>
+                                      <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  )}
                                 </div>
                               </div>
                             );
                           })()
                         ) : (
-                          <div className="text-gray-500 italic text-[11px]">
-                            ✓ Producto encontrado · Precio TiendaMía no disponible
+                          <div className="flex items-center justify-between">
+                            <div className="text-gray-500 italic text-[11px]">
+                              ✓ Producto encontrado · Precio TiendaMía no disponible
+                            </div>
+                            {tiendamiaResult.productUrl && (
+                              <a
+                                href={tiendamiaResult.productUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-[#f00856] font-bold hover:underline text-[11px]"
+                              >
+                                <span>Ver producto</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            )}
                           </div>
                         )}
                       </div>
                     )}
 
                     {tiendamiaResult.status === 'NOT_FOUND' && (
-                      <div className="text-gray-500 text-[11px]">
-                        No encontrado en TiendaMía para el ASIN <span className="font-mono">{tiendamiaResult.asin}</span>.
+                      <div className="text-gray-500 text-[11px] bg-slate-100 p-2.5 rounded-xl border border-slate-200">
+                        Producto no encontrado para este ASIN (<span className="font-mono font-bold">{tiendamiaResult.asin}</span>).
                       </div>
                     )}
 
                     {tiendamiaResult.status === 'UNAVAILABLE' && (
                       <div className="text-slate-600 text-[11px] bg-slate-100/80 p-2.5 rounded-xl border border-slate-200 space-y-1">
-                        <div className="font-semibold text-slate-800">Consulta TiendaMía no disponible</div>
+                        <div className="font-semibold text-slate-800">Consulta temporalmente no disponible</div>
                         <div className="text-slate-500">
                           {tiendamiaResult.statusMessage || 'Actualmente no existe un mecanismo disponible para realizar la consulta exacta por ASIN.'}
                         </div>
@@ -1455,27 +1494,14 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
                     )}
 
                     {tiendamiaResult.status === 'ERROR' && (
-                      <div className="text-rose-600 text-[11px]">
-                        Error de comunicación al consultar TiendaMía.
+                      <div className="text-rose-600 text-[11px] bg-rose-50 p-2.5 rounded-xl border border-rose-200">
+                        Error al verificar TiendaMía.
                       </div>
                     )}
 
-                    {tiendamiaResult.productUrl && (
-                      <div className="pt-1 flex items-center justify-between">
-                        <a
-                          href={tiendamiaResult.productUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900 text-[11px] font-semibold hover:underline"
-                        >
-                          <span>Enlace de referencia directa por ASIN</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                        {tiendamiaResult.checkedAt && (
-                          <span className="text-[10px] text-gray-400">
-                            Verificado: {new Date(tiendamiaResult.checkedAt).toLocaleTimeString()}
-                          </span>
-                        )}
+                    {tiendamiaResult.checkedAt && (
+                      <div className="text-[10px] text-gray-400 text-right pt-0.5">
+                        Verificado: {new Date(tiendamiaResult.checkedAt).toLocaleTimeString()}
                       </div>
                     )}
                   </div>
