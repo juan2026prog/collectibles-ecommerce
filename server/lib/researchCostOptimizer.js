@@ -17,7 +17,9 @@ export const RESEARCH_MODES = Object.freeze({
     maxCandidates: 5,
     maxOutputTokens: 400,
     searchDepth: 'QUICK',
-    expectedWebInputTokens: 2500,
+    expectedWebInputTokensMin: 6500,
+    expectedWebInputTokensMax: 9000,
+    expectedWebInputTokens: 7800,
     timeoutMs: 35000,
     webSearchToolCostUsd: 0.005,
     targetCostMaxUsd: 0.01
@@ -30,10 +32,12 @@ export const RESEARCH_MODES = Object.freeze({
     maxCandidates: 8,
     maxOutputTokens: 750,
     searchDepth: 'STANDARD',
-    expectedWebInputTokens: 5500,
+    expectedWebInputTokensMin: 12000,
+    expectedWebInputTokensMax: 18000,
+    expectedWebInputTokens: 15000,
     timeoutMs: 45000,
     webSearchToolCostUsd: 0.008,
-    targetCostMaxUsd: 0.025
+    targetCostMaxUsd: 0.05
   },
   PROFUNDO: {
     key: 'PROFUNDO',
@@ -43,10 +47,12 @@ export const RESEARCH_MODES = Object.freeze({
     maxCandidates: 15,
     maxOutputTokens: 1200,
     searchDepth: 'DEEP',
-    expectedWebInputTokens: 12000,
+    expectedWebInputTokensMin: 20000,
+    expectedWebInputTokensMax: 35000,
+    expectedWebInputTokens: 28000,
     timeoutMs: 60000,
     webSearchToolCostUsd: 0.015,
-    targetCostMaxUsd: 0.08
+    targetCostMaxUsd: 0.10
   }
 });
 
@@ -145,8 +151,14 @@ export function calculatePreFlightEstimate({
   const basePromptTokens = estimateTokensLocally(prompt);
 
   // Web search tool brings extra document tokens depending on research depth
-  const expectedWebTokens = isWebSearch ? mode.expectedWebInputTokens : 0;
-  const estimatedInputTokens = basePromptTokens + expectedWebTokens;
+  const minWebTokens = isWebSearch ? (mode.expectedWebInputTokensMin || mode.expectedWebInputTokens) : 0;
+  const maxWebTokens = isWebSearch ? (mode.expectedWebInputTokensMax || mode.expectedWebInputTokens) : 0;
+  const avgWebTokens = isWebSearch ? mode.expectedWebInputTokens : 0;
+
+  const estimatedInputTokensMin = basePromptTokens + minWebTokens;
+  const estimatedInputTokensMax = basePromptTokens + maxWebTokens;
+  const estimatedInputTokensAvg = basePromptTokens + avgWebTokens;
+
   const maxOutputTokens = mode.maxOutputTokens;
   const expectedMinOutputTokens = Math.max(150, Math.floor(maxOutputTokens * 0.45));
   const expectedAvgOutputTokens = Math.floor(maxOutputTokens * 0.8);
@@ -156,17 +168,20 @@ export function calculatePreFlightEstimate({
   const outputRate = rates?.outputPer1M || 0.60;
 
   // Base token costs
-  const inputCostUsd = (estimatedInputTokens / 1_000_000) * inputRate;
+  const minInputCostUsd = (estimatedInputTokensMin / 1_000_000) * inputRate;
+  const maxInputCostUsd = (estimatedInputTokensMax / 1_000_000) * inputRate;
+  const avgInputCostUsd = (estimatedInputTokensAvg / 1_000_000) * inputRate;
+
   const minOutputCostUsd = (expectedMinOutputTokens / 1_000_000) * outputRate;
   const maxOutputCostUsd = (maxOutputTokens / 1_000_000) * outputRate;
   const avgOutputCostUsd = (expectedAvgOutputTokens / 1_000_000) * outputRate;
 
   // Total ranges
-  const minTotalUsd = Number((inputCostUsd + minOutputCostUsd).toFixed(5));
-  const maxTotalUsd = Number((inputCostUsd + maxOutputCostUsd).toFixed(5));
-  const avgTotalUsd = Number((inputCostUsd + avgOutputCostUsd).toFixed(5));
+  const minTotalUsd = Number((minInputCostUsd + minOutputCostUsd).toFixed(5));
+  const maxTotalUsd = Number((maxInputCostUsd + maxOutputCostUsd).toFixed(5));
+  const avgTotalUsd = Number((avgInputCostUsd + avgOutputCostUsd).toFixed(5));
 
-  const isCacheHit = Boolean(cacheInfo && cacheInfo.status === 'HIT');
+  const isCacheHit = Boolean(cacheInfo && (cacheInfo.status === 'HIT' || cacheInfo.status === 'HIT_DISCOVERIES'));
   const requiresConfirmation = !isCacheHit && maxTotalUsd > COST_THRESHOLDS.CONFIRMATION_WARNING_USD;
   const isHardLimit = !isCacheHit && maxTotalUsd > COST_THRESHOLDS.HARD_LIMIT_USD;
 
@@ -175,7 +190,7 @@ export function calculatePreFlightEstimate({
   if (mode.key !== 'ECONOMICO' && !isCacheHit) {
     const ecoMode = RESEARCH_MODES.ECONOMICO;
     const ecoRates = getModelPricingRates(ecoMode.model);
-    const ecoInputTokens = basePromptTokens + ecoMode.expectedWebInputTokens;
+    const ecoInputTokens = basePromptTokens + ecoMode.expectedWebInputTokensMax;
     const ecoInputCost = (ecoInputTokens / 1_000_000) * (ecoRates?.inputPer1M || 0.15);
     const ecoOutputCost = (ecoMode.maxOutputTokens / 1_000_000) * (ecoRates?.outputPer1M || 0.60);
     const ecoMaxTotal = Number((ecoInputCost + ecoOutputCost).toFixed(5));
@@ -193,9 +208,11 @@ export function calculatePreFlightEstimate({
     research_depth: mode.key,
     research_depth_label: mode.label,
     max_candidates: mode.maxCandidates,
-    estimated_input_tokens: estimatedInputTokens,
+    estimated_input_tokens: estimatedInputTokensAvg,
+    estimated_input_tokens_min: estimatedInputTokensMin,
+    estimated_input_tokens_max: estimatedInputTokensMax,
     max_output_tokens: maxOutputTokens,
-    estimated_input_cost_usd: Number(inputCostUsd.toFixed(6)),
+    estimated_input_cost_usd: Number(avgInputCostUsd.toFixed(6)),
     estimated_output_cost_usd: Number(avgOutputCostUsd.toFixed(6)),
     estimated_total_min_usd: isCacheHit ? 0 : minTotalUsd,
     estimated_total_max_usd: isCacheHit ? 0 : maxTotalUsd,

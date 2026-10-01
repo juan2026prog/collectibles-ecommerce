@@ -224,9 +224,9 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
           <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-gray-200 text-xs font-bold">
             <span className="text-[11px] text-gray-500 font-extrabold uppercase px-2">Modo:</span>
             {[
-              { id: 'ECONOMICO', label: '⚡ Económico', desc: 'gpt-4o-mini · ~$0.005' },
-              { id: 'ESTANDAR', label: '🔎 Estándar', desc: 'gpt-5.6-terra · ~$0.016' },
-              { id: 'PROFUNDO', label: '🧠 Profundo', desc: 'gpt-5.6-terra max · ~$0.05' }
+              { id: 'ECONOMICO', label: '⚡ Económico', desc: 'gpt-4o-mini · ~$0.001 - $0.002' },
+              { id: 'ESTANDAR', label: '🔎 Estándar', desc: 'gpt-5.6-terra · ~$0.02 - $0.05' },
+              { id: 'PROFUNDO', label: '🧠 Profundo', desc: 'gpt-5.6-terra max · ~$0.05 - $0.09' }
             ].map(m => (
               <button
                 key={m.id}

@@ -78,7 +78,7 @@ describe('RESEARCH COST OPTIMIZER & PRE-FLIGHT ESTIMATOR (ZERO OPENAI COST)', ()
     expect(est.openai_calls_used).toBe(0);
   });
 
-  it('5. Pre-flight estimate for ESTANDAR is within USD 0.01 - 0.025 and suggests cheaper alternative', () => {
+  it('5. Pre-flight estimate for ESTANDAR is within USD 0.02 - 0.055 and suggests cheaper alternative', () => {
     const est = calculatePreFlightEstimate({
       query: 'productos de pokemon',
       country: 'UY',
@@ -88,7 +88,7 @@ describe('RESEARCH COST OPTIMIZER & PRE-FLIGHT ESTIMATOR (ZERO OPENAI COST)', ()
 
     expect(est.model).toBe('gpt-5.6-terra');
     expect(est.research_depth).toBe('ESTANDAR');
-    expect(est.estimated_total_max_usd).toBeLessThanOrEqual(0.03);
+    expect(est.estimated_total_max_usd).toBeLessThanOrEqual(0.055);
     expect(est.cheaper_alternative).toBeDefined();
     expect(est.cheaper_alternative?.mode).toBe('ECONOMICO');
     expect(est.cheaper_alternative?.savings_percent).toBeGreaterThan(60);
