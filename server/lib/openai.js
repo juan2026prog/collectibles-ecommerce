@@ -214,8 +214,14 @@ export async function callOpenAIResponses(options = {}) {
       }
     }
 
-    if (metadata) {
-      requestBody.metadata = metadata;
+    if (metadata && typeof metadata === 'object') {
+      const sanitizedMeta = {};
+      for (const [k, v] of Object.entries(metadata)) {
+        if (v !== undefined && v !== null) {
+          sanitizedMeta[String(k)] = typeof v === 'string' ? v : String(v);
+        }
+      }
+      requestBody.metadata = sanitizedMeta;
     }
 
     const response = await fetch(OPENAI_RESPONSES_URL, {
