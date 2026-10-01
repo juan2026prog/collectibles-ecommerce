@@ -11,6 +11,7 @@ import { ProductImage } from '../../common/ProductImage';
 import { extractCandidateImages } from '../../../lib/imageUtils';
 import { calculateInternationalPricing } from '../../../lib/internationalPricing';
 import { sanitizeBrand } from '../../../lib/brandUtils';
+import { checkTiendamiaByAsin, type TiendamiaMatchResult } from '../../../services/sourcing/tiendamiaMatchingService';
 
 export interface ImportCandidateItem {
   id: string;
@@ -101,12 +102,53 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
   const [batchMarkup, setBatchMarkup] = useState<number>(pricingSettings?.target_margin_percent ?? 3);
   const [isImporting, setIsImporting] = useState<boolean>(false);
 
+  // TiendaMía exact match state (per active detailItem)
+  const [tiendamiaResult, setTiendamiaResult] = useState<TiendamiaMatchResult | null>(null);
+  const [isCheckingTiendamia, setIsCheckingTiendamia] = useState<boolean>(false);
+
   // Sync initial items when provided
   useEffect(() => {
     if (initialItems) {
       setCandidates(initialItems);
     }
   }, [initialItems]);
+
+  // Consulta puntual a TiendaMía cuando se abre el modal de detalle del producto
+  useEffect(() => {
+    if (!detailItem?.external_product_id) {
+      setTiendamiaResult(null);
+      return;
+    }
+    let isMounted = true;
+    setIsCheckingTiendamia(true);
+    checkTiendamiaByAsin(detailItem.external_product_id)
+      .then((res) => {
+        if (isMounted) {
+          setTiendamiaResult(res);
+          setIsCheckingTiendamia(false);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setTiendamiaResult({
+            asin: String(detailItem.external_product_id),
+            found: false,
+            exactMatch: false,
+            priceUsd: null,
+            productUrl: null,
+            status: 'ERROR',
+            checkedAt: new Date().toISOString(),
+            statusMessage: 'Error al consultar TiendaMía',
+            method: 'EXACT_ASIN_MATCH'
+          });
+          setIsCheckingTiendamia(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [detailItem?.external_product_id]);
 
   // Sync searchQuery prop changes with searchTerm
   useEffect(() => {
@@ -1313,15 +1355,131 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
                 );
               })()}
 
-              {/* SECCIÓN TIENDAMÍA READY */}
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between text-xs">
-                <div>
-                  <div className="font-bold text-gray-900">Comparativa TiendaMía</div>
-                  <div className="text-[11px] text-gray-500">Verificación de competitividad de mercado</div>
+              {/* SECCIÓN TIENDAMÍA EXACT ASIN COMPARISON */}
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-bold text-gray-900 flex items-center gap-1.5">
+                      <span>Comparativa TiendaMía</span>
+                      {isCheckingTiendamia && <RefreshCw className="w-3.5 h-3.5 animate-spin text-gray-400" />}
+                    </div>
+                    <div className="text-[11px] text-gray-500">
+                      Match exclusivo por ASIN: <span className="font-mono font-bold text-gray-700">{detailItem.external_product_id || 'N/A'}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    {isCheckingTiendamia ? (
+                      <span className="px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-200 font-bold rounded-lg text-[11px] flex items-center gap-1">
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                        Consultando...
+                      </span>
+                    ) : tiendamiaResult?.status === 'FOUND' ? (
+                      <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold rounded-lg text-[11px]">
+                        ENCONTRADO
+                      </span>
+                    ) : tiendamiaResult?.status === 'NOT_FOUND' ? (
+                      <span className="px-2.5 py-1 bg-gray-100 text-gray-700 border border-gray-300 font-bold rounded-lg text-[11px]">
+                        NO ENCONTRADO
+                      </span>
+                    ) : tiendamiaResult?.status === 'UNAVAILABLE' ? (
+                      <span className="px-2.5 py-1 bg-slate-200 text-slate-700 border border-slate-300 font-bold rounded-lg text-[11px]">
+                        SERVICIO NO DISPONIBLE
+                      </span>
+                    ) : tiendamiaResult?.status === 'ERROR' ? (
+                      <span className="px-2.5 py-1 bg-rose-100 text-rose-800 border border-rose-300 font-bold rounded-lg text-[11px]">
+                        ERROR
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 bg-gray-100 text-gray-600 border border-gray-300 font-bold rounded-lg text-[11px]">
+                        NO CONSULTADO
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <span className="px-2.5 py-1 bg-gray-200 text-gray-700 font-bold rounded-lg text-[11px]">
-                  TiendaMía: N/D
-                </span>
+
+                {/* Detalles de la comparativa */}
+                {!isCheckingTiendamia && tiendamiaResult && (
+                  <div className="pt-2 border-t border-slate-200 space-y-2">
+                    {tiendamiaResult.status === 'FOUND' && (
+                      <div className="space-y-2">
+                        <div className="text-emerald-700 font-bold flex items-center gap-1">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          <span>✓ Mismo ASIN encontrado ({tiendamiaResult.asin})</span>
+                        </div>
+
+                        {tiendamiaResult.priceUsd !== null ? (
+                          (() => {
+                            const fin = getItemFinancials(detailItem);
+                            const diff = fin.finalPrice - tiendamiaResult.priceUsd;
+                            return (
+                              <div className="grid grid-cols-3 gap-2 bg-white p-2.5 rounded-xl border border-slate-200 font-mono text-center">
+                                <div>
+                                  <div className="text-[10px] text-gray-500 font-sans">TiendaMía</div>
+                                  <div className="font-bold text-gray-900">USD {tiendamiaResult.priceUsd.toFixed(2)}</div>
+                                </div>
+                                <div>
+                                  <div className="text-[10px] text-gray-500 font-sans">Collectibles</div>
+                                  <div className="font-bold text-gray-900">USD {fin.finalPrice.toFixed(2)}</div>
+                                </div>
+                                <div>
+                                  <div className="text-[10px] text-gray-500 font-sans">Diferencia</div>
+                                  <div className={`font-bold ${diff <= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                    {diff <= 0 ? `-USD ${Math.abs(diff).toFixed(2)}` : `+USD ${diff.toFixed(2)}`}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()
+                        ) : (
+                          <div className="text-gray-500 italic text-[11px]">
+                            ✓ Producto encontrado · Precio TiendaMía no disponible
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {tiendamiaResult.status === 'NOT_FOUND' && (
+                      <div className="text-gray-500 text-[11px]">
+                        No encontrado en TiendaMía para el ASIN <span className="font-mono">{tiendamiaResult.asin}</span>.
+                      </div>
+                    )}
+
+                    {tiendamiaResult.status === 'UNAVAILABLE' && (
+                      <div className="text-slate-600 text-[11px] bg-slate-100/80 p-2.5 rounded-xl border border-slate-200 space-y-1">
+                        <div className="font-semibold text-slate-800">Consulta TiendaMía no disponible</div>
+                        <div className="text-slate-500">
+                          {tiendamiaResult.statusMessage || 'Actualmente no existe un mecanismo disponible para realizar la consulta exacta por ASIN.'}
+                        </div>
+                      </div>
+                    )}
+
+                    {tiendamiaResult.status === 'ERROR' && (
+                      <div className="text-rose-600 text-[11px]">
+                        Error de comunicación al consultar TiendaMía.
+                      </div>
+                    )}
+
+                    {tiendamiaResult.productUrl && (
+                      <div className="pt-1 flex items-center justify-between">
+                        <a
+                          href={tiendamiaResult.productUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-slate-600 hover:text-slate-900 text-[11px] font-semibold hover:underline"
+                        >
+                          <span>Enlace de referencia directa por ASIN</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                        {tiendamiaResult.checkedAt && (
+                          <span className="text-[10px] text-gray-400">
+                            Verificado: {new Date(tiendamiaResult.checkedAt).toLocaleTimeString()}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* SECCIÓN SOURCING */}
