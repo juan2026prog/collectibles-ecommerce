@@ -12,6 +12,14 @@
       "schedule": "0 */4 * * *"
     }
   ],
+  "functions": {
+    "api/ai-execute.js": {
+      "maxDuration": 60
+    },
+    "api/sourcing-discovery.js": {
+      "maxDuration": 60
+    }
+  },
 
   "headers": [
     {

@@ -167,9 +167,8 @@ export default async function handler(req, res) {
     if (watchlistQueries.length > 0) {
       targetQueries.push(watchlistQueries[0]);
     } else {
-      targetQueries.push('McFarlane DC Multiverse figures');
+      targetQueries.push('latest McFarlane Toys figures preorders 2026');
     }
-    targetQueries.push('latest action figures collectibles preorders 2026');
 
     // 4.3 Execute Web Research with OpenAI Responses API
     const isLocalTest = process.env.NODE_ENV === 'test' && !process.env.OPENAI_API_KEY;
