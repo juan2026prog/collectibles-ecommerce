@@ -416,15 +416,6 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
     return sortedCandidates.slice(start, start + effectivePageSize);
   }, [sortedCandidates, validPage, effectivePageSize]);
 
-  // Auto-fetch TiendaMía for visible candidates on the current page
-  useEffect(() => {
-    paginatedCandidates.forEach(item => {
-      if (item.external_product_id) {
-        fetchTiendamiaForAsin(item.external_product_id);
-      }
-    });
-  }, [paginatedCandidates, fetchTiendamiaForAsin]);
-
   // Header Counters
   const totalFound = candidates.length;
   const totalImported = candidates.filter(c => existingCatalogAsins.has(String(c.external_product_id || '').toUpperCase()) || c.already_imported || c.status === 'imported').length;

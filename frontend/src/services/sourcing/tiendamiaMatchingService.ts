@@ -21,6 +21,8 @@ export interface TiendamiaMatchResult {
 
 // In-memory session cache to avoid repeating lookups during the same session
 const memoryCache = new Map<string, { data: TiendamiaMatchResult; expiresAt: number }>();
+let isDbCacheAvailable = true;
+let isEdgeFunctionAvailable = true;
 
 /**
  * Normaliza un ASIN eliminando espacios en blanco y convirtiendo a mayúsculas.
@@ -86,7 +88,6 @@ export function parseTiendamiaHtmlResponse(
     };
   }
 
-  // Detectar 404 o páginas sin ruta en la plantilla de Magento / TiendaMia
   if (
     html.includes('error-404') ||
     html.includes('cms_noroute_index') ||
@@ -170,8 +171,8 @@ export function parseTiendamiaHtmlResponse(
  * Cumple estrictamente:
  * - CERO scraping masivo / crawling / bypass.
  * - Validación estricta por SKU AMZ-{ASIN}.
- * - Manejo de estados: FOUND | NOT_FOUND | UNAVAILABLE | ERROR.
- * - Cache de 2 niveles (memoria + Supabase).
+ * - Manejo seguro y silencioso de estados sin desbordar consola.
+ * - Cache en memoria (TTL 30 min).
  */
 export async function checkTiendamiaByAsin(
   rawAsin: string | undefined | null,
@@ -200,10 +201,10 @@ export async function checkTiendamiaByAsin(
     return cachedMem.data;
   }
 
-  // 2. CHEQUEO EN SUPABASE (sourcing_market_cache)
-  try {
-    if (!options.forceRefresh) {
-      const { data: cachedDb } = await supabase
+  // 2. CHEQUEO EN SUPABASE (sourcing_market_cache) solo si la tabla está disponible
+  if (isDbCacheAvailable && !options.forceRefresh) {
+    try {
+      const { data: cachedDb, error: dbError } = await supabase
         .from('sourcing_market_cache')
         .select('*')
         .eq('normalized_product_id', asin)
@@ -213,32 +214,50 @@ export async function checkTiendamiaByAsin(
         .limit(1)
         .maybeSingle();
 
-      if (cachedDb && cachedDb.payload) {
+      if (dbError) {
+        // Desactivar futuras llamadas para no generar 404s en consola
+        isDbCacheAvailable = false;
+      } else if (cachedDb && cachedDb.payload) {
         const result = cachedDb.payload as TiendamiaMatchResult;
         memoryCache.set(asin, { data: result, expiresAt: Date.now() + 1000 * 60 * 30 });
         return result;
       }
+    } catch {
+      isDbCacheAvailable = false;
     }
-  } catch (err) {
-    console.warn('[TiendamiaMatch] Error al consultar cache de base de datos:', err);
   }
 
-  // 3. CONSULTA PUNTUAL SERVER-SIDE VÍA EDGE FUNCTION
+  // 3. CONSULTA PUNTUAL SERVER-SIDE VÍA EDGE FUNCTION (si está disponible)
   let result: TiendamiaMatchResult;
 
-  try {
-    const { data: edgeData, error: edgeError } = await supabase.functions.invoke('sourcing-market-intelligence', {
-      body: {
-        source: 'tiendamia',
-        asin,
-        force_refresh: options.forceRefresh ?? false
-      }
-    });
+  if (isEdgeFunctionAvailable) {
+    try {
+      const { data: edgeData, error: edgeError } = await supabase.functions.invoke('sourcing-market-intelligence', {
+        body: {
+          source: 'tiendamia',
+          asin,
+          force_refresh: options.forceRefresh ?? false
+        }
+      });
 
-    if (!edgeError && edgeData && edgeData.status) {
-      result = edgeData as TiendamiaMatchResult;
-    } else {
-      // Si la función responde error de acceso o no está disponible
+      if (!edgeError && edgeData && edgeData.status) {
+        result = edgeData as TiendamiaMatchResult;
+      } else {
+        isEdgeFunctionAvailable = false;
+        result = {
+          asin,
+          found: false,
+          exactMatch: false,
+          priceUsd: null,
+          productUrl: `https://tiendamia.com.uy/p/amz/${asin.toLowerCase()}`,
+          status: 'UNAVAILABLE',
+          checkedAt: now,
+          statusMessage: 'Consulta temporalmente no disponible',
+          method: 'EXACT_ASIN_MATCH'
+        };
+      }
+    } catch {
+      isEdgeFunctionAvailable = false;
       result = {
         asin,
         found: false,
@@ -251,7 +270,7 @@ export async function checkTiendamiaByAsin(
         method: 'EXACT_ASIN_MATCH'
       };
     }
-  } catch {
+  } else {
     result = {
       asin,
       found: false,
@@ -270,27 +289,6 @@ export async function checkTiendamiaByAsin(
     data: result,
     expiresAt: Date.now() + 1000 * 60 * 30
   });
-
-  // Guardar en base de datos si es posible
-  try {
-    const ttlHours = result.found && result.priceUsd ? 12 : 72;
-    const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString();
-    await supabase.from('sourcing_market_cache').upsert(
-      {
-        normalized_product_id: asin,
-        source: 'tiendamia',
-        query: asin,
-        match_type: result.status,
-        match_confidence: result.exactMatch ? 100 : 0,
-        payload: result,
-        checked_at: now,
-        expires_at: expiresAt
-      },
-      { onConflict: 'normalized_product_id,source' }
-    );
-  } catch {
-    // Si no es accesible client-side, se mantiene en memoria
-  }
 
   return result;
 }
