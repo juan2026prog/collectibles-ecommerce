@@ -408,10 +408,10 @@ export default async function handler(req, res) {
       tools,
       toolChoice,
       metadata: {
-        engine,
-        country,
-        operation,
-        has_web_search: isWebSearchNeeded
+        engine: String(engine || ''),
+        country: String(country || 'GLOBAL'),
+        operation: String(operation || 'execute'),
+        has_web_search: isWebSearchNeeded ? 'true' : 'false'
       }
     });
 
