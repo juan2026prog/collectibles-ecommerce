@@ -15,6 +15,7 @@ import {
   calculatePreFlightEstimate 
 } from '../server/lib/researchCostOptimizer.js';
 import { validateRequestedModel } from '../server/lib/openaiPricing.js';
+import { authenticateRequest, acquireInFlightLock } from '../server/lib/authGuard.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_f_7xF86CT0DFwT7YupNh_Q_TzmemHNf';
@@ -126,6 +127,27 @@ export default async function handler(req, res) {
     });
   }
 
+  // 1. Authoritative Authentication & Security Check (Fail-closed)
+  const auth = await authenticateRequest(req, { allowCron: true });
+  if (!auth.authenticated) {
+    return res.status(401).json({
+      success: false,
+      status: 'UNAUTHORIZED',
+      error: auth.message || 'Acceso no autorizado: Se requiere token de sesión Bearer válido.',
+      code: auth.error || 'AUTHENTICATION_REQUIRED'
+    });
+  }
+
+  // Must be at least Admin to trigger AI executions
+  if (!auth.isAdmin) {
+    return res.status(403).json({
+      success: false,
+      status: 'FORBIDDEN',
+      error: 'Acceso denegado: Se requieren permisos de Administrador para ejecutar operaciones de IA.',
+      code: 'ADMIN_REQUIRED'
+    });
+  }
+
   const authHeader = req.headers.authorization || '';
   const client = createClient(SUPABASE_URL, SUPABASE_KEY, {
     global: { headers: authHeader ? { Authorization: authHeader } : {} },
@@ -183,6 +205,17 @@ export default async function handler(req, res) {
 
   const isManualOverride = !modelValidation.isAuto && modelValidation.valid;
   const automaticOrManual = isManualOverride ? 'MANUAL' : 'AUTO';
+
+  // 2. Enforce SUPERADMIN ONLY for Manual Model Override
+  if (isManualOverride && !auth.isSuperAdmin) {
+    return res.status(403).json({
+      success: false,
+      status: 'SUPERADMIN_REQUIRED',
+      error: 'El selector manual de modelos de IA está restringido exclusivamente a Superadmin. Utilice el modo Automático (AUTO).',
+      code: 'SUPERADMIN_REQUIRED',
+      requested_model: effectiveRequestedModel
+    });
+  }
 
   // Default model & tokens derived from modeConfig for cheap-first routing, or manual override
   let selectedModel = isManualOverride 
@@ -372,7 +405,6 @@ export default async function handler(req, res) {
       }
     }
 
-    const isSourcingResearch = engine === 'SOURCING_WEB_RESEARCH' || (operation && /^(sourcing_research|web_research|sourcing_market_research)$/i.test(operation));
     const isStructuredAdvisoryEngine = !isSourcingResearch && ['PRODUCT_DISCOVERY','TREND_ANALYSIS','PRODUCT_CURATION','COUNTRY_INTELLIGENCE','RADAR_INTELLIGENCE','RELEASE_INTELLIGENCE'].includes(engine);
     const evidenceObj = payload?.evidence || {};
     const evidenceFingerprint = generateEvidenceFingerprint(evidenceObj);

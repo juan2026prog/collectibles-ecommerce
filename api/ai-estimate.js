@@ -12,6 +12,7 @@ import {
   normalizeQuery,
   resolveResearchMode
 } from '../server/lib/researchCostOptimizer.js';
+import { authenticateRequest } from '../server/lib/authGuard.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_f_7xF86CT0DFwT7YupNh_Q_TzmemHNf';
@@ -31,6 +32,26 @@ export default async function handler(req, res) {
     return res.status(405).json({
       success: false,
       error: 'Method not allowed. Use POST.'
+    });
+  }
+
+  // 1. Authoritative Authentication & Security Check
+  const auth = await authenticateRequest(req, { allowCron: true });
+  if (!auth.authenticated) {
+    return res.status(401).json({
+      success: false,
+      status: 'UNAUTHORIZED',
+      error: auth.message || 'Acceso no autorizado: Se requiere token de sesión Bearer válido.',
+      code: auth.error || 'AUTHENTICATION_REQUIRED'
+    });
+  }
+
+  if (!auth.isAdmin) {
+    return res.status(403).json({
+      success: false,
+      status: 'FORBIDDEN',
+      error: 'Acceso denegado: Se requieren permisos de Administrador.',
+      code: 'ADMIN_REQUIRED'
     });
   }
 

@@ -9,6 +9,7 @@
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import { callOpenAIResponses } from '../server/lib/openai.js';
+import { authenticateRequest } from '../server/lib/authGuard.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_f_7xF86CT0DFwT7YupNh_Q_TzmemHNf';
@@ -166,61 +167,18 @@ export default async function handler(req, res) {
   const runId = `run_${startTime}_${crypto.randomBytes(4).toString('hex')}`;
   const runUuid = crypto.randomUUID ? crypto.randomUUID() : undefined;
 
-  // 1. Authentication & Security Check
-  const authHeader = req.headers['authorization'] || '';
-  const cronSecretHeader = req.headers['x-cron-secret'] || '';
-  const isVercelCron = req.headers['x-vercel-cron'] === '1' || cronSecretHeader === CRON_SECRET;
-  
-  let isAuthorized = isVercelCron;
-
-  if (!isAuthorized && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.replace('Bearer ', '').trim();
-    try {
-      const { data: { user }, error } = await supabase.auth.getUser(token);
-      if (user && !error) {
-        const jwtRole = user.app_metadata?.role || user.user_metadata?.role;
-        const isSuperAdminEmail = user.email === 'juanmacastillo2008@gmail.com';
-        
-        if (['admin', 'superadmin', 'super_admin', 'god_admin'].includes(jwtRole) || isSuperAdminEmail) {
-          isAuthorized = true;
-        } else {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('role, is_admin')
-            .eq('id', user.id)
-            .maybeSingle();
-            
-          if (profile && (profile.is_admin === true || ['admin', 'superadmin', 'super_admin', 'god_admin'].includes(profile.role))) {
-            isAuthorized = true;
-          } else {
-            const { data: roles } = await supabase
-              .from('user_roles')
-              .select('role')
-              .eq('user_id', user.id);
-            if (roles && roles.some(r => ['admin', 'superadmin', 'super_admin', 'god_admin'].includes(r.role))) {
-              isAuthorized = true;
-            }
-          }
-        }
-      }
-    } catch (authErr) {
-      console.warn('[sourcing-discovery] Auth token verification error:', authErr);
-    }
-  }
-
-  if (process.env.NODE_ENV === 'test') {
-    if (req.headers['x-test-auth'] === 'admin') {
-      isAuthorized = true;
-    }
-  }
-
-  if (!isAuthorized) {
+  // 1. Authoritative Authentication & Security Check
+  const auth = await authenticateRequest(req, { allowCron: true });
+  if (!auth.authenticated || !auth.isAdmin) {
     return res.status(403).json({
       success: false,
       status: 'FORBIDDEN',
-      error: 'Acceso no autorizado al pipeline de Automatic Discovery.'
+      error: 'Acceso no autorizado al pipeline de Automatic Discovery.',
+      code: auth.error || 'FORBIDDEN'
     });
   }
+
+  const isVercelCron = auth.isCron;
 
   // 2. Parse Trigger & Parameters
   const trigger = isVercelCron ? 'CRON' : (req.body?.trigger || req.query?.trigger || 'MANUAL');

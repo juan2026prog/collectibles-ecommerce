@@ -6,6 +6,7 @@ import {
   Bot, ChevronDown
 } from 'lucide-react';
 import { aiGateway } from '../../../services/ai/aiGateway';
+import { useAuth } from '../../../contexts/AuthContext';
 import type { AIPreFlightEstimate, ResearchDepthMode, AIModelCapabilityInfo } from '../../../services/ai/types';
 
 interface SourcingIntelligenceHeaderProps {
@@ -79,6 +80,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
   onSelectQuickFilter,
   lastExecutionTelemetry
 }) => {
+  const { isSuperAdmin } = useAuth();
   const [researchMode, setResearchMode] = useState<ResearchDepthMode>('ECONOMICO');
   const [selectedModel, setSelectedModel] = useState<string>('AUTO');
   const [availableModels, setAvailableModels] = useState<AIModelCapabilityInfo[]>([]);
@@ -270,36 +272,49 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
               ))}
             </div>
 
-            {/* SELECTOR MANUAL DE MODELO DE IA (SUPERADMIN) */}
-            <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-gray-200 text-xs font-bold">
-              <span className="text-[11px] text-gray-500 font-extrabold uppercase px-2 flex items-center gap-1">
-                <Bot className="w-3.5 h-3.5 text-slate-700" />
-                <span>Modelo:</span>
-              </span>
-              <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                className={`bg-white border text-xs font-extrabold rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#f00856] cursor-pointer ${
-                  selectedModel !== 'AUTO' 
-                    ? 'border-pink-500 text-pink-700 bg-pink-50/50' 
-                    : 'border-gray-200 text-slate-800'
-                }`}
-              >
-                <option value="AUTO" className="font-bold">
-                  🤖 Automático (Recomendado)
-                </option>
-                {availableModels.map(m => (
-                  <option 
-                    key={m.id} 
-                    value={m.id} 
-                    disabled={!m.allowed}
-                    className="font-medium"
-                  >
-                    {m.display_name} {m.badge ? `· ${m.badge}` : ''} {!m.allowed ? `(${m.incompatible_reason || 'No compatible'})` : ''}
+            {/* SELECTOR MANUAL DE MODELO DE IA (SUPERADMIN ONLY) */}
+            {isSuperAdmin ? (
+              <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-gray-200 text-xs font-bold">
+                <span className="text-[11px] text-gray-500 font-extrabold uppercase px-2 flex items-center gap-1">
+                  <Bot className="w-3.5 h-3.5 text-slate-700" />
+                  <span>Modelo:</span>
+                </span>
+                <select
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                  className={`bg-white border text-xs font-extrabold rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#f00856] cursor-pointer ${
+                    selectedModel !== 'AUTO' 
+                      ? 'border-pink-500 text-pink-700 bg-pink-50/50' 
+                      : 'border-gray-200 text-slate-800'
+                  }`}
+                  title="Control exclusivo para Superadmin"
+                >
+                  <option value="AUTO" className="font-bold">
+                    🤖 Automático (Recomendado)
                   </option>
-                ))}
-              </select>
-            </div>
+                  {availableModels.map(m => (
+                    <option 
+                      key={m.id} 
+                      value={m.id} 
+                      disabled={!m.allowed}
+                      className="font-medium"
+                    >
+                      {m.display_name} {m.badge ? `· ${m.badge}` : ''} {!m.allowed ? `(${m.incompatible_reason || 'No compatible'})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-gray-200 text-xs font-bold">
+                <span className="text-[11px] text-gray-500 font-extrabold uppercase px-2 flex items-center gap-1">
+                  <Bot className="w-3.5 h-3.5 text-slate-700" />
+                  <span>Modelo:</span>
+                </span>
+                <span className="bg-white border border-gray-200 text-xs font-bold text-slate-700 rounded-xl px-3 py-1.5 flex items-center gap-1">
+                  🤖 Automático
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
