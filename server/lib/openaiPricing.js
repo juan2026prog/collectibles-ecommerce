@@ -93,7 +93,24 @@ export function getModelPricingRates(model) {
     }
   }
 
-  const defaultRates = DEFAULT_MODEL_PRICING[model.toLowerCase()];
+  const lowerModel = model.toLowerCase();
+  let defaultRates = DEFAULT_MODEL_PRICING[lowerModel];
+
+  // If specific dated snapshot model returned by OpenAI (e.g. gpt-4o-mini-2024-07-18, gpt-4o-2024-08-06)
+  if (!defaultRates) {
+    if (lowerModel.startsWith('gpt-4o-mini')) {
+      defaultRates = DEFAULT_MODEL_PRICING['gpt-4o-mini'];
+    } else if (lowerModel.startsWith('gpt-4o')) {
+      defaultRates = DEFAULT_MODEL_PRICING['gpt-4o'];
+    } else if (lowerModel.startsWith('gpt-5.6-terra')) {
+      defaultRates = DEFAULT_MODEL_PRICING['gpt-5.6-terra'];
+    } else if (lowerModel.startsWith('gpt-5.6-sol')) {
+      defaultRates = DEFAULT_MODEL_PRICING['gpt-5.6-sol'];
+    } else if (lowerModel.startsWith('gpt-5.6-luna')) {
+      defaultRates = DEFAULT_MODEL_PRICING['gpt-5.6-luna'];
+    }
+  }
+
   if (defaultRates) {
     const snapshotMs = Date.parse(PRICING_SNAPSHOT_DATE + 'T00:00:00Z');
     const ageDays = Math.floor((Date.now() - snapshotMs) / 86400000);
