@@ -147,7 +147,7 @@ export default async function handler(req, res) {
   }
 
   let selectedModel = 'gpt-5.6-terra';
-  let engineTimeoutMs = 25000;
+  let engineTimeoutMs = 45000;
   let sysData = null;
   let cntrData = null;
   let engData = null;
@@ -405,7 +405,7 @@ export default async function handler(req, res) {
       instructions: resolvedInstructions,
       temperature: 0.2,
       maxTokens: 1500,
-      timeoutMs: engineTimeoutMs,
+      timeoutMs: isWebSearchNeeded ? Math.max(engineTimeoutMs, 50000) : engineTimeoutMs,
       tools,
       toolChoice,
       metadata: {
