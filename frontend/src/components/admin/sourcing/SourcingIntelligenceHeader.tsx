@@ -71,14 +71,20 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
           </div>
           <div>
             <div className="flex items-center gap-2.5">
-              <h1 className="text-xl font-black tracking-tight text-white">
+              <h1 
+                className="text-xl font-black tracking-tight text-white"
+                style={{ color: '#ffffff' }}
+              >
                 SOURCING INTELLIGENCE
               </h1>
               <span className="text-[11px] bg-[#f00856]/30 text-pink-200 px-2.5 py-0.5 rounded-full border border-pink-400/40 uppercase font-black tracking-wider">
                 Centro de Inteligencia
               </span>
             </div>
-            <p className="text-xs text-slate-300 font-medium mt-0.5">
+            <p 
+              className="text-xs text-slate-300 font-medium mt-0.5"
+              style={{ color: '#cbd5e1' }}
+            >
               Descubrimiento de tendencias, señales de demanda y oportunidades comerciales por país.
             </p>
           </div>
@@ -89,11 +95,12 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
           {/* Selector de País */}
           <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 hover:border-slate-600 px-3.5 py-2 rounded-xl text-xs transition">
             <Globe className="w-4 h-4 text-pink-400" />
-            <span className="text-slate-300 font-bold">Mercado:</span>
+            <span className="text-slate-300 font-bold" style={{ color: '#cbd5e1' }}>Mercado:</span>
             <select
               value={country}
               onChange={(e) => onCountryChange(e.target.value)}
               className="bg-transparent text-white font-extrabold focus:outline-none cursor-pointer pr-1"
+              style={{ color: '#ffffff' }}
             >
               {COUNTRIES.map(c => (
                 <option key={c.code} value={c.code} className="bg-slate-900 text-white">
