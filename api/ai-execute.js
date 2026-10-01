@@ -613,6 +613,8 @@ export default async function handler(req, res) {
       } catch (logErr) {
         console.warn('[AI Execute] Telemetry logging error:', logErr.message);
       }
+    }
+
     const classifiedSources = (result.sources || []).map(s => ({
       ...s,
       source_type: classifyDomain(s.url),
