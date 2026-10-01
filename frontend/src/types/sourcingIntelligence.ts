@@ -147,6 +147,8 @@ export interface SourcingResearchQueryRequest {
   country: string;
   category?: string;
   period?: '24h' | '7d' | '30d' | '90d';
+  research_depth?: 'ECONOMICO' | 'ESTANDAR' | 'PROFUNDO';
+  force_refresh?: boolean;
 }
 
 export interface SourcingResearchResponse {
@@ -161,4 +163,9 @@ export interface SourcingResearchResponse {
   cost_usd: number;
   provider: string;
   model: string;
+  cached?: boolean;
+  research_depth?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
 }

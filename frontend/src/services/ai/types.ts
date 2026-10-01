@@ -230,6 +230,44 @@ export interface AIModelPricingDetail {
   status: 'VERIFIED' | 'STALE' | 'UNKNOWN';
 }
 
+export type ResearchDepthMode = 'ECONOMICO' | 'ESTANDAR' | 'PROFUNDO';
+
+export interface AIPreFlightEstimate {
+  success: boolean;
+  model: string;
+  fallback_model?: string;
+  research_depth: ResearchDepthMode;
+  research_depth_label: string;
+  max_candidates: number;
+  estimated_input_tokens: number;
+  max_output_tokens: number;
+  estimated_input_cost_usd: number;
+  estimated_output_cost_usd: number;
+  estimated_total_min_usd: number;
+  estimated_total_max_usd: number;
+  estimated_total_avg_usd: number;
+  web_search_planned: boolean;
+  cache: {
+    status: 'HIT' | 'HIT_DISCOVERIES' | 'MISS';
+    age_seconds: number | null;
+    last_researched_at?: string | null;
+    cached_items_count?: number;
+    cached_model?: string;
+    cached_cost_usd?: number;
+  };
+  requires_confirmation: boolean;
+  hard_limit_exceeded: boolean;
+  warning_threshold_usd: number;
+  cheaper_alternative?: {
+    mode: ResearchDepthMode;
+    model: string;
+    estimated_max_cost_usd: number;
+    savings_percent: number;
+  } | null;
+  pricing_source: string;
+  openai_calls_used: number;
+}
+
 export interface AIDiagnosticStatus {
   ok: boolean;
   configured: boolean;
@@ -238,4 +276,5 @@ export interface AIDiagnosticStatus {
   pricingDetails?: AIModelPricingDetail[];
   environment?: string;
 }
+
 

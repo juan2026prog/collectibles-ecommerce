@@ -7,6 +7,13 @@
 import { createClient } from '@supabase/supabase-js';
 import { callOpenAIResponses, OpenAIError } from '../server/lib/openai.js';
 import { generateEvidenceFingerprint } from '../server/lib/canonicalJson.js';
+import { 
+  resolveResearchMode, 
+  generateResearchCacheKey, 
+  normalizeQuery, 
+  buildOptimizedResearchPrompt,
+  calculatePreFlightEstimate 
+} from '../server/lib/researchCostOptimizer.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_f_7xF86CT0DFwT7YupNh_Q_TzmemHNf';
@@ -131,10 +138,14 @@ export default async function handler(req, res) {
     engine = 'AI_SEARCH',
     country = 'UY',
     operation = 'execute',
+    research_depth,
     prompt,
     payload,
     context = {}
   } = req.body || {};
+
+  const effectiveDepth = research_depth || payload?.research_depth || context?.research_depth || 'ECONOMICO';
+  const modeConfig = resolveResearchMode(effectiveDepth);
 
   const resolvedInput = prompt || (typeof payload === 'string' ? payload : JSON.stringify(payload || {}));
 
@@ -146,8 +157,12 @@ export default async function handler(req, res) {
     });
   }
 
-  let selectedModel = 'gpt-5.6-terra';
-  let engineTimeoutMs = 45000;
+  // Default model & tokens derived from modeConfig for cheap-first routing
+  let selectedModel = (engine === 'SOURCING_WEB_RESEARCH' || (operation && /^(sourcing_research|web_research|sourcing_market_research)$/i.test(operation)))
+    ? modeConfig.model
+    : 'gpt-5.6-terra';
+  let engineTimeoutMs = modeConfig.timeoutMs || 45000;
+  let dynamicMaxTokens = modeConfig.maxOutputTokens || 750;
   let sysData = null;
   let cntrData = null;
   let engData = null;
@@ -335,7 +350,61 @@ export default async function handler(req, res) {
     const evidenceObj = payload?.evidence || {};
     const evidenceFingerprint = generateEvidenceFingerprint(evidenceObj);
 
-    // 2. Fingerprint Cache Lookup for Advisory Analysis
+    // 2. Sourcing Research Multi-tier Cache Lookup (Global-First Cache)
+    const researchCacheKey = isSourcingResearch 
+      ? generateResearchCacheKey(resolvedInput, 'GLOBAL', modeConfig.key) 
+      : null;
+
+    if (isSourcingResearch && client && context?.force_refresh !== true && context?.certification !== true) {
+      try {
+        const { data: cachedResearch } = await client
+          .from('sourcing_research_cache')
+          .select('*')
+          .eq('cache_key', researchCacheKey)
+          .gt('expires_at', new Date().toISOString())
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (cachedResearch) {
+          const cachedData = {
+            summary: cachedResearch.summary,
+            confidence: Number(cachedResearch.confidence || 0.85),
+            subtrends: cachedResearch.subtrends || [],
+            items: cachedResearch.items || []
+          };
+          const cachedElapsed = 1;
+          return res.status(200).json({
+            success: true,
+            status: 'SUCCESS',
+            provider: 'OPENAI',
+            model: cachedResearch.model || modeConfig.model,
+            cached: true,
+            text: JSON.stringify(cachedData),
+            data: cachedData,
+            sources: cachedResearch.sources || [],
+            request_id: `cached_${cachedResearch.cache_key?.slice(0, 12) || Date.now()}`,
+            latency_ms: cachedElapsed,
+            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+            pricing: {
+              model: cachedResearch.model || modeConfig.model,
+              input_tokens: 0,
+              output_tokens: 0,
+              total_tokens: 0,
+              input_cost_usd: 0,
+              output_cost_usd: 0,
+              estimated_cost_usd: 0,
+              pricing_status: 'PRICED',
+              pricing_source: 'SOURCING_RESEARCH_CACHE'
+            }
+          });
+        }
+      } catch (cacheErr) {
+        console.warn('[AI Execute] Sourcing research cache lookup skipped:', cacheErr.message);
+      }
+    }
+
+    // 2b. Fingerprint Cache Lookup for Advisory Analysis
     if (isStructuredAdvisoryEngine && client && context?.force_refresh !== true && context?.certification !== true) {
       try {
         const cacheTtlHours = 2;
@@ -389,7 +458,9 @@ export default async function handler(req, res) {
       }
     }
 
-    const resolvedInstructions = instructionsFor(engine, operation);
+    const resolvedInstructions = isSourcingResearch 
+      ? buildOptimizedResearchPrompt(resolvedInput, country, modeConfig)
+      : instructionsFor(engine, operation);
 
     const isWebSearchNeeded = engine === 'SOURCING_WEB_RESEARCH' || 
       (operation && /^(sourcing_research|web_research|sourcing_market_research)$/i.test(operation)) ||
@@ -398,13 +469,13 @@ export default async function handler(req, res) {
     const tools = isWebSearchNeeded ? [{ type: 'web_search' }] : undefined;
     const toolChoice = isWebSearchNeeded ? 'required' : undefined;
 
-    // 3. Call OpenAI Responses API server-side
+    // 3. Call OpenAI Responses API server-side with mode-specific token & cost constraints
     const result = await callOpenAIResponses({
       model: selectedModel,
       input: resolvedInput,
       instructions: resolvedInstructions,
       temperature: 0.2,
-      maxTokens: 1500,
+      maxTokens: isSourcingResearch ? dynamicMaxTokens : (req.body?.maxTokens || 1500),
       timeoutMs: isWebSearchNeeded ? Math.max(engineTimeoutMs, 50000) : engineTimeoutMs,
       tools,
       toolChoice,
@@ -412,6 +483,7 @@ export default async function handler(req, res) {
         engine: String(engine || ''),
         country: String(country || 'GLOBAL'),
         operation: String(operation || 'execute'),
+        research_depth: modeConfig.key,
         has_web_search: isWebSearchNeeded ? 'true' : 'false'
       }
     });
@@ -565,6 +637,35 @@ export default async function handler(req, res) {
       source_type: classifyDomain(s.url),
       observed_at: new Date().toISOString()
     }));
+
+    // Persist Sourcing Research Cache for future instant reuse across countries
+    if (isSourcingResearch && researchCacheKey && client && result?.usage?.totalTokens > 0) {
+      try {
+        const ttlDays = modeConfig.key === 'PROFUNDO' ? 7 : 3;
+        const expiresAt = new Date(Date.now() + (ttlDays * 24 * 3600 * 1000)).toISOString();
+        const rawItems = Array.isArray(structuredData?.items) ? structuredData.items : [];
+        
+        await client.from('sourcing_research_cache').upsert({
+          cache_key: researchCacheKey,
+          query: resolvedInput,
+          normalized_query: normalizeQuery(resolvedInput),
+          scope: 'GLOBAL',
+          research_depth: modeConfig.key,
+          model: result.model,
+          summary: structuredData?.summary || null,
+          confidence: Number(structuredData?.confidence || 0.85),
+          subtrends: Array.isArray(structuredData?.subtrends) ? structuredData.subtrends : [],
+          items: rawItems,
+          sources: classifiedSources,
+          input_tokens: result.usage.inputTokens,
+          output_tokens: result.usage.outputTokens,
+          cost_usd: result.pricing.estimated_cost_usd,
+          expires_at: expiresAt
+        }, { onConflict: 'cache_key' });
+      } catch (cacheWriteErr) {
+        console.warn('[AI Execute] Sourcing research cache write non-blocking error:', cacheWriteErr.message);
+      }
+    }
 
     // 6. Return sanitized safe result
     return res.status(200).json({

@@ -142,8 +142,24 @@ export default function AdminSourcingImport() {
   };
 
 
+  // Execution Telemetry
+  const [lastExecutionTelemetry, setLastExecutionTelemetry] = useState<{
+    model: string;
+    cost_usd: number;
+    latency_ms: number;
+    input_tokens?: number;
+    output_tokens?: number;
+    total_tokens?: number;
+    cached?: boolean;
+    research_depth?: string;
+  } | null>(null);
+
   // Handle Manual Research Execution
-  const handleExecuteSearch = async (queryOverride?: string) => {
+  const handleExecuteSearch = async (
+    queryOverride?: string, 
+    modeOverride?: 'ECONOMICO' | 'ESTANDAR' | 'PROFUNDO', 
+    forceRefresh = false
+  ) => {
     const q = (queryOverride !== undefined ? queryOverride : searchQuery).trim();
     if (!q) return;
 
@@ -153,16 +169,29 @@ export default function AdminSourcingImport() {
         query: q,
         country: selectedCountry,
         category: selectedCategory !== 'Todas' ? selectedCategory : undefined,
-        period: selectedPeriod
+        period: selectedPeriod,
+        research_depth: modeOverride || 'ECONOMICO',
+        force_refresh: forceRefresh
       });
 
       setTrends(prev => [res.trends[0], ...prev.filter(t => t.topic !== q)]);
       setCandidates(res.candidates);
       setActiveTab('candidates');
 
+      setLastExecutionTelemetry({
+        model: res.model,
+        cost_usd: res.cost_usd,
+        latency_ms: res.latency_ms,
+        input_tokens: res.input_tokens,
+        output_tokens: res.output_tokens,
+        total_tokens: res.total_tokens,
+        cached: res.cached,
+        research_depth: res.research_depth
+      });
+
       addToast({
-        title: 'Investigación Completada',
-        message: `${res.candidates.length} productos candidatos identificados para ${selectedCountry}.`,
+        title: res.cached ? 'Investigación Reutilizada (Caché)' : 'Investigación Completada',
+        message: `${res.candidates.length} productos identificados para ${selectedCountry} (${res.cached ? 'Caché $0.000' : `Costo: $${res.cost_usd.toFixed(4)}`}).`,
         type: 'success'
       });
     } catch (err: any) {
@@ -312,7 +341,7 @@ export default function AdminSourcingImport() {
         onCategoryChange={setSelectedCategory}
         searchQuery={searchQuery}
         onSearchQueryChange={setSearchQuery}
-        onExecuteSearch={() => handleExecuteSearch()}
+        onExecuteSearch={(mode, forceRefresh) => handleExecuteSearch(undefined, mode, forceRefresh)}
         isSearching={isSearching}
         activeCounts={activeCounts}
         activeFilterState={quickFilterState}
@@ -320,6 +349,7 @@ export default function AdminSourcingImport() {
           setQuickFilterState(st);
           if (st !== 'all') setActiveTab('candidates');
         }}
+        lastExecutionTelemetry={lastExecutionTelemetry}
       />
 
       {/* 6 CONSOLIDATED NAVIGATION TABS */}

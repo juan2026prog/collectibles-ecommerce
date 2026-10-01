@@ -40,10 +40,17 @@ export class ResearchIntelligenceService {
    */
   public async research(request: SourcingResearchQueryRequest): Promise<SourcingResearchResponse> {
     const startTime = performance.now();
-    const { query, country = 'UY', category, period = '7d' } = request;
+    const { 
+      query, 
+      country = 'UY', 
+      category, 
+      period = '7d',
+      research_depth = 'ECONOMICO',
+      force_refresh = false
+    } = request;
 
     // 1. Ejecución vía AI Gateway Central
-    const prompt = `INVESTIGACIÓN COMERCIAL SOURCING:
+    const prompt = `INVESTIGACIÓN COMERCIAL SOURCING (MODO: ${research_depth}):
 Consulta: "${query}"
 País objetivo: ${country}
 Categoría: ${category || 'Todas'}
@@ -53,9 +60,13 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
 
     let aiResult: any = null;
     let providerName = 'OPENAI';
-    let modelName = 'gpt-4o';
+    let modelName = research_depth === 'ECONOMICO' ? 'gpt-4o-mini' : 'gpt-5.6-terra';
     let latencyMs = 0;
     let costUsd = 0;
+    let isCached = false;
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let totalTokens = 0;
     let gatewayResponse: any = null;
 
     try {
@@ -69,11 +80,16 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
           country,
           category,
           period,
+          research_depth,
           evidence: {
             search_query: query,
             target_country: country,
             observed_at: new Date().toISOString()
           }
+        },
+        context: {
+          research_depth,
+          force_refresh
         },
         fallbackHandler: () => this.generateLocalResearchFallback(query, country)
       });
@@ -90,9 +106,13 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
         }
       }
       providerName = gatewayResponse.provider || 'OPENAI';
-      modelName = gatewayResponse.model || 'gpt-4o';
+      modelName = gatewayResponse.model || modelName;
       latencyMs = gatewayResponse.latency_ms || Math.round(performance.now() - startTime);
-      costUsd = gatewayResponse.pricing?.estimated_cost_usd || 0.004;
+      costUsd = gatewayResponse.pricing?.estimated_cost_usd || 0;
+      isCached = Boolean(gatewayResponse.cached || (gatewayResponse.usage && gatewayResponse.usage.totalTokens === 0 && gatewayResponse.status === 'SUCCESS'));
+      inputTokens = gatewayResponse.usage?.inputTokens || 0;
+      outputTokens = gatewayResponse.usage?.outputTokens || 0;
+      totalTokens = gatewayResponse.usage?.totalTokens || 0;
     } catch (err) {
       console.warn('[ResearchIntelligence] Error en Gateway, ejecutando fallback local:', err);
       aiResult = this.generateLocalResearchFallback(query, country);
@@ -283,7 +303,12 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
       latency_ms: latencyMs,
       cost_usd: costUsd,
       provider: providerName,
-      model: modelName
+      model: modelName,
+      cached: isCached,
+      research_depth,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      total_tokens: totalTokens
     };
   }
 

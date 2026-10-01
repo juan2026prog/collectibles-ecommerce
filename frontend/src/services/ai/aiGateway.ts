@@ -276,6 +276,79 @@ export class AIGateway {
       latency_ms: elapsed
     };
   }
+
+  /**
+   * Pre-flight Live Token & Cost Estimator (Zero OpenAI Cost Guarantee)
+   */
+  public async estimateCost(params: {
+    query: string;
+    country?: string;
+    research_depth?: 'ECONOMICO' | 'ESTANDAR' | 'PROFUNDO';
+    engine?: string;
+    operation?: string;
+    force_refresh?: boolean;
+  }) {
+    const {
+      query,
+      country = 'UY',
+      research_depth = 'ECONOMICO',
+      engine = 'RESEARCH_INTELLIGENCE',
+      operation = 'sourcing_market_research',
+      force_refresh = false
+    } = params;
+
+    try {
+      let token: string | undefined;
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        token = sessionData?.session?.access_token;
+      } catch (_) {}
+
+      const res = await fetch('/api/ai-estimate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          query,
+          country,
+          research_depth,
+          engine,
+          operation,
+          force_refresh
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error(`Estimate HTTP error ${res.status}`);
+      }
+
+      return await res.json();
+    } catch (err: any) {
+      console.warn('[AIGateway] Pre-flight estimation error:', err);
+      // Local fallback estimate without network
+      return {
+        success: true,
+        model: research_depth === 'ECONOMICO' ? 'gpt-4o-mini' : 'gpt-5.6-terra',
+        research_depth,
+        research_depth_label: research_depth === 'ECONOMICO' ? '⚡ Económico' : (research_depth === 'ESTANDAR' ? '🔎 Estándar' : '🧠 Profundo'),
+        max_candidates: research_depth === 'ECONOMICO' ? 5 : (research_depth === 'ESTANDAR' ? 8 : 15),
+        estimated_input_tokens: research_depth === 'ECONOMICO' ? 2600 : 5700,
+        max_output_tokens: research_depth === 'ECONOMICO' ? 400 : 750,
+        estimated_total_min_usd: research_depth === 'ECONOMICO' ? 0.0004 : 0.012,
+        estimated_total_max_usd: research_depth === 'ECONOMICO' ? 0.0006 : 0.020,
+        estimated_total_avg_usd: research_depth === 'ECONOMICO' ? 0.0005 : 0.016,
+        web_search_planned: true,
+        cache: { status: 'MISS', age_seconds: null },
+        requires_confirmation: false,
+        hard_limit_exceeded: false,
+        warning_threshold_usd: 0.02,
+        pricing_source: 'LOCAL_FALLBACK',
+        openai_calls_used: 0
+      };
+    }
+  }
 }
 
 export const aiGateway = AIGateway.getInstance();

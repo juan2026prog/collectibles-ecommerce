@@ -1,0 +1,212 @@
+// ============================================================
+// COLLECTIBLES 2026 — RESEARCH COST OPTIMIZER & PRICING ENGINE
+// Central server-side logic for cheap-first model routing,
+// token estimation, pre-flight analysis, and multi-tier cache.
+// ZERO PAID OPENAI REQUESTS are executed in this module.
+// ============================================================
+
+import crypto from 'crypto';
+import { getModelPricingRates, calculateOpenAICost } from './openaiPricing.js';
+
+export const RESEARCH_MODES = Object.freeze({
+  ECONOMICO: {
+    key: 'ECONOMICO',
+    label: '⚡ Económico',
+    model: 'gpt-4o-mini',
+    fallbackModel: 'gpt-5.6-luna',
+    maxCandidates: 5,
+    maxOutputTokens: 400,
+    searchDepth: 'QUICK',
+    expectedWebInputTokens: 2500,
+    timeoutMs: 35000,
+    webSearchToolCostUsd: 0.005,
+    targetCostMaxUsd: 0.01
+  },
+  ESTANDAR: {
+    key: 'ESTANDAR',
+    label: '🔎 Estándar',
+    model: 'gpt-5.6-terra',
+    fallbackModel: 'gpt-4o',
+    maxCandidates: 8,
+    maxOutputTokens: 750,
+    searchDepth: 'STANDARD',
+    expectedWebInputTokens: 5500,
+    timeoutMs: 45000,
+    webSearchToolCostUsd: 0.008,
+    targetCostMaxUsd: 0.025
+  },
+  PROFUNDO: {
+    key: 'PROFUNDO',
+    label: '🧠 Profundo',
+    model: 'gpt-5.6-terra',
+    fallbackModel: 'gpt-5.6-sol',
+    maxCandidates: 15,
+    maxOutputTokens: 1200,
+    searchDepth: 'DEEP',
+    expectedWebInputTokens: 12000,
+    timeoutMs: 60000,
+    webSearchToolCostUsd: 0.015,
+    targetCostMaxUsd: 0.08
+  }
+});
+
+export const COST_THRESHOLDS = Object.freeze({
+  LOW_MAX_USD: 0.01,
+  NORMAL_MAX_USD: 0.02,
+  CONFIRMATION_WARNING_USD: 0.02,
+  HARD_LIMIT_USD: 0.15
+});
+
+/**
+ * Normalizes query string for caching and deduplication
+ */
+export function normalizeQuery(query) {
+  if (!query || typeof query !== 'string') return '';
+  return query
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove accents
+    .replace(/[^\w\s]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Generates deterministic cache key for research queries
+ * Global research cache is reusable across countries!
+ */
+export function generateResearchCacheKey(query, scope = 'GLOBAL', depth = 'ECONOMICO') {
+  const normQuery = normalizeQuery(query);
+  const normDepth = (depth || 'ECONOMICO').toUpperCase();
+  const rawKey = `${normQuery}|${scope}|${normDepth}`;
+  return crypto.createHash('sha256').update(rawKey).digest('hex');
+}
+
+/**
+ * Resolves research mode configuration with safe fallback to ECONOMICO
+ */
+export function resolveResearchMode(modeInput) {
+  if (!modeInput) return RESEARCH_MODES.ECONOMICO;
+  const upper = String(modeInput).toUpperCase().trim();
+  if (upper === 'ECONOMICO' || upper === 'QUICK' || upper === 'FAST') {
+    return RESEARCH_MODES.ECONOMICO;
+  }
+  if (upper === 'ESTANDAR' || upper === 'STANDARD' || upper === 'BALANCED') {
+    return RESEARCH_MODES.ESTANDAR;
+  }
+  if (upper === 'PROFUNDO' || upper === 'DEEP' || upper === 'REASONING') {
+    return RESEARCH_MODES.PROFUNDO;
+  }
+  return RESEARCH_MODES.ECONOMICO;
+}
+
+/**
+ * Local conservative token estimation (1 token ≈ 4 characters for Spanish/English + JSON overhead)
+ * ZERO OpenAI calls.
+ */
+export function estimateTokensLocally(text) {
+  if (!text) return 0;
+  const str = typeof text === 'string' ? text : JSON.stringify(text);
+  return Math.ceil(str.length / 3.8);
+}
+
+/**
+ * Generates compact targeted prompt instructions for web research based on mode
+ */
+export function buildOptimizedResearchPrompt(query, country = 'UY', modeConfig = RESEARCH_MODES.ECONOMICO) {
+  const currentYear = new Date().getFullYear();
+  const maxItems = modeConfig.maxCandidates;
+
+  return `INVESTIGACIÓN COMERCIAL SOURCING (MODO: ${modeConfig.key}):
+Consulta: "${query}"
+Año actual: ${currentYear}
+Mercado objetivo: ${country} (Buscar lanzamientos GLOBALES y evaluar disponibilidad).
+Instrucciones:
+1. Identifica hasta ${maxItems} productos oficiales reales, preventas o lanzamientos recientes relevantes.
+2. NUNCA inventes precios, costos ni stock.
+3. Devuelve ÚNICAMENTE un JSON compacto con la siguiente estructura:
+{"summary":string,"confidence":number_0_to_1,"subtrends":string[],"items":[{"title":string,"brand":string,"franchise":string,"category":string,"origin_price_usd":number_or_null,"asin":string_or_null,"url":string_or_null,"retailer":string,"is_preorder":boolean,"is_new":boolean,"release_date":string_or_null,"evidence_snippet":string}]}`;
+}
+
+/**
+ * Pre-Flight Cost & Token Estimator
+ * Computes exact ranges locally without executing any paid OpenAI call.
+ */
+export function calculatePreFlightEstimate({
+  query,
+  country = 'UY',
+  researchDepth = 'ECONOMICO',
+  isWebSearch = true,
+  cacheInfo = null
+}) {
+  const mode = resolveResearchMode(researchDepth);
+  const prompt = buildOptimizedResearchPrompt(query, country, mode);
+  const basePromptTokens = estimateTokensLocally(prompt);
+
+  // Web search tool brings extra document tokens depending on research depth
+  const expectedWebTokens = isWebSearch ? mode.expectedWebInputTokens : 0;
+  const estimatedInputTokens = basePromptTokens + expectedWebTokens;
+  const maxOutputTokens = mode.maxOutputTokens;
+  const expectedMinOutputTokens = Math.max(150, Math.floor(maxOutputTokens * 0.45));
+  const expectedAvgOutputTokens = Math.floor(maxOutputTokens * 0.8);
+
+  const rates = getModelPricingRates(mode.model);
+  const inputRate = rates?.inputPer1M || 0.15;
+  const outputRate = rates?.outputPer1M || 0.60;
+
+  // Base token costs
+  const inputCostUsd = (estimatedInputTokens / 1_000_000) * inputRate;
+  const minOutputCostUsd = (expectedMinOutputTokens / 1_000_000) * outputRate;
+  const maxOutputCostUsd = (maxOutputTokens / 1_000_000) * outputRate;
+  const avgOutputCostUsd = (expectedAvgOutputTokens / 1_000_000) * outputRate;
+
+  // Total ranges
+  const minTotalUsd = Number((inputCostUsd + minOutputCostUsd).toFixed(5));
+  const maxTotalUsd = Number((inputCostUsd + maxOutputCostUsd).toFixed(5));
+  const avgTotalUsd = Number((inputCostUsd + avgOutputCostUsd).toFixed(5));
+
+  const isCacheHit = Boolean(cacheInfo && cacheInfo.status === 'HIT');
+  const requiresConfirmation = !isCacheHit && maxTotalUsd > COST_THRESHOLDS.CONFIRMATION_WARNING_USD;
+  const isHardLimit = !isCacheHit && maxTotalUsd > COST_THRESHOLDS.HARD_LIMIT_USD;
+
+  // Alternative cheaper calculation if currently in standard or profundo
+  let cheaperAlternative = null;
+  if (mode.key !== 'ECONOMICO' && !isCacheHit) {
+    const ecoMode = RESEARCH_MODES.ECONOMICO;
+    const ecoRates = getModelPricingRates(ecoMode.model);
+    const ecoInputTokens = basePromptTokens + ecoMode.expectedWebInputTokens;
+    const ecoInputCost = (ecoInputTokens / 1_000_000) * (ecoRates?.inputPer1M || 0.15);
+    const ecoOutputCost = (ecoMode.maxOutputTokens / 1_000_000) * (ecoRates?.outputPer1M || 0.60);
+    const ecoMaxTotal = Number((ecoInputCost + ecoOutputCost).toFixed(5));
+    cheaperAlternative = {
+      mode: 'ECONOMICO',
+      model: ecoMode.model,
+      estimated_max_cost_usd: ecoMaxTotal,
+      savings_percent: Math.round(((maxTotalUsd - ecoMaxTotal) / maxTotalUsd) * 100)
+    };
+  }
+
+  return {
+    model: mode.model,
+    fallback_model: mode.fallbackModel,
+    research_depth: mode.key,
+    research_depth_label: mode.label,
+    max_candidates: mode.maxCandidates,
+    estimated_input_tokens: estimatedInputTokens,
+    max_output_tokens: maxOutputTokens,
+    estimated_input_cost_usd: Number(inputCostUsd.toFixed(6)),
+    estimated_output_cost_usd: Number(avgOutputCostUsd.toFixed(6)),
+    estimated_total_min_usd: isCacheHit ? 0 : minTotalUsd,
+    estimated_total_max_usd: isCacheHit ? 0 : maxTotalUsd,
+    estimated_total_avg_usd: isCacheHit ? 0 : avgTotalUsd,
+    web_search_planned: isWebSearch,
+    cache: cacheInfo || { status: 'MISS', age_seconds: null },
+    requires_confirmation: requiresConfirmation,
+    hard_limit_exceeded: isHardLimit,
+    warning_threshold_usd: COST_THRESHOLDS.CONFIRMATION_WARNING_USD,
+    cheaper_alternative: cheaperAlternative,
+    pricing_source: rates?.source || 'CENTRAL_REGISTRY',
+    openai_calls_used: 0
+  };
+}
