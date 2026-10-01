@@ -56,9 +56,10 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
     let modelName = 'gpt-4o';
     let latencyMs = 0;
     let costUsd = 0;
+    let gatewayResponse: any = null;
 
     try {
-      const response = await aiGateway.execute({
+      gatewayResponse = await aiGateway.execute({
         engine: 'RESEARCH_INTELLIGENCE',
         country: (country as any) || 'UY',
         operation: 'sourcing_market_research',
@@ -77,47 +78,47 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
         fallbackHandler: () => this.generateLocalResearchFallback(query, country)
       });
 
-      aiResult = response.data;
-      providerName = response.provider || 'OPENAI';
-      modelName = response.model || 'gpt-4o';
-      latencyMs = response.latency_ms || Math.round(performance.now() - startTime);
-      costUsd = response.pricing?.estimated_cost_usd || 0.004;
+      aiResult = gatewayResponse.data;
+      providerName = gatewayResponse.provider || 'OPENAI';
+      modelName = gatewayResponse.model || 'gpt-4o';
+      latencyMs = gatewayResponse.latency_ms || Math.round(performance.now() - startTime);
+      costUsd = gatewayResponse.pricing?.estimated_cost_usd || 0.004;
     } catch (err) {
       console.warn('[ResearchIntelligence] Error en Gateway, ejecutando fallback local:', err);
       aiResult = this.generateLocalResearchFallback(query, country);
       latencyMs = Math.round(performance.now() - startTime);
     }
 
-    // 2. Generar o extraer señales observables
-    const signals: SourcingSignal[] = [
-      {
-        id: `sig-query-${Date.now()}`,
-        source: `Investigación ${country}`,
-        source_type: 'INTERNAL_DATA',
-        country,
-        signal_name: `Consulta activa: "${query}"`,
-        confidence: 95,
-        observed_at: new Date().toISOString()
-      },
-      {
-        id: `sig-amz-${Date.now()}`,
-        source: 'Amazon US Live',
-        source_type: 'RETAILER',
-        country: 'GLOBAL',
-        signal_name: 'Catálogo y Preorders Verificados',
-        confidence: 92,
-        observed_at: new Date().toISOString()
-      },
-      {
-        id: `sig-ml-${Date.now()}`,
-        source: `Mercado Libre ${country}`,
-        source_type: 'MARKETPLACE',
-        country,
-        signal_name: 'Señales de oferta y demanda local',
-        confidence: 88,
-        observed_at: new Date().toISOString()
-      }
-    ];
+    // 2. Incorporar fuentes reales de Web Search devueltas por el Gateway
+    const signals: SourcingSignal[] = [];
+
+    if (Array.isArray(gatewayResponse?.sources) && gatewayResponse.sources.length > 0) {
+      gatewayResponse.sources.forEach((src: any, i: number) => {
+
+        signals.push({
+          id: `sig-web-${i + 1}-${Date.now()}`,
+          source: src.title || src.domain || 'Web Search Source',
+          source_type: src.source_type || 'WEB_EDITORIAL',
+          country: 'GLOBAL',
+          signal_name: `Fuente Web: ${src.title || src.url}`,
+          confidence: 90,
+          observed_at: src.observed_at || new Date().toISOString(),
+          metadata: { url: src.url, domain: src.domain, snippet: src.snippet }
+        });
+      });
+    }
+
+    // Señal base de la consulta del usuario
+    signals.push({
+      id: `sig-query-${Date.now()}`,
+      source: `Investigación ${country}`,
+      source_type: 'INTERNAL_DATA',
+      country,
+      signal_name: `Consulta activa: "${query}"`,
+      confidence: 95,
+      observed_at: new Date().toISOString()
+    });
+
 
     // 3. Evaluar Tendencia con el TrendEngine determinístico
     const trendEval = TrendEngine.evaluateTrend({

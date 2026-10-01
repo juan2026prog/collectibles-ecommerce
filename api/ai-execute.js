@@ -19,8 +19,33 @@ const ENGINE_COUNTRY_FLAG = {
   COUNTRY_INTELLIGENCE: 'country_intelligence_enabled',
   RADAR_INTELLIGENCE: 'radar_intelligence_enabled',
   RELEASE_INTELLIGENCE: 'release_intelligence_enabled',
-  RESEARCH_INTELLIGENCE: 'product_discovery_enabled'
+  RESEARCH_INTELLIGENCE: 'product_discovery_enabled',
+  SOURCING_WEB_RESEARCH: 'product_discovery_enabled'
 };
+
+function classifyDomain(urlStr) {
+  try {
+    const domain = new URL(urlStr).hostname.toLowerCase().replace(/^www\./, '');
+    if (domain.includes('mcfarlane') || domain.includes('necaonline') || domain.includes('hasbropulse') || domain.includes('funko.com') || domain.includes('goodsmile') || domain.includes('sideshow') || domain.includes('pokemon.com')) {
+      return 'OFFICIAL';
+    }
+    if (domain.includes('amazon.') || domain.includes('bestbuy.') || domain.includes('target.') || domain.includes('walmart.') || domain.includes('bigbadtoystore') || domain.includes('entertainmentearth')) {
+      return 'RETAILER';
+    }
+    if (domain.includes('ebay.') || domain.includes('mercadolibre.') || domain.includes('tiendamia.')) {
+      return 'MARKETPLACE';
+    }
+    if (domain.includes('reddit.com') || domain.includes('toynewsi.com') || domain.includes('news.toyark.com') || domain.includes('figurerealm.com')) {
+      return 'COMMUNITY';
+    }
+    if (domain.includes('ign.com') || domain.includes('gamespot.com') || domain.includes('polygon.com') || domain.includes('screenrant.com') || domain.includes('bleedingcool.com')) {
+      return 'EDITORIAL';
+    }
+    return 'OTHER';
+  } catch {
+    return 'OTHER';
+  }
+}
 
 function extractAllowedEvidenceIds(evidence) {
   const allowed = new Set();
@@ -64,11 +89,15 @@ function instructionsFor(engine, operation) {
   if (engine === 'AI_SEARCH') {
     return common + ' For AI Search, understand collector intent and improve the answer using only supplied products and context. Return ONLY valid JSON with keys headline (string), summary (string), breakdown (array of strings), nextHighlight (string or null), relatedQuestions (array of up to 4 strings).';
   }
+  if (engine === 'SOURCING_WEB_RESEARCH') {
+    return common + ' Realiza investigación comercial de coleccionables mediante búsqueda web real. Identifica productos oficiales reales, novedades y preorders confirmados. NUNCA inventes precios, landed costs ni stock comercial. Devuelve ÚNICAMENTE un JSON válido con la siguiente estructura: {"summary": string, "confidence": number_0_to_1, "subtrends": string[], "items": [{"title": string, "brand": string, "franchise": string, "category": string, "origin_price_usd": number_or_null, "asin": string_or_null, "url": string_or_null, "retailer": string, "is_preorder": boolean, "is_new": boolean, "release_date": string_or_null, "evidence_snippet": string}]}.';
+  }
   if (['PRODUCT_DISCOVERY','TREND_ANALYSIS','PRODUCT_CURATION','COUNTRY_INTELLIGENCE','RADAR_INTELLIGENCE','RELEASE_INTELLIGENCE','RESEARCH_INTELLIGENCE'].includes(engine)) {
     return common + ' You are advisory only: never publish, buy, change prices, or trigger automation. Reason only from evidence in payload.evidence. Missing evidence must reduce confidence, never be guessed. scoreAdjustment is only a bounded advisory adjustment from -10 to 10; deterministic Collectibles scoring remains authoritative. Return ONLY valid JSON: {"summary":string,"confidence":number_0_to_1,"signals":string[],"risks":string[],"recommendations":string[],"evidenceIds":string[],"scoreAdjustment":number_minus10_to_10,"action":"REVIEW"|"WATCH"|"IGNORE"}.';
   }
   return common + ` Operation: ${operation}. Return concise useful output grounded only in supplied data.`;
 }
+
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -352,20 +381,31 @@ export default async function handler(req, res) {
 
     const resolvedInstructions = instructionsFor(engine, operation);
 
+    const isWebSearchNeeded = engine === 'SOURCING_WEB_RESEARCH' || 
+      (operation && /^(sourcing_research|web_research|sourcing_market_research)$/i.test(operation)) ||
+      /\b(latest|new|preorder|announced|released|trending|this week|today|recent|2026|preventa|lanzamiento)\b/i.test(resolvedInput);
+
+    const tools = isWebSearchNeeded ? [{ type: 'web_search' }] : undefined;
+    const toolChoice = isWebSearchNeeded ? 'required' : undefined;
+
     // 3. Call OpenAI Responses API server-side
     const result = await callOpenAIResponses({
       model: selectedModel,
       input: resolvedInput,
       instructions: resolvedInstructions,
       temperature: 0.2,
-      maxTokens: 1024,
+      maxTokens: 1500,
       timeoutMs: engineTimeoutMs,
+      tools,
+      toolChoice,
       metadata: {
         engine,
         country,
-        operation
+        operation,
+        has_web_search: isWebSearchNeeded
       }
     });
+
 
     const elapsedMs = Date.now() - startTime;
     const finalRequestId = result.requestId || requestId;
@@ -499,6 +539,12 @@ export default async function handler(req, res) {
       }
     }
 
+    const classifiedSources = (result.sources || []).map(s => ({
+      ...s,
+      source_type: classifyDomain(s.url),
+      observed_at: new Date().toISOString()
+    }));
+
     // 6. Return sanitized safe result
     return res.status(200).json({
       success: true,
@@ -507,12 +553,14 @@ export default async function handler(req, res) {
       model: result.model,
       text: result.outputText,
       data: structuredData,
+      sources: classifiedSources,
       response_id: result.responseId,
       request_id: finalRequestId,
       latency_ms: elapsedMs,
       usage: result.usage,
       pricing: result.pricing
     });
+
 
   } catch (err) {
     const elapsedMs = Date.now() - startTime;

@@ -17,8 +17,9 @@ describe('SOURCING INTELLIGENCE V4 — AUTOMATIC DISCOVERY REAL PIPELINE', () =>
 
       const webCollector = ALL_SOURCING_COLLECTORS.find(c => c.sourceId === 'web_research');
       const webHealth = await webCollector?.getHealthStatus();
-      expect(webHealth?.status).toBe('NOT_CONFIGURED');
+      expect(webHealth?.status).toBe('CONNECTED');
     });
+
 
     it('isolates single source failure without aborting full collection', async () => {
       const mockCollectorResults = [

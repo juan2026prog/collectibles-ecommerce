@@ -80,6 +80,58 @@ function extractOutputText(data) {
 }
 
 /**
+ * Extracts web search source citations from Responses API output
+ */
+function extractSources(data) {
+  const sources = [];
+  const seenUrls = new Set();
+
+  for (const item of data?.output || []) {
+    // Check annotations in text content
+    for (const content of item?.content || []) {
+      if (Array.isArray(content?.annotations)) {
+        for (const ann of content.annotations) {
+          if (ann.type === 'url_citation' && ann.url && !seenUrls.has(ann.url)) {
+            seenUrls.add(ann.url);
+            sources.push({
+              url: ann.url,
+              title: ann.title || ann.text || ann.url,
+              domain: (() => {
+                try { return new URL(ann.url).hostname.replace(/^www\./, ''); } catch { return 'web'; }
+              })(),
+              cited_text: ann.text || '',
+              startIndex: ann.start_index,
+              endIndex: ann.end_index
+            });
+          }
+        }
+      }
+    }
+    // Check direct tool call outputs
+    if (item?.type === 'web_search_call' || item?.type === 'web_search') {
+      const toolAction = item.web_search_call || item.action || {};
+      if (Array.isArray(toolAction.results)) {
+        for (const res of toolAction.results) {
+          if (res.url && !seenUrls.has(res.url)) {
+            seenUrls.add(res.url);
+            sources.push({
+              url: res.url,
+              title: res.title || res.url,
+              domain: (() => {
+                try { return new URL(res.url).hostname.replace(/^www\./, ''); } catch { return 'web'; }
+              })(),
+              snippet: res.snippet || res.content || ''
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return sources;
+}
+
+/**
  * Executes a call to OpenAI Responses API with telemetry & pricing calculation.
  * 
  * @param {Object} options
@@ -91,6 +143,8 @@ function extractOutputText(data) {
  * @param {number} [options.timeoutMs=25000]
  * @param {string} [options.systemPrompt]
  * @param {string} [options.instructions]
+ * @param {Array} [options.tools] - e.g. [{ type: "web_search" }]
+ * @param {string|Object} [options.toolChoice] - e.g. "required" | "auto"
  * @param {Object} [options.metadata]
  * @returns {Promise<Object>} Execution result with data, usage, telemetry, and pricing
  */
@@ -104,6 +158,8 @@ export async function callOpenAIResponses(options = {}) {
     timeoutMs = 25000,
     systemPrompt,
     instructions,
+    tools,
+    toolChoice,
     metadata
   } = options;
 
@@ -151,6 +207,13 @@ export async function callOpenAIResponses(options = {}) {
       requestBody.instructions = resolvedInstructions;
     }
 
+    if (Array.isArray(tools) && tools.length > 0) {
+      requestBody.tools = tools;
+      if (toolChoice) {
+        requestBody.tool_choice = toolChoice;
+      }
+    }
+
     if (metadata) {
       requestBody.metadata = metadata;
     }
@@ -165,6 +228,7 @@ export async function callOpenAIResponses(options = {}) {
       body: JSON.stringify(requestBody),
       signal: controller.signal
     });
+
 
     const latencyMs = Date.now() - startTime;
     const xRequestId = response.headers.get('x-request-id') || `req_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -209,6 +273,7 @@ export async function callOpenAIResponses(options = {}) {
     }
 
     const outputText = extractOutputText(responseData);
+    const sources = extractSources(responseData);
 
     // Usage tokens extraction
     const usage = responseData.usage || {};
@@ -223,6 +288,7 @@ export async function callOpenAIResponses(options = {}) {
       success: true,
       text: outputText,
       outputText,
+      sources,
       model: responseData.model || selectedModel,
       responseId: responseData.id || `resp_${Date.now()}`,
       requestId: xRequestId,
@@ -235,6 +301,7 @@ export async function callOpenAIResponses(options = {}) {
       pricing,
       raw: responseData
     };
+
 
   } catch (err) {
     const latencyMs = Date.now() - startTime;

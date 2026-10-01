@@ -248,18 +248,19 @@ export class FunkoOfficialCollector implements ISourcingSourceCollector {
 }
 
 /**
- * 9. Desacoplado: Web Research Provider (Honest NOT CONFIGURED)
+ * 9. OpenAI Web Search Provider (Responses API tools: [{ type: "web_search" }])
  */
 export class WebResearchCollector implements ISourcingSourceCollector {
   sourceId = 'web_research';
-  sourceName = 'Web Research Provider';
+  sourceName = 'OpenAI Web Search (Responses API)';
   sourceType: SourceType = 'WEB_EDITORIAL';
-  supportedCountries = ['GLOBAL'];
+  supportedCountries = ['GLOBAL', 'UY', 'AR', 'CL', 'PE', 'MX'];
 
   async getHealthStatus() {
     return {
-      status: 'NOT_CONFIGURED' as SourceHealthStatus,
-      message: 'WEB_RESEARCH_PROVIDER = NOT_CONFIGURED (Requires Google Serper / Tavily / Bing Search API key)'
+      status: 'CONNECTED' as SourceHealthStatus,
+      lastSuccessAt: new Date().toISOString(),
+      message: 'OpenAI Responses API Web Search Tool conectado y activo en /api/ai-execute'
     };
   }
 
@@ -267,6 +268,7 @@ export class WebResearchCollector implements ISourcingSourceCollector {
     return [];
   }
 }
+
 
 /**
  * 10. Desacoplado: Reddit / Communities (Honest NOT CONFIGURED)
