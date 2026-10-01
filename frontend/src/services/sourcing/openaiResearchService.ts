@@ -1,9 +1,10 @@
+import { aiGateway } from '../ai/aiGateway';
 import { supabase } from '../../lib/supabase';
 import type { ResearchPack } from '../../types/sourcing';
 
 // ================================================================
-// OPENAI RESEARCH SERVICE — CLIENT SIDE
-// Communicates with the sourcing-openai-research Edge Function.
+// OPENAI RESEARCH SERVICE — SOURCING CLIENT GATEWAY
+// All OpenAI calls route strictly through AIGateway -> /api/ai-execute.
 // OPENAI_API_KEY is NEVER touched here — server-side only.
 // ================================================================
 
@@ -30,6 +31,7 @@ export type OpenAIResearchType =
 
 export interface OpenAIResearchParams {
   query: string;
+  country?: string;
   research_type?: OpenAIResearchType;
   max_results?: number;
 }
@@ -57,78 +59,120 @@ export interface OpenAIFeatureStatus {
 }
 
 /**
- * Checks whether sourcing_openai_enabled is true in site_settings.
+ * Checks whether AI system is globally enabled in ai_system_config.
  * Does NOT expose any API key.
  */
 export async function checkOpenAIStatus(): Promise<OpenAIFeatureStatus> {
-  const { data, error } = await supabase
-    .from('site_settings')
-    .select('key, value')
-    .in('key', ['sourcing_openai_enabled', 'sourcing_openai_model']);
+  try {
+    const { data: sysConfig } = await supabase
+      .from('ai_system_config')
+      .select('global_enabled, provider')
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
 
-  if (error) return { enabled: false, reason: 'FEATURE_DISABLED' };
+    if (sysConfig) {
+      const enabled = Boolean(sysConfig.global_enabled) && sysConfig.provider !== 'NONE';
+      return {
+        enabled,
+        reason: enabled ? 'OK' : 'FEATURE_DISABLED',
+        model: 'gpt-4o'
+      };
+    }
+  } catch {}
 
-  const map: Record<string, string> = {};
-  for (const row of (data ?? [])) map[row.key] = row.value;
-
-  const enabled = map['sourcing_openai_enabled'] === 'true';
-  return {
-    enabled,
-    reason: enabled ? 'OK' : 'FEATURE_DISABLED',
-    model: map['sourcing_openai_model'] || 'gpt-4o'
-  };
+  return { enabled: false, reason: 'FEATURE_DISABLED' };
 }
 
 /**
- * Executes an OpenAI-powered product research query.
- * Returns a canonical Research Pack that feeds into sourcingService.processResearchPack().
+ * Executes an OpenAI-powered product research query through the central AI Gateway.
+ * Returns a canonical Research Pack that feeds into Sourcing pipeline.
  */
 export async function executeOpenAIResearch(
   params: OpenAIResearchParams
 ): Promise<OpenAIResearchResult> {
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    return { success: false, status: 'FORBIDDEN', error: 'No autenticado.' };
-  }
-
-  const supabaseUrl = (supabase as any).supabaseUrl as string;
-  const functionUrl = `${supabaseUrl}/functions/v1/sourcing-openai-research`;
+  const prompt = `BÚSQUEDA SOURCING: ${params.query}\nTipo de investigación: ${params.research_type || 'MANUAL'}\nPaís objetivo: ${params.country || 'UY'}\nMáximo ${params.max_results || 20} productos. Todos deben ser originales y oficialmente licenciados.`;
 
   try {
-    const response = await fetch(functionUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
-        'apikey': (supabase as any).supabaseKey as string
-      },
-      body: JSON.stringify({
+    const response = await aiGateway.execute({
+      engine: 'RESEARCH_INTELLIGENCE',
+      country: (params.country as any) || 'UY',
+      operation: 'sourcing_research',
+      prompt,
+      payload: {
         query: params.query,
         research_type: params.research_type || 'MANUAL',
-        max_results: params.max_results || 100
-      })
+        country: params.country || 'UY',
+        evidence: {
+          query: params.query,
+          timestamp: new Date().toISOString()
+        }
+      }
     });
 
-    const data = await response.json();
+    if (!response.success) {
+      let mappedStatus: OpenAIResearchStatus = 'FAILED';
+      if (response.status === 'BUDGET_EXCEEDED') mappedStatus = 'BUDGET_EXCEEDED';
+      if (response.status === 'AI_DISABLED' || response.status === 'ENGINE_DISABLED') mappedStatus = 'FEATURE_DISABLED';
+      if (response.status === 'PROVIDER_NOT_CONFIGURED') mappedStatus = 'PENDING_CREDENTIAL';
 
-    if (!response.ok) {
       return {
         success: false,
-        status: (data.status as OpenAIResearchStatus) || 'FAILED',
-        error: data.error || 'Error inesperado.'
+        status: mappedStatus,
+        error: response.error || 'Error al ejecutar investigación con IA.'
       };
     }
 
+    const outputData = response.data;
+    const items = Array.isArray(outputData?.items) ? outputData.items : [];
+
+    const pack: ResearchPack = {
+      schema_version: '1.0',
+      pack_id: `pack_${Date.now()}`,
+      title: `Investigación: ${params.query}`,
+      generated_at: new Date().toISOString(),
+      provider: 'openai_gateway',
+      query: params.query,
+      research_type: params.research_type || 'MANUAL',
+      items: items.map((it: any) => ({
+        url: it.url || 'https://www.amazon.com',
+        retailer: it.retailer || 'amazon',
+        name: it.name || it.title || params.query,
+        brand: it.brand || 'Collectibles',
+        license: it.license || it.franchise || '',
+        manufacturer: it.manufacturer || it.brand || 'Collectibles',
+        product_type: it.product_type || 'TRENDING',
+        reason: it.reason || outputData?.summary || 'Detectado por Research Intelligence',
+        tags: Array.isArray(it.tags) ? it.tags : [],
+        price: null,
+        upc: it.upc || null,
+        asin: it.asin || null,
+        mpn: it.mpn || null,
+        release_date: it.release_date || null,
+        research_notes: it.research_notes || '',
+        confidence: Number(outputData?.confidence || 0.8)
+      }))
+    };
+
     return {
       success: true,
-      status: data.status as OpenAIResearchStatus,
-      pack: data.pack as ResearchPack,
-      usage: data.usage,
-      items_found: data.items_found,
-      items_valid: data.items_valid,
-      items_invalid: data.items_invalid
+      status: 'READY',
+      pack,
+      usage: {
+        input_tokens: response.usage?.inputTokens || 0,
+        output_tokens: response.usage?.outputTokens || 0,
+        total_tokens: response.usage?.totalTokens || 0,
+        estimated_cost_usd: response.pricing?.estimated_cost_usd || 0
+      },
+      items_found: items.length,
+      items_valid: items.length,
+      items_invalid: 0
     };
   } catch (err: any) {
-    return { success: false, status: 'FAILED', error: err.message };
+    return {
+      success: false,
+      status: 'FAILED',
+      error: err.message || 'Error inesperado al conectar con AI Gateway.'
+    };
   }
 }

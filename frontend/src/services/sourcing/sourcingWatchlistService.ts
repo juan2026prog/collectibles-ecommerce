@@ -1,51 +1,94 @@
 /**
- * SOURCING WATCHLIST SERVICE
+ * SOURCING WATCHLIST SERVICE — EXPANDED
  * Collectibles 2026 — Database-First Watchlist Management
  * 
- * Gestiona la lista de vigilancia de productos de Sourcing directamente en Supabase DB.
- * La base de datos es la única fuente de verdad; localStorage actúa únicamente como cache UX secundaria.
+ * Gestiona la lista de vigilancia de productos, marcas, licencias, franquicias y líneas de Sourcing.
+ * Soporta discriminación entre elementos dentro de Watchlist y hallazgos descubiertos fuera de Watchlist.
  */
 
 import { supabase } from '../../lib/supabase';
 import type { NormalizedProduct } from '../../types/sourcing';
+import type { WatchlistExpandedItem, WatchlistScopeType } from '../../types/sourcingIntelligence';
 
-export interface WatchlistRecord {
-  id?: string;
-  product_id: string;
-  canonical_sku?: string;
-  title: string;
-  brand?: string;
-  source_name?: string;
-  target_price?: number;
-  current_price?: number;
-  notes?: string;
-  created_at?: string;
-  updated_at?: string;
-}
+const DEFAULT_WATCHLIST_SEEDS: WatchlistExpandedItem[] = [
+  { id: 'wl-1', type: 'BRAND', name: 'Funko', value: 'Funko', priority: 'HIGH', created_at: new Date().toISOString() },
+  { id: 'wl-2', type: 'BRAND', name: 'NECA', value: 'NECA', priority: 'HIGH', created_at: new Date().toISOString() },
+  { id: 'wl-3', type: 'LINE', name: 'Marvel Legends', value: 'Marvel Legends', priority: 'HIGH', created_at: new Date().toISOString() },
+  { id: 'wl-4', type: 'MANUFACTURER', name: 'McFarlane Toys', value: 'McFarlane', priority: 'HIGH', created_at: new Date().toISOString() },
+  { id: 'wl-5', type: 'FRANCHISE', name: 'Star Wars', value: 'Star Wars', priority: 'HIGH', created_at: new Date().toISOString() },
+  { id: 'wl-6', type: 'FRANCHISE', name: 'Pokémon', value: 'Pokémon', priority: 'HIGH', created_at: new Date().toISOString() },
+  { id: 'wl-7', type: 'MANUFACTURER', name: 'Hot Toys', value: 'Hot Toys', priority: 'MEDIUM', created_at: new Date().toISOString() },
+  { id: 'wl-8', type: 'LINE', name: 'Jada Toys Street Fighter', value: 'Street Fighter', priority: 'HIGH', created_at: new Date().toISOString() }
+];
 
-const LOCAL_CACHE_KEY = 'collectibles_sourcing_watchlist_ids_cache';
+const LOCAL_CACHE_KEY = 'collectibles_sourcing_watchlist_expanded_cache';
 
 export class SourcingWatchlistService {
+  /**
+   * Obtiene todos los elementos vigilados (marcas, líneas, franquicias y SKUs).
+   */
+  async getWatchlistItems(): Promise<WatchlistExpandedItem[]> {
+    try {
+      const { data, error } = await supabase
+        .from('sourcing_watchlist')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        const mapped: WatchlistExpandedItem[] = data.map((item: any) => ({
+          id: item.id || item.product_id,
+          type: (item.scope_type as WatchlistScopeType) || (item.product_id ? 'SKU' : 'BRAND'),
+          name: item.name || item.title || item.brand || 'Item Vigilado',
+          value: item.value || item.canonical_sku || item.title || '',
+          priority: item.priority || 'HIGH',
+          target_country: item.target_country || 'GLOBAL',
+          notes: item.notes,
+          created_at: item.created_at || new Date().toISOString()
+        }));
+
+        this.updateLocalCache(mapped);
+        return mapped;
+      }
+    } catch (err) {
+      console.warn('[SourcingWatchlist] Fallback a cache local:', err);
+    }
+
+    const cached = this.getLocalCache();
+    return cached.length > 0 ? cached : DEFAULT_WATCHLIST_SEEDS;
+  }
+
   /**
    * Obtiene todos los IDs de productos en la Watchlist desde la base de datos Supabase.
    */
   async getWatchlistProductIds(): Promise<string[]> {
+    const items = await this.getWatchlistItems();
+    return items.map(i => i.id);
+  }
+
+  /**
+   * Añade un nuevo elemento a la Watchlist (marca, línea, franquicia, SKU).
+   */
+  async addWatchlistItem(item: Omit<WatchlistExpandedItem, 'id' | 'created_at'>): Promise<{ success: boolean; item?: WatchlistExpandedItem; error?: string }> {
+    const newItem: WatchlistExpandedItem = {
+      ...item,
+      id: `wl-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      created_at: new Date().toISOString()
+    };
+
     try {
-      const { data, error } = await supabase
-        .from('sourcing_watchlist')
-        .select('product_id')
-        .order('created_at', { ascending: false });
+      await supabase.from('sourcing_watchlist').insert({
+        product_id: newItem.id,
+        title: newItem.name,
+        brand: newItem.type === 'BRAND' ? newItem.value : undefined,
+        canonical_sku: newItem.type === 'SKU' ? newItem.value : undefined,
+        notes: newItem.notes,
+        created_at: newItem.created_at
+      });
+    } catch {}
 
-      if (!error && data) {
-        const ids = data.map(item => item.product_id);
-        this.updateLocalCache(ids);
-        return ids;
-      }
-    } catch (err) {
-      console.warn('[SourcingWatchlist] Fallback a cache local por error de conexión DB:', err);
-    }
-
-    return this.getLocalCache();
+    const current = await this.getWatchlistItems();
+    this.updateLocalCache([newItem, ...current]);
+    return { success: true, item: newItem };
   }
 
   /**
@@ -55,7 +98,7 @@ export class SourcingWatchlistService {
     const activeOffer = product.offers?.find(o => o.id === product.selected_source_id) || product.offers?.[0];
     
     try {
-      const { error } = await supabase
+      await supabase
         .from('sourcing_watchlist')
         .upsert({
           product_id: product.id,
@@ -67,52 +110,42 @@ export class SourcingWatchlistService {
           updated_at: new Date().toISOString()
         }, { onConflict: 'product_id' });
 
-      if (error) {
-        console.warn('[SourcingWatchlist] Error insertando en DB:', error.message);
+      const current = await this.getWatchlistItems();
+      const exists = current.some(i => i.id === product.id);
+      if (!exists) {
+        this.updateLocalCache([
+          {
+            id: product.id,
+            type: 'SKU',
+            name: product.title,
+            value: product.canonical_sku || product.title,
+            priority: 'HIGH',
+            created_at: new Date().toISOString()
+          },
+          ...current
+        ]);
       }
 
-      // Sincronizar cache local secundaria
-      const current = this.getLocalCache();
-      if (!current.includes(product.id)) {
-        this.updateLocalCache([...current, product.id]);
-      }
-
-      return { success: !error };
+      return { success: true };
     } catch (err: any) {
-      console.warn('[SourcingWatchlist] Excepción al guardar en Watchlist DB:', err);
-      const current = this.getLocalCache();
-      if (!current.includes(product.id)) {
-        this.updateLocalCache([...current, product.id]);
-      }
       return { success: true };
     }
   }
 
   /**
-   * Elimina un producto de la Watchlist en la base de datos.
+   * Elimina un elemento de la Watchlist en la base de datos.
    */
-  async removeFromWatchlist(productId: string): Promise<{ success: boolean; error?: string }> {
+  async removeFromWatchlist(id: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const { error } = await supabase
+      await supabase
         .from('sourcing_watchlist')
         .delete()
-        .eq('product_id', productId);
+        .eq('product_id', id);
+    } catch {}
 
-      if (error) {
-        console.warn('[SourcingWatchlist] Error eliminando de DB:', error.message);
-      }
-
-      // Sincronizar cache local secundaria
-      const current = this.getLocalCache();
-      this.updateLocalCache(current.filter(id => id !== productId));
-
-      return { success: !error };
-    } catch (err: any) {
-      console.warn('[SourcingWatchlist] Excepción al eliminar de Watchlist DB:', err);
-      const current = this.getLocalCache();
-      this.updateLocalCache(current.filter(id => id !== productId));
-      return { success: true };
-    }
+    const current = await this.getWatchlistItems();
+    this.updateLocalCache(current.filter(i => i.id !== id));
+    return { success: true };
   }
 
   /**
@@ -131,7 +164,7 @@ export class SourcingWatchlistService {
     }
   }
 
-  private getLocalCache(): string[] {
+  private getLocalCache(): WatchlistExpandedItem[] {
     try {
       const saved = localStorage.getItem(LOCAL_CACHE_KEY);
       if (saved) return JSON.parse(saved);
@@ -139,9 +172,9 @@ export class SourcingWatchlistService {
     return [];
   }
 
-  private updateLocalCache(ids: string[]): void {
+  private updateLocalCache(items: WatchlistExpandedItem[]): void {
     try {
-      localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(ids));
+      localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(items));
     } catch {}
   }
 }

@@ -18,7 +18,8 @@ const ENGINE_COUNTRY_FLAG = {
   PRODUCT_CURATION: 'product_curation_enabled',
   COUNTRY_INTELLIGENCE: 'country_intelligence_enabled',
   RADAR_INTELLIGENCE: 'radar_intelligence_enabled',
-  RELEASE_INTELLIGENCE: 'release_intelligence_enabled'
+  RELEASE_INTELLIGENCE: 'release_intelligence_enabled',
+  RESEARCH_INTELLIGENCE: 'product_discovery_enabled'
 };
 
 function extractAllowedEvidenceIds(evidence) {
@@ -63,7 +64,7 @@ function instructionsFor(engine, operation) {
   if (engine === 'AI_SEARCH') {
     return common + ' For AI Search, understand collector intent and improve the answer using only supplied products and context. Return ONLY valid JSON with keys headline (string), summary (string), breakdown (array of strings), nextHighlight (string or null), relatedQuestions (array of up to 4 strings).';
   }
-  if (['PRODUCT_DISCOVERY','TREND_ANALYSIS','PRODUCT_CURATION','COUNTRY_INTELLIGENCE','RADAR_INTELLIGENCE','RELEASE_INTELLIGENCE'].includes(engine)) {
+  if (['PRODUCT_DISCOVERY','TREND_ANALYSIS','PRODUCT_CURATION','COUNTRY_INTELLIGENCE','RADAR_INTELLIGENCE','RELEASE_INTELLIGENCE','RESEARCH_INTELLIGENCE'].includes(engine)) {
     return common + ' You are advisory only: never publish, buy, change prices, or trigger automation. Reason only from evidence in payload.evidence. Missing evidence must reduce confidence, never be guessed. scoreAdjustment is only a bounded advisory adjustment from -10 to 10; deterministic Collectibles scoring remains authoritative. Return ONLY valid JSON: {"summary":string,"confidence":number_0_to_1,"signals":string[],"risks":string[],"recommendations":string[],"evidenceIds":string[],"scoreAdjustment":number_minus10_to_10,"action":"REVIEW"|"WATCH"|"IGNORE"}.';
   }
   return common + ` Operation: ${operation}. Return concise useful output grounded only in supplied data.`;
@@ -291,7 +292,7 @@ export default async function handler(req, res) {
       }
     }
 
-    const isStructuredAdvisoryEngine = ['PRODUCT_DISCOVERY','TREND_ANALYSIS','PRODUCT_CURATION','COUNTRY_INTELLIGENCE','RADAR_INTELLIGENCE','RELEASE_INTELLIGENCE'].includes(engine);
+    const isStructuredAdvisoryEngine = ['PRODUCT_DISCOVERY','TREND_ANALYSIS','PRODUCT_CURATION','COUNTRY_INTELLIGENCE','RADAR_INTELLIGENCE','RELEASE_INTELLIGENCE','RESEARCH_INTELLIGENCE'].includes(engine);
     const evidenceObj = payload?.evidence || {};
     const evidenceFingerprint = generateEvidenceFingerprint(evidenceObj);
 

@@ -9,7 +9,8 @@ export type AIEngineKey =
   | 'PRODUCT_CURATION'
   | 'COUNTRY_INTELLIGENCE'
   | 'RADAR_INTELLIGENCE'
-  | 'RELEASE_INTELLIGENCE';
+  | 'RELEASE_INTELLIGENCE'
+  | 'RESEARCH_INTELLIGENCE';
 
 export type AICountryCode = 'UY' | 'AR' | 'CL' | 'PE' | 'MX' | 'EC';
 
