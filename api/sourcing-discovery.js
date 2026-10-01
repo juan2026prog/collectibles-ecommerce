@@ -183,11 +183,16 @@ export default async function handler(req, res) {
           const aiResult = await callOpenAIResponses({
             input: webResearchPrompt,
             instructions: webResearchInstructions,
-            maxTokens: 1500,
-            timeoutMs: 30000,
+            maxTokens: 1200,
+            timeoutMs: 25000,
             tools: [{ type: 'web_search' }],
             toolChoice: 'required',
-            metadata: { engine: 'SOURCING_WEB_RESEARCH', trigger, country, run_id: runId }
+            metadata: { 
+              engine: 'SOURCING_WEB_RESEARCH', 
+              trigger: String(trigger || 'CRON'), 
+              country: String(country || 'UY'), 
+              run_id: String(runId || '') 
+            }
           });
 
           aiCallsCount++;
