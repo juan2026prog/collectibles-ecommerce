@@ -9,7 +9,7 @@
     },
     {
       "path": "/api/sourcing-discovery",
-      "schedule": "0 */4 * * *"
+      "schedule": "0 7 * * *"
     }
   ],
   "functions": {
