@@ -434,7 +434,7 @@ Devuelve ÚNICAMENTE un objeto JSON válido con la siguiente estructura:
           input: webResearchPrompt,
           instructions: webResearchInstructions,
           maxTokens: 2500,
-          timeoutMs: 35000,
+          timeoutMs: 45000,
           tools: [{ type: 'web_search' }],
           toolChoice: 'required',
           metadata: { 
