@@ -81,7 +81,7 @@ describe('FINAL AI SECURITY + RBAC + MODEL CAPABILITIES TEST SUITE', () => {
       const auth = await authenticateRequest(mockReq, { allowCron: true });
       expect(auth.authenticated).toBe(false);
       expect(auth.isAdmin).toBe(false);
-    });
+    }, 15000);
   });
 
   // ============================================================
@@ -199,15 +199,19 @@ describe('FINAL AI SECURITY + RBAC + MODEL CAPABILITIES TEST SUITE', () => {
       expect(model.pricing.output_per_million).toBe(10.00);
     });
 
-    it('5. gpt-5.6-luna is accurately marked disabled/incompatible for web search research', () => {
+    it('5. gpt-5.6-luna is enabled, verified, and web-search capable', () => {
       const model = MODEL_CAPABILITY_REGISTRY['gpt-5.6-luna'];
       expect(model).toBeDefined();
-      expect(model.enabled).toBe(false);
-      expect(model.capabilities.web_search).toBe(false);
+      expect(model.enabled).toBe(true);
+      expect(model.capabilities.web_search).toBe(true);
+      expect(model.capabilities.research_intelligence).toBe(true);
+      expect(model.pricing.input_per_million).toBe(0.20);
+      expect(model.pricing.cached_input_per_million).toBe(0.02);
+      expect(model.pricing.output_per_million).toBe(1.20);
 
       const val = validateRequestedModel('gpt-5.6-luna', { engine: 'RESEARCH_INTELLIGENCE', requiresWebSearch: true });
-      expect(val.valid).toBe(false);
-      expect(val.error).toBe('MODEL_DISABLED');
+      expect(val.valid).toBe(true);
+      expect(val.model).toBe('gpt-5.6-luna');
     });
 
     it('6. Dynamic catalog excludes private credentials and secrets', () => {

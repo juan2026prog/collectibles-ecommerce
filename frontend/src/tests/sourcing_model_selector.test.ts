@@ -57,10 +57,11 @@ describe('SOURCING AI MODEL SELECTOR & DYNAMIC MANUAL OVERRIDE (ZERO OPENAI CALL
     expect(fakeVal.valid).toBe(false);
     expect(fakeVal.error).toBe('MODEL_NOT_FOUND');
 
-    // Invalid: Model without web search capability (e.g. gpt-5.6-luna)
+    // Valid: gpt-5.6-luna with web search capability
     const lunaVal = validateRequestedModel('gpt-5.6-luna', { engine: 'RESEARCH_INTELLIGENCE', requiresWebSearch: true });
-    expect(lunaVal.valid).toBe(false);
-    expect(lunaVal.error).toBe('MODEL_DISABLED'); // Disabled / not web search compatible
+    expect(lunaVal.valid).toBe(true);
+    expect(lunaVal.model).toBe('gpt-5.6-luna');
+    expect(lunaVal.isAuto).toBe(false);
   });
 
   it('3. Pre-Flight calculation supports AUTO vs Manual Model Override while preserving Mode constraints', () => {

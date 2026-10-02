@@ -128,12 +128,12 @@ export const MODEL_CAPABILITY_REGISTRY = Object.freeze({
   'gpt-5.6-luna': {
     id: 'gpt-5.6-luna',
     display_name: 'GPT-5.6 Luna',
-    badge: 'Ultra-rápido',
-    description: 'Modelo ultraliviano para tareas de baja complejidad',
-    enabled: false,
+    badge: '⚡ Ultra-económico',
+    description: 'Modelo ultraliviano de alta velocidad con soporte de búsqueda web',
+    enabled: true,
     capabilities: {
-      research_intelligence: false,
-      web_search: false,
+      research_intelligence: true,
+      web_search: true,
       structured_output: true
     },
     pricing: {

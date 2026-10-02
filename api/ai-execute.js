@@ -411,7 +411,7 @@ export default async function handler(req, res) {
 
     // 2. Sourcing Research Multi-tier Cache Lookup (Global-First Cache)
     const researchCacheKey = isSourcingResearch 
-      ? generateResearchCacheKey(resolvedInput, 'GLOBAL', modeConfig.key) 
+      ? generateResearchCacheKey(resolvedInput, 'GLOBAL', modeConfig.key, isManualOverride ? selectedModel : 'AUTO') 
       : null;
 
     if (isSourcingResearch && client && context?.force_refresh !== true && context?.certification !== true) {

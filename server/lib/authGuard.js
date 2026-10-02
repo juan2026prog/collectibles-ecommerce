@@ -80,6 +80,19 @@ export async function authenticateRequest(req, options = {}) {
     };
   }
 
+  // Fast fail-closed validation for non-JWT malformed tokens
+  if (token.split('.').length !== 3) {
+    return {
+      authenticated: false,
+      isCron: false,
+      isAdmin: false,
+      isSuperAdmin: false,
+      user: null,
+      error: 'INVALID_TOKEN',
+      message: 'Formato de token Bearer inválido (estructura JWT no válida).'
+    };
+  }
+
   // 4. Validate Token Server-Side with Supabase Auth
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {

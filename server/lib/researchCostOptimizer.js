@@ -82,10 +82,11 @@ export function normalizeQuery(query) {
  * Generates deterministic cache key for research queries
  * Global research cache is reusable across countries!
  */
-export function generateResearchCacheKey(query, scope = 'GLOBAL', depth = 'ECONOMICO') {
+export function generateResearchCacheKey(query, scope = 'GLOBAL', depth = 'ECONOMICO', model = 'AUTO') {
   const normQuery = normalizeQuery(query);
   const normDepth = (depth || 'ECONOMICO').toUpperCase();
-  const rawKey = `${normQuery}|${scope}|${normDepth}`;
+  const normModel = (model && model !== 'AUTO') ? String(model).toLowerCase().trim() : 'AUTO';
+  const rawKey = `${normQuery}|${scope}|${normDepth}|${normModel}`;
   return crypto.createHash('sha256').update(rawKey).digest('hex');
 }
 

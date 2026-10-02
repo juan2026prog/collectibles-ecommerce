@@ -79,7 +79,8 @@ export default async function handler(req, res) {
   });
 
   const mode = resolveResearchMode(research_depth);
-  const cacheKey = generateResearchCacheKey(cleanQuery, 'GLOBAL', mode.key);
+  const isModelOverride = requested_model && requested_model !== 'AUTO';
+  const cacheKey = generateResearchCacheKey(cleanQuery, 'GLOBAL', mode.key, isModelOverride ? requested_model : 'AUTO');
 
   let cacheInfo = {
     status: 'MISS',
