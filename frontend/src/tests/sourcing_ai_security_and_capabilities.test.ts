@@ -239,7 +239,8 @@ describe('FINAL AI SECURITY + RBAC + MODEL CAPABILITIES TEST SUITE', () => {
 
       expect(est.openai_calls_used).toBe(0);
       expect(est.model).toBe('gpt-4o-mini');
-      expect(est.estimated_total_max_usd).toBeLessThan(0.002);
+      expect(est.estimated_total_max_usd).toBeLessThan(0.006);
+      expect(est.estimated_total_max_usd).toBeGreaterThan(0.002);
     });
 
     it('2. Pre-Flight calculates accurate multiplier for expensive manual models', () => {

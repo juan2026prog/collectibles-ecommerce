@@ -17,11 +17,20 @@ export const RESEARCH_MODES = Object.freeze({
     maxCandidates: 5,
     maxOutputTokens: 600,
     searchDepth: 'QUICK',
-    expectedWebInputTokensMin: 6500,
-    expectedWebInputTokensMax: 9000,
-    expectedWebInputTokens: 7800,
+    expectedWebInputTokensMin: 16500,
+    expectedWebInputTokensMax: 26000,
+    expectedWebInputTokens: 21000,
+    expectedWebOutputTokensMin: 250,
+    expectedWebOutputTokensMax: 600,
+    expectedWebOutputTokens: 450,
+    noWebInputTokensMin: 300,
+    noWebInputTokensMax: 1500,
+    noWebInputTokens: 600,
+    noWebOutputTokensMin: 200,
+    noWebOutputTokensMax: 600,
+    noWebOutputTokens: 350,
     timeoutMs: 35000,
-    webSearchToolCostUsd: 0.005,
+    webSearchToolCostUsd: 0,
     targetCostMaxUsd: 0.01
   },
   ESTANDAR: {
@@ -32,11 +41,20 @@ export const RESEARCH_MODES = Object.freeze({
     maxCandidates: 8,
     maxOutputTokens: 750,
     searchDepth: 'STANDARD',
-    expectedWebInputTokensMin: 12000,
-    expectedWebInputTokensMax: 18000,
-    expectedWebInputTokens: 15000,
+    expectedWebInputTokensMin: 22000,
+    expectedWebInputTokensMax: 36000,
+    expectedWebInputTokens: 28000,
+    expectedWebOutputTokensMin: 350,
+    expectedWebOutputTokensMax: 750,
+    expectedWebOutputTokens: 600,
+    noWebInputTokensMin: 500,
+    noWebInputTokensMax: 2500,
+    noWebInputTokens: 1000,
+    noWebOutputTokensMin: 300,
+    noWebOutputTokensMax: 750,
+    noWebOutputTokens: 500,
     timeoutMs: 45000,
-    webSearchToolCostUsd: 0.008,
+    webSearchToolCostUsd: 0,
     targetCostMaxUsd: 0.05
   },
   PROFUNDO: {
@@ -47,11 +65,20 @@ export const RESEARCH_MODES = Object.freeze({
     maxCandidates: 15,
     maxOutputTokens: 1200,
     searchDepth: 'DEEP',
-    expectedWebInputTokensMin: 20000,
-    expectedWebInputTokensMax: 35000,
-    expectedWebInputTokens: 28000,
+    expectedWebInputTokensMin: 30000,
+    expectedWebInputTokensMax: 58000,
+    expectedWebInputTokens: 42000,
+    expectedWebOutputTokensMin: 500,
+    expectedWebOutputTokensMax: 1200,
+    expectedWebOutputTokens: 900,
+    noWebInputTokensMin: 800,
+    noWebInputTokensMax: 4000,
+    noWebInputTokens: 1800,
+    noWebOutputTokensMin: 400,
+    noWebOutputTokensMax: 1200,
+    noWebOutputTokens: 800,
     timeoutMs: 60000,
-    webSearchToolCostUsd: 0.015,
+    webSearchToolCostUsd: 0,
     targetCostMaxUsd: 0.10
   }
 });
@@ -62,6 +89,61 @@ export const COST_THRESHOLDS = Object.freeze({
   CONFIRMATION_WARNING_USD: 0.02,
   HARD_LIMIT_USD: 0.15
 });
+
+/**
+ * Deterministic Query Complexity Analyzer (Zero OpenAI calls)
+ * Evaluates multi-entity keywords, scope modifiers, and length to adjust token ranges accurately.
+ */
+export function analyzeQueryComplexity(query) {
+  if (!query || typeof query !== 'string') {
+    return {
+      factor: 1.0,
+      confidence: 'HIGH',
+      confidence_label: 'Alta precisión (calibrada con telemetría web)',
+      reasons: []
+    };
+  }
+
+  const norm = query.toLowerCase().trim();
+  let factor = 1.0;
+  const reasons = [];
+
+  // Multi-entity separators & comparative intent
+  if (/\b(vs|contra|y|o|,|\/)\b/i.test(norm)) {
+    factor += 0.05;
+    reasons.push('múltiples entidades o comparativas');
+  }
+
+  // Broad / aggregation terms
+  if (/\b(todas?|todos|linea completa|completa|coleccion|resumen|catalogo|mejores|tendencias|mercado|diferencias)\b/i.test(norm)) {
+    factor += 0.05;
+    reasons.push('alcance de búsqueda amplio');
+  }
+
+  // Query length / detailed description
+  const wordCount = norm.split(/\s+/).filter(Boolean).length;
+  if (norm.length > 80 || wordCount > 10) {
+    factor += 0.05;
+    reasons.push('longitud de consulta detallada');
+  }
+
+  // Cap complexity factor between 1.0 and 1.25
+  const finalFactor = Number(Math.min(1.25, Math.max(1.0, factor)).toFixed(2));
+
+  let confidence = 'HIGH';
+  let confidence_label = 'Alta precisión (calibrada con telemetría web)';
+  if (finalFactor >= 1.15) {
+    confidence = 'MEDIUM';
+    confidence_label = 'Precisión moderada (consulta compleja / multi-entidad)';
+  }
+
+  return {
+    factor: finalFactor,
+    confidence,
+    confidence_label,
+    reasons
+  };
+}
 
 /**
  * Normalizes query string for caching and deduplication
@@ -151,6 +233,7 @@ export function calculatePreFlightEstimate({
   const mode = resolveResearchMode(researchDepth);
   const prompt = buildOptimizedResearchPrompt(query, country, mode);
   const basePromptTokens = estimateTokensLocally(prompt);
+  const complexity = analyzeQueryComplexity(query);
 
   // Validate manual model override
   const modelValidation = validateRequestedModel(requestedModel, {
@@ -162,17 +245,22 @@ export function calculatePreFlightEstimate({
   const targetModel = isManualOverride ? modelValidation.model : mode.model;
 
   // Web search tool brings extra document tokens depending on research depth
-  const minWebTokens = isWebSearch ? (mode.expectedWebInputTokensMin || mode.expectedWebInputTokens) : 0;
-  const maxWebTokens = isWebSearch ? (mode.expectedWebInputTokensMax || mode.expectedWebInputTokens) : 0;
-  const avgWebTokens = isWebSearch ? mode.expectedWebInputTokens : 0;
+  const rawInputMin = isWebSearch ? mode.expectedWebInputTokensMin : (mode.noWebInputTokensMin || 300);
+  const rawInputExpected = isWebSearch ? mode.expectedWebInputTokens : (mode.noWebInputTokens || 600);
+  const rawInputMax = isWebSearch ? mode.expectedWebInputTokensMax : (mode.noWebInputTokensMax || 1500);
 
-  const estimatedInputTokensMin = basePromptTokens + minWebTokens;
-  const estimatedInputTokensMax = basePromptTokens + maxWebTokens;
-  const estimatedInputTokensAvg = basePromptTokens + avgWebTokens;
+  const rawOutputMin = isWebSearch ? mode.expectedWebOutputTokensMin : (mode.noWebOutputTokensMin || 200);
+  const rawOutputExpected = isWebSearch ? mode.expectedWebOutputTokens : (mode.noWebOutputTokens || 350);
+  const rawOutputMax = isWebSearch ? (mode.expectedWebOutputTokensMax || mode.maxOutputTokens) : (mode.noWebOutputTokensMax || mode.maxOutputTokens);
 
-  const maxOutputTokens = mode.maxOutputTokens;
-  const expectedMinOutputTokens = Math.max(150, Math.floor(maxOutputTokens * 0.45));
-  const expectedAvgOutputTokens = Math.floor(maxOutputTokens * 0.8);
+  // Adjust input tokens with query complexity factor (bounded 1.0 - 1.25)
+  const estimatedInputTokensMin = Math.round(basePromptTokens + rawInputMin);
+  const estimatedInputTokensExpected = Math.round((basePromptTokens + rawInputExpected) * complexity.factor);
+  const estimatedInputTokensMax = Math.round((basePromptTokens + rawInputMax) * complexity.factor);
+
+  const estimatedOutputTokensMin = rawOutputMin;
+  const estimatedOutputTokensExpected = Math.round(rawOutputExpected * (complexity.factor > 1.1 ? 1.08 : 1.0));
+  const maxOutputTokens = rawOutputMax;
 
   const rates = getModelPricingRates(targetModel);
   const inputRate = rates?.inputPer1M || 0.15;
@@ -180,17 +268,17 @@ export function calculatePreFlightEstimate({
 
   // Base token costs
   const minInputCostUsd = (estimatedInputTokensMin / 1_000_000) * inputRate;
+  const expectedInputCostUsd = (estimatedInputTokensExpected / 1_000_000) * inputRate;
   const maxInputCostUsd = (estimatedInputTokensMax / 1_000_000) * inputRate;
-  const avgInputCostUsd = (estimatedInputTokensAvg / 1_000_000) * inputRate;
 
-  const minOutputCostUsd = (expectedMinOutputTokens / 1_000_000) * outputRate;
+  const minOutputCostUsd = (estimatedOutputTokensMin / 1_000_000) * outputRate;
+  const expectedOutputCostUsd = (estimatedOutputTokensExpected / 1_000_000) * outputRate;
   const maxOutputCostUsd = (maxOutputTokens / 1_000_000) * outputRate;
-  const avgOutputCostUsd = (expectedAvgOutputTokens / 1_000_000) * outputRate;
 
   // Total ranges
   const minTotalUsd = Number((minInputCostUsd + minOutputCostUsd).toFixed(5));
+  const expectedTotalUsd = Number((expectedInputCostUsd + expectedOutputCostUsd).toFixed(5));
   const maxTotalUsd = Number((maxInputCostUsd + maxOutputCostUsd).toFixed(5));
-  const avgTotalUsd = Number((avgInputCostUsd + avgOutputCostUsd).toFixed(5));
 
   const isCacheHit = Boolean(cacheInfo && (cacheInfo.status === 'HIT' || cacheInfo.status === 'HIT_DISCOVERIES'));
   const requiresConfirmation = !isCacheHit && (maxTotalUsd > COST_THRESHOLDS.CONFIRMATION_WARNING_USD || (isManualOverride && maxTotalUsd > 0.015));
@@ -254,16 +342,25 @@ export function calculatePreFlightEstimate({
     research_depth: mode.key,
     research_depth_label: mode.label,
     max_candidates: mode.maxCandidates,
-    estimated_input_tokens: estimatedInputTokensAvg,
+    estimated_input_tokens: estimatedInputTokensExpected,
     estimated_input_tokens_min: estimatedInputTokensMin,
+    estimated_input_tokens_expected: estimatedInputTokensExpected,
     estimated_input_tokens_max: estimatedInputTokensMax,
+    estimated_output_tokens_min: estimatedOutputTokensMin,
+    estimated_output_tokens_expected: estimatedOutputTokensExpected,
     max_output_tokens: maxOutputTokens,
-    estimated_input_cost_usd: Number(avgInputCostUsd.toFixed(6)),
-    estimated_output_cost_usd: Number(avgOutputCostUsd.toFixed(6)),
+    estimated_input_cost_usd: Number(expectedInputCostUsd.toFixed(6)),
+    estimated_output_cost_usd: Number(expectedOutputCostUsd.toFixed(6)),
+    estimated_cost_min_usd: isCacheHit ? 0 : minTotalUsd,
+    estimated_cost_expected_usd: isCacheHit ? 0 : expectedTotalUsd,
+    estimated_cost_max_usd: isCacheHit ? 0 : maxTotalUsd,
     estimated_total_min_usd: isCacheHit ? 0 : minTotalUsd,
     estimated_total_max_usd: isCacheHit ? 0 : maxTotalUsd,
-    estimated_total_avg_usd: isCacheHit ? 0 : avgTotalUsd,
+    estimated_total_avg_usd: isCacheHit ? 0 : expectedTotalUsd,
     web_search_planned: isWebSearch,
+    query_complexity: complexity,
+    confidence: complexity.confidence,
+    confidence_label: complexity.confidence_label,
     cache: cacheInfo || { status: 'MISS', age_seconds: null },
     requires_confirmation: requiresConfirmation,
     hard_limit_exceeded: isHardLimit,

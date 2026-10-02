@@ -253,9 +253,9 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
             <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-gray-200 text-xs font-bold">
               <span className="text-[11px] text-gray-500 font-extrabold uppercase px-2">Modo:</span>
               {[
-                { id: 'ECONOMICO', label: '⚡ Económico', desc: 'gpt-4o-mini · ~$0.001 - $0.002' },
-                { id: 'ESTANDAR', label: '🔎 Estándar', desc: 'gpt-5.6-terra · ~$0.02 - $0.05' },
-                { id: 'PROFUNDO', label: '🧠 Profundo', desc: 'gpt-5.6-terra max · ~$0.05 - $0.09' }
+                { id: 'ECONOMICO', label: '⚡ Económico', desc: 'gpt-4o-mini · ~$0.003 - $0.004' },
+                { id: 'ESTANDAR', label: '🔎 Estándar', desc: 'gpt-5.6-terra · ~$0.04 - $0.08' },
+                { id: 'PROFUNDO', label: '🧠 Profundo', desc: 'gpt-5.6-terra max · ~$0.07 - $0.13' }
               ].map(m => (
                 <button
                   key={m.id}
@@ -284,8 +284,8 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
                   onChange={(e) => setSelectedModel(e.target.value)}
                   className={`bg-white border text-xs font-extrabold rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#f00856] cursor-pointer ${
                     selectedModel !== 'AUTO' 
-                      ? 'border-pink-500 text-pink-700 bg-pink-50/50' 
-                      : 'border-gray-200 text-slate-800'
+                    ? 'border-pink-500 text-pink-700 bg-pink-50/50' 
+                    : 'border-gray-200 text-slate-800'
                   }`}
                   title="Control exclusivo para Superadmin"
                 >
@@ -370,9 +370,14 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
+                <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700" title={preFlightEstimate.confidence_label || 'Estimación basada en telemetría de OpenAI Web Search'}>
                   <span className="text-slate-400 font-medium">Tokens est.:</span>
-                  <span className="text-white font-bold">~{preFlightEstimate.estimated_input_tokens + preFlightEstimate.max_output_tokens}</span>
+                  <span className="text-white font-bold">
+                    {preFlightEstimate.estimated_input_tokens_min && preFlightEstimate.estimated_input_tokens_max
+                      ? `~${(preFlightEstimate.estimated_input_tokens_min / 1000).toFixed(1)}K–${(preFlightEstimate.estimated_input_tokens_max / 1000).toFixed(1)}K (Esp. ~${Math.round(preFlightEstimate.estimated_input_tokens / 1000)}K)`
+                      : `~${preFlightEstimate.estimated_input_tokens + preFlightEstimate.max_output_tokens}`
+                    }
+                  </span>
                 </div>
 
                 <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
