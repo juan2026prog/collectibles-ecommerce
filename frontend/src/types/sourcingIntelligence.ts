@@ -146,7 +146,7 @@ export interface SourcingResearchQueryRequest {
   query: string;
   country: string;
   category?: string;
-  period?: '24h' | '7d' | '30d' | '90d';
+  period?: '24h' | '7d' | '30d' | '90d' | 'all';
   research_depth?: 'ECONOMICO' | 'ESTANDAR' | 'PROFUNDO';
   requested_model?: string;
   force_refresh?: boolean;

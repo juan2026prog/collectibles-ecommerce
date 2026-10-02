@@ -82,7 +82,7 @@ describe('SOURCING AI MODEL SELECTOR & DYNAMIC MANUAL OVERRIDE (ZERO OPENAI CALL
     expect(estAuto.model).toBe('gpt-4o-mini');
     expect(estAuto.max_candidates).toBe(5); // ECONOMICO limit
     expect(estAuto.max_output_tokens).toBe(600); // ECONOMICO limit
-    expect(estAuto.estimated_total_avg_usd).toBeLessThan(0.003);
+    expect(estAuto.estimated_total_avg_usd).toBeLessThan(0.01);
     expect(estAuto.openai_calls_used).toBe(0);
 
     // 3b. Mode: ECONOMICO, Model: gpt-5.6-terra -> override model, preserve ECONOMICO limits
@@ -122,8 +122,8 @@ describe('SOURCING AI MODEL SELECTOR & DYNAMIC MANUAL OVERRIDE (ZERO OPENAI CALL
     estimates.forEach(est => {
       // Must not make any real OpenAI calls
       expect(est.openai_calls_used).toBe(0);
-      expect(est.estimated_input_tokens_min).toBeGreaterThan(6000);
-      expect(est.estimated_input_tokens_max).toBeLessThan(12000);
+      expect(est.estimated_input_tokens_min).toBeGreaterThan(10000);
+      expect(est.estimated_input_tokens_max).toBeLessThan(35000);
       expect(est.estimated_total_min_usd).toBeGreaterThan(0);
       expect(est.estimated_total_max_usd).toBeGreaterThan(est.estimated_total_min_usd);
     });

@@ -114,12 +114,12 @@ export async function authenticateRequest(req, options = {}) {
     }
 
     // 5. Authoritative RBAC evaluation from JWT metadata, profiles table, and user_roles table
-    const jwtRole = String(user.app_metadata?.role || user.user_metadata?.role || '').toLowerCase();
+    const jwtRole = String(user.app_metadata?.role || user.user_metadata?.role || user.role || '').toLowerCase();
     let isSuperAdmin = ['superadmin', 'super_admin', 'god_admin'].includes(jwtRole);
     let isAdmin = isSuperAdmin || ['admin'].includes(jwtRole);
 
-    // If not already superadmin from JWT, query profiles table
-    if (!isSuperAdmin) {
+    // If not already superadmin from JWT, query profiles table (by id, and fallback by email if available)
+    if (!isAdmin) {
       const { data: profile } = await supabase
         .from('profiles')
         .select('role, is_admin')
@@ -134,11 +134,27 @@ export async function authenticateRequest(req, options = {}) {
         } else if (profileRole === 'admin' || profile.is_admin === true) {
           isAdmin = true;
         }
+      } else if (user.email) {
+        const { data: profileByEmail } = await supabase
+          .from('profiles')
+          .select('role, is_admin')
+          .eq('email', user.email)
+          .maybeSingle();
+
+        if (profileByEmail) {
+          const profileRole = String(profileByEmail.role || '').toLowerCase();
+          if (['superadmin', 'super_admin', 'god_admin'].includes(profileRole)) {
+            isSuperAdmin = true;
+            isAdmin = true;
+          } else if (profileRole === 'admin' || profileByEmail.is_admin === true) {
+            isAdmin = true;
+          }
+        }
       }
     }
 
-    // If not already superadmin, check user_roles table
-    if (!isSuperAdmin) {
+    // If not already admin, check user_roles table
+    if (!isAdmin) {
       const { data: rolesData } = await supabase
         .from('user_roles')
         .select('role')

@@ -435,11 +435,43 @@ export class AIGateway {
       return await res.json();
     } catch (err: any) {
       console.warn('[AIGateway] Pre-flight estimation error:', err);
-      // Local fallback estimate without network
+      // Local dynamic fallback estimate without network
       const isAuto = !requested_model || requested_model === 'AUTO';
       const fallbackModel = isAuto 
-        ? (research_depth === 'ECONOMICO' ? 'gpt-4o-mini' : 'gpt-5.6-terra')
+        ? (research_depth === 'ECONOMICO' ? 'gpt-4o-mini' : (research_depth === 'ESTANDAR' ? 'gpt-5.6-terra' : 'gpt-5.6-sol'))
         : requested_model;
+
+      const inputTokensExpected = research_depth === 'ECONOMICO' ? 21000 : (research_depth === 'ESTANDAR' ? 28000 : 42000);
+      const inputTokensMin = research_depth === 'ECONOMICO' ? 16500 : (research_depth === 'ESTANDAR' ? 22000 : 30000);
+      const inputTokensMax = research_depth === 'ECONOMICO' ? 26000 : (research_depth === 'ESTANDAR' ? 36000 : 58000);
+
+      const outputTokensExpected = research_depth === 'ECONOMICO' ? 450 : (research_depth === 'ESTANDAR' ? 600 : 900);
+      const outputTokensMin = research_depth === 'ECONOMICO' ? 250 : (research_depth === 'ESTANDAR' ? 350 : 500);
+      const outputTokensMax = research_depth === 'ECONOMICO' ? 600 : (research_depth === 'ESTANDAR' ? 750 : 1200);
+
+      // Model pricing rates per 1M tokens
+      const rates: Record<string, { in: number; out: number }> = {
+        'gpt-4o-mini': { in: 0.15, out: 0.60 },
+        'gpt-5.6-luna': { in: 0.20, out: 1.20 },
+        'gpt-5.6-terra': { in: 2.00, out: 12.00 },
+        'gpt-4o': { in: 2.50, out: 10.00 },
+        'gpt-5.6-sol': { in: 4.00, out: 20.00 },
+        'gpt-4-turbo': { in: 10.00, out: 30.00 },
+        'gpt-4.5-preview': { in: 75.00, out: 150.00 }
+      };
+
+      const mRate = rates[fallbackModel] || rates['gpt-4o-mini'];
+      const inputCostExpected = (inputTokensExpected / 1000000) * mRate.in;
+      const outputCostExpected = (outputTokensExpected / 1000000) * mRate.out;
+      const totalExpected = inputCostExpected + outputCostExpected;
+
+      const inputCostMin = (inputTokensMin / 1000000) * mRate.in;
+      const outputCostMin = (outputTokensMin / 1000000) * mRate.out;
+      const totalMin = inputCostMin + outputCostMin;
+
+      const inputCostMax = (inputTokensMax / 1000000) * mRate.in;
+      const outputCostMax = (outputTokensMax / 1000000) * mRate.out;
+      const totalMax = inputCostMax + outputCostMax;
 
       return {
         success: true,
@@ -449,24 +481,24 @@ export class AIGateway {
         research_depth,
         research_depth_label: research_depth === 'ECONOMICO' ? '⚡ Económico' : (research_depth === 'ESTANDAR' ? '🔎 Estándar' : '🧠 Profundo'),
         max_candidates: research_depth === 'ECONOMICO' ? 5 : (research_depth === 'ESTANDAR' ? 8 : 15),
-        estimated_input_tokens: research_depth === 'ECONOMICO' ? 21000 : (research_depth === 'ESTANDAR' ? 28000 : 42000),
-        estimated_input_tokens_min: research_depth === 'ECONOMICO' ? 16500 : (research_depth === 'ESTANDAR' ? 22000 : 30000),
-        estimated_input_tokens_expected: research_depth === 'ECONOMICO' ? 21000 : (research_depth === 'ESTANDAR' ? 28000 : 42000),
-        estimated_input_tokens_max: research_depth === 'ECONOMICO' ? 26000 : (research_depth === 'ESTANDAR' ? 36000 : 58000),
-        estimated_output_tokens_min: research_depth === 'ECONOMICO' ? 250 : (research_depth === 'ESTANDAR' ? 350 : 500),
-        estimated_output_tokens_expected: research_depth === 'ECONOMICO' ? 450 : (research_depth === 'ESTANDAR' ? 600 : 900),
-        max_output_tokens: research_depth === 'ECONOMICO' ? 600 : (research_depth === 'ESTANDAR' ? 750 : 1200),
-        estimated_input_cost_usd: research_depth === 'ECONOMICO' ? 0.00315 : 0.056,
-        estimated_output_cost_usd: research_depth === 'ECONOMICO' ? 0.00027 : 0.0072,
-        estimated_cost_min_usd: research_depth === 'ECONOMICO' ? 0.00263 : 0.048,
-        estimated_cost_expected_usd: research_depth === 'ECONOMICO' ? 0.00342 : 0.063,
-        estimated_cost_max_usd: research_depth === 'ECONOMICO' ? 0.00426 : 0.081,
-        estimated_total_min_usd: research_depth === 'ECONOMICO' ? 0.00263 : 0.048,
-        estimated_total_max_usd: research_depth === 'ECONOMICO' ? 0.00426 : 0.081,
-        estimated_total_avg_usd: research_depth === 'ECONOMICO' ? 0.00342 : 0.063,
+        estimated_input_tokens: inputTokensExpected,
+        estimated_input_tokens_min: inputTokensMin,
+        estimated_input_tokens_expected: inputTokensExpected,
+        estimated_input_tokens_max: inputTokensMax,
+        estimated_output_tokens_min: outputTokensMin,
+        estimated_output_tokens_expected: outputTokensExpected,
+        max_output_tokens: outputTokensMax,
+        estimated_input_cost_usd: Number(inputCostExpected.toFixed(6)),
+        estimated_output_cost_usd: Number(outputCostExpected.toFixed(6)),
+        estimated_cost_min_usd: Number(totalMin.toFixed(6)),
+        estimated_cost_expected_usd: Number(totalExpected.toFixed(6)),
+        estimated_cost_max_usd: Number(totalMax.toFixed(6)),
+        estimated_total_min_usd: Number(totalMin.toFixed(6)),
+        estimated_total_max_usd: Number(totalMax.toFixed(6)),
+        estimated_total_avg_usd: Number(totalExpected.toFixed(6)),
         web_search_planned: true,
         cache: { status: 'MISS', age_seconds: null },
-        requires_confirmation: false,
+        requires_confirmation: totalExpected >= 0.05,
         hard_limit_exceeded: false,
         warning_threshold_usd: 0.02,
         pricing_source: 'LOCAL_FALLBACK',

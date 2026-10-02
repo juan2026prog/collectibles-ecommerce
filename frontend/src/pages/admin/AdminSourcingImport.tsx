@@ -57,7 +57,7 @@ export default function AdminSourcingImport() {
 
   // Country, Period and Category context
   const [selectedCountry, setSelectedCountry] = useState<string>('UY');
-  const [selectedPeriod, setSelectedPeriod] = useState<'24h' | '7d' | '30d' | '90d'>('7d');
+  const [selectedPeriod, setSelectedPeriod] = useState<'24h' | '7d' | '30d' | '90d' | 'all'>('all');
   const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
 
   // Research Query state

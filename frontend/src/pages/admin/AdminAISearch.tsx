@@ -54,7 +54,7 @@ export default function AdminAISearch() {
       setLoading(true);
       const [logsRes, embedRes, synRes] = await Promise.all([
         supabase.from('ai_search_logs').select('*').order('created_at', { ascending: false }).limit(50),
-        supabase.from('product_embeddings').select('id', { count: 'exact', head: true }),
+        supabase.from('product_embeddings').select('product_id', { count: 'exact', head: true }),
         supabase.from('ai_search_synonyms').select('id', { count: 'exact', head: true })
       ]);
 
@@ -80,10 +80,17 @@ export default function AdminAISearch() {
       const { data, error } = await supabase
         .from('ai_search_synonyms')
         .select('*')
-        .order('source_term', { ascending: true });
+        .order('term', { ascending: true });
 
       if (!error && data) {
-        setSynonyms(data);
+        const mapped: SynonymRow[] = data.map((item: any) => ({
+          id: item.id,
+          source_term: item.term || item.source_term || '',
+          target_term: item.canonical_term || item.target_term || '',
+          is_active: item.active ?? item.is_active ?? true,
+          created_at: item.created_at
+        }));
+        setSynonyms(mapped);
       }
     } catch (err) {
       console.error('Error loading synonyms:', err);
@@ -99,9 +106,9 @@ export default function AdminAISearch() {
     setSavingSynonym(true);
     try {
       const payload = {
-        source_term: editingSynonym.source_term.trim().toLowerCase(),
-        target_term: editingSynonym.target_term.trim(),
-        is_active: editingSynonym.is_active ?? true
+        term: editingSynonym.source_term.trim().toLowerCase(),
+        canonical_term: editingSynonym.target_term.trim(),
+        active: editingSynonym.is_active ?? true
       };
 
       if (editingSynonym.id) {

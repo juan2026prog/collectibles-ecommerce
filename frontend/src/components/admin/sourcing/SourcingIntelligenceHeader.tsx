@@ -106,13 +106,21 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
     };
   }, []);
 
-  // Live Zero-Cost Pre-Flight Estimator Trigger (Debounced)
+  // Live Zero-Cost Pre-Flight Estimator Trigger (Debounced & Deduplicated)
+  const lastEstimateKeyRef = useRef<string>('');
+
   useEffect(() => {
     const clean = (searchQuery || '').trim();
     if (!clean || clean.length < 3) {
       setPreFlightEstimate(null);
       setShowConfirmationWarning(false);
+      lastEstimateKeyRef.current = '';
       return;
+    }
+
+    const currentKey = `${clean}|${country}|${researchMode}|${selectedModel}`;
+    if (lastEstimateKeyRef.current === currentKey && preFlightEstimate) {
+      return; // Deduplicate identical params
     }
 
     let isMounted = true;
@@ -126,6 +134,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
           requested_model: selectedModel
         });
         if (isMounted) {
+          lastEstimateKeyRef.current = currentKey;
           setPreFlightEstimate(est);
           if (est?.requires_confirmation) {
             setShowConfirmationWarning(true);
@@ -138,7 +147,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
       } finally {
         if (isMounted) setIsEstimating(false);
       }
-    }, 280);
+    }, 450);
 
     return () => {
       isMounted = false;
@@ -206,17 +215,17 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
 
           {/* Selector de Período */}
           <div className="flex items-center bg-slate-800 border border-slate-700 p-1 rounded-xl text-xs font-bold">
-            {(['24h', '7d', '30d', '90d'] as const).map(p => (
+            {(['all', '24h', '7d', '30d', '90d'] as const).map(p => (
               <button
                 key={p}
-                onClick={() => onPeriodChange(p)}
+                onClick={() => onPeriodChange(p as any)}
                 className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                   period === p 
                     ? 'bg-[#f00856] text-white font-black shadow-xs' 
                     : 'text-slate-300 hover:text-white'
                 }`}
               >
-                {p === '24h' ? '24h' : p === '7d' ? '7 días' : p === '30d' ? '30 días' : '90 días'}
+                {p === 'all' ? 'Sin límite' : p === '24h' ? '24h' : p === '7d' ? '7 días' : p === '30d' ? '30 días' : '90 días'}
               </button>
             ))}
           </div>
