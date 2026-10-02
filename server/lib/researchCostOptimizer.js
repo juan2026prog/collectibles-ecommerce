@@ -14,21 +14,21 @@ export const RESEARCH_MODES = Object.freeze({
     label: '⚡ Económico',
     model: 'gpt-4o-mini',
     fallbackModel: 'gpt-5.6-luna',
-    maxCandidates: 5,
-    maxOutputTokens: 600,
+    maxCandidates: 15,
+    maxOutputTokens: 1200,
     searchDepth: 'QUICK',
     expectedWebInputTokensMin: 16500,
     expectedWebInputTokensMax: 26000,
     expectedWebInputTokens: 21000,
-    expectedWebOutputTokensMin: 250,
-    expectedWebOutputTokensMax: 600,
-    expectedWebOutputTokens: 450,
+    expectedWebOutputTokensMin: 400,
+    expectedWebOutputTokensMax: 1200,
+    expectedWebOutputTokens: 800,
     noWebInputTokensMin: 300,
     noWebInputTokensMax: 1500,
     noWebInputTokens: 600,
     noWebOutputTokensMin: 200,
-    noWebOutputTokensMax: 600,
-    noWebOutputTokens: 350,
+    noWebOutputTokensMax: 800,
+    noWebOutputTokens: 450,
     timeoutMs: 35000,
     webSearchToolCostUsd: 0,
     targetCostMaxUsd: 0.01
@@ -263,9 +263,9 @@ Familia de producto: ${familyLabel}${familyInstruction}
 
 Instrucciones:
 1. Resuelve alias multilingües si la consulta está en español (ej. "ositos cariñosos" -> "Care Bears", "caballeros del zodiaco" -> "Saint Seiya", "tortugas ninja" -> "TMNT / Teenage Mutant Ninja Turtles", etc.) para descubrir productos oficiales existentes en el mercado global.
-2. Identifica hasta ${maxItems} productos oficiales reales, preventas o lanzamientos relevantes.
+2. Identifica hasta ${maxItems} productos oficiales reales y relevantes, priorizando diversidad de productos y fuentes (fabricantes oficiales, retailers, marketplaces y anuncios de lanzamientos). Si hay menos productos verificables con evidencia suficiente, incluye únicamente los confirmados.
 3. Si la consulta menciona preventas o novedades ("nuevos", "lanzamientos", "preventa"), prioriza lanzamientos recientes; de lo contrario, incluye los coleccionables oficiales más demandados del catálogo.
-4. NUNCA inventes precios, costos ni stock.
+4. NUNCA inventes precios, costos ni stock. NUNCA inventes productos no verificados. Si un dato no es verificable, devuelve null.
 5. Devuelve ÚNICAMENTE un JSON compacto con la siguiente estructura:
 {"summary":string,"confidence":number_0_to_1,"subtrends":string[],"items":[{"title":string,"brand":string,"franchise":string,"category":string,"origin_price_usd":number_or_null,"asin":string_or_null,"url":string_or_null,"retailer":string,"is_preorder":boolean,"is_new":boolean,"release_date":string_or_null,"evidence_snippet":string}]}`;
 }

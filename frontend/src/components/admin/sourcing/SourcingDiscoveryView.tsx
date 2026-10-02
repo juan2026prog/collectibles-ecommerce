@@ -212,12 +212,16 @@ export const SourcingDiscoveryView: React.FC<SourcingDiscoveryViewProps> = ({
                     <div className="flex justify-between">
                       <span>Costo Puesto {country}:</span>
                       <strong className="text-gray-900">
-                        ${Number(landedCost).toFixed(2)}
+                        {landedCost !== null && landedCost !== undefined ? `$${Number(landedCost).toFixed(2)}` : 'Pendiente'}
                       </strong>
                     </div>
                     <div className="flex justify-between font-bold text-emerald-600">
                       <span>Margen Estimado:</span>
-                      <span>+{Number(marginPct).toFixed(1)}%</span>
+                      {marginPct !== null && marginPct !== undefined ? (
+                        <span>+{Number(marginPct).toFixed(1)}%</span>
+                      ) : (
+                        <span className="text-slate-400 font-normal italic">Sin referencia local</span>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -185,7 +185,11 @@ export const WhyExplainabilityModal: React.FC<WhyExplainabilityModalProps> = ({
                   <span>Diferencial de Precios & Margen</span>
                 </span>
                 <p className="text-xs text-blue-950 font-medium leading-relaxed">
-                  {why.market_differential || `Landed cost estimado en USD ${candidate.pricing?.landed_cost_estimated_usd || candidate.pricing?.amazon_price_usd} con margen proyectado de ${candidate.pricing?.estimated_margin_percent || 25}%.`}
+                  {why.market_differential || (
+                    candidate.pricing?.estimated_margin_percent !== null && candidate.pricing?.estimated_margin_percent !== undefined
+                      ? `Landed cost estimado en USD ${candidate.pricing?.landed_cost_estimated_usd || candidate.pricing?.amazon_price_usd} con margen proyectado de ${candidate.pricing?.estimated_margin_percent}%.`
+                      : `Landed cost estimado en USD ${candidate.pricing?.landed_cost_estimated_usd || candidate.pricing?.amazon_price_usd || 'N/A'}. Margen y PVP pendientes de cotización o referencia en plaza local.`
+                  )}
                 </p>
               </div>
 

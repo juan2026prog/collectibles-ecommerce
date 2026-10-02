@@ -18,8 +18,8 @@ describe('RESEARCH COST OPTIMIZER & PRE-FLIGHT ESTIMATOR (ZERO OPENAI COST)', ()
     expect(RESEARCH_MODES.PROFUNDO).toBeDefined();
 
     expect(RESEARCH_MODES.ECONOMICO.model).toBe('gpt-4o-mini');
-    expect(RESEARCH_MODES.ECONOMICO.maxCandidates).toBe(5);
-    expect(RESEARCH_MODES.ECONOMICO.maxOutputTokens).toBe(600);
+    expect(RESEARCH_MODES.ECONOMICO.maxCandidates).toBe(15);
+    expect(RESEARCH_MODES.ECONOMICO.maxOutputTokens).toBe(1200);
 
     expect(RESEARCH_MODES.ESTANDAR.model).toBe('gpt-5.6-terra');
     expect(RESEARCH_MODES.ESTANDAR.maxCandidates).toBe(8);
@@ -71,8 +71,8 @@ describe('RESEARCH COST OPTIMIZER & PRE-FLIGHT ESTIMATOR (ZERO OPENAI COST)', ()
 
     expect(est.model).toBe('gpt-4o-mini');
     expect(est.research_depth).toBe('ECONOMICO');
-    expect(est.max_candidates).toBe(5);
-    expect(est.max_output_tokens).toBe(600);
+    expect(est.max_candidates).toBe(15);
+    expect(est.max_output_tokens).toBe(1200);
     expect(est.estimated_total_max_usd).toBeLessThanOrEqual(COST_THRESHOLDS.LOW_MAX_USD);
     expect(est.requires_confirmation).toBe(false);
     expect(est.openai_calls_used).toBe(0);

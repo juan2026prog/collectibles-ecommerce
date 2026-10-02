@@ -145,9 +145,9 @@ export class SourcingDiscoveryEngine {
             tiendamia_price_usd: d.evidence?.tiendamia_price || null,
             mercadolibre_price_local: d.evidence?.ml_price || null,
             mercadolibre_currency: country === 'UY' ? 'UYU' : 'ARS',
-            landed_cost_estimated_usd: d.landed_cost_usd || (d.price_usd || 0),
-            suggested_sale_price_usd: d.suggested_price_usd || ((d.price_usd || 0) * 1.3),
-            estimated_margin_percent: d.margin_percent || 25,
+            landed_cost_estimated_usd: d.landed_cost_usd !== null && d.landed_cost_usd !== undefined ? Number(d.landed_cost_usd) : null,
+            suggested_sale_price_usd: d.suggested_price_usd !== null && d.suggested_price_usd !== undefined ? Number(d.suggested_price_usd) : null,
+            estimated_margin_percent: d.margin_percent !== null && d.margin_percent !== undefined ? Number(d.margin_percent) : null,
             currency: 'USD'
           },
           stock_status: d.stock_status as any,

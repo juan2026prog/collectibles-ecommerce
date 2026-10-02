@@ -80,8 +80,8 @@ describe('SOURCING AI MODEL SELECTOR & DYNAMIC MANUAL OVERRIDE (ZERO OPENAI CALL
     expect(estAuto.requested_model).toBe('AUTO');
     expect(estAuto.automatic_or_manual).toBe('AUTO');
     expect(estAuto.model).toBe('gpt-4o-mini');
-    expect(estAuto.max_candidates).toBe(5); // ECONOMICO limit
-    expect(estAuto.max_output_tokens).toBe(600); // ECONOMICO limit
+    expect(estAuto.max_candidates).toBe(15); // ECONOMICO limit
+    expect(estAuto.max_output_tokens).toBe(1200); // ECONOMICO limit
     expect(estAuto.estimated_total_avg_usd).toBeLessThan(0.01);
     expect(estAuto.openai_calls_used).toBe(0);
 
@@ -97,8 +97,8 @@ describe('SOURCING AI MODEL SELECTOR & DYNAMIC MANUAL OVERRIDE (ZERO OPENAI CALL
     expect(estTerra.requested_model).toBe('gpt-5.6-terra');
     expect(estTerra.automatic_or_manual).toBe('MANUAL');
     expect(estTerra.model).toBe('gpt-5.6-terra');
-    expect(estTerra.max_candidates).toBe(5); // Still ECONOMICO limit!
-    expect(estTerra.max_output_tokens).toBe(600); // Still ECONOMICO limit!
+    expect(estTerra.max_candidates).toBe(15); // Still ECONOMICO limit!
+    expect(estTerra.max_output_tokens).toBe(1200); // Still ECONOMICO limit!
     expect(estTerra.estimated_total_avg_usd).toBeGreaterThan(estAuto.estimated_total_avg_usd);
     expect(estTerra.cheaper_alternative).toBeDefined();
     expect(estTerra.cheaper_alternative?.model).toBe('gpt-4o-mini');

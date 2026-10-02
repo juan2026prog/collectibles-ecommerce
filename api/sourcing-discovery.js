@@ -96,60 +96,153 @@ function computeDeterministicOpportunityScore({
   isNew,
   rawSourcesCount = 1,
   sourceRetailer = '',
-  mlMatchesCount = 0,
-  marginPercent = 25,
-  hasLocalSearchDemand = false
+  mlMatchesCount = null,
+  marginPercent = null,
+  hasLocalSearchDemand = false,
+  communitySignalsCount = 0
 }) {
-  // 1. Global Momentum (0-25)
-  let globalMomentum = 14;
-  if (isPreorder) globalMomentum = 24;
-  else if (isNew) globalMomentum = 19;
-  else if (rawSourcesCount > 2) globalMomentum = 21;
+  // 1. Global Momentum (0-25) — NO EVIDENCE = NO POINTS
+  // Preorder alone is NOT momentum. Requires multiple independent sources, community discussions, or retail availability.
+  let globalMomentum = 0;
+  let momentumConfidence = 'UNKNOWN';
+  let momentumReason = 'Sin señales de tracción o volumen verificable';
+
+  if (rawSourcesCount >= 3 || communitySignalsCount >= 2) {
+    globalMomentum = 20;
+    momentumConfidence = 'HIGH';
+    momentumReason = `Tracción confirmada en ${rawSourcesCount} fuentes independientes y discusiones`;
+  } else if (rawSourcesCount >= 2) {
+    globalMomentum = 12;
+    momentumConfidence = 'MEDIUM';
+    momentumReason = `Tracción observable en ${rawSourcesCount} fuentes de mercado`;
+  } else {
+    globalMomentum = 0;
+    momentumConfidence = 'UNKNOWN';
+    momentumReason = 'Solo 1 mención de fuente; momentum pendiente de confirmación';
+  }
 
   // 2. Novelty Factor (0-20)
-  let novelty = 10;
-  if (isPreorder) novelty = 20;
-  else if (isNew) novelty = 16;
+  // Reflects recency of announcement or release date, NOT demand.
+  let novelty = 0;
+  let noveltyReason = 'Catálogo regular';
+  if (isPreorder) {
+    novelty = 18;
+    noveltyReason = 'Preventa oficial activa de catálogo reciente';
+  } else if (isNew) {
+    novelty = 14;
+    noveltyReason = 'Nuevo lanzamiento confirmado en catálogo';
+  } else {
+    novelty = 0;
+    noveltyReason = 'Sin fecha reciente demostrada';
+  }
 
   // 3. Source Confidence (0-15)
-  let sourceConfidence = 10;
+  // Confidence based on authoritative provenance
+  let sourceConfidence = 0;
+  let sourceReason = 'Fuente no verificada';
   const r = (sourceRetailer || '').toLowerCase();
-  if (r.includes('official') || r.includes('mcfarlane') || r.includes('neca') || r.includes('hasbro') || r.includes('bandai')) {
+  if (r.includes('official') || r.includes('mcfarlane') || r.includes('neca') || r.includes('hasbro') || r.includes('bandai') || r.includes('tamashii') || r.includes('mattel') || r.includes('hot toys')) {
     sourceConfidence = 15;
+    sourceReason = `Fabricante oficial verificado (${sourceRetailer})`;
   } else if (r.includes('bigbadtoystore') || r.includes('entertainmentearth') || r.includes('amazon') || r.includes('best buy')) {
-    sourceConfidence = 13;
+    sourceConfidence = 12;
+    sourceReason = `Retailer autorizado internacional (${sourceRetailer})`;
+  } else if (r.length > 0) {
+    sourceConfidence = 7;
+    sourceReason = `Canal de mercado secundario (${sourceRetailer})`;
+  } else {
+    sourceConfidence = 0;
+    sourceReason = 'Fuente desconocida';
   }
 
   // 4. Local Supply Gap in UY (0-15)
-  let localSupplyGap = 5;
-  if (mlMatchesCount === 0) {
-    localSupplyGap = 15; // Complete gap in UY = highest early market opportunity
+  // Absence in MLU is an observable lack of supply, NOT local demand.
+  let localSupplyGap = 0;
+  let supplyGapReason = 'Presencia local no verificada';
+  if (mlMatchesCount === null || mlMatchesCount === undefined) {
+    localSupplyGap = 0;
+    supplyGapReason = 'Sin chequeo de oferta local';
+  } else if (mlMatchesCount === 0) {
+    localSupplyGap = 15;
+    supplyGapReason = '0 publicaciones equivalentes en ML Uruguay (Brecha de oferta)';
   } else if (mlMatchesCount <= 2) {
-    localSupplyGap = 10;
+    localSupplyGap = 8;
+    supplyGapReason = `Oferta local limitada (${mlMatchesCount} publicaciones relacionadas en MLU)`;
   } else {
-    localSupplyGap = 2; // High local saturation
+    localSupplyGap = 0;
+    supplyGapReason = `Oferta local saturada (${mlMatchesCount} publicaciones en MLU)`;
   }
 
-  // 5. Landed Margin (0-15)
-  let importMargin = 5;
-  if (marginPercent >= 30) importMargin = 15;
-  else if (marginPercent >= 25) importMargin = 12;
-  else if (marginPercent >= 20) importMargin = 9;
-  else if (marginPercent >= 15) importMargin = 6;
-  else importMargin = 0;
+  // 5. Landed Margin (0-15) — NO EVIDENCE = NO POINTS
+  // Only awards points if marginPercent is a real derived number from real costs & prices.
+  let importMargin = 0;
+  let marginReason = 'Margen desconocido o sin precio de referencia local';
+  if (typeof marginPercent === 'number' && !isNaN(marginPercent)) {
+    if (marginPercent >= 30) {
+      importMargin = 15;
+      marginReason = `Margen comercial sólido (${marginPercent.toFixed(1)}%)`;
+    } else if (marginPercent >= 20) {
+      importMargin = 10;
+      marginReason = `Margen comercial viable (${marginPercent.toFixed(1)}%)`;
+    } else if (marginPercent >= 10) {
+      importMargin = 5;
+      marginReason = `Margen comercial ajustado (${marginPercent.toFixed(1)}%)`;
+    } else {
+      importMargin = 0;
+      marginReason = `Margen inferior al umbral mínimo (${marginPercent.toFixed(1)}%)`;
+    }
+  } else {
+    importMargin = 0;
+    marginReason = 'Margen pendiente (sin referencia de precio local)';
+  }
 
-  // 6. Local Demand Corroboration (0-10)
-  let localDemand = hasLocalSearchDemand ? 10 : 0;
+  // 6. Local Demand Corroboration (0-10) — NO EVIDENCE = NO POINTS
+  // Requires explicit internal or local evidence
+  let localDemand = 0;
+  let demandReason = 'Demanda local desconocida (sin historial en Collectibles)';
+  if (hasLocalSearchDemand) {
+    localDemand = 10;
+    demandReason = 'Búsquedas o wishlist activas de usuarios en Collectibles';
+  } else {
+    localDemand = 0;
+    demandReason = 'Demanda local desconocida (0 puntos asignados)';
+  }
 
   const totalScore = Math.min(100, Math.max(0,
     globalMomentum + novelty + sourceConfidence + localSupplyGap + importMargin + localDemand
   ));
 
-  const isEarly = !hasLocalSearchDemand && mlMatchesCount === 0;
+  // Determine overall score confidence based on backed components
+  let scoreConfidence = 'LOW';
+  const backedFactors = [
+    globalMomentum > 0,
+    novelty > 0,
+    sourceConfidence > 0,
+    localSupplyGap > 0,
+    importMargin > 0,
+    localDemand > 0
+  ].filter(Boolean).length;
+
+  if (backedFactors >= 4 && (importMargin > 0 || localDemand > 0)) {
+    scoreConfidence = 'HIGH';
+  } else if (backedFactors >= 3) {
+    scoreConfidence = 'MEDIUM';
+  } else {
+    scoreConfidence = 'LOW';
+  }
 
   return {
     totalScore,
+    scoreConfidence,
     breakdown: {
+      global_momentum: { points: globalMomentum, max: 25, reason: momentumReason, confidence: momentumConfidence },
+      novelty: { points: novelty, max: 20, reason: noveltyReason, confidence: novelty > 0 ? 'HIGH' : 'UNKNOWN' },
+      source_confidence: { points: sourceConfidence, max: 15, reason: sourceReason, confidence: sourceConfidence >= 12 ? 'HIGH' : 'MEDIUM' },
+      local_supply_gap: { points: localSupplyGap, max: 15, reason: supplyGapReason, confidence: mlMatchesCount !== null ? 'HIGH' : 'UNKNOWN' },
+      import_margin: { points: importMargin, max: 15, reason: marginReason, confidence: typeof marginPercent === 'number' ? 'HIGH' : 'UNKNOWN' },
+      local_demand: { points: localDemand, max: 10, reason: demandReason, confidence: hasLocalSearchDemand ? 'HIGH' : 'UNKNOWN' }
+    },
+    rawBreakdown: {
       global_momentum: globalMomentum,
       novelty,
       source_confidence: sourceConfidence,
@@ -157,8 +250,7 @@ function computeDeterministicOpportunityScore({
       import_margin: importMargin,
       local_demand: localDemand
     },
-    opportunityType: isEarly ? 'EARLY_MARKET_OPPORTUNITY' : (hasLocalSearchDemand ? 'VALIDATED_OPPORTUNITY' : 'MARKET_OPPORTUNITY'),
-    confidence: (totalScore >= 80 && hasLocalSearchDemand) ? 'HIGH' : 'MEDIUM'
+    opportunityType: (localSupplyGap > 0 && localDemand === 0) ? 'EARLY_MARKET_OPPORTUNITY' : (hasLocalSearchDemand ? 'VALIDATED_OPPORTUNITY' : 'MARKET_OPPORTUNITY')
   };
 }
 
@@ -501,23 +593,48 @@ Devuelve ÚNICAMENTE un objeto JSON válido con la siguiente estructura:
               (item.brand && item.brand.toLowerCase().includes(w.toLowerCase()))
             );
 
-            const itemPrice = typeof item.origin_price_usd === 'number' && item.origin_price_usd > 0 ? item.origin_price_usd : 29.99;
-            const landedCostEst = Math.round((itemPrice * 1.25 + 10) * 100) / 100;
-            const suggestedSalePrice = Math.round((landedCostEst * 1.35) * 100) / 100;
-            const marginPct = Math.round(((suggestedSalePrice - landedCostEst) / suggestedSalePrice) * 100);
+            // 1. ORIGIN PRICE (OBSERVED from source)
+            const itemPrice = typeof item.origin_price_usd === 'number' && item.origin_price_usd > 0 ? item.origin_price_usd : null;
+            // 2. LANDED COST (DERIVED formula: price * 1.25 + 10 shipping/handling)
+            const landedCostEst = itemPrice ? Math.round((itemPrice * 1.25 + 10) * 100) / 100 : null;
 
-            // EVALUATE LOCAL MLU SUPPLY FOR URUGUAY
+            // 3. EVALUATE LOCAL MLU SUPPLY & PRICING FOR URUGUAY (OBSERVED local reference)
             let localMluMatchesCount = 0;
+            let localMarketPriceUsd = null;
             try {
               const { data: matchingMlu } = await supabase
                 .from('ml_raw_items')
-                .select('id, title, price')
+                .select('id, title, price, currency_id')
                 .ilike('title', `%${item.brand || item.title.split(' ')[0]}%`)
                 .limit(5);
-              if (matchingMlu) localMluMatchesCount = matchingMlu.length;
+              if (matchingMlu && matchingMlu.length > 0) {
+                localMluMatchesCount = matchingMlu.length;
+                const itemWithPrice = matchingMlu.find(m => Number(m.price) > 0);
+                if (itemWithPrice) {
+                  const rawP = Number(itemWithPrice.price);
+                  localMarketPriceUsd = itemWithPrice.currency_id === 'UYU' ? Math.round((rawP / 42.5) * 100) / 100 : rawP;
+                }
+              }
             } catch {}
 
-            // Deterministic multi-factor scoring
+            // 4. SUGGESTED SALE PRICE & MARGIN (DERIVED ONLY IF LOCAL PRICE OR EXPLICIT BENCHMARK EXISTS)
+            let suggestedSalePrice = null;
+            let marginPct = null;
+            let marginProvenance = 'UNKNOWN';
+
+            if (localMarketPriceUsd && landedCostEst && localMarketPriceUsd > landedCostEst) {
+              // Local market price exists: price competitively slightly below local market
+              suggestedSalePrice = Math.round(localMarketPriceUsd * 0.95 * 100) / 100;
+              marginPct = Math.round(((suggestedSalePrice - landedCostEst) / suggestedSalePrice) * 100);
+              marginProvenance = 'DERIVED_FROM_LOCAL_MARKET';
+            } else {
+              // NO LOCAL MARKET REFERENCE: Do NOT invent a fake +26% margin!
+              suggestedSalePrice = null;
+              marginPct = null;
+              marginProvenance = 'UNKNOWN';
+            }
+
+            // Deterministic multi-factor scoring (STRICT EVIDENCE-BASED: NO EVIDENCE = NO POINTS)
             const scoreDetails = computeDeterministicOpportunityScore({
               isPreorder: Boolean(item.is_preorder),
               isNew: Boolean(item.is_new),
