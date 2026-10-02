@@ -308,7 +308,7 @@ export default async function handler(req, res) {
       }
 
       // Country check
-      if (country && country !== 'GLOBAL') {
+      if (country && country !== 'GLOBAL' && country !== 'ALL' && country !== 'TODOS') {
         const { data: fetchedCntrData } = await safeDbQuery(
           client
             .from('ai_country_config')
@@ -622,6 +622,19 @@ export default async function handler(req, res) {
     const tools = isWebSearchNeeded ? [{ type: 'web_search' }] : undefined;
     const toolChoice = isWebSearchNeeded ? (modeConfig.key === 'PROFUNDO' ? 'required' : 'auto') : undefined;
 
+    console.info(`[RESEARCH_TRACE] OPENAI_REQUEST_STARTED`, {
+      request_id: requestId,
+      query: cleanSearchQuery || resolvedInput,
+      target_country: country || 'GLOBAL',
+      product_family: effectiveProductFamily,
+      time_scope: effectiveTimeScope,
+      research_depth: modeConfig.key,
+      requested_model: effectiveRequestedModel,
+      actual_model: selectedModel,
+      dynamic_max_tokens: dynamicMaxTokens,
+      has_web_search: isWebSearchNeeded
+    });
+
     // 3. Call OpenAI Responses API server-side with mode-specific token & cost constraints
     const result = await callOpenAIResponses({
       model: selectedModel,
@@ -641,9 +654,21 @@ export default async function handler(req, res) {
       }
     });
 
-
     const elapsedMs = Date.now() - startTime;
     const finalRequestId = result.requestId || requestId;
+
+    console.info(`[RESEARCH_TRACE] OPENAI_RESPONSE_RECEIVED`, {
+      request_id: finalRequestId,
+      actual_model: result.model,
+      output_text_length: (result.outputText || '').length,
+      sources_count: (result.sources || []).length,
+      web_search_call_detected: (result.sources || []).length > 0 || (result.raw?.output || []).some(o => o.type === 'web_search_call'),
+      input_tokens: result.usage?.inputTokens,
+      output_tokens: result.usage?.outputTokens,
+      total_tokens: result.usage?.totalTokens,
+      estimated_cost_usd: result.pricing?.estimated_cost_usd,
+      latency_ms: elapsedMs
+    });
 
     // 4. Log Success Telemetry to ai_usage_events
     if (client) {
@@ -706,6 +731,8 @@ export default async function handler(req, res) {
 
     // 5. Parse structured Part 3 outputs server-side and Validate Evidence IDs
     let structuredData = null;
+    let parsedContainerType = 'NONE';
+    let rawCandidateCount = 0;
     let intelligenceRunStatus = 'SUCCESS';
 
     if (isStructuredAdvisoryEngine || isSourcingResearch) {
@@ -759,20 +786,48 @@ export default async function handler(req, res) {
 
     if (isSourcingResearch && structuredData) {
       if (Array.isArray(structuredData)) {
+        parsedContainerType = 'root_array';
+        rawCandidateCount = structuredData.length;
         structuredData = {
           summary: 'Investigación de mercado completada.',
           confidence: 0.85,
           subtrends: [],
           items: structuredData
         };
-      } else if (!Array.isArray(structuredData.items)) {
-        if (Array.isArray(structuredData.products)) structuredData.items = structuredData.products;
-        else if (Array.isArray(structuredData.candidates)) structuredData.items = structuredData.candidates;
-        else if (Array.isArray(structuredData.results)) structuredData.items = structuredData.results;
-        else if (Array.isArray(structuredData.discoveries)) structuredData.items = structuredData.discoveries;
-        else structuredData.items = [];
+      } else {
+        if (Array.isArray(structuredData.items)) {
+          parsedContainerType = 'items';
+          rawCandidateCount = structuredData.items.length;
+        } else if (Array.isArray(structuredData.products)) {
+          parsedContainerType = 'products';
+          rawCandidateCount = structuredData.products.length;
+          structuredData.items = structuredData.products;
+        } else if (Array.isArray(structuredData.candidates)) {
+          parsedContainerType = 'candidates';
+          rawCandidateCount = structuredData.candidates.length;
+          structuredData.items = structuredData.candidates;
+        } else if (Array.isArray(structuredData.results)) {
+          parsedContainerType = 'results';
+          rawCandidateCount = structuredData.results.length;
+          structuredData.items = structuredData.results;
+        } else if (Array.isArray(structuredData.discoveries)) {
+          parsedContainerType = 'discoveries';
+          rawCandidateCount = structuredData.discoveries.length;
+          structuredData.items = structuredData.discoveries;
+        } else {
+          parsedContainerType = 'NONE';
+          structuredData.items = [];
+        }
       }
     }
+
+    console.info(`[RESEARCH_TRACE] STRUCTURED_PARSE_RESULT`, {
+      request_id: finalRequestId,
+      structured_payload_detected: Boolean(structuredData),
+      parsed_container: parsedContainerType,
+      raw_candidate_count: rawCandidateCount,
+      final_candidate_count: Array.isArray(structuredData?.items) ? structuredData.items.length : 0
+    });
 
     if (isStructuredAdvisoryEngine && structuredData) {
 

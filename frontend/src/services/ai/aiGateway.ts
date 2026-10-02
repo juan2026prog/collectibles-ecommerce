@@ -89,8 +89,9 @@ export class AIGateway {
         );
       }
 
-      // 2. Check Country Config if country specified
-      if (country) {
+      // 2. Check Country Config if specific 2-letter country is targeted (GLOBAL/ALL is always allowed)
+      const isGlobalScope = !country || country === 'ALL' || country === 'GLOBAL' || country === 'TODOS';
+      if (!isGlobalScope) {
         const { data: countryData } = await supabase
           .from('ai_country_config')
           .select('*')
