@@ -388,6 +388,8 @@ export class AIGateway {
   public async estimateCost(params: {
     query: string;
     country?: string;
+    product_family?: string;
+    category?: string;
     research_depth?: 'ECONOMICO' | 'ESTANDAR' | 'PROFUNDO';
     requested_model?: string;
     time_scope?: string;
@@ -399,6 +401,8 @@ export class AIGateway {
     const {
       query,
       country = 'UY',
+      product_family,
+      category,
       research_depth = 'ECONOMICO',
       requested_model = 'AUTO',
       time_scope = 'ALL_TIME',
@@ -416,6 +420,7 @@ export class AIGateway {
       } catch (_) {}
 
       const effectiveTimeScope = time_scope || period || 'ALL_TIME';
+      const effectiveProductFamily = product_family || category || 'ALL';
 
       const res = await fetch('/api/ai-estimate', {
         method: 'POST',
@@ -426,6 +431,8 @@ export class AIGateway {
         body: JSON.stringify({
           query,
           country,
+          product_family: effectiveProductFamily,
+          category: effectiveProductFamily,
           research_depth,
           requested_model,
           time_scope: effectiveTimeScope,

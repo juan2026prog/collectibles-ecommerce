@@ -160,16 +160,40 @@ export function normalizeQuery(query) {
     .trim();
 }
 
+export const COLLECTIBLES_PRODUCT_FAMILIES = Object.freeze([
+  { id: 'ALL', label: 'Todos' },
+  { id: 'FIGURES', label: 'Figuras' },
+  { id: 'STATUES_BUSTS', label: 'Estatuas y Bustos' },
+  { id: 'PLUSH', label: 'Peluches' },
+  { id: 'COMICS_MANGA', label: 'Cómics y Manga' },
+  { id: 'TCG_CARDS', label: 'TCG y Cartas' },
+  { id: 'APPAREL_ACCESSORIES', label: 'Ropa y Accesorios' },
+  { id: 'BUILDING_SETS', label: 'Building Sets / LEGO' },
+  { id: 'BOARD_GAMES', label: 'Board Games' },
+  { id: 'PUZZLES', label: 'Puzzles' },
+  { id: 'REPLICAS_PROPS', label: 'Réplicas y Props' },
+  { id: 'VEHICLES', label: 'Vehículos' },
+  { id: 'OTHER_COLLECTIBLES', label: 'Otros Coleccionables' }
+]);
+
+export function normalizeProductFamily(family) {
+  if (!family || typeof family !== 'string') return 'ALL';
+  const clean = family.trim().toUpperCase();
+  const matched = COLLECTIBLES_PRODUCT_FAMILIES.find(f => f.id === clean || f.label.toUpperCase() === clean);
+  return matched ? matched.id : 'ALL';
+}
+
 /**
  * Generates deterministic cache key for research queries
  * Global research cache is reusable across countries!
  */
-export function generateResearchCacheKey(query, scope = 'GLOBAL', depth = 'ECONOMICO', model = 'AUTO', timeScope = 'ALL_TIME') {
+export function generateResearchCacheKey(query, scope = 'GLOBAL', depth = 'ECONOMICO', model = 'AUTO', timeScope = 'ALL_TIME', productFamily = 'ALL') {
   const normQuery = normalizeQuery(query);
   const normDepth = (depth || 'ECONOMICO').toUpperCase();
   const normModel = (model && model !== 'AUTO') ? String(model).toLowerCase().trim() : 'AUTO';
   const normTime = (timeScope || 'ALL_TIME').toUpperCase();
-  const rawKey = `${normQuery}|${scope}|${normDepth}|${normModel}|${normTime}`;
+  const normFamily = normalizeProductFamily(productFamily);
+  const rawKey = `${normQuery}|${scope}|${normDepth}|${normModel}|${normTime}|${normFamily}`;
   return crypto.createHash('sha256').update(rawKey).digest('hex');
 }
 
@@ -204,9 +228,12 @@ export function estimateTokensLocally(text) {
 /**
  * Generates compact targeted prompt instructions for web research based on mode
  */
-export function buildOptimizedResearchPrompt(query, country = 'UY', modeConfig = RESEARCH_MODES.ECONOMICO, timeScope = 'ALL_TIME') {
+export function buildOptimizedResearchPrompt(query, country = 'UY', modeConfig = RESEARCH_MODES.ECONOMICO, timeScope = 'ALL_TIME', productFamily = 'ALL') {
   const currentYear = new Date().getFullYear();
   const maxItems = modeConfig.maxCandidates;
+  const normFamily = normalizeProductFamily(productFamily);
+  const familyObj = COLLECTIBLES_PRODUCT_FAMILIES.find(f => f.id === normFamily);
+  const familyLabel = familyObj ? familyObj.label : 'Todos';
 
   const timeLabel = timeScope === '24h' 
     ? 'Últimas 24 horas'
@@ -218,15 +245,24 @@ export function buildOptimizedResearchPrompt(query, country = 'UY', modeConfig =
           ? 'Últimos 90 días' 
           : 'Sin límite temporal (todo catálogo y lanzamientos activos)';
 
+  const targetCountryLabel = (!country || country === 'ALL' || country === 'GLOBAL') 
+    ? 'GLOBAL (Oportunidades internacionales sin restricción de país único)' 
+    : country;
+
+  const familyInstruction = normFamily !== 'ALL'
+    ? `\nRestricción de familia de producto: Restringir resultados estrictamente a la familia ${familyLabel} (${normFamily}). Si la consulta busca una franquicia o personaje, listar coleccionables que pertenezcan a esta categoría.`
+    : '';
+
   return `INVESTIGACIÓN COMERCIAL SOURCING (MODO: ${modeConfig.key}):
 Consulta: "${query}"
 Año actual: ${currentYear}
-Mercado objetivo comercial: ${country}
+Mercado objetivo comercial: ${targetCountryLabel}
 Alcance de descubrimiento: GLOBAL (fabricantes oficiales, retailers internacionales y tiendas globales)
 Ventana temporal: ${timeLabel}
+Familia de producto: ${familyLabel}${familyInstruction}
 
 Instrucciones:
-1. Resuelve alias multilingües si la consulta está en español (ej. "ositos cariñosos" -> "Care Bears", "caballeros del zodiaco" -> "Saint Seiya", "tortugas ninja" -> "TMNT / Teenage Mutant Ninja Turtles", etc.) para descubrir figuras, peluches, estatuas o coleccionables oficiales existentes en el mercado global.
+1. Resuelve alias multilingües si la consulta está en español (ej. "ositos cariñosos" -> "Care Bears", "caballeros del zodiaco" -> "Saint Seiya", "tortugas ninja" -> "TMNT / Teenage Mutant Ninja Turtles", etc.) para descubrir productos oficiales existentes en el mercado global.
 2. Identifica hasta ${maxItems} productos oficiales reales, preventas o lanzamientos relevantes.
 3. Si la consulta menciona preventas o novedades ("nuevos", "lanzamientos", "preventa"), prioriza lanzamientos recientes; de lo contrario, incluye los coleccionables oficiales más demandados del catálogo.
 4. NUNCA inventes precios, costos ni stock.
@@ -245,10 +281,13 @@ export function calculatePreFlightEstimate({
   requestedModel = 'AUTO',
   isWebSearch = true,
   timeScope = 'ALL_TIME',
+  productFamily = 'ALL',
+  product_family,
   cacheInfo = null
 }) {
+  const effectiveFamily = productFamily !== 'ALL' ? productFamily : (product_family || 'ALL');
   const mode = resolveResearchMode(researchDepth);
-  const prompt = buildOptimizedResearchPrompt(query, country, mode, timeScope);
+  const prompt = buildOptimizedResearchPrompt(query, country, mode, timeScope, effectiveFamily);
   const basePromptTokens = estimateTokensLocally(prompt);
   const complexity = analyzeQueryComplexity(query);
 
@@ -348,6 +387,9 @@ export function calculatePreFlightEstimate({
     }
   }
 
+  const normFamily = normalizeProductFamily(effectiveFamily);
+  const familyObj = COLLECTIBLES_PRODUCT_FAMILIES.find(f => f.id === normFamily);
+
   return {
     model: targetModel,
     display_name: modelValidation.display_name || targetModel,
@@ -358,6 +400,8 @@ export function calculatePreFlightEstimate({
     fallback_model: mode.fallbackModel,
     research_depth: mode.key,
     research_depth_label: mode.label,
+    product_family: normFamily,
+    product_family_label: familyObj ? familyObj.label : 'Todos',
     max_candidates: mode.maxCandidates,
     estimated_input_tokens: estimatedInputTokensExpected,
     estimated_input_tokens_min: estimatedInputTokensMin,

@@ -3,19 +3,22 @@ import {
   Sparkles, Search, Globe, Calendar, Filter, BrainCircuit, 
   Flame, Rocket, TrendingUp, Sparkle, Clock, Gem, X, RefreshCw,
   Zap, AlertTriangle, CheckCircle2, ShieldAlert, ChevronRight, RotateCcw,
-  Bot, ChevronDown
+  Bot, ChevronDown, Package
 } from 'lucide-react';
 import { aiGateway } from '../../../services/ai/aiGateway';
 import { useAuth } from '../../../contexts/AuthContext';
 import type { AIPreFlightEstimate, ResearchDepthMode, AIModelCapabilityInfo } from '../../../services/ai/types';
+import { COLLECTIBLES_PRODUCT_FAMILIES } from '../../../types/sourcingIntelligence';
 
 interface SourcingIntelligenceHeaderProps {
   country: string;
   onCountryChange: (c: string) => void;
-  period: '24h' | '7d' | '30d' | '90d';
-  onPeriodChange: (p: '24h' | '7d' | '30d' | '90d') => void;
-  category: string;
-  onCategoryChange: (cat: string) => void;
+  period: '24h' | '7d' | '30d' | '90d' | 'all';
+  onPeriodChange: (p: '24h' | '7d' | '30d' | '90d' | 'all') => void;
+  productFamily?: string;
+  onProductFamilyChange?: (pf: string) => void;
+  category?: string;
+  onCategoryChange?: (cat: string) => void;
   searchQuery: string;
   onSearchQueryChange: (q: string) => void;
   onExecuteSearch: (mode?: ResearchDepthMode, requestedModel?: string, forceRefresh?: boolean) => void;
@@ -46,6 +49,7 @@ interface SourcingIntelligenceHeaderProps {
 }
 
 const COUNTRIES = [
+  { code: 'ALL', label: 'Todos', flag: '🌎', active: true },
   { code: 'UY', label: 'Uruguay', flag: '🇺🇾', active: true },
   { code: 'AR', label: 'Argentina', flag: '🇦🇷', active: true },
   { code: 'CL', label: 'Chile', flag: '🇨🇱', active: true },
@@ -53,22 +57,13 @@ const COUNTRIES = [
   { code: 'MX', label: 'México', flag: '🇲🇽', active: true }
 ];
 
-const CATEGORIES = [
-  'Todas',
-  'Figuras de Acción 7"',
-  'Figuras 1:12',
-  'Figuras Premium 1:6',
-  'Trading Cards & TCG',
-  'Estatuas & Bustos',
-  'Retro & Vintage',
-  'Funkos & Miniatures'
-];
-
 export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProps> = ({
   country,
   onCountryChange,
   period,
   onPeriodChange,
+  productFamily,
+  onProductFamilyChange,
   category,
   onCategoryChange,
   searchQuery,
@@ -88,6 +83,13 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
   const [estimateError, setEstimateError] = useState<string | null>(null);
   const [isEstimating, setIsEstimating] = useState<boolean>(false);
   const [showConfirmationWarning, setShowConfirmationWarning] = useState<boolean>(false);
+
+  const effectiveFamily = productFamily || category || 'ALL';
+
+  const handleFamilySelect = (val: string) => {
+    if (onProductFamilyChange) onProductFamilyChange(val);
+    if (onCategoryChange) onCategoryChange(val);
+  };
 
   // Fetch Central Models Catalog on Mount (Zero Hardcoded List)
   useEffect(() => {
@@ -120,7 +122,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
       return;
     }
 
-    const currentKey = `${clean}|${country}|${period}|${researchMode}|${selectedModel}`;
+    const currentKey = `${clean}|${country}|${period}|${researchMode}|${selectedModel}|${effectiveFamily}`;
     if (lastEstimateKeyRef.current === currentKey) {
       return; // Deduplicate identical params
     }
@@ -136,6 +138,8 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
         const est = await aiGateway.estimateCost({
           query: clean,
           country,
+          product_family: effectiveFamily,
+          category: effectiveFamily,
           research_depth: researchMode,
           requested_model: selectedModel,
           time_scope: period === 'all' ? 'ALL_TIME' : period,
@@ -167,7 +171,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [searchQuery, country, period, researchMode, selectedModel]);
+  }, [searchQuery, country, period, researchMode, selectedModel, effectiveFamily]);
 
   const handleRunSearch = (forceRefresh = false) => {
     if (preFlightEstimate?.requires_confirmation && !showConfirmationWarning && !forceRefresh) {
@@ -209,10 +213,10 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
 
         {/* SELECTORES DE CONTEXTO */}
         <div className="flex items-center gap-3 flex-wrap">
-          {/* Selector de País */}
+          {/* Selector de Mercado Objetivo */}
           <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 hover:border-slate-600 px-3.5 py-2 rounded-xl text-xs transition">
             <Globe className="w-4 h-4 text-pink-400" />
-            <span className="text-slate-300 font-bold" style={{ color: '#cbd5e1' }}>Mercado:</span>
+            <span className="text-slate-300 font-bold" style={{ color: '#cbd5e1' }}>Mercado Objetivo:</span>
             <select
               value={country}
               onChange={(e) => onCountryChange(e.target.value)}
@@ -221,7 +225,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
             >
               {COUNTRIES.map(c => (
                 <option key={c.code} value={c.code} className="bg-slate-900 text-white">
-                  {c.flag} {c.label} ({c.code})
+                  {c.flag} {c.label} {c.code !== 'ALL' ? `(${c.code})` : ''}
                 </option>
               ))}
             </select>
@@ -232,7 +236,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
             {(['all', '24h', '7d', '30d', '90d'] as const).map(p => (
               <button
                 key={p}
-                onClick={() => onPeriodChange(p as any)}
+                onClick={() => onPeriodChange(p)}
                 className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                   period === p 
                     ? 'bg-[#f00856] text-white font-black shadow-xs' 
@@ -244,17 +248,18 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
             ))}
           </div>
 
-          {/* Selector de Categoría */}
+          {/* Selector de Tipo de Producto (Product Families) */}
           <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 hover:border-slate-600 px-3.5 py-2 rounded-xl text-xs transition">
-            <Filter className="w-4 h-4 text-pink-400" />
+            <Package className="w-4 h-4 text-pink-400" />
+            <span className="text-slate-300 font-bold" style={{ color: '#cbd5e1' }}>Tipo de Producto:</span>
             <select
-              value={category}
-              onChange={(e) => onCategoryChange(e.target.value)}
+              value={effectiveFamily}
+              onChange={(e) => handleFamilySelect(e.target.value)}
               className="bg-transparent text-white font-bold focus:outline-none cursor-pointer"
             >
-              {CATEGORIES.map(cat => (
-                <option key={cat} value={cat} className="bg-slate-900 text-white">
-                  {cat}
+              {COLLECTIBLES_PRODUCT_FAMILIES.map(fam => (
+                <option key={fam.id} value={fam.id} className="bg-slate-900 text-white">
+                  {fam.label}
                 </option>
               ))}
             </select>
@@ -352,7 +357,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
               onKeyDown={(e) => {
                 if (e.key === 'Enter') handleRunSearch(false);
               }}
-              placeholder={`Ej: "Buscame productos Pokémon en tendencia en ${country}", "Nuevos preorders de McFarlane", "Lanzamientos NECA 7 días"...`}
+              placeholder={`Ej: "Buscame productos Pokémon en tendencia", "Nuevos preorders de McFarlane", "Lanzamientos Care Bears 7 días"...`}
               className="w-full pl-12 pr-11 py-4 bg-gray-50/70 border border-gray-300 rounded-2xl text-sm font-semibold text-gray-900 placeholder:text-gray-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#f00856] focus:border-transparent transition shadow-inner"
             />
             {searchQuery && (
@@ -388,7 +393,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
                 <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
                   <span className="text-slate-400 font-medium">Mercado Objetivo:</span>
                   <span className="text-white font-bold">
-                    {COUNTRIES.find(c => c.code === country)?.flag || '🇺🇾'} {COUNTRIES.find(c => c.code === country)?.label || country}
+                    {country === 'ALL' || country === 'GLOBAL' ? '🌎 Todos (Global)' : `${COUNTRIES.find(c => c.code === country)?.flag || '🇺🇾'} ${COUNTRIES.find(c => c.code === country)?.label || country}`}
                   </span>
                 </div>
 
@@ -403,6 +408,15 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
                   <span className="text-slate-400 font-medium">Período:</span>
                   <span className="text-amber-300 font-bold">
                     {period === 'all' ? 'Sin límite' : (period === '24h' ? '24h' : (period === '7d' ? '7 días' : (period === '30d' ? '30 días' : '90 días')))}
+                  </span>
+                </div>
+
+                {/* TIPO DE PRODUCTO */}
+                <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
+                  <Package className="w-3.5 h-3.5 text-purple-400" />
+                  <span className="text-slate-400 font-medium">Tipo:</span>
+                  <span className="text-purple-300 font-bold">
+                    {COLLECTIBLES_PRODUCT_FAMILIES.find(f => f.id === effectiveFamily || f.label === effectiveFamily)?.label || effectiveFamily}
                   </span>
                 </div>
 

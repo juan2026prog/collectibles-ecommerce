@@ -178,12 +178,16 @@ export default async function handler(req, res) {
     requested_model,
     time_scope,
     period,
+    product_family,
+    productFamily,
+    category,
     prompt,
     payload,
     context = {}
   } = req.body || {};
 
   const effectiveTimeScope = time_scope || period || payload?.time_scope || payload?.period || context?.time_scope || context?.period || 'ALL_TIME';
+  const effectiveProductFamily = product_family || productFamily || category || payload?.product_family || payload?.productFamily || payload?.category || context?.product_family || context?.productFamily || context?.category || 'ALL';
   const effectiveDepth = research_depth || payload?.research_depth || context?.research_depth || 'ECONOMICO';
   const modeConfig = resolveResearchMode(effectiveDepth);
 
@@ -435,7 +439,7 @@ export default async function handler(req, res) {
 
     // 2. Sourcing Research Multi-tier Cache Lookup (Global-First Cache)
     const researchCacheKey = isSourcingResearch 
-      ? generateResearchCacheKey(resolvedInput, 'GLOBAL', modeConfig.key, isManualOverride ? selectedModel : 'AUTO', effectiveTimeScope) 
+      ? generateResearchCacheKey(resolvedInput, 'GLOBAL', modeConfig.key, isManualOverride ? selectedModel : 'AUTO', effectiveTimeScope, effectiveProductFamily) 
       : null;
 
     if (isSourcingResearch && client && context?.force_refresh !== true && context?.certification !== true) {
@@ -587,7 +591,7 @@ export default async function handler(req, res) {
     }
 
     const resolvedInstructions = isSourcingResearch 
-      ? buildOptimizedResearchPrompt(resolvedInput, country, modeConfig, effectiveTimeScope)
+      ? buildOptimizedResearchPrompt(resolvedInput, country, modeConfig, effectiveTimeScope, effectiveProductFamily)
       : instructionsFor(engine, operation);
 
     const isWebSearchNeeded = engine === 'SOURCING_WEB_RESEARCH' || 

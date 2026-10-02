@@ -267,6 +267,8 @@ export interface AIPreFlightEstimate {
   fallback_model?: string;
   research_depth: ResearchDepthMode;
   research_depth_label: string;
+  product_family?: string;
+  product_family_label?: string;
   max_candidates: number;
   estimated_input_tokens: number;
   estimated_input_tokens_min?: number;

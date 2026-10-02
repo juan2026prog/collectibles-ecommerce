@@ -43,6 +43,7 @@ export class ResearchIntelligenceService {
     const { 
       query, 
       country = 'UY', 
+      product_family,
       category, 
       period = '7d',
       research_depth = 'ECONOMICO',
@@ -50,11 +51,14 @@ export class ResearchIntelligenceService {
       force_refresh = false
     } = request;
 
+    const effectiveFamily = product_family || category || 'ALL';
+
     // 1. Ejecución vía AI Gateway Central
     const prompt = `INVESTIGACIÓN COMERCIAL SOURCING (MODO: ${research_depth}):
 Consulta: "${query}"
 País objetivo: ${country}
-Categoría: ${category || 'Todas'}
+Familia de producto: ${effectiveFamily}
+Categoría: ${effectiveFamily}
 Período de análisis: ${period}
 
 Tu rol es estructurar la investigación, identificar productos oficiales reales, preorders y tendencias emergentes. NUNCA inventes precios, landed costs ni stock comercial; esos datos se calculan mediante el motor determinístico de Collectibles.`;
@@ -81,17 +85,24 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
         payload: {
           query,
           country,
-          category,
+          product_family: effectiveFamily,
+          productFamily: effectiveFamily,
+          category: effectiveFamily,
           period,
+          time_scope: period === 'all' ? 'ALL_TIME' : period,
           research_depth,
           requested_model,
           evidence: {
             search_query: query,
             target_country: country,
+            product_family: effectiveFamily,
             observed_at: new Date().toISOString()
           }
         },
         context: {
+          product_family: effectiveFamily,
+          productFamily: effectiveFamily,
+          category: effectiveFamily,
           research_depth,
           requested_model,
           force_refresh
@@ -314,6 +325,7 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
       success: true,
       query,
       country,
+      product_family: effectiveFamily,
       trends: [mainTrendCard],
       candidates,
       summary: aiResult?.summary || `Investigación completada para "${query}" en ${country}. ${candidates.length} productos detectados con oportunidad comercial confirmada.`,

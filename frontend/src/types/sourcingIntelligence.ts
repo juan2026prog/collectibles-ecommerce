@@ -142,9 +142,46 @@ export interface WatchlistExpandedItem {
   active_candidates_count?: number;
 }
 
+export type CollectiblesProductFamilyId =
+  | 'ALL'
+  | 'FIGURES'
+  | 'STATUES_BUSTS'
+  | 'PLUSH'
+  | 'COMICS_MANGA'
+  | 'TCG_CARDS'
+  | 'APPAREL_ACCESSORIES'
+  | 'BUILDING_SETS'
+  | 'BOARD_GAMES'
+  | 'PUZZLES'
+  | 'REPLICAS_PROPS'
+  | 'VEHICLES'
+  | 'OTHER_COLLECTIBLES';
+
+export interface CollectiblesProductFamilyOption {
+  id: CollectiblesProductFamilyId;
+  label: string;
+}
+
+export const COLLECTIBLES_PRODUCT_FAMILIES: readonly CollectiblesProductFamilyOption[] = [
+  { id: 'ALL', label: 'Todos' },
+  { id: 'FIGURES', label: 'Figuras' },
+  { id: 'STATUES_BUSTS', label: 'Estatuas y Bustos' },
+  { id: 'PLUSH', label: 'Peluches' },
+  { id: 'COMICS_MANGA', label: 'Cómics y Manga' },
+  { id: 'TCG_CARDS', label: 'TCG y Cartas' },
+  { id: 'APPAREL_ACCESSORIES', label: 'Ropa y Accesorios' },
+  { id: 'BUILDING_SETS', label: 'Building Sets / LEGO' },
+  { id: 'BOARD_GAMES', label: 'Board Games' },
+  { id: 'PUZZLES', label: 'Puzzles' },
+  { id: 'REPLICAS_PROPS', label: 'Réplicas y Props' },
+  { id: 'VEHICLES', label: 'Vehículos' },
+  { id: 'OTHER_COLLECTIBLES', label: 'Otros Coleccionables' }
+] as const;
+
 export interface SourcingResearchQueryRequest {
   query: string;
   country: string;
+  product_family?: string;
   category?: string;
   period?: '24h' | '7d' | '30d' | '90d' | 'all';
   research_depth?: 'ECONOMICO' | 'ESTANDAR' | 'PROFUNDO';
@@ -156,6 +193,7 @@ export interface SourcingResearchResponse {
   success: boolean;
   query: string;
   country: string;
+  product_family?: string;
   trends: SourcingTrendCard[];
   candidates: SourcingProductCandidate[];
   summary: string;

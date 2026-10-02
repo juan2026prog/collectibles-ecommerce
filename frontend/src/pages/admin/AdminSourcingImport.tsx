@@ -55,10 +55,11 @@ export default function AdminSourcingImport() {
   // Active Main Navigation Tab (6 Consolidated Areas)
   const [activeTab, setActiveTab] = useState<SourcingIntelligenceTab>('trends');
 
-  // Country, Period and Category context
+  // Country, Period, Product Family and Category context
   const [selectedCountry, setSelectedCountry] = useState<string>('UY');
   const [selectedPeriod, setSelectedPeriod] = useState<'24h' | '7d' | '30d' | '90d' | 'all'>('all');
-  const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
+  const [selectedProductFamily, setSelectedProductFamily] = useState<string>('ALL');
+  const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
 
   // Research Query state
   const [searchQuery, setSearchQuery] = useState<string>(urlQuery || '');
@@ -173,7 +174,8 @@ export default function AdminSourcingImport() {
       const res = await researchIntelligenceService.research({
         query: q,
         country: selectedCountry,
-        category: selectedCategory !== 'Todas' ? selectedCategory : undefined,
+        product_family: selectedProductFamily,
+        category: selectedProductFamily !== 'ALL' ? selectedProductFamily : undefined,
         period: selectedPeriod,
         research_depth: modeOverride || 'ECONOMICO',
         requested_model: requestedModel,
@@ -347,8 +349,10 @@ export default function AdminSourcingImport() {
         onCountryChange={setSelectedCountry}
         period={selectedPeriod}
         onPeriodChange={setSelectedPeriod}
-        category={selectedCategory}
-        onCategoryChange={setSelectedCategory}
+        productFamily={selectedProductFamily}
+        onProductFamilyChange={setSelectedProductFamily}
+        category={selectedProductFamily}
+        onCategoryChange={setSelectedProductFamily}
         searchQuery={searchQuery}
         onSearchQueryChange={setSearchQuery}
         onExecuteSearch={(mode, requestedModel, forceRefresh) => handleExecuteSearch(undefined, mode, requestedModel, forceRefresh)}

@@ -64,11 +64,15 @@ export default async function handler(req, res) {
     requested_model = 'AUTO',
     time_scope = 'ALL_TIME',
     period,
+    product_family,
+    productFamily,
+    category,
     is_web_search = true,
     force_refresh = false
   } = req.body || {};
 
   const effectiveTimeScope = time_scope || period || 'ALL_TIME';
+  const effectiveProductFamily = product_family || productFamily || category || 'ALL';
 
   const cleanQuery = normalizeQuery(query || req.body?.prompt || '');
   if (!cleanQuery) {
@@ -90,7 +94,7 @@ export default async function handler(req, res) {
 
   const mode = resolveResearchMode(research_depth);
   const isModelOverride = requested_model && requested_model !== 'AUTO';
-  const cacheKey = generateResearchCacheKey(cleanQuery, 'GLOBAL', mode.key, isModelOverride ? requested_model : 'AUTO', effectiveTimeScope);
+  const cacheKey = generateResearchCacheKey(cleanQuery, 'GLOBAL', mode.key, isModelOverride ? requested_model : 'AUTO', effectiveTimeScope, effectiveProductFamily);
 
   let cacheInfo = {
     status: 'MISS',
@@ -191,6 +195,7 @@ async function safeDbQuery(queryPromise, fallback = { data: null, error: null },
     requestedModel: requested_model,
     isWebSearch: is_web_search,
     timeScope: effectiveTimeScope,
+    productFamily: effectiveProductFamily,
     cacheInfo
   });
 
@@ -200,6 +205,7 @@ async function safeDbQuery(queryPromise, fallback = { data: null, error: null },
     operation,
     query: cleanQuery,
     country,
+    product_family: effectiveProductFamily,
     ...estimate
   });
 }
