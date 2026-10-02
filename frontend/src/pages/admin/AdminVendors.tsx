@@ -21,7 +21,8 @@ export default function AdminVendors() {
 
   // Modal / Detail States
   const [selectedVendor, setSelectedVendor] = useState<any | null>(null);
-  const [selectedStoreProducts, setSelectedStoreProducts] = useState<any | null>(null);
+  const [selectedStoreProducts, setSelectedStoreProducts] = useState<{ store: any; products: any[]; loading?: boolean } | null>(null);
+  const [storeProductsCache, setStoreProductsCache] = useState<Record<string, { products: any[]; timestamp: number }>>({});
 
   const { toast } = useToast();
   const { confirm } = useConfirmModal();
@@ -95,11 +96,6 @@ export default function AdminVendors() {
               brands(id, name, logo_url)
             )
           ),
-          products(
-            id, vendor_id, vendor_store_id, title, base_price, status,
-            brand:brands!products_brand_id_fkey(name),
-            product_variants(inventory_count)
-          ),
           ml_seller_accounts(id, nickname)
         `, { count: 'exact' });
 
@@ -107,29 +103,66 @@ export default function AdminVendors() {
         query = query.ilike('store_name', `%${searchTerm}%`);
       }
 
-      const [vendorsRes, metricsRes] = await Promise.all([
+      const [vendorsRes, metricsRes, countsRes] = await Promise.all([
         query.order('created_at', { ascending: false }).range(from, to),
-        supabase.rpc('get_vendor_sales_metrics')
+        supabase.rpc('get_vendor_sales_metrics'),
+        supabase.rpc('get_vendor_product_counts')
       ]);
 
       if (vendorsRes.error) throw vendorsRes.error;
 
       const metricsMap = new Map((metricsRes.data || []).map((m: any) => [m.vendor_id, m]));
-      const vendorsWithMetrics = (vendorsRes.data || []).map((v: any) => ({
-        ...v,
-        ships_to_argentina: !!(v.ships_to_argentina ?? v.shipping_settings?.ships_to_argentina),
-        metrics: metricsMap.get(v.id) || {
-          confirmed_gmv: 0,
-          pending_gmv: 0,
-          liquidated_gmv: 0,
-          refunded_amount: 0,
-          disputed_amount: 0,
-          marketplace_fees: 0,
-          net_to_vendor: 0,
-          order_count: 0,
-          suborder_count: 0
+      const countsData = countsRes.data || [];
+
+      // Map counts by vendor_id and by vendor_store_id
+      const vendorCountsMap = new Map<string, { total: number; active: number }>();
+      const storeCountsMap = new Map<string, { total: number; active: number }>();
+
+      for (const row of countsData) {
+        if (row.vendor_id) {
+          const current = vendorCountsMap.get(row.vendor_id) || { total: 0, active: 0 };
+          current.total += Number(row.product_count || 0);
+          current.active += Number(row.active_product_count || 0);
+          vendorCountsMap.set(row.vendor_id, current);
         }
-      }));
+        if (row.vendor_store_id) {
+          storeCountsMap.set(row.vendor_store_id, {
+            total: Number(row.product_count || 0),
+            active: Number(row.active_product_count || 0)
+          });
+        }
+      }
+
+      const vendorsWithMetrics = (vendorsRes.data || []).map((v: any) => {
+        const vendorCounts = vendorCountsMap.get(v.id) || { total: 0, active: 0 };
+        const enrichedStores = (v.vendor_stores || []).map((s: any) => {
+          const storeCounts = storeCountsMap.get(s.id) || { total: 0, active: 0 };
+          return {
+            ...s,
+            product_count: storeCounts.total,
+            active_product_count: storeCounts.active
+          };
+        });
+
+        return {
+          ...v,
+          product_count: vendorCounts.total,
+          active_product_count: vendorCounts.active,
+          vendor_stores: enrichedStores,
+          ships_to_argentina: !!(v.ships_to_argentina ?? v.shipping_settings?.ships_to_argentina),
+          metrics: metricsMap.get(v.id) || {
+            confirmed_gmv: 0,
+            pending_gmv: 0,
+            liquidated_gmv: 0,
+            refunded_amount: 0,
+            disputed_amount: 0,
+            marketplace_fees: 0,
+            net_to_vendor: 0,
+            order_count: 0,
+            suborder_count: 0
+          }
+        };
+      });
 
       setVendors(vendorsWithMetrics);
       if (vendorsRes.count !== null) setTotalRecords(vendorsRes.count);
@@ -137,6 +170,43 @@ export default function AdminVendors() {
       console.error('Error fetching vendors:', err);
     }
     setLoading(false);
+  }
+
+  async function handleOpenStoreProducts(store: any) {
+    const cached = storeProductsCache[store.id];
+    const now = Date.now();
+    if (cached && (now - cached.timestamp < 3 * 60 * 1000)) {
+      setSelectedStoreProducts({ store, products: cached.products, loading: false });
+      return;
+    }
+
+    setSelectedStoreProducts({ store, products: [], loading: true });
+
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select(`
+          id, title, base_price, status, is_active, vendor_id, vendor_store_id,
+          brand:brands!products_brand_id_fkey(name),
+          product_variants(inventory_count)
+        `)
+        .eq('vendor_store_id', store.id)
+        .order('title', { ascending: true });
+
+      if (error) throw error;
+
+      const prods = data || [];
+      setStoreProductsCache(prev => ({
+        ...prev,
+        [store.id]: { products: prods, timestamp: now }
+      }));
+
+      setSelectedStoreProducts({ store, products: prods, loading: false });
+    } catch (err: any) {
+      console.error('Error fetching store products:', err);
+      toast.error('Error al cargar productos de la tienda: ' + err.message);
+      setSelectedStoreProducts({ store, products: [], loading: false });
+    }
   }
 
   async function updateVendorStatus(vendor: any, newStatus: 'active' | 'inactive' | 'suspended', reasonInput?: string) {
@@ -541,7 +611,7 @@ export default function AdminVendors() {
             emptyDescription="Prueba modificando la búsqueda."
             renderCard={(v) => {
               const storeNames = v.vendor_stores?.map((s: any) => s.store_name).join(', ') || 'Ninguna';
-              const prodCount = v.products?.length || 0;
+              const prodCount = v.product_count || 0;
               const mlConnected = (v.ml_seller_accounts?.length || 0) > 0;
 
               return (
@@ -627,7 +697,7 @@ export default function AdminVendors() {
             )}
             renderTableRow={(v) => {
               const storeNames = v.vendor_stores?.map((s: any) => s.store_name).join(', ') || 'Ninguna';
-              const prodCount = v.products?.length || 0;
+              const prodCount = v.product_count || 0;
               const mlConnected = (v.ml_seller_accounts?.length || 0) > 0;
               return (
                 <tr key={v.id} className="hover:bg-gray-50 transition-colors">
@@ -845,7 +915,6 @@ export default function AdminVendors() {
                         <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400 italic">No hay tiendas registradas para este vendor.</td></tr>
                       ) : (
                         selectedVendor.vendor_stores.map((store: any) => {
-                          const storeProds = selectedVendor.products?.filter((p: any) => p.vendor_store_id === store.id) || [];
                           const brandsList = store.vendor_store_brands?.map((b: any) => b.brands?.name).filter(Boolean).join(', ') || 'Ninguna';
                           const isStoreOfficial = !!(store.is_official && store.approved_by && store.approved_at);
                           return (
@@ -866,7 +935,7 @@ export default function AdminVendors() {
                                   <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded font-black text-[9px] border border-blue-200">SÍ</span>
                                 ) : 'NO'}
                               </td>
-                              <td className="px-4 py-3 font-semibold text-gray-700">{storeProds.length}</td>
+                              <td className="px-4 py-3 font-semibold text-gray-700">{store.product_count || 0}</td>
                               <td className="px-4 py-3 text-right">
                                 <div className="flex justify-end gap-1">
                                   {/* Toggle Official Store */}
@@ -900,7 +969,7 @@ export default function AdminVendors() {
 
                                   {/* Ver productos */}
                                   <button
-                                    onClick={() => setSelectedStoreProducts({ store, products: storeProds })}
+                                    onClick={() => handleOpenStoreProducts(store)}
                                     className="px-2 py-1 rounded text-[10px] font-bold bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200"
                                   >
                                     Productos
@@ -954,47 +1023,54 @@ export default function AdminVendors() {
             </div>
             
             <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto text-xs">
-              <div className="overflow-x-auto border border-gray-100 rounded-xl">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-left font-bold text-gray-500">Producto</th>
-                      <th className="px-4 py-3 text-left font-bold text-gray-500">Marca</th>
-                      <th className="px-4 py-3 text-left font-bold text-gray-500">Tienda</th>
-                      <th className="px-4 py-3 text-left font-bold text-gray-500">Precio</th>
-                      <th className="px-4 py-3 text-left font-bold text-gray-500 text-center">Stock</th>
-                      <th className="px-4 py-3 text-left font-bold text-gray-500">Estado</th>
-                      <th className="px-4 py-3 text-left font-bold text-gray-500 text-center">Visible</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-150">
-                    {selectedStoreProducts.products.length === 0 ? (
-                      <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400 italic">No hay productos en esta tienda.</td></tr>
-                    ) : (
-                      selectedStoreProducts.products.map((p: any) => {
-                        const totalStock = p.product_variants?.reduce((sum: number, v: any) => sum + (v.inventory_count || 0), 0) || 0;
-                        return (
-                          <tr key={p.id} className="hover:bg-gray-50">
-                            <td className="px-4 py-3 font-semibold text-gray-900">{p.title}</td>
-                            <td className="px-4 py-3 text-gray-500">{p.brand?.name || '—'}</td>
-                            <td className="px-4 py-3 text-gray-500">{selectedStoreProducts.store.store_name}</td>
-                            <td className="px-4 py-3 font-bold text-gray-805">${p.base_price}</td>
-                            <td className="px-4 py-3 text-center font-semibold text-gray-700">{totalStock}</td>
-                            <td className="px-4 py-3">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                p.status === 'published' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-800'
-                              }`}>
-                                {p.status === 'published' ? 'Publicado' : p.status}
-                              </span>
-                            </td>
-                            <td className="px-4 py-3 text-center font-bold text-gray-700">{p.is_active ? 'SÍ' : 'NO'}</td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              {selectedStoreProducts.loading ? (
+                <div className="flex flex-col items-center justify-center py-12 text-gray-500 gap-2">
+                  <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
+                  <span className="font-medium text-sm">Cargando productos de la tienda...</span>
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-gray-100 rounded-xl">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-4 py-3 text-left font-bold text-gray-500">Producto</th>
+                        <th className="px-4 py-3 text-left font-bold text-gray-500">Marca</th>
+                        <th className="px-4 py-3 text-left font-bold text-gray-500">Tienda</th>
+                        <th className="px-4 py-3 text-left font-bold text-gray-500">Precio</th>
+                        <th className="px-4 py-3 text-left font-bold text-gray-500 text-center">Stock</th>
+                        <th className="px-4 py-3 text-left font-bold text-gray-500">Estado</th>
+                        <th className="px-4 py-3 text-left font-bold text-gray-500 text-center">Visible</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-150">
+                      {selectedStoreProducts.products.length === 0 ? (
+                        <tr><td colSpan={7} className="px-4 py-6 text-center text-gray-400 italic">No hay productos en esta tienda.</td></tr>
+                      ) : (
+                        selectedStoreProducts.products.map((p: any) => {
+                          const totalStock = p.product_variants?.reduce((sum: number, v: any) => sum + (v.inventory_count || 0), 0) || 0;
+                          return (
+                            <tr key={p.id} className="hover:bg-gray-50">
+                              <td className="px-4 py-3 font-semibold text-gray-900">{p.title}</td>
+                              <td className="px-4 py-3 text-gray-500">{p.brand?.name || '—'}</td>
+                              <td className="px-4 py-3 text-gray-500">{selectedStoreProducts.store.store_name}</td>
+                              <td className="px-4 py-3 font-bold text-gray-805">${p.base_price}</td>
+                              <td className="px-4 py-3 text-center font-semibold text-gray-700">{totalStock}</td>
+                              <td className="px-4 py-3">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  p.status === 'published' ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {p.status === 'published' ? 'Publicado' : p.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-center font-bold text-gray-700">{p.is_active ? 'SÍ' : 'NO'}</td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
             
             <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
