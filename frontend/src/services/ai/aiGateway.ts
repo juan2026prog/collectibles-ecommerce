@@ -390,6 +390,8 @@ export class AIGateway {
     country?: string;
     research_depth?: 'ECONOMICO' | 'ESTANDAR' | 'PROFUNDO';
     requested_model?: string;
+    time_scope?: string;
+    period?: string;
     engine?: string;
     operation?: string;
     force_refresh?: boolean;
@@ -399,6 +401,8 @@ export class AIGateway {
       country = 'UY',
       research_depth = 'ECONOMICO',
       requested_model = 'AUTO',
+      time_scope = 'ALL_TIME',
+      period,
       engine = 'RESEARCH_INTELLIGENCE',
       operation = 'sourcing_market_research',
       force_refresh = false
@@ -411,6 +415,8 @@ export class AIGateway {
         token = sessionData?.session?.access_token;
       } catch (_) {}
 
+      const effectiveTimeScope = time_scope || period || 'ALL_TIME';
+
       const res = await fetch('/api/ai-estimate', {
         method: 'POST',
         headers: {
@@ -422,6 +428,8 @@ export class AIGateway {
           country,
           research_depth,
           requested_model,
+          time_scope: effectiveTimeScope,
+          period: effectiveTimeScope,
           engine,
           operation,
           force_refresh

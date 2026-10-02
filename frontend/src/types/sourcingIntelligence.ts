@@ -172,4 +172,5 @@ export interface SourcingResearchResponse {
   input_tokens?: number;
   output_tokens?: number;
   total_tokens?: number;
+  zero_result_reason?: string;
 }

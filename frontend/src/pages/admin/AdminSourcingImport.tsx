@@ -69,6 +69,7 @@ export default function AdminSourcingImport() {
   // Data Collections
   const [trends, setTrends] = useState<SourcingTrendCard[]>([]);
   const [candidates, setCandidates] = useState<SourcingProductCandidate[]>([]);
+  const [zeroResultReason, setZeroResultReason] = useState<string | undefined>(undefined);
   const [watchlistItems, setWatchlistItems] = useState<WatchlistExpandedItem[]>([]);
   const [workbenchItems, setWorkbenchItems] = useState<ImportCandidateItem[]>([]);
 
@@ -181,6 +182,7 @@ export default function AdminSourcingImport() {
 
       setTrends(prev => [res.trends[0], ...prev.filter(t => t.topic !== q)]);
       setCandidates(res.candidates);
+      setZeroResultReason(res.zero_result_reason);
       setActiveTab('candidates');
 
       setLastExecutionTelemetry({
@@ -462,6 +464,7 @@ export default function AdminSourcingImport() {
         <ProductCandidatesView
           candidates={candidates}
           country={selectedCountry}
+          zeroResultReason={zeroResultReason}
           onOpenWhyModal={(c) => {
             setSelectedCandidateForWhy(c);
             setShowWhyModal(true);

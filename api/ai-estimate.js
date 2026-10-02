@@ -62,9 +62,13 @@ export default async function handler(req, res) {
     country = 'UY',
     research_depth = 'ECONOMICO',
     requested_model = 'AUTO',
+    time_scope = 'ALL_TIME',
+    period,
     is_web_search = true,
     force_refresh = false
   } = req.body || {};
+
+  const effectiveTimeScope = time_scope || period || 'ALL_TIME';
 
   const cleanQuery = normalizeQuery(query || req.body?.prompt || '');
   if (!cleanQuery) {
@@ -74,15 +78,19 @@ export default async function handler(req, res) {
     });
   }
 
+  const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
   const client = (SUPABASE_KEY && !SUPABASE_KEY.startsWith('sb_publishable'))
     ? createClient(SUPABASE_URL, SUPABASE_KEY, {
-        auth: { persistSession: false, autoRefreshToken: false }
+        auth: { persistSession: false, autoRefreshToken: false },
+        ...(authHeader.startsWith('Bearer ') ? {
+          global: { headers: { Authorization: authHeader } }
+        } : {})
       })
     : null;
 
   const mode = resolveResearchMode(research_depth);
   const isModelOverride = requested_model && requested_model !== 'AUTO';
-  const cacheKey = generateResearchCacheKey(cleanQuery, 'GLOBAL', mode.key, isModelOverride ? requested_model : 'AUTO');
+  const cacheKey = generateResearchCacheKey(cleanQuery, 'GLOBAL', mode.key, isModelOverride ? requested_model : 'AUTO', effectiveTimeScope);
 
   let cacheInfo = {
     status: 'MISS',
@@ -182,6 +190,7 @@ async function safeDbQuery(queryPromise, fallback = { data: null, error: null },
     researchDepth: mode.key,
     requestedModel: requested_model,
     isWebSearch: is_web_search,
+    timeScope: effectiveTimeScope,
     cacheInfo
   });
 

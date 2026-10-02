@@ -164,11 +164,12 @@ export function normalizeQuery(query) {
  * Generates deterministic cache key for research queries
  * Global research cache is reusable across countries!
  */
-export function generateResearchCacheKey(query, scope = 'GLOBAL', depth = 'ECONOMICO', model = 'AUTO') {
+export function generateResearchCacheKey(query, scope = 'GLOBAL', depth = 'ECONOMICO', model = 'AUTO', timeScope = 'ALL_TIME') {
   const normQuery = normalizeQuery(query);
   const normDepth = (depth || 'ECONOMICO').toUpperCase();
   const normModel = (model && model !== 'AUTO') ? String(model).toLowerCase().trim() : 'AUTO';
-  const rawKey = `${normQuery}|${scope}|${normDepth}|${normModel}`;
+  const normTime = (timeScope || 'ALL_TIME').toUpperCase();
+  const rawKey = `${normQuery}|${scope}|${normDepth}|${normModel}|${normTime}`;
   return crypto.createHash('sha256').update(rawKey).digest('hex');
 }
 
@@ -203,18 +204,33 @@ export function estimateTokensLocally(text) {
 /**
  * Generates compact targeted prompt instructions for web research based on mode
  */
-export function buildOptimizedResearchPrompt(query, country = 'UY', modeConfig = RESEARCH_MODES.ECONOMICO) {
+export function buildOptimizedResearchPrompt(query, country = 'UY', modeConfig = RESEARCH_MODES.ECONOMICO, timeScope = 'ALL_TIME') {
   const currentYear = new Date().getFullYear();
   const maxItems = modeConfig.maxCandidates;
+
+  const timeLabel = timeScope === '24h' 
+    ? 'Últimas 24 horas'
+    : timeScope === '7d' 
+      ? 'Últimos 7 días'
+      : timeScope === '30d' 
+        ? 'Últimos 30 días'
+        : timeScope === '90d' 
+          ? 'Últimos 90 días' 
+          : 'Sin límite temporal (todo catálogo y lanzamientos activos)';
 
   return `INVESTIGACIÓN COMERCIAL SOURCING (MODO: ${modeConfig.key}):
 Consulta: "${query}"
 Año actual: ${currentYear}
-Mercado objetivo: ${country} (Buscar lanzamientos GLOBALES y evaluar disponibilidad).
+Mercado objetivo comercial: ${country}
+Alcance de descubrimiento: GLOBAL (fabricantes oficiales, retailers internacionales y tiendas globales)
+Ventana temporal: ${timeLabel}
+
 Instrucciones:
-1. Identifica hasta ${maxItems} productos oficiales reales, preventas o lanzamientos recientes relevantes.
-2. NUNCA inventes precios, costos ni stock.
-3. Devuelve ÚNICAMENTE un JSON compacto con la siguiente estructura:
+1. Resuelve alias multilingües si la consulta está en español (ej. "ositos cariñosos" -> "Care Bears", "caballeros del zodiaco" -> "Saint Seiya", "tortugas ninja" -> "TMNT / Teenage Mutant Ninja Turtles", etc.) para descubrir figuras, peluches, estatuas o coleccionables oficiales existentes en el mercado global.
+2. Identifica hasta ${maxItems} productos oficiales reales, preventas o lanzamientos relevantes.
+3. Si la consulta menciona preventas o novedades ("nuevos", "lanzamientos", "preventa"), prioriza lanzamientos recientes; de lo contrario, incluye los coleccionables oficiales más demandados del catálogo.
+4. NUNCA inventes precios, costos ni stock.
+5. Devuelve ÚNICAMENTE un JSON compacto con la siguiente estructura:
 {"summary":string,"confidence":number_0_to_1,"subtrends":string[],"items":[{"title":string,"brand":string,"franchise":string,"category":string,"origin_price_usd":number_or_null,"asin":string_or_null,"url":string_or_null,"retailer":string,"is_preorder":boolean,"is_new":boolean,"release_date":string_or_null,"evidence_snippet":string}]}`;
 }
 
@@ -228,10 +244,11 @@ export function calculatePreFlightEstimate({
   researchDepth = 'ECONOMICO',
   requestedModel = 'AUTO',
   isWebSearch = true,
+  timeScope = 'ALL_TIME',
   cacheInfo = null
 }) {
   const mode = resolveResearchMode(researchDepth);
-  const prompt = buildOptimizedResearchPrompt(query, country, mode);
+  const prompt = buildOptimizedResearchPrompt(query, country, mode, timeScope);
   const basePromptTokens = estimateTokensLocally(prompt);
   const complexity = analyzeQueryComplexity(query);
 
@@ -358,6 +375,9 @@ export function calculatePreFlightEstimate({
     estimated_total_max_usd: isCacheHit ? 0 : maxTotalUsd,
     estimated_total_avg_usd: isCacheHit ? 0 : expectedTotalUsd,
     web_search_planned: isWebSearch,
+    search_scope: 'GLOBAL',
+    target_country: country,
+    time_scope: timeScope,
     query_complexity: complexity,
     confidence: complexity.confidence,
     confidence_label: complexity.confidence_label,

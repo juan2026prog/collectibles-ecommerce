@@ -85,6 +85,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
   const [selectedModel, setSelectedModel] = useState<string>('AUTO');
   const [availableModels, setAvailableModels] = useState<AIModelCapabilityInfo[]>([]);
   const [preFlightEstimate, setPreFlightEstimate] = useState<AIPreFlightEstimate | null>(null);
+  const [estimateError, setEstimateError] = useState<string | null>(null);
   const [isEstimating, setIsEstimating] = useState<boolean>(false);
   const [showConfirmationWarning, setShowConfirmationWarning] = useState<boolean>(false);
 
@@ -113,47 +114,60 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
     const clean = (searchQuery || '').trim();
     if (!clean || clean.length < 3) {
       setPreFlightEstimate(null);
+      setEstimateError(null);
       setShowConfirmationWarning(false);
       lastEstimateKeyRef.current = '';
       return;
     }
 
-    const currentKey = `${clean}|${country}|${researchMode}|${selectedModel}`;
-    if (lastEstimateKeyRef.current === currentKey && preFlightEstimate) {
+    const currentKey = `${clean}|${country}|${period}|${researchMode}|${selectedModel}`;
+    if (lastEstimateKeyRef.current === currentKey) {
       return; // Deduplicate identical params
     }
 
     let isMounted = true;
     const timer = setTimeout(async () => {
+      // Mark key immediately to prevent duplicate loops
+      lastEstimateKeyRef.current = currentKey;
       setIsEstimating(true);
+      setEstimateError(null);
+
       try {
         const est = await aiGateway.estimateCost({
           query: clean,
           country,
           research_depth: researchMode,
-          requested_model: selectedModel
+          requested_model: selectedModel,
+          time_scope: period === 'all' ? 'ALL_TIME' : period,
+          period: period === 'all' ? 'ALL_TIME' : period
         });
+
         if (isMounted) {
-          lastEstimateKeyRef.current = currentKey;
           setPreFlightEstimate(est);
+          setEstimateError(null);
           if (est?.requires_confirmation) {
             setShowConfirmationWarning(true);
           } else {
             setShowConfirmationWarning(false);
           }
         }
-      } catch (err) {
-        console.warn('Estimate fetch skipped:', err);
+      } catch (err: any) {
+        console.warn('[SourcingHeader] Pre-flight estimation error:', err);
+        if (isMounted) {
+          setPreFlightEstimate(null);
+          setEstimateError(err?.message || 'Error al conectar con el estimador');
+          setShowConfirmationWarning(false);
+        }
       } finally {
         if (isMounted) setIsEstimating(false);
       }
-    }, 450);
+    }, 380);
 
     return () => {
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [searchQuery, country, researchMode, selectedModel]);
+  }, [searchQuery, country, period, researchMode, selectedModel]);
 
   const handleRunSearch = (forceRefresh = false) => {
     if (preFlightEstimate?.requires_confirmation && !showConfirmationWarning && !forceRefresh) {
@@ -369,7 +383,30 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
         {preFlightEstimate && (
           <div className="bg-slate-900 text-white rounded-2xl p-4 border border-slate-800 shadow-md space-y-2.5">
             <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* MERCADO OBJETIVO */}
+                <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
+                  <span className="text-slate-400 font-medium">Mercado Objetivo:</span>
+                  <span className="text-white font-bold">
+                    {COUNTRIES.find(c => c.code === country)?.flag || '🇺🇾'} {COUNTRIES.find(c => c.code === country)?.label || country}
+                  </span>
+                </div>
+
+                {/* ALCANCE DE BÚSQUEDA */}
+                <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
+                  <span className="text-slate-400 font-medium">Búsqueda:</span>
+                  <span className="text-sky-400 font-bold">🌎 Global</span>
+                </div>
+
+                {/* VENTANA TEMPORAL */}
+                <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
+                  <span className="text-slate-400 font-medium">Período:</span>
+                  <span className="text-amber-300 font-bold">
+                    {period === 'all' ? 'Sin límite' : (period === '24h' ? '24h' : (period === '7d' ? '7 días' : (period === '30d' ? '30 días' : '90 días')))}
+                  </span>
+                </div>
+
+                {/* MODELO */}
                 <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
                   <Zap className="w-3.5 h-3.5 text-amber-400" />
                   <span className="text-slate-400 font-medium">Modelo:</span>
@@ -379,6 +416,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
                   </span>
                 </div>
 
+                {/* TOKENS ESTIMADOS */}
                 <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700" title={preFlightEstimate.confidence_label || 'Estimación basada en telemetría de OpenAI Web Search'}>
                   <span className="text-slate-400 font-medium">Tokens est.:</span>
                   <span className="text-white font-bold">
@@ -389,9 +427,10 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
                   </span>
                 </div>
 
+                {/* WEB SEARCH */}
                 <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
                   <span className="text-slate-400 font-medium">Web Search:</span>
-                  <span className="text-emerald-400 font-bold">Activado</span>
+                  <span className="text-emerald-400 font-bold">✓ Activado</span>
                 </div>
               </div>
 
@@ -479,6 +518,41 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* ESTIMATION ERROR NOTICE (FAIL-SAFE CONTROLLED NOTIFICATION) */}
+        {estimateError && !preFlightEstimate && !isEstimating && (
+          <div className="bg-amber-950/80 border border-amber-500/40 text-amber-200 rounded-2xl p-3.5 text-xs flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                No se pudo calcular el costo previo automáticamente ({estimateError}). Podés ejecutar la investigación normalmente.
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                lastEstimateKeyRef.current = '';
+                setEstimateError(null);
+                setIsEstimating(true);
+                aiGateway.estimateCost({
+                  query: (searchQuery || '').trim(),
+                  country,
+                  research_depth: researchMode,
+                  requested_model: selectedModel,
+                  time_scope: period === 'all' ? 'ALL_TIME' : period,
+                  period: period === 'all' ? 'ALL_TIME' : period
+                }).then(est => {
+                  setPreFlightEstimate(est);
+                  setEstimateError(null);
+                }).catch(err => {
+                  setEstimateError(err?.message || 'Error de conexión');
+                }).finally(() => setIsEstimating(false));
+              }}
+              className="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-lg transition cursor-pointer shrink-0"
+            >
+              Reintentar
+            </button>
           </div>
         )}
 

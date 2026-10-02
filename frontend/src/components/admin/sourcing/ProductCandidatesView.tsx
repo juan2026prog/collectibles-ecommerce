@@ -36,6 +36,7 @@ const ProductThumbnail: React.FC<{ src?: string | null; alt: string; isPreorder?
 interface ProductCandidatesViewProps {
   candidates: SourcingProductCandidate[];
   country: string;
+  zeroResultReason?: string;
   onOpenWhyModal: (candidate: SourcingProductCandidate) => void;
   onSendToImport: (candidate: SourcingProductCandidate) => void;
   onToggleWatchlist: (candidate: SourcingProductCandidate) => void;
@@ -46,6 +47,7 @@ interface ProductCandidatesViewProps {
 export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
   candidates,
   country,
+  zeroResultReason,
   onOpenWhyModal,
   onSendToImport,
   onToggleWatchlist,
@@ -70,10 +72,12 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
   if (candidates.length === 0) {
     return (
       <div className="bg-white border border-gray-200 rounded-3xl p-12 text-center space-y-3">
-        <Sparkles className="w-8 h-8 text-gray-400 mx-auto" />
-        <h3 className="text-base font-bold text-gray-900">No hay productos candidatos en esta vista</h3>
-        <p className="text-xs text-gray-500 max-w-md mx-auto">
-          Ejecutá una investigación desde la barra superior o activá el Discovery Automático para detectar oportunidades comerciales.
+        <Sparkles className="w-8 h-8 text-pink-500 mx-auto" />
+        <h3 className="text-base font-bold text-gray-900">
+          {zeroResultReason ? 'Sin productos candidatos encontrados' : 'No hay productos candidatos en esta vista'}
+        </h3>
+        <p className="text-xs text-gray-600 max-w-md mx-auto">
+          {zeroResultReason || 'Ejecutá una investigación desde la barra superior o activá el Discovery Automático para detectar oportunidades comerciales.'}
         </p>
       </div>
     );

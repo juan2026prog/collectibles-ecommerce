@@ -95,11 +95,11 @@ export async function authenticateRequest(req, options = {}) {
 
   // 4. Validate Token Server-Side with Supabase Auth
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+    const authSupabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
       auth: { persistSession: false, autoRefreshToken: false }
     });
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: userError } = await authSupabase.auth.getUser(token);
 
     if (userError || !user) {
       return {
@@ -113,62 +113,74 @@ export async function authenticateRequest(req, options = {}) {
       };
     }
 
-    // 5. Authoritative RBAC evaluation from JWT metadata, profiles table, and user_roles table
-    const jwtRole = String(user.app_metadata?.role || user.user_metadata?.role || user.role || '').toLowerCase();
-    let isSuperAdmin = ['superadmin', 'super_admin', 'god_admin'].includes(jwtRole);
-    let isAdmin = isSuperAdmin || ['admin'].includes(jwtRole);
+    // 5. Authoritative RBAC evaluation
+    // Check JWT app_metadata and user_metadata
+    const jwtAppRole = String(user.app_metadata?.role || user.app_metadata?.roles?.[0] || '').toLowerCase();
+    const jwtUserRole = String(user.user_metadata?.role || user.user_metadata?.roles?.[0] || user.role || '').toLowerCase();
+    const isJwtSuper = ['superadmin', 'super_admin', 'god_admin', 'owner', 'founder'].includes(jwtAppRole) ||
+      ['superadmin', 'super_admin', 'god_admin', 'owner', 'founder'].includes(jwtUserRole) ||
+      user.app_metadata?.is_super_admin === true ||
+      user.user_metadata?.is_super_admin === true;
 
-    // If not already superadmin from JWT, query profiles table (by id, and fallback by email if available)
-    if (!isAdmin) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, is_admin')
-        .eq('id', user.id)
-        .maybeSingle();
+    const isJwtAdmin = isJwtSuper ||
+      ['admin', 'administrator'].includes(jwtAppRole) ||
+      ['admin', 'administrator'].includes(jwtUserRole) ||
+      user.app_metadata?.is_admin === true ||
+      user.user_metadata?.is_admin === true ||
+      user.app_metadata?.claims_admin === true;
 
-      if (profile) {
-        const profileRole = String(profile.role || '').toLowerCase();
-        if (['superadmin', 'super_admin', 'god_admin'].includes(profileRole)) {
-          isSuperAdmin = true;
-          isAdmin = true;
-        } else if (profileRole === 'admin' || profile.is_admin === true) {
-          isAdmin = true;
+    let isSuperAdmin = isJwtSuper;
+    let isAdmin = isJwtAdmin;
+
+    // Create an authenticated client with the user's Bearer token so Postgres RLS satisfies auth.uid() = id / user_id
+    const userDbClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`
         }
-      } else if (user.email) {
-        const { data: profileByEmail } = await supabase
+      }
+    });
+
+    // If not already resolved from JWT, query profiles table
+    if (!isAdmin) {
+      try {
+        const { data: profile } = await userDbClient
           .from('profiles')
           .select('role, is_admin')
-          .eq('email', user.email)
+          .eq('id', user.id)
           .maybeSingle();
 
-        if (profileByEmail) {
-          const profileRole = String(profileByEmail.role || '').toLowerCase();
-          if (['superadmin', 'super_admin', 'god_admin'].includes(profileRole)) {
+        if (profile) {
+          const profileRole = String(profile.role || '').toLowerCase();
+          if (['superadmin', 'super_admin', 'god_admin', 'owner', 'founder'].includes(profileRole)) {
             isSuperAdmin = true;
             isAdmin = true;
-          } else if (profileRole === 'admin' || profileByEmail.is_admin === true) {
+          } else if (profileRole === 'admin' || profileRole === 'administrator' || profile.is_admin === true) {
             isAdmin = true;
           }
         }
-      }
+      } catch (_) {}
     }
 
-    // If not already admin, check user_roles table
+    // If not already resolved from JWT or profiles, query user_roles table
     if (!isAdmin) {
-      const { data: rolesData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', user.id);
+      try {
+        const { data: rolesData } = await userDbClient
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id);
 
-      if (Array.isArray(rolesData)) {
-        const roles = rolesData.map(r => String(r.role || '').toLowerCase());
-        if (roles.some(r => ['superadmin', 'super_admin', 'god_admin'].includes(r))) {
-          isSuperAdmin = true;
-          isAdmin = true;
-        } else if (roles.includes('admin')) {
-          isAdmin = true;
+        if (Array.isArray(rolesData) && rolesData.length > 0) {
+          const roles = rolesData.map(r => String(r.role || '').toLowerCase());
+          if (roles.some(r => ['superadmin', 'super_admin', 'god_admin', 'owner', 'founder'].includes(r))) {
+            isSuperAdmin = true;
+            isAdmin = true;
+          } else if (roles.some(r => ['admin', 'administrator'].includes(r))) {
+            isAdmin = true;
+          }
         }
-      }
+      } catch (_) {}
     }
 
     return {

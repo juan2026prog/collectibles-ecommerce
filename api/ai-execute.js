@@ -158,9 +158,13 @@ export default async function handler(req, res) {
     });
   }
 
+  const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
   const client = (SUPABASE_KEY && !SUPABASE_KEY.startsWith('sb_publishable'))
     ? createClient(SUPABASE_URL, SUPABASE_KEY, {
-        auth: { persistSession: false, autoRefreshToken: false }
+        auth: { persistSession: false, autoRefreshToken: false },
+        ...(authHeader.startsWith('Bearer ') ? {
+          global: { headers: { Authorization: authHeader } }
+        } : {})
       })
     : null;
 
@@ -170,14 +174,16 @@ export default async function handler(req, res) {
   const {
     engine = 'AI_SEARCH',
     country = 'UY',
-    operation = 'execute',
     research_depth,
     requested_model,
+    time_scope,
+    period,
     prompt,
     payload,
     context = {}
   } = req.body || {};
 
+  const effectiveTimeScope = time_scope || period || payload?.time_scope || payload?.period || context?.time_scope || context?.period || 'ALL_TIME';
   const effectiveDepth = research_depth || payload?.research_depth || context?.research_depth || 'ECONOMICO';
   const modeConfig = resolveResearchMode(effectiveDepth);
 
@@ -429,7 +435,7 @@ export default async function handler(req, res) {
 
     // 2. Sourcing Research Multi-tier Cache Lookup (Global-First Cache)
     const researchCacheKey = isSourcingResearch 
-      ? generateResearchCacheKey(resolvedInput, 'GLOBAL', modeConfig.key, isManualOverride ? selectedModel : 'AUTO') 
+      ? generateResearchCacheKey(resolvedInput, 'GLOBAL', modeConfig.key, isManualOverride ? selectedModel : 'AUTO', effectiveTimeScope) 
       : null;
 
     if (isSourcingResearch && client && context?.force_refresh !== true && context?.certification !== true) {
@@ -581,7 +587,7 @@ export default async function handler(req, res) {
     }
 
     const resolvedInstructions = isSourcingResearch 
-      ? buildOptimizedResearchPrompt(resolvedInput, country, modeConfig)
+      ? buildOptimizedResearchPrompt(resolvedInput, country, modeConfig, effectiveTimeScope)
       : instructionsFor(engine, operation);
 
     const isWebSearchNeeded = engine === 'SOURCING_WEB_RESEARCH' || 

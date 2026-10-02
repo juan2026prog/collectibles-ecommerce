@@ -297,6 +297,19 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
       })
     );
 
+    let zeroResultReason: string | undefined = undefined;
+    if (candidates.length === 0) {
+      if (gatewayResponse?.status === 'UNAUTHORIZED' || gatewayResponse?.status === 'FORBIDDEN') {
+        zeroResultReason = 'La investigación fue bloqueada por autenticación o permisos insuficientes.';
+      } else if (gatewayResponse?.status === 'OPENAI_ERROR') {
+        zeroResultReason = `Error en ejecución de búsqueda web: ${gatewayResponse?.error || 'No se pudo conectar con el proveedor de IA.'}`;
+      } else if (gatewayResponse?.fallback_executed) {
+        zeroResultReason = `Sin resultados remotos disponibles para "${query}" en el alcance actual.`;
+      } else {
+        zeroResultReason = `No se encontraron productos oficiales o preventas verificables en la web para "${query}".`;
+      }
+    }
+
     return {
       success: true,
       query,
@@ -316,7 +329,8 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
       research_depth,
       input_tokens: inputTokens,
       output_tokens: outputTokens,
-      total_tokens: totalTokens
+      total_tokens: totalTokens,
+      zero_result_reason: zeroResultReason
     };
   }
 
