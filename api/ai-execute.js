@@ -12,7 +12,10 @@ import {
   generateResearchCacheKey, 
   normalizeQuery, 
   buildOptimizedResearchPrompt,
-  calculatePreFlightEstimate 
+  calculatePreFlightEstimate,
+  planResearchBatches,
+  normalizeResultLimit,
+  deduplicateResearchCandidates
 } from '../server/lib/researchCostOptimizer.js';
 import { validateRequestedModel } from '../server/lib/openaiPricing.js';
 import { authenticateRequest, acquireInFlightLock } from '../server/lib/authGuard.js';
@@ -107,6 +110,73 @@ function instructionsFor(engine, operation) {
   return common + ` Operation: ${operation}. Return concise useful output grounded only in supplied data.`;
 }
 
+function parseSourcingItems(outputText) {
+  if (!outputText || typeof outputText !== 'string') return { summary: null, confidence: 0.85, subtrends: [], items: [] };
+  let structured = null;
+  const clean = outputText.trim().replace(/^\`\`\`(?:json)?/i, '').replace(/\`\`\`$/i, '').trim();
+  try {
+    structured = JSON.parse(clean);
+  } catch {
+    const match = outputText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (match && match[1]) {
+      try {
+        structured = JSON.parse(match[1].trim());
+      } catch {}
+    }
+  }
+
+  // Robust repair fallback if truncated
+  if (!structured) {
+    try {
+      const firstBrace = clean.indexOf('{');
+      if (firstBrace !== -1) {
+        const repaired = clean.slice(firstBrace);
+        const itemsMatch = repaired.match(/"items"\s*:\s*\[([\s\S]*)/i);
+        if (itemsMatch) {
+          const rawItemsBlock = itemsMatch[1];
+          const lastItemClose = rawItemsBlock.lastIndexOf('}');
+          if (lastItemClose !== -1) {
+            const validItemsString = rawItemsBlock.slice(0, lastItemClose + 1);
+            const parsedItems = JSON.parse(`[${validItemsString}]`);
+            const summaryMatch = repaired.match(/"summary"\s*:\s*"([^"]*)"/i);
+            const confMatch = repaired.match(/"confidence"\s*:\s*([0-9.]+)/i);
+            structured = {
+              summary: summaryMatch ? summaryMatch[1] : null,
+              confidence: confMatch ? parseFloat(confMatch[1]) : 0.85,
+              subtrends: [],
+              items: parsedItems
+            };
+          }
+        }
+      }
+    } catch {}
+  }
+
+  if (!structured) return { summary: null, confidence: 0.85, subtrends: [], items: [] };
+
+  let items = [];
+  if (Array.isArray(structured)) {
+    items = structured;
+  } else if (Array.isArray(structured.items)) {
+    items = structured.items;
+  } else if (Array.isArray(structured.products)) {
+    items = structured.products;
+  } else if (Array.isArray(structured.candidates)) {
+    items = structured.candidates;
+  } else if (Array.isArray(structured.results)) {
+    items = structured.results;
+  } else if (Array.isArray(structured.discoveries)) {
+    items = structured.discoveries;
+  }
+
+  return {
+    summary: structured.summary || null,
+    confidence: typeof structured.confidence === 'number' ? structured.confidence : 0.85,
+    subtrends: Array.isArray(structured.subtrends) ? structured.subtrends : [],
+    items
+  };
+}
+
 
 async function safeDbQuery(queryPromise, fallback = { data: null, error: null }, timeoutMs = 2500) {
   try {
@@ -183,10 +253,16 @@ export default async function handler(req, res) {
     product_family,
     productFamily,
     category,
+    result_limit,
+    resultLimit,
     prompt,
     payload,
     context = {}
   } = req.body || {};
+
+  const effectiveResultLimit = normalizeResultLimit(
+    result_limit || resultLimit || payload?.result_limit || payload?.resultLimit || context?.result_limit || context?.resultLimit || 'AUTO'
+  );
 
   const effectiveTimeScope = time_scope || period || payload?.time_scope || payload?.period || context?.time_scope || context?.period || 'ALL_TIME';
   const effectiveProductFamily = product_family || productFamily || category || payload?.product_family || payload?.productFamily || payload?.category || context?.product_family || context?.productFamily || context?.category || 'ALL';
@@ -464,7 +540,7 @@ export default async function handler(req, res) {
 
     // 2. Sourcing Research Multi-tier Cache Lookup (Global-First Cache)
     const researchCacheKey = isSourcingResearch 
-      ? generateResearchCacheKey(cleanSearchQuery || resolvedInput, 'GLOBAL', modeConfig.key, isManualOverride ? selectedModel : 'AUTO', effectiveTimeScope, effectiveProductFamily) 
+      ? generateResearchCacheKey(cleanSearchQuery || resolvedInput, 'GLOBAL', modeConfig.key, isManualOverride ? selectedModel : 'AUTO', effectiveTimeScope, effectiveProductFamily, effectiveResultLimit) 
       : null;
 
     if (isSourcingResearch && client && context?.force_refresh !== true && context?.certification !== true) {
@@ -622,122 +698,210 @@ export default async function handler(req, res) {
     const tools = isWebSearchNeeded ? [{ type: 'web_search' }] : undefined;
     const toolChoice = isWebSearchNeeded ? (modeConfig.key === 'PROFUNDO' ? 'required' : 'auto') : undefined;
 
-    console.info(`[RESEARCH_TRACE] OPENAI_REQUEST_STARTED`, {
-      request_id: requestId,
-      query: cleanSearchQuery || resolvedInput,
-      target_country: country || 'GLOBAL',
-      product_family: effectiveProductFamily,
-      time_scope: effectiveTimeScope,
-      research_depth: modeConfig.key,
-      requested_model: effectiveRequestedModel,
-      actual_model: selectedModel,
-      dynamic_max_tokens: dynamicMaxTokens,
-      has_web_search: isWebSearchNeeded
-    });
-
-    // 3. Call OpenAI Responses API server-side with mode-specific token & cost constraints
-    const result = await callOpenAIResponses({
-      model: selectedModel,
-      input: isSourcingResearch ? (cleanSearchQuery || resolvedInput) : resolvedInput,
-      instructions: resolvedInstructions,
-      temperature: 0.2,
-      maxTokens: isSourcingResearch ? dynamicMaxTokens : (req.body?.maxTokens || 1500),
-      timeoutMs: isWebSearchNeeded ? Math.max(engineTimeoutMs, 50000) : engineTimeoutMs,
-      tools,
-      toolChoice,
-      metadata: {
-        engine: String(engine || ''),
-        country: String(country || 'GLOBAL'),
-        operation: String(operation || 'execute'),
-        research_depth: modeConfig.key,
-        has_web_search: isWebSearchNeeded ? 'true' : 'false'
-      }
-    });
-
-    const elapsedMs = Date.now() - startTime;
-    const finalRequestId = result.requestId || requestId;
-
-    console.info(`[RESEARCH_TRACE] OPENAI_RESPONSE_RECEIVED`, {
-      request_id: finalRequestId,
-      actual_model: result.model,
-      output_text_length: (result.outputText || '').length,
-      sources_count: (result.sources || []).length,
-      web_search_call_detected: (result.sources || []).length > 0 || (result.raw?.output || []).some(o => o.type === 'web_search_call'),
-      input_tokens: result.usage?.inputTokens,
-      output_tokens: result.usage?.outputTokens,
-      total_tokens: result.usage?.totalTokens,
-      estimated_cost_usd: result.pricing?.estimated_cost_usd,
-      latency_ms: elapsedMs
-    });
-
-    // 4. Log Success Telemetry to ai_usage_events
-    if (client) {
-      try {
-        const usagePayload = {
-          engine,
-          country_code: country || 'GLOBAL',
-          provider: 'OPENAI',
-          model: result.model,
-          request_id: finalRequestId,
-          input_tokens: result.usage.inputTokens,
-          output_tokens: result.usage.outputTokens,
-          total_tokens: result.usage.totalTokens,
-          estimated_cost_usd: result.pricing.estimated_cost_usd,
-          latency_ms: elapsedMs,
-          status: 'SUCCESS',
-          fallback_used: false,
-          metadata: {
-            operation,
-            requested_model: effectiveRequestedModel,
-            automatic_or_manual: automaticOrManual,
-            research_depth: modeConfig.key,
-            response_id: result.responseId,
-            pricing_status: result.pricing.pricing_status,
-            pricing_source: result.pricing.pricing_source,
-            input_cost_usd: result.pricing.input_cost_usd,
-            output_cost_usd: result.pricing.output_cost_usd,
-            context
-          }
-        };
-        const { error: usageInsertError } = await client.from('ai_usage_events').insert(usagePayload);
-        if (usageInsertError) {
-          const { error: usageRpcError } = await client.rpc('log_ai_usage_event', {
-            p_engine: usagePayload.engine,
-            p_country_code: usagePayload.country_code,
-            p_provider: usagePayload.provider,
-            p_model: usagePayload.model,
-            p_request_id: usagePayload.request_id,
-            p_input_tokens: usagePayload.input_tokens,
-            p_output_tokens: usagePayload.output_tokens,
-            p_total_tokens: usagePayload.total_tokens,
-            p_estimated_cost_usd: usagePayload.estimated_cost_usd,
-            p_latency_ms: usagePayload.latency_ms,
-            p_status: usagePayload.status,
-            p_fallback_used: usagePayload.fallback_used,
-            p_metadata: usagePayload.metadata
-          });
-          if (usageRpcError) throw usageRpcError;
-        }
-      } catch (logErr) {
-        console.warn('[AI Execute] Telemetry logging error:', logErr.message);
-      }
-    }
-
-    const classifiedSources = (result.sources || []).map(s => ({
-      ...s,
-      source_type: classifyDomain(s.url),
-      observed_at: new Date().toISOString()
-    }));
-
-    // 5. Parse structured Part 3 outputs server-side and Validate Evidence IDs
+    let result = null;
     let structuredData = null;
     let parsedContainerType = 'NONE';
     let rawCandidateCount = 0;
     let intelligenceRunStatus = 'SUCCESS';
+    let finalRequestId = requestId;
+    let allSources = [];
+    let totalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    let totalPricing = {
+      model: selectedModel,
+      input_tokens: 0,
+      output_tokens: 0,
+      total_tokens: 0,
+      input_cost_usd: 0,
+      output_cost_usd: 0,
+      estimated_cost_usd: 0,
+      pricing_status: 'PRICED',
+      pricing_source: 'CENTRAL_REGISTRY'
+    };
+    let batchExecutionTelemetry = {
+      result_limit: effectiveResultLimit,
+      batches_planned: 1,
+      batches_executed: 0,
+      stop_reason: 'COMPLETED'
+    };
 
-    if (isStructuredAdvisoryEngine || isSourcingResearch) {
+    if (isSourcingResearch) {
+      const batchPlan = planResearchBatches(effectiveResultLimit, modeConfig);
+      batchExecutionTelemetry.batches_planned = batchPlan.batchCount;
+      const targetCount = batchPlan.targetCount;
+      let accumulatedCandidates = [];
+      let lastSummary = 'Investigación comercial completada.';
+      let lastConfidence = 0.85;
+      let accumulatedSubtrends = new Set();
+      let stopReason = 'COMPLETED';
+
+      console.info(`[RESEARCH_TRACE] BATCH_PLAN_STARTED`, {
+        request_id: requestId,
+        query: cleanSearchQuery || resolvedInput,
+        target_country: country || 'GLOBAL',
+        product_family: effectiveProductFamily,
+        time_scope: effectiveTimeScope,
+        research_depth: modeConfig.key,
+        result_limit: effectiveResultLimit,
+        batches_planned: batchPlan.batchCount,
+        target_count: targetCount
+      });
+
+      for (let bIdx = 0; bIdx < batchPlan.batches.length; bIdx++) {
+        const batch = batchPlan.batches[bIdx];
+        const excludeTitles = accumulatedCandidates.map(c => c.title).filter(Boolean);
+
+        const batchInstructions = buildOptimizedResearchPrompt(
+          cleanSearchQuery || resolvedInput,
+          country,
+          modeConfig,
+          effectiveTimeScope,
+          effectiveProductFamily,
+          effectiveResultLimit,
+          {
+            batchIndex: bIdx + 1,
+            totalBatches: batchPlan.batchCount,
+            targetCount: batch.targetCount,
+            excludeTitles
+          }
+        );
+
+        console.info(`[RESEARCH_TRACE] OPENAI_BATCH_REQUEST_STARTED`, {
+          request_id: requestId,
+          batch_index: bIdx + 1,
+          total_batches: batchPlan.batchCount,
+          target_count: batch.targetCount,
+          exclude_count: excludeTitles.length
+        });
+
+        const batchResult = await callOpenAIResponses({
+          model: selectedModel,
+          input: cleanSearchQuery || resolvedInput,
+          instructions: batchInstructions,
+          temperature: 0.2,
+          maxTokens: batch.maxOutputTokens || dynamicMaxTokens,
+          timeoutMs: isWebSearchNeeded ? Math.max(engineTimeoutMs, 50000) : engineTimeoutMs,
+          tools,
+          toolChoice,
+          metadata: {
+            engine: String(engine || ''),
+            country: String(country || 'GLOBAL'),
+            operation: String(operation || 'execute'),
+            research_depth: modeConfig.key,
+            batch_index: String(bIdx + 1),
+            total_batches: String(batchPlan.batchCount),
+            result_limit: String(effectiveResultLimit)
+          }
+        });
+
+        batchExecutionTelemetry.batches_executed++;
+        finalRequestId = batchResult.requestId || finalRequestId;
+        result = batchResult; // Keep last for responseId etc.
+
+        // Accumulate tokens and pricing
+        totalUsage.inputTokens += (batchResult.usage?.inputTokens || 0);
+        totalUsage.outputTokens += (batchResult.usage?.outputTokens || 0);
+        totalUsage.totalTokens += (batchResult.usage?.totalTokens || 0);
+
+        totalPricing.input_tokens += (batchResult.pricing?.input_tokens || 0);
+        totalPricing.output_tokens += (batchResult.pricing?.output_tokens || 0);
+        totalPricing.total_tokens += (batchResult.pricing?.total_tokens || 0);
+        totalPricing.input_cost_usd = Number((totalPricing.input_cost_usd + (batchResult.pricing?.input_cost_usd || 0)).toFixed(6));
+        totalPricing.output_cost_usd = Number((totalPricing.output_cost_usd + (batchResult.pricing?.output_cost_usd || 0)).toFixed(6));
+        totalPricing.estimated_cost_usd = Number((totalPricing.estimated_cost_usd + (batchResult.pricing?.estimated_cost_usd || 0)).toFixed(6));
+
+        // Accumulate sources
+        if (Array.isArray(batchResult.sources)) {
+          allSources.push(...batchResult.sources);
+        }
+
+        // Parse items from this batch
+        const parsedBatch = parseSourcingItems(batchResult.outputText);
+        if (parsedBatch.summary) lastSummary = parsedBatch.summary;
+        if (parsedBatch.confidence) lastConfidence = parsedBatch.confidence;
+        (parsedBatch.subtrends || []).forEach(st => accumulatedSubtrends.add(st));
+
+        rawCandidateCount += parsedBatch.items.length;
+        const prevCount = accumulatedCandidates.length;
+        accumulatedCandidates = deduplicateResearchCandidates(accumulatedCandidates, parsedBatch.items);
+        const newUniquesInBatch = accumulatedCandidates.length - prevCount;
+
+        console.info(`[RESEARCH_TRACE] OPENAI_BATCH_RESPONSE_RECEIVED`, {
+          request_id: finalRequestId,
+          batch_index: bIdx + 1,
+          items_in_batch: parsedBatch.items.length,
+          new_uniques: newUniquesInBatch,
+          total_accumulated: accumulatedCandidates.length,
+          batch_tokens: batchResult.usage?.totalTokens,
+          batch_cost_usd: batchResult.pricing?.estimated_cost_usd
+        });
+
+        // Early Stop condition 1: Target limit reached
+        if (accumulatedCandidates.length >= targetCount) {
+          stopReason = 'LIMIT_REACHED';
+          accumulatedCandidates = accumulatedCandidates.slice(0, targetCount);
+          break;
+        }
+
+        // Early Stop condition 2: No more unique candidates found in this batch (saturation)
+        if (bIdx > 0 && newUniquesInBatch === 0 && parsedBatch.items.length > 0) {
+          stopReason = 'SATURATION_NO_NEW_CANDIDATES';
+          break;
+        }
+
+        // Early Stop condition 3: Budget check before next batch
+        if (bIdx < batchPlan.batches.length - 1 && totalPricing.estimated_cost_usd >= 0.08) {
+          stopReason = 'BUDGET_CAP_REACHED';
+          break;
+        }
+      }
+
+      batchExecutionTelemetry.stop_reason = stopReason;
+      parsedContainerType = 'items';
+      structuredData = {
+        summary: lastSummary,
+        confidence: lastConfidence,
+        subtrends: Array.from(accumulatedSubtrends),
+        items: accumulatedCandidates
+      };
+    } else {
+      // Non-sourcing single-call advisory engines
+      const resolvedInstructions = instructionsFor(engine, operation);
+
+      console.info(`[RESEARCH_TRACE] OPENAI_REQUEST_STARTED`, {
+        request_id: requestId,
+        query: cleanSearchQuery || resolvedInput,
+        target_country: country || 'GLOBAL',
+        engine,
+        requested_model: effectiveRequestedModel,
+        actual_model: selectedModel,
+        dynamic_max_tokens: dynamicMaxTokens
+      });
+
+      result = await callOpenAIResponses({
+        model: selectedModel,
+        input: resolvedInput,
+        instructions: resolvedInstructions,
+        temperature: 0.2,
+        maxTokens: req.body?.maxTokens || 1500,
+        timeoutMs: engineTimeoutMs,
+        tools,
+        toolChoice,
+        metadata: {
+          engine: String(engine || ''),
+          country: String(country || 'GLOBAL'),
+          operation: String(operation || 'execute')
+        }
+      });
+
+      finalRequestId = result.requestId || requestId;
+      totalUsage = result.usage;
+      totalPricing = result.pricing;
+      if (Array.isArray(result.sources)) {
+        allSources = result.sources;
+      }
+
+      const clean = String(result.outputText || '').trim().replace(/^\`\`\`(?:json)?/i, '').replace(/\`\`\`$/i, '').trim();
       try {
-        const clean = String(result.outputText || '').trim().replace(/^\`\`\`(?:json)?/i, '').replace(/\`\`\`$/i, '').trim();
         structuredData = JSON.parse(clean);
       } catch {
         const match = String(result.outputText || '').match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
@@ -746,87 +910,26 @@ export default async function handler(req, res) {
             structuredData = JSON.parse(match[1].trim());
           } catch {}
         }
-        if (!structuredData && isSourcingResearch) {
-          // Robust JSON repair for research outputs (e.g. if truncated by token limit)
-          try {
-            let repaired = (result.outputText || '').trim();
-            const firstBrace = repaired.indexOf('{');
-            if (firstBrace !== -1) {
-              repaired = repaired.slice(firstBrace);
-              // Find the last complete item in "items": [...]
-              const itemsMatch = repaired.match(/"items"\s*:\s*\[([\s\S]*)/i);
-              if (itemsMatch) {
-                const rawItemsBlock = itemsMatch[1];
-                const lastItemClose = rawItemsBlock.lastIndexOf('}');
-                if (lastItemClose !== -1) {
-                  const validItemsString = rawItemsBlock.slice(0, lastItemClose + 1);
-                  const parsedItems = JSON.parse(`[${validItemsString}]`);
-                  
-                  // Extract summary and subtrends if available
-                  const summaryMatch = repaired.match(/"summary"\s*:\s*"([^"]*)"/i);
-                  const confMatch = repaired.match(/"confidence"\s*:\s*([0-9.]+)/i);
-                  structuredData = {
-                    summary: summaryMatch ? summaryMatch[1] : 'Investigación de mercado completada.',
-                    confidence: confMatch ? parseFloat(confMatch[1]) : 0.85,
-                    subtrends: [],
-                    items: parsedItems
-                  };
-                }
-              }
-            }
-          } catch (repairErr) {
-            console.warn('[AI Execute] JSON repair attempt failed:', repairErr.message);
-          }
-        }
-        if (!structuredData && isStructuredAdvisoryEngine) {
-          throw new OpenAIError('INVALID_OUTPUT', 502, 'OpenAI returned invalid structured intelligence output.');
-        }
+      }
+
+      if (!structuredData && isStructuredAdvisoryEngine) {
+        throw new OpenAIError('INVALID_OUTPUT', 502, 'OpenAI returned invalid structured intelligence output.');
       }
     }
 
-    if (isSourcingResearch && structuredData) {
-      if (Array.isArray(structuredData)) {
-        parsedContainerType = 'root_array';
-        rawCandidateCount = structuredData.length;
-        structuredData = {
-          summary: 'Investigación de mercado completada.',
-          confidence: 0.85,
-          subtrends: [],
-          items: structuredData
-        };
-      } else {
-        if (Array.isArray(structuredData.items)) {
-          parsedContainerType = 'items';
-          rawCandidateCount = structuredData.items.length;
-        } else if (Array.isArray(structuredData.products)) {
-          parsedContainerType = 'products';
-          rawCandidateCount = structuredData.products.length;
-          structuredData.items = structuredData.products;
-        } else if (Array.isArray(structuredData.candidates)) {
-          parsedContainerType = 'candidates';
-          rawCandidateCount = structuredData.candidates.length;
-          structuredData.items = structuredData.candidates;
-        } else if (Array.isArray(structuredData.results)) {
-          parsedContainerType = 'results';
-          rawCandidateCount = structuredData.results.length;
-          structuredData.items = structuredData.results;
-        } else if (Array.isArray(structuredData.discoveries)) {
-          parsedContainerType = 'discoveries';
-          rawCandidateCount = structuredData.discoveries.length;
-          structuredData.items = structuredData.discoveries;
-        } else {
-          parsedContainerType = 'NONE';
-          structuredData.items = [];
-        }
-      }
-    }
+    const elapsedMs = Date.now() - startTime;
 
-    console.info(`[RESEARCH_TRACE] STRUCTURED_PARSE_RESULT`, {
+    console.info(`[RESEARCH_TRACE] EXECUTION_COMPLETED`, {
       request_id: finalRequestId,
-      structured_payload_detected: Boolean(structuredData),
-      parsed_container: parsedContainerType,
+      actual_model: selectedModel,
       raw_candidate_count: rawCandidateCount,
-      final_candidate_count: Array.isArray(structuredData?.items) ? structuredData.items.length : 0
+      unique_candidate_count: Array.isArray(structuredData?.items) ? structuredData.items.length : 0,
+      batches_planned: batchExecutionTelemetry.batches_planned,
+      batches_executed: batchExecutionTelemetry.batches_executed,
+      stop_reason: batchExecutionTelemetry.stop_reason,
+      total_tokens: totalUsage.totalTokens,
+      estimated_cost_usd: totalPricing.estimated_cost_usd,
+      latency_ms: elapsedMs
     });
 
     if (isStructuredAdvisoryEngine && structuredData) {
@@ -857,6 +960,66 @@ export default async function handler(req, res) {
       }
     }
 
+    const classifiedSources = (allSources || []).map(s => ({
+      ...s,
+      source_type: classifyDomain(s.url),
+      observed_at: new Date().toISOString()
+    }));
+
+    // 4. Log Success Telemetry to ai_usage_events
+    if (client) {
+      try {
+        const usagePayload = {
+          engine,
+          country_code: country || 'GLOBAL',
+          provider: 'OPENAI',
+          model: selectedModel,
+          request_id: finalRequestId,
+          input_tokens: totalUsage.inputTokens,
+          output_tokens: totalUsage.outputTokens,
+          total_tokens: totalUsage.totalTokens,
+          estimated_cost_usd: totalPricing.estimated_cost_usd,
+          latency_ms: elapsedMs,
+          status: 'SUCCESS',
+          fallback_used: false,
+          metadata: {
+            operation,
+            requested_model: effectiveRequestedModel,
+            automatic_or_manual: automaticOrManual,
+            research_depth: modeConfig.key,
+            response_id: result?.responseId,
+            pricing_status: totalPricing.pricing_status,
+            pricing_source: totalPricing.pricing_source,
+            input_cost_usd: totalPricing.input_cost_usd,
+            output_cost_usd: totalPricing.output_cost_usd,
+            batch_telemetry: batchExecutionTelemetry,
+            context
+          }
+        };
+        const { error: usageInsertError } = await client.from('ai_usage_events').insert(usagePayload);
+        if (usageInsertError) {
+          const { error: usageRpcError } = await client.rpc('log_ai_usage_event', {
+            p_engine: usagePayload.engine,
+            p_country_code: usagePayload.country_code,
+            p_provider: usagePayload.provider,
+            p_model: usagePayload.model,
+            p_request_id: usagePayload.request_id,
+            p_input_tokens: usagePayload.input_tokens,
+            p_output_tokens: usagePayload.output_tokens,
+            p_total_tokens: usagePayload.total_tokens,
+            p_estimated_cost_usd: usagePayload.estimated_cost_usd,
+            p_latency_ms: usagePayload.latency_ms,
+            p_status: usagePayload.status,
+            p_fallback_used: usagePayload.fallback_used,
+            p_metadata: usagePayload.metadata
+          });
+          if (usageRpcError) throw usageRpcError;
+        }
+      } catch (logErr) {
+        console.warn('[AI Execute] Telemetry logging error:', logErr.message);
+      }
+    }
+
     // Persist research run in ai_intelligence_runs and sourcing_research_cache
     if (structuredData && client) {
       try {
@@ -877,13 +1040,14 @@ export default async function handler(req, res) {
           recommendations: Array.isArray(structuredData.recommendations) ? structuredData.recommendations : [],
           evidence_ids: Array.isArray(structuredData.evidenceIds) ? structuredData.evidenceIds : [],
           request_id: finalRequestId,
-          model: result.model,
+          model: selectedModel,
           status: intelligenceRunStatus,
           metadata: { 
             operation, 
             decision_mode: isSourcingResearch ? 'SOURCING_RESEARCH' : 'ADVISORY_ONLY',
             invalid_evidence_neutralized: intelligenceRunStatus === 'INVALID_AI_EVIDENCE',
             research_depth: modeConfig.key,
+            batch_telemetry: batchExecutionTelemetry,
             items: Array.isArray(structuredData.items) ? structuredData.items : [],
             sources: classifiedSources
           }
@@ -900,8 +1064,9 @@ export default async function handler(req, res) {
         console.warn('[AI Execute] Intelligence run logging error:', logErr.message);
       }
     }
+
     // Persist Sourcing Research Cache for future instant reuse across countries
-    if (isSourcingResearch && researchCacheKey && client && result?.usage?.totalTokens > 0) {
+    if (isSourcingResearch && researchCacheKey && client && totalUsage?.totalTokens > 0) {
       try {
         const ttlDays = modeConfig.key === 'PROFUNDO' ? 7 : 3;
         const expiresAt = new Date(Date.now() + (ttlDays * 24 * 3600 * 1000)).toISOString();
@@ -913,15 +1078,15 @@ export default async function handler(req, res) {
           normalized_query: normalizeQuery(resolvedInput),
           scope: 'GLOBAL',
           research_depth: modeConfig.key,
-          model: result.model,
+          model: selectedModel,
           summary: structuredData?.summary || null,
           confidence: Number(structuredData?.confidence || 0.85),
           subtrends: Array.isArray(structuredData?.subtrends) ? structuredData.subtrends : [],
           items: rawItems,
           sources: classifiedSources,
-          input_tokens: result.usage.inputTokens,
-          output_tokens: result.usage.outputTokens,
-          cost_usd: result.pricing.estimated_cost_usd,
+          input_tokens: totalUsage.inputTokens,
+          output_tokens: totalUsage.outputTokens,
+          cost_usd: totalPricing.estimated_cost_usd,
           expires_at: expiresAt
         }, { onConflict: 'cache_key' });
       } catch (cacheWriteErr) {
@@ -934,19 +1099,20 @@ export default async function handler(req, res) {
       success: true,
       status: intelligenceRunStatus,
       provider: 'OPENAI',
-      model: result.model,
+      model: selectedModel,
       requested_model: effectiveRequestedModel,
-      actual_model: result.model,
+      actual_model: selectedModel,
       automatic_or_manual: automaticOrManual,
       research_depth: modeConfig.key,
-      text: result.outputText,
+      text: result?.outputText || JSON.stringify(structuredData),
       data: structuredData,
       sources: classifiedSources,
-      response_id: result.responseId,
+      response_id: result?.responseId || null,
       request_id: finalRequestId,
       latency_ms: elapsedMs,
-      usage: result.usage,
-      pricing: result.pricing
+      usage: totalUsage,
+      pricing: totalPricing,
+      batch_telemetry: batchExecutionTelemetry
     });
 
 

@@ -52,6 +52,8 @@ export class OpenAIProvider implements AIProviderAdapter {
           model: context?.model,
           requested_model: context?.requested_model || payload?.requested_model,
           research_depth: context?.research_depth || payload?.research_depth,
+          result_limit: context?.resultLimit || payload?.resultLimit || context?.result_limit || payload?.result_limit,
+          resultLimit: context?.resultLimit || payload?.resultLimit || context?.result_limit || payload?.result_limit,
           context
         })
       });

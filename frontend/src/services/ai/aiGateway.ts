@@ -154,7 +154,8 @@ export class AIGateway {
         country: country || 'UY',
         model: engineConfig.model !== 'NOT CONFIGURED' ? engineConfig.model : undefined,
         temperature: engineConfig.temperature,
-        maxTokens: engineConfig.max_output_tokens
+        maxTokens: engineConfig.max_output_tokens,
+        resultLimit: options.resultLimit || context?.resultLimit
       };
 
       // 5. Execute Provider Adapter
@@ -395,6 +396,8 @@ export class AIGateway {
     requested_model?: string;
     time_scope?: string;
     period?: string;
+    result_limit?: 'AUTO' | 10 | 25 | 50 | 100;
+    resultLimit?: 'AUTO' | 10 | 25 | 50 | 100;
     engine?: string;
     operation?: string;
     force_refresh?: boolean;
@@ -408,10 +411,14 @@ export class AIGateway {
       requested_model = 'AUTO',
       time_scope = 'ALL_TIME',
       period,
+      result_limit,
+      resultLimit,
       engine = 'RESEARCH_INTELLIGENCE',
       operation = 'sourcing_market_research',
       force_refresh = false
     } = params;
+
+    const effectiveResultLimit = result_limit || resultLimit || 'AUTO';
 
     try {
       let token: string | undefined;
@@ -438,6 +445,8 @@ export class AIGateway {
           requested_model,
           time_scope: effectiveTimeScope,
           period: effectiveTimeScope,
+          result_limit: effectiveResultLimit,
+          resultLimit: effectiveResultLimit,
           engine,
           operation,
           force_refresh

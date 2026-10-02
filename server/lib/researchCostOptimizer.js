@@ -187,13 +187,91 @@ export function normalizeProductFamily(family) {
  * Generates deterministic cache key for research queries
  * Global research cache is reusable across countries!
  */
-export function generateResearchCacheKey(query, scope = 'GLOBAL', depth = 'ECONOMICO', model = 'AUTO', timeScope = 'ALL_TIME', productFamily = 'ALL') {
+export function normalizeResultLimit(limitInput) {
+  if (limitInput === undefined || limitInput === null || limitInput === '' || limitInput === 'AUTO') {
+    return 'AUTO';
+  }
+  const n = parseInt(String(limitInput), 10);
+  if (n === 10) return 10;
+  if (n === 25) return 25;
+  if (n === 50) return 50;
+  if (n === 100) return 100;
+  return 'AUTO';
+}
+
+export function planResearchBatches(resultLimit, modeConfig = RESEARCH_MODES.ECONOMICO) {
+  const normLimit = normalizeResultLimit(resultLimit);
+  if (normLimit === 'AUTO') {
+    // Default safe limit: 15 products in 1 batch for ECONOMICO, 8 for ESTANDAR, 15 for PROFUNDO
+    const limitNum = modeConfig.maxCandidates || 15;
+    return {
+      resultLimit: 'AUTO',
+      targetCount: limitNum,
+      batchCount: 1,
+      batchSize: limitNum,
+      batches: [{ batchIndex: 1, targetCount: limitNum, maxOutputTokens: modeConfig.maxOutputTokens || 1200 }]
+    };
+  }
+
+  const targetCount = Number(normLimit);
+  // Batch sizing: For 10 -> 1 batch of 10
+  // For 25 -> 2 batches (15, 10) or 2 batches of 15
+  // For 50 -> 3 batches (20, 20, 15)
+  // For 100 -> 5 batches (20, 20, 20, 20, 20)
+  let batchCount = 1;
+  let batches = [];
+
+  if (targetCount === 10) {
+    batchCount = 1;
+    batches = [{ batchIndex: 1, targetCount: 10, maxOutputTokens: 900 }];
+  } else if (targetCount === 25) {
+    batchCount = 2;
+    batches = [
+      { batchIndex: 1, targetCount: 15, maxOutputTokens: 1200 },
+      { batchIndex: 2, targetCount: 10, maxOutputTokens: 900 }
+    ];
+  } else if (targetCount === 50) {
+    batchCount = 3;
+    batches = [
+      { batchIndex: 1, targetCount: 20, maxOutputTokens: 1500 },
+      { batchIndex: 2, targetCount: 20, maxOutputTokens: 1500 },
+      { batchIndex: 3, targetCount: 15, maxOutputTokens: 1200 }
+    ];
+  } else if (targetCount === 100) {
+    batchCount = 5;
+    batches = [
+      { batchIndex: 1, targetCount: 20, maxOutputTokens: 1500 },
+      { batchIndex: 2, targetCount: 20, maxOutputTokens: 1500 },
+      { batchIndex: 3, targetCount: 20, maxOutputTokens: 1500 },
+      { batchIndex: 4, targetCount: 20, maxOutputTokens: 1500 },
+      { batchIndex: 5, targetCount: 20, maxOutputTokens: 1500 }
+    ];
+  } else {
+    batchCount = 1;
+    batches = [{ batchIndex: 1, targetCount: targetCount, maxOutputTokens: 1200 }];
+  }
+
+  return {
+    resultLimit: normLimit,
+    targetCount,
+    batchCount,
+    batchSize: batches[0]?.targetCount || 15,
+    batches
+  };
+}
+
+/**
+ * Generates deterministic cache key for research queries
+ * Global research cache is reusable across countries!
+ */
+export function generateResearchCacheKey(query, scope = 'GLOBAL', depth = 'ECONOMICO', model = 'AUTO', timeScope = 'ALL_TIME', productFamily = 'ALL', resultLimit = 'AUTO') {
   const normQuery = normalizeQuery(query);
   const normDepth = (depth || 'ECONOMICO').toUpperCase();
   const normModel = (model && model !== 'AUTO') ? String(model).toLowerCase().trim() : 'AUTO';
   const normTime = (timeScope || 'ALL_TIME').toUpperCase();
   const normFamily = normalizeProductFamily(productFamily);
-  const rawKey = `${normQuery}|${scope}|${normDepth}|${normModel}|${normTime}|${normFamily}`;
+  const normLimit = normalizeResultLimit(resultLimit);
+  const rawKey = `${normQuery}|${scope}|${normDepth}|${normModel}|${normTime}|${normFamily}|${normLimit}`;
   return crypto.createHash('sha256').update(rawKey).digest('hex');
 }
 
@@ -228,9 +306,10 @@ export function estimateTokensLocally(text) {
 /**
  * Generates compact targeted prompt instructions for web research based on mode
  */
-export function buildOptimizedResearchPrompt(query, country = 'UY', modeConfig = RESEARCH_MODES.ECONOMICO, timeScope = 'ALL_TIME', productFamily = 'ALL') {
+export function buildOptimizedResearchPrompt(query, country = 'UY', modeConfig = RESEARCH_MODES.ECONOMICO, timeScope = 'ALL_TIME', productFamily = 'ALL', resultLimit = 'AUTO', batchContext = null) {
   const currentYear = new Date().getFullYear();
-  const maxItems = modeConfig.maxCandidates;
+  const batchPlan = planResearchBatches(resultLimit, modeConfig);
+  const maxItems = batchContext?.targetCount || (resultLimit && resultLimit !== 'AUTO' ? Number(resultLimit) : modeConfig.maxCandidates);
   const normFamily = normalizeProductFamily(productFamily);
   const familyObj = COLLECTIBLES_PRODUCT_FAMILIES.find(f => f.id === normFamily);
   const familyLabel = familyObj ? familyObj.label : 'Todos';
@@ -238,12 +317,12 @@ export function buildOptimizedResearchPrompt(query, country = 'UY', modeConfig =
   const timeLabel = timeScope === '24h' 
     ? 'Últimas 24 horas'
     : timeScope === '7d' 
-      ? 'Últimos 7 días'
-      : timeScope === '30d' 
-        ? 'Últimos 30 días'
-        : timeScope === '90d' 
-          ? 'Últimos 90 días' 
-          : 'Sin límite temporal (todo catálogo y lanzamientos activos)';
+    ? 'Últimos 7 días'
+    : timeScope === '30d' 
+      ? 'Últimos 30 días'
+      : timeScope === '90d' 
+        ? 'Últimos 90 días' 
+        : 'Sin límite temporal (todo catálogo y lanzamientos activos)';
 
   const targetCountryLabel = (!country || country === 'ALL' || country === 'GLOBAL') 
     ? 'GLOBAL (Oportunidades internacionales sin restricción de país único)' 
@@ -253,13 +332,17 @@ export function buildOptimizedResearchPrompt(query, country = 'UY', modeConfig =
     ? `\nRestricción de familia de producto: Restringir resultados estrictamente a la familia ${familyLabel} (${normFamily}). Si la consulta busca una franquicia o personaje, listar coleccionables que pertenezcan a esta categoría.`
     : '';
 
+  const batchInstruction = batchContext?.excludeTitles && batchContext.excludeTitles.length > 0
+    ? `\nLote actual: ${batchContext.batchIndex} de ${batchContext.totalBatches}. EXCLUIR los siguientes productos ya descubiertos en lotes anteriores para garantizar diversidad: ${batchContext.excludeTitles.slice(0, 15).join('; ')}.`
+    : '';
+
   return `INVESTIGACIÓN COMERCIAL SOURCING (MODO: ${modeConfig.key}):
 Consulta: "${query}"
 Año actual: ${currentYear}
 Mercado objetivo comercial: ${targetCountryLabel}
 Alcance de descubrimiento: GLOBAL (fabricantes oficiales, retailers internacionales y tiendas globales)
 Ventana temporal: ${timeLabel}
-Familia de producto: ${familyLabel}${familyInstruction}
+Familia de producto: ${familyLabel}${familyInstruction}${batchInstruction}
 
 Instrucciones:
 1. Resuelve alias multilingües si la consulta está en español (ej. "ositos cariñosos" -> "Care Bears", "caballeros del zodiaco" -> "Saint Seiya", "tortugas ninja" -> "TMNT / Teenage Mutant Ninja Turtles", etc.) para descubrir productos oficiales existentes en el mercado global.
@@ -283,11 +366,15 @@ export function calculatePreFlightEstimate({
   timeScope = 'ALL_TIME',
   productFamily = 'ALL',
   product_family,
+  resultLimit = 'AUTO',
   cacheInfo = null
 }) {
   const effectiveFamily = productFamily !== 'ALL' ? productFamily : (product_family || 'ALL');
   const mode = resolveResearchMode(researchDepth);
-  const prompt = buildOptimizedResearchPrompt(query, country, mode, timeScope, effectiveFamily);
+  const normLimit = normalizeResultLimit(resultLimit);
+  const batchPlan = planResearchBatches(normLimit, mode);
+
+  const prompt = buildOptimizedResearchPrompt(query, country, mode, timeScope, effectiveFamily, normLimit);
   const basePromptTokens = estimateTokensLocally(prompt);
   const complexity = analyzeQueryComplexity(query);
 
@@ -301,28 +388,41 @@ export function calculatePreFlightEstimate({
   const targetModel = isManualOverride ? modelValidation.model : mode.model;
 
   // Web search tool brings extra document tokens depending on research depth
-  const rawInputMin = isWebSearch ? mode.expectedWebInputTokensMin : (mode.noWebInputTokensMin || 300);
-  const rawInputExpected = isWebSearch ? mode.expectedWebInputTokens : (mode.noWebInputTokens || 600);
-  const rawInputMax = isWebSearch ? mode.expectedWebInputTokensMax : (mode.noWebInputTokensMax || 1500);
+  const rawInputMinPerBatch = isWebSearch ? mode.expectedWebInputTokensMin : (mode.noWebInputTokensMin || 300);
+  const rawInputExpectedPerBatch = isWebSearch ? mode.expectedWebInputTokens : (mode.noWebInputTokens || 600);
+  const rawInputMaxPerBatch = isWebSearch ? mode.expectedWebInputTokensMax : (mode.noWebInputTokensMax || 1500);
 
-  const rawOutputMin = isWebSearch ? mode.expectedWebOutputTokensMin : (mode.noWebOutputTokensMin || 200);
-  const rawOutputExpected = isWebSearch ? mode.expectedWebOutputTokens : (mode.noWebOutputTokens || 350);
-  const rawOutputMax = isWebSearch ? (mode.expectedWebOutputTokensMax || mode.maxOutputTokens) : (mode.noWebOutputTokensMax || mode.maxOutputTokens);
+  // Output tokens per batch
+  const defaultBatchMax = isWebSearch ? (batchPlan.batches[0]?.maxOutputTokens || mode.maxOutputTokens) : (mode.noWebOutputTokensMax || 750);
+  const singleBatchMaxOutput = defaultBatchMax;
+  const rawOutputMinPerBatch = isWebSearch ? mode.expectedWebOutputTokensMin : (mode.noWebOutputTokensMin || 200);
+  const rawOutputExpectedPerBatch = Math.round(singleBatchMaxOutput * 0.65);
+  const rawOutputMaxPerBatch = singleBatchMaxOutput;
 
-  // Adjust input tokens with query complexity factor (bounded 1.0 - 1.25)
-  const estimatedInputTokensMin = Math.round(basePromptTokens + rawInputMin);
-  const estimatedInputTokensExpected = Math.round((basePromptTokens + rawInputExpected) * complexity.factor);
-  const estimatedInputTokensMax = Math.round((basePromptTokens + rawInputMax) * complexity.factor);
+  // Single batch token calculations
+  const singleBatchInputMin = Math.round(basePromptTokens + rawInputMinPerBatch);
+  const singleBatchInputExpected = Math.round((basePromptTokens + rawInputExpectedPerBatch) * complexity.factor);
+  const singleBatchInputMax = Math.round((basePromptTokens + rawInputMaxPerBatch) * complexity.factor);
 
-  const estimatedOutputTokensMin = rawOutputMin;
-  const estimatedOutputTokensExpected = Math.round(rawOutputExpected * (complexity.factor > 1.1 ? 1.08 : 1.0));
-  const maxOutputTokens = rawOutputMax;
+  const singleBatchOutputMin = rawOutputMinPerBatch;
+  const singleBatchOutputExpected = Math.round(rawOutputExpectedPerBatch * (complexity.factor > 1.1 ? 1.08 : 1.0));
+  const singleBatchOutputMax = rawOutputMaxPerBatch;
+
+  // TOTAL across all planned batches
+  const numBatches = batchPlan.batchCount;
+  const estimatedInputTokensMin = singleBatchInputMin * numBatches;
+  const estimatedInputTokensExpected = singleBatchInputExpected * numBatches;
+  const estimatedInputTokensMax = singleBatchInputMax * numBatches;
+
+  const estimatedOutputTokensMin = singleBatchOutputMin * numBatches;
+  const estimatedOutputTokensExpected = singleBatchOutputExpected * numBatches;
+  const maxOutputTokens = singleBatchOutputMax * numBatches;
 
   const rates = getModelPricingRates(targetModel);
   const inputRate = rates?.inputPer1M || 0.15;
   const outputRate = rates?.outputPer1M || 0.60;
 
-  // Base token costs
+  // Base token costs across ALL batches
   const minInputCostUsd = (estimatedInputTokensMin / 1_000_000) * inputRate;
   const expectedInputCostUsd = (estimatedInputTokensExpected / 1_000_000) * inputRate;
   const maxInputCostUsd = (estimatedInputTokensMax / 1_000_000) * inputRate;
@@ -331,14 +431,14 @@ export function calculatePreFlightEstimate({
   const expectedOutputCostUsd = (estimatedOutputTokensExpected / 1_000_000) * outputRate;
   const maxOutputCostUsd = (maxOutputTokens / 1_000_000) * outputRate;
 
-  // Total ranges
+  // Total ranges across all batches
   const minTotalUsd = Number((minInputCostUsd + minOutputCostUsd).toFixed(5));
   const expectedTotalUsd = Number((expectedInputCostUsd + expectedOutputCostUsd).toFixed(5));
   const maxTotalUsd = Number((maxInputCostUsd + maxOutputCostUsd).toFixed(5));
 
   const isCacheHit = Boolean(cacheInfo && (cacheInfo.status === 'HIT' || cacheInfo.status === 'HIT_DISCOVERIES'));
-  const requiresConfirmation = !isCacheHit && (maxTotalUsd > COST_THRESHOLDS.CONFIRMATION_WARNING_USD || (isManualOverride && maxTotalUsd > 0.015));
-  const isHardLimit = !isCacheHit && maxTotalUsd > COST_THRESHOLDS.HARD_LIMIT_USD;
+  const isBudgetWarning = !isCacheHit && (maxTotalUsd > (COST_THRESHOLDS.CONFIRMATION_WARNING_USD * numBatches) || (isManualOverride && maxTotalUsd > 0.015));
+  const isHardLimit = !isCacheHit && maxTotalUsd > (COST_THRESHOLDS.HARD_LIMIT_USD * Math.max(1, numBatches * 0.7));
 
   // Compute cheaper alternative comparison against AUTO / ECONOMICO
   let cheaperAlternative = null;
@@ -402,7 +502,11 @@ export function calculatePreFlightEstimate({
     research_depth_label: mode.label,
     product_family: normFamily,
     product_family_label: familyObj ? familyObj.label : 'Todos',
-    max_candidates: mode.maxCandidates,
+    result_limit: normLimit,
+    requested_result_limit: normLimit,
+    max_candidates: batchPlan.targetCount,
+    batches_planned: batchPlan.batchCount,
+    batch_plan: batchPlan,
     estimated_input_tokens: estimatedInputTokensExpected,
     estimated_input_tokens_min: estimatedInputTokensMin,
     estimated_input_tokens_expected: estimatedInputTokensExpected,
@@ -426,11 +530,142 @@ export function calculatePreFlightEstimate({
     confidence: complexity.confidence,
     confidence_label: complexity.confidence_label,
     cache: cacheInfo || { status: 'MISS', age_seconds: null },
-    requires_confirmation: requiresConfirmation,
+    requires_confirmation: isBudgetWarning,
     hard_limit_exceeded: isHardLimit,
-    warning_threshold_usd: COST_THRESHOLDS.CONFIRMATION_WARNING_USD,
+    warning_threshold_usd: COST_THRESHOLDS.CONFIRMATION_WARNING_USD * numBatches,
     cheaper_alternative: cheaperAlternative,
     pricing_source: rates?.source || 'CENTRAL_REGISTRY',
     openai_calls_used: 0
   };
 }
+
+/**
+ * Normalizes title for deduplication without losing legitimate variants
+ * e.g., "Care Bears Cheer Bear 14 inch Plush" vs "Care Bears Grumpy Bear 14 inch Plush" are DISTINCT.
+ */
+export function normalizeTitleForDedupe(title) {
+  if (!title || typeof title !== 'string') return '';
+  const cleaned = title
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\b(inch|inches)\b/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  // Sort distinct word tokens to catch minor title rearrangements across retailers
+  return cleaned.split(' ').filter(Boolean).sort().join(' ');
+}
+
+/**
+ * Global Deduplicator for Sourcing Candidates across batches
+ * Deduplicates by exact ASIN/SKU, exact normalized title, or brand+character+scale combination.
+ * Attaches multi-source evidence array when duplicates are merged!
+ */
+export function deduplicateResearchCandidates(existingList = [], incomingList = []) {
+  const merged = [...existingList];
+  const seenAsins = new Set();
+  const seenTitles = new Set();
+  const seenKeys = new Set();
+
+  // Populate seen sets with existing items
+  for (const item of merged) {
+    if (item.asin && typeof item.asin === 'string') {
+      seenAsins.add(item.asin.toUpperCase().trim());
+    }
+    const normT = normalizeTitleForDedupe(item.title);
+    if (normT) seenTitles.add(normT);
+    const key = `${(item.brand || '').toLowerCase().trim()}|${(item.franchise || '').toLowerCase().trim()}|${normT}`;
+    seenKeys.add(key);
+    if (!Array.isArray(item.evidence)) {
+      item.evidence = [];
+      if (item.evidence_snippet || item.url) {
+        item.evidence.push({
+          url: item.url || null,
+          retailer: item.retailer || null,
+          snippet: item.evidence_snippet || null,
+          price_usd: item.origin_price_usd ?? null,
+          observed_at: new Date().toISOString()
+        });
+      }
+    }
+  }
+
+  for (const candidate of incomingList) {
+    if (!candidate || !candidate.title) continue;
+    const asin = (candidate.asin && typeof candidate.asin === 'string') ? candidate.asin.toUpperCase().trim() : null;
+    const normT = normalizeTitleForDedupe(candidate.title);
+    const key = `${(candidate.brand || '').toLowerCase().trim()}|${(candidate.franchise || '').toLowerCase().trim()}|${normT}`;
+
+    let duplicateIndex = -1;
+    if (asin && seenAsins.has(asin)) {
+      duplicateIndex = merged.findIndex(m => m.asin && m.asin.toUpperCase().trim() === asin);
+    } else if (seenTitles.has(normT)) {
+      duplicateIndex = merged.findIndex(m => normalizeTitleForDedupe(m.title) === normT);
+    } else if (seenKeys.has(key)) {
+      duplicateIndex = merged.findIndex(m => `${(m.brand || '').toLowerCase().trim()}|${(m.franchise || '').toLowerCase().trim()}|${normalizeTitleForDedupe(m.title)}` === key);
+    }
+
+    if (duplicateIndex >= 0) {
+      // Merge evidence into existing candidate without replacing authoritative fields if already set
+      const existing = merged[duplicateIndex];
+      if (!Array.isArray(existing.evidence)) {
+        existing.evidence = [];
+      }
+      // Merge candidate evidence array if already present
+      if (Array.isArray(candidate.evidence)) {
+        for (const ev of candidate.evidence) {
+          if (!existing.evidence.some(e => e.url && ev.url && e.url === ev.url)) {
+            existing.evidence.push(ev);
+          }
+        }
+      }
+      if (candidate.url || candidate.evidence_snippet) {
+        const alreadyHasSource = existing.evidence.some(e => e.url && candidate.url && e.url === candidate.url);
+        if (!alreadyHasSource) {
+          existing.evidence.push({
+            url: candidate.url || null,
+            retailer: candidate.retailer || null,
+            snippet: candidate.evidence_snippet || null,
+            price_usd: candidate.origin_price_usd ?? null,
+            observed_at: new Date().toISOString()
+          });
+        }
+      }
+      // Fill missing fields if existing didn't have them
+      if (!existing.origin_price_usd && candidate.origin_price_usd) {
+        existing.origin_price_usd = candidate.origin_price_usd;
+      }
+      if (!existing.asin && candidate.asin) {
+        existing.asin = candidate.asin;
+      }
+      if (!existing.url && candidate.url) {
+        existing.url = candidate.url;
+      }
+    } else {
+      // New unique candidate!
+      if (asin) seenAsins.add(asin);
+      if (normT) seenTitles.add(normT);
+      seenKeys.add(key);
+
+      const normalizedCandidate = { ...candidate };
+      if (!Array.isArray(normalizedCandidate.evidence)) {
+        normalizedCandidate.evidence = [];
+        if (candidate.evidence_snippet || candidate.url) {
+          normalizedCandidate.evidence.push({
+            url: candidate.url || null,
+            retailer: candidate.retailer || null,
+            snippet: candidate.evidence_snippet || null,
+            price_usd: candidate.origin_price_usd ?? null,
+            observed_at: new Date().toISOString()
+          });
+        }
+      }
+      merged.push(normalizedCandidate);
+    }
+  }
+
+  return merged;
+}
+

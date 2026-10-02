@@ -48,9 +48,12 @@ export class ResearchIntelligenceService {
       period = '7d',
       research_depth = 'ECONOMICO',
       requested_model = 'AUTO',
+      result_limit,
+      resultLimit,
       force_refresh = false
     } = request;
 
+    const effectiveResultLimit = result_limit || resultLimit || 'AUTO';
     const effectiveFamily = product_family || category || 'ALL';
 
     // 1. Ejecución vía AI Gateway Central
@@ -73,6 +76,7 @@ export class ResearchIntelligenceService {
         country: (country as any) || 'UY',
         operation: 'sourcing_market_research',
         prompt: query,
+        resultLimit: effectiveResultLimit,
         payload: {
           query,
           country,
@@ -83,6 +87,8 @@ export class ResearchIntelligenceService {
           time_scope: period === 'all' ? 'ALL_TIME' : period,
           research_depth,
           requested_model,
+          result_limit: effectiveResultLimit,
+          resultLimit: effectiveResultLimit,
           evidence: {
             search_query: query,
             target_country: country,
@@ -96,6 +102,8 @@ export class ResearchIntelligenceService {
           category: effectiveFamily,
           research_depth,
           requested_model,
+          result_limit: effectiveResultLimit,
+          resultLimit: effectiveResultLimit,
           force_refresh
         }
       });
@@ -246,16 +254,23 @@ export class ResearchIntelligenceService {
           candStatus = 'EMERGING';
         }
 
+        // Gap de mercado local: solo otorga puntos si hay evidencia de búsqueda en plaza o de falta de oferta directa
+        const verifiedMarketGapScore = (item.mlu_matches_count === 0 || item.local_supply_gap === 15)
+          ? 85
+          : (typeof item.mlu_matches_count === 'number' && item.mlu_matches_count <= 2)
+            ? 50
+            : 0; // UNKNOWN = 0
+
         // Opportunity Score determinístico de 7 componentes
         const oppEval = evaluateOpportunityScore({
           demandScore: trendEval.collectibles_trend_score,
-          sellerTrustScore: 92,
+          sellerTrustScore: item.retailer ? 90 : 75,
           marginPercent: pricingRes.netMarginPercentage || 25,
           profitUsd: pricingRes.estimatedProfit || 12,
           matchConfidence: 0.95,
           inStock: candStatus !== 'OUT_OF_STOCK',
-          isOfficialVerified: true,
-          uruguayMarketGapScore: 78,
+          isOfficialVerified: Boolean(item.brand || item.retailer === 'official'),
+          uruguayMarketGapScore: verifiedMarketGapScore,
           trendVelocity: trendEval.trend_velocity
         });
 
@@ -301,14 +316,34 @@ export class ResearchIntelligenceService {
             market_differential: mlPriceLocal ? `Precio estimado en plaza local: ${country === 'UY' ? '$U' : '$'} ${mlPriceLocal}. Margen estimado Collectibles: ${(pricingRes.netMarginPercentage || 25).toFixed(1)}%.` : 'Sin competencia directa local detectada.',
             stock_verdict: candStatus === 'PREORDER' ? 'Preventa oficial activa de fabricante.' : 'Stock disponible en origen.',
             internal_signals: `Driver: ${trendEval.drivers.slice(0, 2).join('; ')}.`,
-            evidence_sources: signals.map(s => ({
-              name: s.source,
-              type: s.source_type,
-              confidence: s.confidence,
-              date: s.observed_at
-            }))
+            evidence_sources: Array.isArray(item.evidence) && item.evidence.length > 0
+              ? item.evidence.map((e: any) => ({
+                  name: e.retailer || item.retailer || 'Origen Web',
+                  type: 'RETAILER',
+                  confidence: 90,
+                  date: e.observed_at || new Date().toISOString()
+                }))
+              : signals.map(s => ({
+                  name: s.source,
+                  type: s.source_type,
+                  confidence: s.confidence,
+                  date: s.observed_at
+                }))
           },
-          raw_evidence: signals,
+          raw_evidence: Array.isArray(item.evidence) && item.evidence.length > 0
+            ? item.evidence.map((e: any, eIdx: number) => ({
+                id: `sig-cand-${idx + 1}-${eIdx + 1}`,
+                source: e.retailer || item.retailer || 'Web Search',
+                source_type: 'RETAILER' as const,
+                country: 'GLOBAL',
+                signal_name: 'Confirmación comercial',
+                metric_value: e.price_usd ? `$${e.price_usd}` : undefined,
+                confidence: 90,
+                observed_at: e.observed_at || new Date().toISOString(),
+                url: e.url,
+                evidence_text: e.snippet
+              }))
+            : signals,
           created_at: new Date().toISOString()
         };
       })
@@ -345,6 +380,8 @@ export class ResearchIntelligenceService {
       automatic_or_manual: gatewayResponse?.automatic_or_manual || (requested_model && requested_model !== 'AUTO' ? 'MANUAL' : 'AUTO'),
       cached: isCached,
       research_depth,
+      result_limit: effectiveResultLimit,
+      batch_telemetry: gatewayResponse?.batch_telemetry || undefined,
       input_tokens: inputTokens,
       output_tokens: outputTokens,
       total_tokens: totalTokens,

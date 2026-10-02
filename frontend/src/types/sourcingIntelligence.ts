@@ -186,6 +186,8 @@ export interface SourcingResearchQueryRequest {
   period?: '24h' | '7d' | '30d' | '90d' | 'all';
   research_depth?: 'ECONOMICO' | 'ESTANDAR' | 'PROFUNDO';
   requested_model?: string;
+  result_limit?: 'AUTO' | 10 | 25 | 50 | 100;
+  resultLimit?: 'AUTO' | 10 | 25 | 50 | 100;
   force_refresh?: boolean;
 }
 
@@ -207,6 +209,13 @@ export interface SourcingResearchResponse {
   automatic_or_manual?: 'AUTO' | 'MANUAL';
   cached?: boolean;
   research_depth?: string;
+  result_limit?: 'AUTO' | 10 | 25 | 50 | 100;
+  batch_telemetry?: {
+    result_limit: string | number;
+    batches_planned: number;
+    batches_executed: number;
+    stop_reason: string;
+  };
   input_tokens?: number;
   output_tokens?: number;
   total_tokens?: number;

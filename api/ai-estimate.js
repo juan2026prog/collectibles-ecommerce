@@ -67,12 +67,15 @@ export default async function handler(req, res) {
     product_family,
     productFamily,
     category,
+    result_limit,
+    resultLimit,
     is_web_search = true,
     force_refresh = false
   } = req.body || {};
 
   const effectiveTimeScope = time_scope || period || 'ALL_TIME';
   const effectiveProductFamily = product_family || productFamily || category || 'ALL';
+  const effectiveResultLimit = result_limit || resultLimit || 'AUTO';
 
   const cleanQuery = normalizeQuery(query || req.body?.prompt || '');
   if (!cleanQuery) {
@@ -94,7 +97,7 @@ export default async function handler(req, res) {
 
   const mode = resolveResearchMode(research_depth);
   const isModelOverride = requested_model && requested_model !== 'AUTO';
-  const cacheKey = generateResearchCacheKey(cleanQuery, 'GLOBAL', mode.key, isModelOverride ? requested_model : 'AUTO', effectiveTimeScope, effectiveProductFamily);
+  const cacheKey = generateResearchCacheKey(cleanQuery, 'GLOBAL', mode.key, isModelOverride ? requested_model : 'AUTO', effectiveTimeScope, effectiveProductFamily, effectiveResultLimit);
 
   let cacheInfo = {
     status: 'MISS',
@@ -196,6 +199,7 @@ async function safeDbQuery(queryPromise, fallback = { data: null, error: null },
     isWebSearch: is_web_search,
     timeScope: effectiveTimeScope,
     productFamily: effectiveProductFamily,
+    resultLimit: effectiveResultLimit,
     cacheInfo
   });
 
@@ -206,6 +210,7 @@ async function safeDbQuery(queryPromise, fallback = { data: null, error: null },
     query: cleanQuery,
     country,
     product_family: effectiveProductFamily,
+    result_limit: effectiveResultLimit,
     ...estimate
   });
 }

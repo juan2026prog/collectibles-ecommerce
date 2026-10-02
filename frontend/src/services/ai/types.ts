@@ -180,6 +180,7 @@ export interface AIExecuteOptions<T = any> {
   context?: Record<string, any>;
   prompt?: string;
   systemPrompt?: string;
+  resultLimit?: 'AUTO' | 10 | 25 | 50 | 100;
   fallbackHandler?: () => Promise<T> | T;
 }
 
@@ -196,6 +197,12 @@ export interface AIExecuteResponse<T = any> {
   latency_ms?: number;
   usage?: AIUsageInfo;
   pricing?: AIPricingInfo;
+  batch_telemetry?: {
+    result_limit: string | number;
+    batches_planned: number;
+    batches_executed: number;
+    stop_reason: string;
+  };
   request_id?: string;
   response_id?: string;
 }
@@ -269,7 +276,10 @@ export interface AIPreFlightEstimate {
   research_depth_label: string;
   product_family?: string;
   product_family_label?: string;
+  result_limit?: 'AUTO' | 10 | 25 | 50 | 100;
+  requested_result_limit?: 'AUTO' | 10 | 25 | 50 | 100;
   max_candidates: number;
+  batches_planned?: number;
   estimated_input_tokens: number;
   estimated_input_tokens_min?: number;
   estimated_input_tokens_max?: number;

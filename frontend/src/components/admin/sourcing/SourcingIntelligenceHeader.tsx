@@ -19,9 +19,11 @@ interface SourcingIntelligenceHeaderProps {
   onProductFamilyChange?: (pf: string) => void;
   category?: string;
   onCategoryChange?: (cat: string) => void;
+  resultLimit?: 'AUTO' | 10 | 25 | 50 | 100;
+  onResultLimitChange?: (limit: 'AUTO' | 10 | 25 | 50 | 100) => void;
   searchQuery: string;
   onSearchQueryChange: (q: string) => void;
-  onExecuteSearch: (mode?: ResearchDepthMode, requestedModel?: string, forceRefresh?: boolean) => void;
+  onExecuteSearch: (mode?: ResearchDepthMode, requestedModel?: string, forceRefresh?: boolean, resultLimit?: 'AUTO' | 10 | 25 | 50 | 100) => void;
   isSearching: boolean;
   activeCounts: {
     trending: number;
@@ -66,6 +68,8 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
   onProductFamilyChange,
   category,
   onCategoryChange,
+  resultLimit: propResultLimit,
+  onResultLimitChange,
   searchQuery,
   onSearchQueryChange,
   onExecuteSearch,
@@ -78,6 +82,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
   const { isSuperAdmin } = useAuth();
   const [researchMode, setResearchMode] = useState<ResearchDepthMode>('ECONOMICO');
   const [selectedModel, setSelectedModel] = useState<string>('AUTO');
+  const [localResultLimit, setLocalResultLimit] = useState<'AUTO' | 10 | 25 | 50 | 100>(propResultLimit || 'AUTO');
   const [availableModels, setAvailableModels] = useState<AIModelCapabilityInfo[]>([]);
   const [preFlightEstimate, setPreFlightEstimate] = useState<AIPreFlightEstimate | null>(null);
   const [estimateError, setEstimateError] = useState<string | null>(null);
@@ -85,6 +90,11 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
   const [showConfirmationWarning, setShowConfirmationWarning] = useState<boolean>(false);
 
   const effectiveFamily = productFamily || category || 'ALL';
+
+  const handleLimitChange = (newLimit: 'AUTO' | 10 | 25 | 50 | 100) => {
+    setLocalResultLimit(newLimit);
+    if (onResultLimitChange) onResultLimitChange(newLimit);
+  };
 
   const handleFamilySelect = (val: string) => {
     if (onProductFamilyChange) onProductFamilyChange(val);
@@ -122,7 +132,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
       return;
     }
 
-    const currentKey = `${clean}|${country}|${period}|${researchMode}|${selectedModel}|${effectiveFamily}`;
+    const currentKey = `${clean}|${country}|${period}|${researchMode}|${selectedModel}|${effectiveFamily}|${localResultLimit}`;
     if (lastEstimateKeyRef.current === currentKey) {
       return; // Deduplicate identical params
     }
@@ -143,7 +153,9 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
           research_depth: researchMode,
           requested_model: selectedModel,
           time_scope: period === 'all' ? 'ALL_TIME' : period,
-          period: period === 'all' ? 'ALL_TIME' : period
+          period: period === 'all' ? 'ALL_TIME' : period,
+          result_limit: localResultLimit,
+          resultLimit: localResultLimit
         });
 
         if (isMounted) {
@@ -171,7 +183,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [searchQuery, country, period, researchMode, selectedModel, effectiveFamily]);
+  }, [searchQuery, country, period, researchMode, selectedModel, effectiveFamily, localResultLimit]);
 
   const handleRunSearch = (forceRefresh = false) => {
     if (preFlightEstimate?.requires_confirmation && !showConfirmationWarning && !forceRefresh) {
@@ -179,7 +191,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
       return;
     }
     setShowConfirmationWarning(false);
-    onExecuteSearch(researchMode, selectedModel, forceRefresh);
+    onExecuteSearch(researchMode, selectedModel, forceRefresh, localResultLimit);
   };
 
   return (
@@ -277,6 +289,23 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
 
           {/* CONTROLES DE MODO Y MODELO DE IA */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* SELECTOR DE CANTIDAD DE RESULTADOS (HASTA 100 CON BATCHING) */}
+            <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-gray-200 text-xs font-bold">
+              <span className="text-[11px] text-gray-500 font-extrabold uppercase px-2">Resultados:</span>
+              <select
+                value={localResultLimit}
+                onChange={(e) => handleLimitChange(e.target.value as any)}
+                className="bg-white border border-gray-200 text-xs font-extrabold rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#f00856] cursor-pointer text-slate-800"
+                title="Cantidad de productos candidatos a descubrir (hasta 100 con particionamiento en lotes)"
+              >
+                <option value="AUTO">Automático (15)</option>
+                <option value="10">10 productos (1 lote)</option>
+                <option value="25">25 productos (2 lotes)</option>
+                <option value="50">50 productos (3 lotes)</option>
+                <option value="100">100 productos (5 lotes)</option>
+              </select>
+            </div>
+
             {/* SELECTOR DE MODO DE INVESTIGACIÓN (CHEAP-FIRST DEFAULT) */}
             <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-gray-200 text-xs font-bold">
               <span className="text-[11px] text-gray-500 font-extrabold uppercase px-2">Modo:</span>
@@ -417,6 +446,15 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
                   <span className="text-slate-400 font-medium">Tipo:</span>
                   <span className="text-purple-300 font-bold">
                     {COLLECTIBLES_PRODUCT_FAMILIES.find(f => f.id === effectiveFamily || f.label === effectiveFamily)?.label || effectiveFamily}
+                  </span>
+                </div>
+
+                {/* CANTIDAD OBJETIVO Y LOTES PLANIFICADOS */}
+                <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
+                  <span className="text-slate-400 font-medium">Objetivo:</span>
+                  <span className="text-pink-400 font-bold">
+                    {preFlightEstimate.max_candidates} productos
+                    {preFlightEstimate.batches_planned && preFlightEstimate.batches_planned > 1 ? ` (${preFlightEstimate.batches_planned} lotes)` : ''}
                   </span>
                 </div>
 

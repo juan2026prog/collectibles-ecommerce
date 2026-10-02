@@ -63,6 +63,7 @@ export default function AdminSourcingImport() {
 
   // Research Query state
   const [searchQuery, setSearchQuery] = useState<string>(urlQuery || '');
+  const [selectedResultLimit, setSelectedResultLimit] = useState<'AUTO' | 10 | 25 | 50 | 100>('AUTO');
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [isDiscoveryScanning, setIsDiscoveryScanning] = useState<boolean>(false);
   const [quickFilterState, setQuickFilterState] = useState<string>('all');
@@ -164,10 +165,13 @@ export default function AdminSourcingImport() {
     queryOverride?: string, 
     modeOverride?: 'ECONOMICO' | 'ESTANDAR' | 'PROFUNDO', 
     requestedModel?: string,
-    forceRefresh = false
+    forceRefresh = false,
+    resultLimitOverride?: 'AUTO' | 10 | 25 | 50 | 100
   ) => {
     const q = (queryOverride !== undefined ? queryOverride : searchQuery).trim();
     if (!q) return;
+
+    const limitToUse = resultLimitOverride || selectedResultLimit;
 
     setIsSearching(true);
     try {
@@ -179,6 +183,8 @@ export default function AdminSourcingImport() {
         period: selectedPeriod,
         research_depth: modeOverride || 'ECONOMICO',
         requested_model: requestedModel,
+        result_limit: limitToUse,
+        resultLimit: limitToUse,
         force_refresh: forceRefresh
       });
 
@@ -353,9 +359,11 @@ export default function AdminSourcingImport() {
         onProductFamilyChange={setSelectedProductFamily}
         category={selectedProductFamily}
         onCategoryChange={setSelectedProductFamily}
+        resultLimit={selectedResultLimit}
+        onResultLimitChange={setSelectedResultLimit}
         searchQuery={searchQuery}
         onSearchQueryChange={setSearchQuery}
-        onExecuteSearch={(mode, requestedModel, forceRefresh) => handleExecuteSearch(undefined, mode, requestedModel, forceRefresh)}
+        onExecuteSearch={(mode, requestedModel, forceRefresh, resultLimit) => handleExecuteSearch(undefined, mode, requestedModel, forceRefresh, resultLimit)}
         isSearching={isSearching}
         activeCounts={activeCounts}
         activeFilterState={quickFilterState}

@@ -56,6 +56,8 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
 }) => {
   const [filterQuery, setFilterQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const pageSize = 25;
 
   const filtered = candidates.filter(c => {
     if (filterQuery) {
@@ -68,6 +70,9 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
     if (statusFilter !== 'all' && c.status !== statusFilter) return false;
     return true;
   });
+
+  const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+  const paginatedCandidates = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   if (candidates.length === 0) {
     return (
@@ -118,7 +123,7 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
 
       {/* GRID DE CANDIDATOS */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filtered.map(cand => {
+        {paginatedCandidates.map(cand => {
           const isPreorder = cand.status === 'PREORDER';
           const isOpportunity = cand.status === 'OPPORTUNITY';
           const isOutsideWatchlist = cand.discovered_from === 'DISCOVERED_OUTSIDE_WATCHLIST';
@@ -270,6 +275,44 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
           );
         })}
       </div>
+
+      {/* CONTROLES DE PAGINACIÓN (25 POR PÁGINA) */}
+      {totalPages > 1 && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs font-bold text-gray-700 shadow-2xs">
+          <span>
+            Mostrando {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filtered.length)} de {filtered.length} productos candidatos
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition cursor-pointer"
+            >
+              Anterior
+            </button>
+            {Array.from({ length: totalPages }).map((_, i) => (
+              <button
+                key={i + 1}
+                onClick={() => setCurrentPage(i + 1)}
+                className={`w-7 h-7 rounded-lg transition cursor-pointer flex items-center justify-center ${
+                  currentPage === i + 1 
+                    ? 'bg-slate-900 text-white font-black' 
+                    : 'border border-gray-200 hover:bg-gray-50'
+                }`}
+              >
+                {i + 1}
+              </button>
+            ))}
+            <button
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition cursor-pointer"
+            >
+              Siguiente
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
