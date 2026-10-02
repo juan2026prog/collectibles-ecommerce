@@ -91,18 +91,29 @@ function extractSources(data) {
     for (const content of item?.content || []) {
       if (Array.isArray(content?.annotations)) {
         for (const ann of content.annotations) {
-          if (ann.type === 'url_citation' && ann.url && !seenUrls.has(ann.url)) {
-            seenUrls.add(ann.url);
-            sources.push({
-              url: ann.url,
-              title: ann.title || ann.text || ann.url,
-              domain: (() => {
-                try { return new URL(ann.url).hostname.replace(/^www\./, ''); } catch { return 'web'; }
-              })(),
-              cited_text: ann.text || '',
-              startIndex: ann.start_index,
-              endIndex: ann.end_index
-            });
+          if (ann?.type === 'url_citation') {
+            // Responses API citations may expose URL metadata either directly
+            // on the annotation or nested under url_citation. Support both.
+            const citation = ann.url_citation && typeof ann.url_citation === 'object'
+              ? ann.url_citation
+              : ann;
+            const url = citation?.url || ann?.url || null;
+            const title = citation?.title || ann?.title || ann?.text || url;
+
+            if (url && !seenUrls.has(url)) {
+              seenUrls.add(url);
+              sources.push({
+                url,
+                title,
+                domain: (() => {
+                  try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return 'web'; }
+                })(),
+                cited_text: ann.text || citation?.text || '',
+                startIndex: ann.start_index ?? citation?.start_index,
+                endIndex: ann.end_index ?? citation?.end_index
+              });
+            }
+          }
           }
         }
       }
