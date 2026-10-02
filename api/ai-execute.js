@@ -108,6 +108,16 @@ function instructionsFor(engine, operation) {
 }
 
 
+async function safeDbQuery(queryPromise, fallback = { data: null, error: null }, timeoutMs = 2500) {
+  try {
+    const timeout = new Promise((resolve) => setTimeout(() => resolve(fallback), timeoutMs));
+    return await Promise.race([queryPromise, timeout]);
+  } catch (err) {
+    console.warn('[AI Execute] DB Query error:', err.message);
+    return fallback;
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -148,9 +158,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const authHeader = req.headers.authorization || '';
   const client = createClient(SUPABASE_URL, SUPABASE_KEY, {
-    global: { headers: authHeader ? { Authorization: authHeader } : {} },
     auth: { persistSession: false, autoRefreshToken: false }
   });
 
@@ -231,12 +239,14 @@ export default async function handler(req, res) {
     // 1. Validate System, Country, and Engine configs from Database
     if (client) {
       // Global switch & Circuit breaker
-      const { data: fetchedSysData } = await client
-        .from('ai_system_config')
-        .select('*')
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
+      const { data: fetchedSysData } = await safeDbQuery(
+        client
+          .from('ai_system_config')
+          .select('*')
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle()
+      );
 
       sysData = fetchedSysData;
 
@@ -262,11 +272,13 @@ export default async function handler(req, res) {
 
       // Country check
       if (country && country !== 'GLOBAL') {
-        const { data: fetchedCntrData } = await client
-          .from('ai_country_config')
-          .select('*')
-          .eq('country_code', country)
-          .maybeSingle();
+        const { data: fetchedCntrData } = await safeDbQuery(
+          client
+            .from('ai_country_config')
+            .select('*')
+            .eq('country_code', country)
+            .maybeSingle()
+        );
 
         cntrData = fetchedCntrData;
 
@@ -291,11 +303,13 @@ export default async function handler(req, res) {
       }
 
       // Engine check
-      const { data: fetchedEngData } = await client
-        .from('ai_engine_config')
-        .select('*')
-        .eq('engine_key', engine)
-        .maybeSingle();
+      const { data: fetchedEngData } = await safeDbQuery(
+        client
+          .from('ai_engine_config')
+          .select('*')
+          .eq('engine_key', engine)
+          .maybeSingle()
+      );
 
       engData = fetchedEngData;
 
@@ -328,10 +342,12 @@ export default async function handler(req, res) {
       const hasCntrMonthly = Number(cntrData?.monthly_budget_usd || 0) > 0;
 
       if (hasSysDaily || hasSysMonthly || hasEngDaily || hasEngMonthly || hasCntrDaily || hasCntrMonthly) {
-        const { data: usageRows } = await client
-          .from('ai_usage_events')
-          .select('estimated_cost_usd, engine, country_code, created_at')
-          .gte('created_at', startOfMonth);
+        const { data: usageRows } = await safeDbQuery(
+          client
+            .from('ai_usage_events')
+            .select('estimated_cost_usd, engine, country_code, created_at')
+            .gte('created_at', startOfMonth)
+        );
 
         if (usageRows && usageRows.length > 0) {
           let totalMonth = 0;
@@ -416,14 +432,16 @@ export default async function handler(req, res) {
 
     if (isSourcingResearch && client && context?.force_refresh !== true && context?.certification !== true) {
       try {
-        const { data: cachedResearch } = await client
-          .from('sourcing_research_cache')
-          .select('*')
-          .eq('cache_key', researchCacheKey)
-          .gt('expires_at', new Date().toISOString())
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        const { data: cachedResearch } = await safeDbQuery(
+          client
+            .from('sourcing_research_cache')
+            .select('*')
+            .eq('cache_key', researchCacheKey)
+            .gt('expires_at', new Date().toISOString())
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        );
 
         if (cachedResearch) {
           const cachedData = {
