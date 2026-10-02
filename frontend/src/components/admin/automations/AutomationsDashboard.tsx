@@ -32,10 +32,10 @@ export default function AutomationsDashboard() {
   async function fetchDashboard() {
     setLoading(true);
     try {
-      // Fetch Recent Carts and Alerts for lists
+      // Fetch Recent Carts and Alerts for lists with lean projections
       const [cartsRes, alertsRes, rpcRes] = await Promise.all([
-        supabase.from('abandoned_checkouts').select('*').order('created_at', { ascending: false }).limit(5),
-        supabase.from('wishlist_alerts').select('*, wishlists(products(title))').order('created_at', { ascending: false }).limit(5),
+        supabase.from('abandoned_checkouts').select('id, email, status, total_amount, created_at, recovery_email_sent, recovery_24h_sent').order('created_at', { ascending: false }).limit(5),
+        supabase.from('wishlist_alerts').select('id, alert_type, status, created_at, wishlists(products(title))').order('created_at', { ascending: false }).limit(5),
         supabase.rpc('get_automation_dashboard_metrics')
       ]);
 

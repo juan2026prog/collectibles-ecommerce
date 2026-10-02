@@ -364,7 +364,7 @@ export default function VMercadoLibre() {
     try {
       const { data, error } = await supabase
         .from('ml_import_logs')
-        .select('*')
+        .select('id, seller_id, status, created_at, trigger_source, total_fetched, new_imported, matched_links, error_message')
         .eq('seller_id', account.seller_id)
         .order('created_at', { ascending: false })
         .limit(10);

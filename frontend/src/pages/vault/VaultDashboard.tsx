@@ -176,7 +176,11 @@ export default function VaultDashboard() {
       // Si está activada la completitud en Admin, calculamos el % y las piezas faltantes
       if (isEnabled && dbItems.length > 0) {
         const userWaveNames = Array.from(new Set(dbItems.map((i: any) => i.line).filter(Boolean)));
-        let catalogQuery = supabase.from('products').select('id, title, slug, base_price, brand:brands(name), category_id');
+        let catalogQuery = supabase
+          .from('products')
+          .select('id, title, slug, base_price, brand:brands(name), category_id')
+          .eq('status', 'published')
+          .eq('is_active', true);
         
         if (source === 'wave_series' && userWaveNames.length > 0) {
           catalogQuery = catalogQuery.limit(50);
@@ -216,6 +220,8 @@ export default function VaultDashboard() {
       const { data, error } = await supabase
         .from('products')
         .select('id, title, slug, base_price, brand:brands(name), category:categories(name)')
+        .eq('status', 'published')
+        .eq('is_active', true)
         .ilike('title', `%${q.trim()}%`)
         .limit(8);
 

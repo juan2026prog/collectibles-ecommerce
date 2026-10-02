@@ -86,17 +86,17 @@ export default function AdminVendors() {
       let query = supabase
         .from('vendors')
         .select(`
-          *, 
+          id, store_name, slug, logo_url, banner_url, description, status, base_commission_rate, created_at, contact_email, contact_phone, pickup_address, shipping_settings, tax_id, company_name, kyc_status, promotions_opt_in, ships_to_argentina,
           profiles:profiles(email, first_name, last_name, phone),
           vendor_stores(
-            *,
+            id, vendor_id, store_name, slug, logo_url, status, is_official, official_badge_text, created_at,
             vendor_store_brands(
-              *,
-              brands(*)
+              id, brand_id, status, is_official,
+              brands(id, name, logo_url)
             )
           ),
           products(
-            *,
+            id, vendor_id, vendor_store_id, title, base_price, status,
             brand:brands!products_brand_id_fkey(name),
             product_variants(inventory_count)
           ),

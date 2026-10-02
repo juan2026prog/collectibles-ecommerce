@@ -30,15 +30,23 @@ export default function CustomerFileModal({ userId, onClose }: { userId: string,
     setLoading(true);
     
     // 1. Profile
-    const { data: prof } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('id, email, first_name, last_name, phone, created_at')
+      .eq('id', userId)
+      .single();
     if (prof) setProfile(prof);
 
     // 2. Orders
-    const { data: ords } = await supabase.from('orders').select('*').eq('user_id', userId).order('created_at', { ascending: false });
+    const { data: ords } = await supabase
+      .from('orders')
+      .select('id, order_number, total_amount, currency, status, payment_status, created_at, coupon_id, total_discounts')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
     if (ords) {
       setOrders(ords);
-      const spent = ords.reduce((acc, o) => acc + o.total_amount, 0);
-      const coupons = ords.filter(o => o.metadata?.coupon).length;
+      const spent = ords.reduce((acc, o) => acc + Number(o.total_amount || 0), 0);
+      const coupons = ords.filter(o => o.coupon_id || (o.total_discounts && o.total_discounts > 0)).length;
       setStats(prev => ({
         ...prev,
         totalOrders: ords.length,
@@ -52,7 +60,7 @@ export default function CustomerFileModal({ userId, onClose }: { userId: string,
 
     // 3. CRM Logs
     const { data: lgs } = await supabase.from('communication_logs')
-      .select('*, communication_templates(name)')
+      .select('id, status, channel, created_at, communication_templates(name)')
       .eq('customer_id', userId).order('created_at', { ascending: false });
     if (lgs) {
       setLogs(lgs);
@@ -64,11 +72,18 @@ export default function CustomerFileModal({ userId, onClose }: { userId: string,
     }
 
     // 4. Wishlist
-    const { data: wl } = await supabase.from('wishlists').select('*, products(title)').eq('user_id', userId);
+    const { data: wl } = await supabase
+      .from('wishlists')
+      .select('id, product_id, created_at, products(title)')
+      .eq('user_id', userId);
     if (wl) setWishlist(wl);
 
     // 5. Carts
-    const { data: cts } = await supabase.from('abandoned_checkouts').select('*').eq('customer_id', userId).order('created_at', { ascending: false });
+    const { data: cts } = await supabase
+      .from('abandoned_checkouts')
+      .select('id, customer_id, total_amount, status, created_at')
+      .eq('customer_id', userId)
+      .order('created_at', { ascending: false });
     if (cts) {
        setCarts(cts);
        setStats(prev => ({ ...prev, recoveries: cts.filter(c => c.status === 'converted').length }));
@@ -76,7 +91,11 @@ export default function CustomerFileModal({ userId, onClose }: { userId: string,
 
     // 6. Consents (needs email from profile)
     if (prof?.email) {
-      const { data: cst } = await supabase.from('customer_consents').select('*').eq('email', prof.email).single();
+      const { data: cst } = await supabase
+        .from('customer_consents')
+        .select('id, email, marketing_accepted, terms_accepted, updated_at')
+        .eq('email', prof.email)
+        .maybeSingle();
       if (cst) setConsents(cst);
     }
 

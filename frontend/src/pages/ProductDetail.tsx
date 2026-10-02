@@ -1,7 +1,7 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, Minus, Plus, Star, ChevronDown, Heart, Zap, ZoomIn, Archive } from 'lucide-react';
-import { useProduct, useProductBuyBox, useProducts, getProductGroupBadge, getAllProductGroupBadges } from '../hooks/useData';
+import { useProduct, useProductBuyBox, useProductCards, getProductGroupBadge, getAllProductGroupBadges } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
 import { useInternationalCartContext } from '../contexts/InternationalCartContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -115,7 +115,7 @@ function RelatedProductsSection({ currentProductId, categorySlug, brandId, licen
   brandId?: string;
   licenseId?: string;
 }) {
-  const { products } = useProducts({ category: categorySlug, limit: 12 });
+  const { products } = useProductCards({ category: categorySlug, limit: 12, skipCount: true });
   const { formatCurrencyPrice } = useCurrency();
   const { addToCart } = useCartContext();
 
