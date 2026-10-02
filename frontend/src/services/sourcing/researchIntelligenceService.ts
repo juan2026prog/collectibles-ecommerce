@@ -97,9 +97,12 @@ export class ResearchIntelligenceService {
           research_depth,
           requested_model,
           force_refresh
-        },
-        fallbackHandler: () => this.generateLocalResearchFallback(query, country)
+        }
       });
+
+      if (!gatewayResponse.success) {
+        throw new Error(gatewayResponse.error || `Error en Gateway (${gatewayResponse.status || 'AI_ERROR'})`);
+      }
 
       aiResult = gatewayResponse.data;
       if ((!aiResult || typeof aiResult === 'string') && gatewayResponse.text) {
@@ -120,10 +123,9 @@ export class ResearchIntelligenceService {
       inputTokens = gatewayResponse.usage?.inputTokens || 0;
       outputTokens = gatewayResponse.usage?.outputTokens || 0;
       totalTokens = gatewayResponse.usage?.totalTokens || 0;
-    } catch (err) {
-      console.warn('[ResearchIntelligence] Error en Gateway, ejecutando fallback local:', err);
-      aiResult = this.generateLocalResearchFallback(query, country);
-      latencyMs = Math.round(performance.now() - startTime);
+    } catch (err: any) {
+      console.error('[ResearchIntelligence] Error en Gateway:', err);
+      throw err;
     }
 
     // 2. Incorporar fuentes reales de Web Search devueltas por el Gateway
