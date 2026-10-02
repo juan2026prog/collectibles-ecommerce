@@ -79,9 +79,6 @@ function extractOutputText(data) {
   return '';
 }
 
-/**
- * Extracts web search source citations from Responses API output
- */
 function extractSources(data) {
   const sources = [];
   const seenUrls = new Set();
@@ -90,7 +87,6 @@ function extractSources(data) {
     // Check annotations in text content
     for (const content of item?.content || []) {
       if (Array.isArray(content?.annotations)) {
-        for (const ann of content.annotations) {
           if (ann?.type === 'url_citation') {
             // Responses API citations may expose URL metadata either directly
             // on the annotation or nested under url_citation. Support both.
@@ -118,21 +114,21 @@ function extractSources(data) {
       }
     }
     // Check direct tool call outputs
-    if (item?.type === 'web_search_call' || item?.type === 'web_search') {
-      const toolAction = item.web_search_call || item.action || {};
-      if (Array.isArray(toolAction.results)) {
-        for (const res of toolAction.results) {
-          if (res.url && !seenUrls.has(res.url)) {
-            seenUrls.add(res.url);
-            sources.push({
-              url: res.url,
-              title: res.title || res.url,
-              domain: (() => {
-                try { return new URL(res.url).hostname.replace(/^www\./, ''); } catch { return 'web'; }
-              })(),
-              snippet: res.snippet || res.content || ''
-            });
-          }
+    if (item?.type === 'web_search_call' || item?.type === 'web_search' || item?.type === 'tool_call') {
+      const toolAction = item.web_search_call || item.action || item;
+      const resultsList = Array.isArray(toolAction.results) ? toolAction.results : (Array.isArray(item.results) ? item.results : []);
+      for (const res of resultsList) {
+        const resUrl = res.url || res.link;
+        if (resUrl && typeof resUrl === 'string' && !seenUrls.has(resUrl)) {
+          seenUrls.add(resUrl);
+          sources.push({
+            url: resUrl,
+            title: res.title || res.name || resUrl,
+            domain: (() => {
+              try { return new URL(resUrl).hostname.replace(/^www\./, ''); } catch { return 'web'; }
+            })(),
+            snippet: res.snippet || res.content || res.summary || ''
+          });
         }
       }
     }

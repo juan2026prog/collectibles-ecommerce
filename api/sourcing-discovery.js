@@ -397,13 +397,22 @@ Devuelve ÚNICAMENTE un objeto JSON válido con la siguiente estructura:
 
     if (!isLocalTest) {
       try {
+        console.info(`[DISCOVERY_TRACE] STARTING_OPENAI_DISCOVERY_SCAN`, {
+          run_id: runId,
+          trigger,
+          targetMarket,
+          topBrand,
+          model: 'gpt-4o-mini'
+        });
+
         const aiResult = await callOpenAIResponses({
+          model: 'gpt-4o-mini',
           input: webResearchPrompt,
           instructions: webResearchInstructions,
-          maxTokens: 2500,
+          maxTokens: 1200,
           timeoutMs: 45000,
           tools: [{ type: 'web_search' }],
-          toolChoice: 'required',
+          toolChoice: 'auto',
           metadata: { 
             engine: 'SOURCING_WEB_RESEARCH', 
             trigger: String(trigger || 'CRON'), 
@@ -466,11 +475,24 @@ Devuelve ÚNICAMENTE un objeto JSON válido con la siguiente estructura:
           } catch {}
         }
 
-        // Parse JSON output
+        // Parse JSON output with robust canonical extraction
         const parsed = extractJsonFromText(aiResult.outputText);
+        let parsedCandidates = [];
+        if (Array.isArray(parsed)) {
+          parsedCandidates = parsed;
+        } else if (parsed && typeof parsed === 'object') {
+          parsedCandidates = parsed.items || parsed.products || parsed.candidates || parsed.results || parsed.discoveries || [];
+        }
 
-        if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
-          for (const item of parsed.items) {
+        console.info(`[DISCOVERY_TRACE] OPENAI_SCAN_COMPLETED`, {
+          run_id: runId,
+          web_sources_found: webSearchRawCount,
+          raw_discoveries_count: parsedCandidates.length,
+          cost_usd: aiResult.pricing?.estimated_cost_usd
+        });
+
+        if (Array.isArray(parsedCandidates) && parsedCandidates.length > 0) {
+          for (const item of parsedCandidates) {
             if (!item.title) continue;
             productsDetected++;
             
