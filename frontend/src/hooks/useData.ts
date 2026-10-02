@@ -178,11 +178,12 @@ export function useProducts(filters: ProductFilters = {}) {
 
     // ── Step 2: main product query based on availability ──
     const availMode = filters.availability || (filters.isInternational ? 'international' : 'local');
+    const countOption = filters.skipCount ? undefined : { count: 'exact' as const };
 
     if (availMode === 'international') {
       let query = supabase
         .from('international_products')
-        .select('*, category_rel:categories!collectibles_category_id(id, name, slug), subcategory_rel:categories!collectibles_subcategory_id(id, name, slug)', { count: 'exact' });
+        .select('*, category_rel:categories!collectibles_category_id(id, name, slug), subcategory_rel:categories!collectibles_subcategory_id(id, name, slug)', countOption);
 
       if (!filters.includeDrafts) {
         query = query.eq('status', 'published');
@@ -294,7 +295,7 @@ export function useProducts(filters: ProductFilters = {}) {
 
       let localQuery = supabase
         .from('products')
-        .select(selectStr, { count: 'exact' })
+        .select(selectStr, countOption)
         .eq('status', 'published')
         .eq('is_active', true);
 
@@ -325,7 +326,7 @@ export function useProducts(filters: ProductFilters = {}) {
       if (!filters.license && !filters.theme && !filters.vendor_store_id && !filters.badge && (!filters.condition || filters.condition === 'new')) {
         intlQuery = supabase
           .from('international_products')
-          .select('*, category_rel:categories!collectibles_category_id(id, name, slug), subcategory_rel:categories!collectibles_subcategory_id(id, name, slug)', { count: 'exact' })
+          .select('*, category_rel:categories!collectibles_category_id(id, name, slug), subcategory_rel:categories!collectibles_subcategory_id(id, name, slug)', countOption)
           .eq('status', 'published');
 
         if (filters.search) {
@@ -1685,6 +1686,10 @@ export interface CatalogFacetFilters {
   isInternationalEnabled?: boolean;
 }
 
+let _cachedLocalCatalogProducts: { data: any[]; timestamp: number } | null = null;
+let _cachedIntlCatalogProducts: { data: any[]; timestamp: number } | null = null;
+const CATALOG_FACET_CACHE_TTL = 3 * 60 * 1000;
+
 export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
   const [facets, setFacets] = useState<{
     categoryFacets: Record<string, number>;
@@ -1712,6 +1717,9 @@ export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
 
       try {
         async function fetchAllLocalProducts() {
+          if (_cachedLocalCatalogProducts && Date.now() - _cachedLocalCatalogProducts.timestamp < CATALOG_FACET_CACHE_TTL) {
+            return _cachedLocalCatalogProducts.data;
+          }
           const pageSize = 1000;
           let from = 0;
           let all: any[] = [];
@@ -1731,11 +1739,15 @@ export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
             if (data.length < pageSize) break;
             from += pageSize;
           }
+          _cachedLocalCatalogProducts = { data: all, timestamp: Date.now() };
           return all;
         }
 
         async function fetchAllIntlProducts() {
           if (filters.isInternationalEnabled === false) return [];
+          if (_cachedIntlCatalogProducts && Date.now() - _cachedIntlCatalogProducts.timestamp < CATALOG_FACET_CACHE_TTL) {
+            return _cachedIntlCatalogProducts.data;
+          }
           const pageSize = 1000;
           let from = 0;
           let all: any[] = [];
@@ -1751,6 +1763,7 @@ export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
             if (data.length < pageSize) break;
             from += pageSize;
           }
+          _cachedIntlCatalogProducts = { data: all, timestamp: Date.now() };
           return all;
         }
 

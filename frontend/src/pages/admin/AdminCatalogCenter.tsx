@@ -426,8 +426,10 @@ export default function AdminCatalogCenter() {
     setRecalculating(true);
     setRecalcProgress(0);
     try {
-      // 1. Fetch ALL products in the database
-      const { data: prods, error } = await supabase.from('products').select('*');
+      // 1. Fetch products in the database with strictly required fields (avoiding heavy description and metadata)
+      const { data: prods, error } = await supabase
+        .from('products')
+        .select('id, title, slug, base_price, brand_id, category_id, ml_brand, ml_category, status, is_active, images:product_images(url), variants:product_variants(sku, inventory_count)');
       if (error) throw error;
       if (!prods || prods.length === 0) {
         toast.info('No hay productos para recalcular');
