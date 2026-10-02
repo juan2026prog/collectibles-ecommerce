@@ -26,7 +26,8 @@ export class SourcingDiscoveryEngine {
    */
   public async loadLiveTrends(country: string = 'UY'): Promise<SourcingTrendCard[]> {
     try {
-      const countryList = country === 'GLOBAL' ? ['GLOBAL', 'UY', 'US'] : [country, 'GLOBAL'];
+      const isGlobal = !country || country === 'GLOBAL' || country === 'ALL' || country === 'TODOS';
+      const countryList = isGlobal ? ['GLOBAL', 'UY', 'US', 'ALL', 'AR', 'CL'] : [country, 'GLOBAL'];
       const { data: dbTrends, error } = await supabase
         .from('sourcing_trends')
         .select('*')
@@ -104,7 +105,8 @@ export class SourcingDiscoveryEngine {
    */
   public async loadLiveDiscoveries(country: string = 'UY'): Promise<SourcingProductCandidate[]> {
     try {
-      const countryList = country === 'GLOBAL' ? ['GLOBAL', 'UY', 'US'] : [country, 'GLOBAL'];
+      const isGlobal = !country || country === 'GLOBAL' || country === 'ALL' || country === 'TODOS';
+      const countryList = isGlobal ? ['GLOBAL', 'UY', 'US', 'ALL', 'AR', 'CL'] : [country, 'GLOBAL'];
       const { data: dbDiscoveries, error } = await supabase
         .from('sourcing_discoveries')
         .select('*')
