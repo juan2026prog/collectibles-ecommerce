@@ -18,7 +18,7 @@ import { validateRequestedModel } from '../server/lib/openaiPricing.js';
 import { authenticateRequest, acquireInFlightLock } from '../server/lib/authGuard.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_f_7xF86CT0DFwT7YupNh_Q_TzmemHNf';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 const ENGINE_COUNTRY_FLAG = {
   AI_SEARCH: 'ai_search_enabled',
@@ -158,9 +158,11 @@ export default async function handler(req, res) {
     });
   }
 
-  const client = createClient(SUPABASE_URL, SUPABASE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
+  const client = (SUPABASE_KEY && !SUPABASE_KEY.startsWith('sb_publishable'))
+    ? createClient(SUPABASE_URL, SUPABASE_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false }
+      })
+    : null;
 
   const startTime = Date.now();
   const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
