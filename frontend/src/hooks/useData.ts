@@ -277,14 +277,14 @@ export function useProducts(filters: ProductFilters = {}) {
             ${categoryId ? ', product_categories!inner(category_id)' : ''}
         `
         : `
-            id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, condition_notes, created_at,
+            id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, created_at,
             category:categories(id, name, slug),
             brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
             images:product_images(id, url, alt_text, is_primary),
             variants:product_variants(id, sku, price_adjustment, inventory_count),
             vendor:vendors(id, store_name, slug, logo_url),
             vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official),
-            product_group_items(group_id, group:product_groups(id, name, slug, is_active, sort_order, badge_image_url, badge_storage_path, badge_alt_text, allowed_payment_providers, payment_method_restriction))
+            product_group_items(group_id, group:product_groups(id, name, slug, is_active, sort_order, badge_image_url, badge_storage_path, badge_alt_text))
             ${categoryId ? ', product_categories!inner(category_id)' : ''}
         `;
 
@@ -468,14 +468,14 @@ export function useProducts(filters: ProductFilters = {}) {
           ${categoryId ? ', product_categories!inner(category_id)' : ''}
       `
       : `
-          id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, condition_notes, created_at,
+          id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, created_at,
           category:categories(id, name, slug),
           brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
           images:product_images(id, url, alt_text, is_primary),
           variants:product_variants(id, sku, price_adjustment, inventory_count),
           vendor:vendors(id, store_name, slug, logo_url),
           vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official),
-          product_group_items(group_id, group:product_groups(id, name, slug, is_active, sort_order, badge_image_url, badge_storage_path, badge_alt_text, allowed_payment_providers, payment_method_restriction))
+          product_group_items(group_id, group:product_groups(id, name, slug, is_active, sort_order, badge_image_url, badge_storage_path, badge_alt_text))
           ${categoryId ? ', product_categories!inner(category_id)' : ''}
       `;
 
