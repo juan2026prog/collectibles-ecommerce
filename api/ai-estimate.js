@@ -91,18 +91,29 @@ export default async function handler(req, res) {
     cached_items_count: 0
   };
 
+async function safeDbQuery(queryPromise, fallback = { data: null, error: null }, timeoutMs = 2000) {
+  try {
+    const timeout = new Promise((resolve) => setTimeout(() => resolve(fallback), timeoutMs));
+    return await Promise.race([queryPromise, timeout]);
+  } catch (err) {
+    return fallback;
+  }
+}
+
   // 1. Check Research Cache in Supabase (Zero OpenAI Calls)
   if (!force_refresh && client) {
     try {
       // First check sourcing_research_cache
-      const { data: cachedRow } = await client
-        .from('sourcing_research_cache')
-        .select('*')
-        .eq('cache_key', cacheKey)
-        .gt('expires_at', new Date().toISOString())
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const { data: cachedRow } = await safeDbQuery(
+        client
+          .from('sourcing_research_cache')
+          .select('*')
+          .eq('cache_key', cacheKey)
+          .gt('expires_at', new Date().toISOString())
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      );
 
       if (cachedRow) {
         const ageSec = Math.floor((Date.now() - new Date(cachedRow.created_at).getTime()) / 1000);
@@ -116,14 +127,16 @@ export default async function handler(req, res) {
         };
       } else {
         // Check ai_intelligence_runs
-        const { data: cachedRun } = await client
-          .from('ai_intelligence_runs')
-          .select('*')
-          .eq('evidence_fingerprint', cacheKey)
-          .eq('status', 'SUCCESS')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        const { data: cachedRun } = await safeDbQuery(
+          client
+            .from('ai_intelligence_runs')
+            .select('*')
+            .eq('evidence_fingerprint', cacheKey)
+            .eq('status', 'SUCCESS')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        );
 
         if (cachedRun) {
           const ageSec = Math.floor((Date.now() - new Date(cachedRun.created_at).getTime()) / 1000);
@@ -137,12 +150,14 @@ export default async function handler(req, res) {
           };
         } else {
           // Fallback check recent sourcing_discoveries
-          const { data: recentDisc } = await client
-            .from('sourcing_discoveries')
-            .select('id, title, discovered_at')
-            .ilike('title', `%${cleanQuery.split(' ')[0]}%`)
-            .gte('discovered_at', new Date(Date.now() - (12 * 3600 * 1000)).toISOString())
-            .limit(5);
+          const { data: recentDisc } = await safeDbQuery(
+            client
+              .from('sourcing_discoveries')
+              .select('id, title, discovered_at')
+              .ilike('title', `%${cleanQuery.split(' ')[0]}%`)
+              .gte('discovered_at', new Date(Date.now() - (12 * 3600 * 1000)).toISOString())
+              .limit(5)
+          );
 
           if (recentDisc && recentDisc.length >= 3) {
             const ageSec = Math.floor((Date.now() - new Date(recentDisc[0].discovered_at).getTime()) / 1000);
