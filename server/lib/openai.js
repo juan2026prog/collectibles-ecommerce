@@ -87,6 +87,7 @@ function extractSources(data) {
     // Check annotations in text content
     for (const content of item?.content || []) {
       if (Array.isArray(content?.annotations)) {
+        for (const ann of content.annotations) {
           if (ann?.type === 'url_citation') {
             // Responses API citations may expose URL metadata either directly
             // on the annotation or nested under url_citation. Support both.
