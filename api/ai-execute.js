@@ -173,7 +173,9 @@ export default async function handler(req, res) {
 
   const {
     engine = 'AI_SEARCH',
+    operation = 'execute',
     country = 'UY',
+    query,
     research_depth,
     requested_model,
     time_scope,
@@ -204,9 +206,32 @@ export default async function handler(req, res) {
   }
 
   const isSourcingResearch = engine === 'SOURCING_WEB_RESEARCH' || engine === 'RESEARCH_INTELLIGENCE' || (operation && /^(sourcing_research|web_research|sourcing_market_research)$/i.test(operation));
+
+  // Extract clean search query for Sourcing Web Research without nested system prompt wrappers
+  let cleanSearchQuery = '';
+  if (isSourcingResearch) {
+    if (typeof query === 'string' && query.trim()) {
+      cleanSearchQuery = query.trim();
+    } else if (typeof payload?.query === 'string' && payload.query.trim()) {
+      cleanSearchQuery = payload.query.trim();
+    } else if (typeof payload?.evidence?.search_query === 'string' && payload.evidence.search_query.trim()) {
+      cleanSearchQuery = payload.evidence.search_query.trim();
+    } else if (typeof prompt === 'string') {
+      const match = prompt.match(/Consulta:\s*"([^"]+)"/i);
+      if (match && match[1]) {
+        cleanSearchQuery = match[1].trim();
+      } else if (!prompt.includes('INVESTIGACIÓN COMERCIAL')) {
+        cleanSearchQuery = prompt.trim();
+      }
+    }
+    if (!cleanSearchQuery) {
+      cleanSearchQuery = resolvedInput;
+    }
+  }
+
   const isWebSearchNeeded = engine === 'SOURCING_WEB_RESEARCH' || engine === 'RESEARCH_INTELLIGENCE' ||
     (operation && /^(sourcing_research|web_research|sourcing_market_research)$/i.test(operation)) ||
-    /\b(latest|new|preorder|announced|released|trending|this week|today|recent|2026|preventa|lanzamiento)\b/i.test(resolvedInput);
+    /\b(latest|new|preorder|announced|released|trending|this week|today|recent|2026|preventa|lanzamiento)\b/i.test(cleanSearchQuery || resolvedInput);
 
   // Validate manual model override against Central Registry
   const modelValidation = validateRequestedModel(effectiveRequestedModel, {
@@ -439,7 +464,7 @@ export default async function handler(req, res) {
 
     // 2. Sourcing Research Multi-tier Cache Lookup (Global-First Cache)
     const researchCacheKey = isSourcingResearch 
-      ? generateResearchCacheKey(resolvedInput, 'GLOBAL', modeConfig.key, isManualOverride ? selectedModel : 'AUTO', effectiveTimeScope, effectiveProductFamily) 
+      ? generateResearchCacheKey(cleanSearchQuery || resolvedInput, 'GLOBAL', modeConfig.key, isManualOverride ? selectedModel : 'AUTO', effectiveTimeScope, effectiveProductFamily) 
       : null;
 
     if (isSourcingResearch && client && context?.force_refresh !== true && context?.certification !== true) {
@@ -591,12 +616,8 @@ export default async function handler(req, res) {
     }
 
     const resolvedInstructions = isSourcingResearch 
-      ? buildOptimizedResearchPrompt(resolvedInput, country, modeConfig, effectiveTimeScope, effectiveProductFamily)
+      ? buildOptimizedResearchPrompt(cleanSearchQuery || resolvedInput, country, modeConfig, effectiveTimeScope, effectiveProductFamily)
       : instructionsFor(engine, operation);
-
-    const isWebSearchNeeded = engine === 'SOURCING_WEB_RESEARCH' || 
-      (operation && /^(sourcing_research|web_research|sourcing_market_research)$/i.test(operation)) ||
-      /\b(latest|new|preorder|announced|released|trending|this week|today|recent|2026|preventa|lanzamiento)\b/i.test(resolvedInput);
 
     const tools = isWebSearchNeeded ? [{ type: 'web_search' }] : undefined;
     const toolChoice = isWebSearchNeeded ? (modeConfig.key === 'PROFUNDO' ? 'required' : 'auto') : undefined;
@@ -604,7 +625,7 @@ export default async function handler(req, res) {
     // 3. Call OpenAI Responses API server-side with mode-specific token & cost constraints
     const result = await callOpenAIResponses({
       model: selectedModel,
-      input: resolvedInput,
+      input: isSourcingResearch ? (cleanSearchQuery || resolvedInput) : resolvedInput,
       instructions: resolvedInstructions,
       temperature: 0.2,
       maxTokens: isSourcingResearch ? dynamicMaxTokens : (req.body?.maxTokens || 1500),
@@ -733,6 +754,23 @@ export default async function handler(req, res) {
         if (!structuredData && isStructuredAdvisoryEngine) {
           throw new OpenAIError('INVALID_OUTPUT', 502, 'OpenAI returned invalid structured intelligence output.');
         }
+      }
+    }
+
+    if (isSourcingResearch && structuredData) {
+      if (Array.isArray(structuredData)) {
+        structuredData = {
+          summary: 'Investigación de mercado completada.',
+          confidence: 0.85,
+          subtrends: [],
+          items: structuredData
+        };
+      } else if (!Array.isArray(structuredData.items)) {
+        if (Array.isArray(structuredData.products)) structuredData.items = structuredData.products;
+        else if (Array.isArray(structuredData.candidates)) structuredData.items = structuredData.candidates;
+        else if (Array.isArray(structuredData.results)) structuredData.items = structuredData.results;
+        else if (Array.isArray(structuredData.discoveries)) structuredData.items = structuredData.discoveries;
+        else structuredData.items = [];
       }
     }
 

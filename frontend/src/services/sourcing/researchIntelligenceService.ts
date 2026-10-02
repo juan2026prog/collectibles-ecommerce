@@ -54,15 +54,6 @@ export class ResearchIntelligenceService {
     const effectiveFamily = product_family || category || 'ALL';
 
     // 1. Ejecución vía AI Gateway Central
-    const prompt = `INVESTIGACIÓN COMERCIAL SOURCING (MODO: ${research_depth}):
-Consulta: "${query}"
-País objetivo: ${country}
-Familia de producto: ${effectiveFamily}
-Categoría: ${effectiveFamily}
-Período de análisis: ${period}
-
-Tu rol es estructurar la investigación, identificar productos oficiales reales, preorders y tendencias emergentes. NUNCA inventes precios, landed costs ni stock comercial; esos datos se calculan mediante el motor determinístico de Collectibles.`;
-
     let aiResult: any = null;
     let providerName = 'OPENAI';
     let modelName = requested_model && requested_model !== 'AUTO' 
@@ -81,7 +72,7 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
         engine: 'RESEARCH_INTELLIGENCE',
         country: (country as any) || 'UY',
         operation: 'sourcing_market_research',
-        prompt,
+        prompt: query,
         payload: {
           query,
           country,
@@ -199,7 +190,20 @@ Tu rol es estructurar la investigación, identificar productos oficiales reales,
     };
 
     // 4. Construir Productos Candidatos con Pricing y Opportunity Score determinístico
-    const rawItems: any[] = Array.isArray(aiResult?.items) ? aiResult.items : [];
+    let rawItems: any[] = [];
+    if (Array.isArray(aiResult?.items)) {
+      rawItems = aiResult.items;
+    } else if (Array.isArray(aiResult?.products)) {
+      rawItems = aiResult.products;
+    } else if (Array.isArray(aiResult?.candidates)) {
+      rawItems = aiResult.candidates;
+    } else if (Array.isArray(aiResult?.results)) {
+      rawItems = aiResult.results;
+    } else if (Array.isArray(aiResult?.discoveries)) {
+      rawItems = aiResult.discoveries;
+    } else if (Array.isArray(aiResult)) {
+      rawItems = aiResult;
+    }
 
     const candidates: SourcingProductCandidate[] = await Promise.all(
       rawItems.map(async (item: any, idx: number) => {
