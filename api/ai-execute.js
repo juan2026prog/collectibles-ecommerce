@@ -569,7 +569,7 @@ export default async function handler(req, res) {
       /\b(latest|new|preorder|announced|released|trending|this week|today|recent|2026|preventa|lanzamiento)\b/i.test(resolvedInput);
 
     const tools = isWebSearchNeeded ? [{ type: 'web_search' }] : undefined;
-    const toolChoice = isWebSearchNeeded ? 'required' : undefined;
+    const toolChoice = isWebSearchNeeded ? (modeConfig.key === 'PROFUNDO' ? 'required' : 'auto') : undefined;
 
     // 3. Call OpenAI Responses API server-side with mode-specific token & cost constraints
     const result = await callOpenAIResponses({
