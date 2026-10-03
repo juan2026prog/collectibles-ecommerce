@@ -295,7 +295,20 @@ export class ResearchIntelligenceService {
           trendVelocity: trendEval.trend_velocity
         });
 
-        const cleanImg = (item.image_url && typeof item.image_url === 'string' && !item.image_url.includes('unsplash.com') && item.image_url.startsWith('http')) ? item.image_url.trim() : '';
+        // Validación estricta de imagen: Solo URLs HTTPS/HTTP válidas, sin data URI, sin blobs, sin unsplash/placeholders genéricos
+        const rawCandidateImg = item.image_url || item.image || item.imageUrl || item.thumbnail_url || item.thumbnail || item.source_image;
+        const cleanImg = (rawCandidateImg && typeof rawCandidateImg === 'string' && !rawCandidateImg.includes('unsplash.com') && !rawCandidateImg.includes('placeholder') && !rawCandidateImg.startsWith('data:') && !rawCandidateImg.startsWith('blob:') && (rawCandidateImg.startsWith('https://') || rawCandidateImg.startsWith('http://')))
+          ? rawCandidateImg.trim()
+          : '';
+
+        console.log('[RESEARCH_IMAGE_TRACE]', {
+          title: item.title || item.name,
+          source: item.retailer || 'unknown',
+          product_url_present: Boolean(item.url),
+          raw_image_present: Boolean(rawCandidateImg),
+          service_image_present: Boolean(cleanImg),
+          image_url: cleanImg || null
+        });
 
         // Safe landed cost and suggested price
         const landedCostUsd = pricingRes?.realCost || (originPrice !== null ? originPrice : 0);

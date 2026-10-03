@@ -348,9 +348,9 @@ Instrucciones:
 1. Resuelve alias multilingües si la consulta está en español (ej. "ositos cariñosos" -> "Care Bears", "caballeros del zodiaco" -> "Saint Seiya", "tortugas ninja" -> "TMNT / Teenage Mutant Ninja Turtles", etc.) para descubrir productos oficiales existentes en el mercado global.
 2. Identifica hasta ${maxItems} productos oficiales reales y relevantes, priorizando diversidad de productos y fuentes (fabricantes oficiales, retailers, marketplaces y anuncios de lanzamientos). Si hay menos productos verificables con evidencia suficiente, incluye únicamente los confirmados.
 3. Si la consulta menciona preventas o novedades ("nuevos", "lanzamientos", "preventa"), prioriza lanzamientos recientes; de lo contrario, incluye los coleccionables oficiales más demandados del catálogo.
-4. NUNCA inventes precios, costos ni stock. NUNCA inventes productos no verificados. Si un dato no es verificable, devuelve null.
+4. NUNCA inventes precios, costos, stock ni URLs de imagen. NUNCA inventes productos no verificados. Si un dato no es verificable, devuelve null. Incluye image_url únicamente cuando corresponda de forma verificable al producto exacto encontrado en la fuente oficial/retailer.
 5. Devuelve ÚNICAMENTE un JSON compacto con la siguiente estructura:
-{"summary":string,"confidence":number_0_to_1,"subtrends":string[],"items":[{"title":string,"brand":string,"franchise":string,"category":string,"origin_price_usd":number_or_null,"asin":string_or_null,"url":string_or_null,"retailer":string,"is_preorder":boolean,"is_new":boolean,"release_date":string_or_null,"evidence_snippet":string}]}`;
+{"summary":string,"confidence":number_0_to_1,"subtrends":string[],"items":[{"title":string,"brand":string,"franchise":string,"category":string,"origin_price_usd":number_or_null,"image_url":string_or_null,"asin":string_or_null,"url":string_or_null,"retailer":string,"is_preorder":boolean,"is_new":boolean,"release_date":string_or_null,"evidence_snippet":string}]}`;
 }
 
 /**
@@ -636,6 +636,9 @@ export function deduplicateResearchCandidates(existingList = [], incomingList = 
       // Fill missing fields if existing didn't have them
       if (!existing.origin_price_usd && candidate.origin_price_usd) {
         existing.origin_price_usd = candidate.origin_price_usd;
+      }
+      if (!existing.image_url && candidate.image_url) {
+        existing.image_url = candidate.image_url;
       }
       if (!existing.asin && candidate.asin) {
         existing.asin = candidate.asin;
