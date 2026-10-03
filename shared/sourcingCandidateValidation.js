@@ -37,42 +37,54 @@ export function validateCandidate(raw, context = {}) {
   const country = context.country || raw.country_code || raw.country || 'UY';
   const title = String(raw.title || raw.name || '').trim();
   const sourceUrl = publicUrl(raw.url || raw.source_url || raw.retailer_url);
-  const observations = (context.observations || []).filter(o => o && o.status === 'OBSERVED' && publicUrl(o.source_url) && o.observed_at);
+  const observations = (context.observations || []).filter(o => o && ['OBSERVED', 'CORROBORATED'].includes(o.status) && publicUrl(o.source_url) && o.observed_at);
   const observed = field => observations.find(o => o.field === field) || provenance();
+
+  // 1. Identity Provenance
   const identity = observed('identity');
+
+  // 2. Identifier Provenance
   const declaredAsin = typeof raw.asin === 'string' && /^[A-Z0-9]{10}$/i.test(raw.asin.trim()) ? raw.asin.trim().toUpperCase() : null;
   const extractedAsin = extractAmazonAsin(sourceUrl);
   const verifiedAsin = observed('asin');
   const asin = verifiedAsin.value || extractedAsin || declaredAsin;
   const identifier = verifiedAsin.value
     ? { ...verifiedAsin, verification: 'SOURCE_VERIFIED' }
-    : provenance(asin, 'UNKNOWN', raw.retailer || raw.source_retailer || null, extractedAsin ? sourceUrl : null, null,
-      { verification: extractedAsin ? 'SOURCE_EXTRACTED' : 'AI_DECLARED' });
+    : (extractedAsin
+      ? provenance(extractedAsin, 'OBSERVED', 'Amazon URL', sourceUrl, context.createdAt || new Date().toISOString(), { verification: 'SOURCE_EXTRACTED' })
+      : provenance(asin, 'UNKNOWN', raw.retailer || raw.source_retailer || null, null, null, { verification: declaredAsin ? 'AI_DECLARED' : 'UNVERIFIED' }));
+
+  // 3. Image Provenance
   const image = observed('image');
+
+  // 4. Origin Price Provenance
   const origin = observed('origin_price');
   const originPrice = finiteNumber(origin.value);
+
+  // 5. Market Checks
   const marketChecks = context.marketChecks || {};
   const market = name => {
     const m = marketChecks[name];
     if (!m || !m.checked_at || !publicUrl(m.source_url) || !['PRESENT', 'VERIFIED_ABSENT', 'VERIFIED_LOW_SUPPLY'].includes(m.presence)) {
       return { presence: 'UNKNOWN', price: provenance(), reason: m?.reason || 'No verificado', checked_at: m?.checked_at || null };
     }
-    return { ...m, price: m.price?.status === 'OBSERVED' ? m.price : provenance() };
+    return { ...m, price: ['OBSERVED', 'CORROBORATED'].includes(m.price?.status) ? m.price : provenance() };
   };
   const tiendamia = market('tiendamia');
   const mercadolibre = market('mercadolibre');
-  // Sourcing has no second landed-cost formula. Import analysis supplies a
-  // complete, versioned quote from the existing country/pricing engine.
+
+  // 6. Economic / Landed Cost
   const quote = context.economic;
   const quoteInputs = quote?.inputs || [];
   const validQuote = quote?.engine === 'CANONICAL_LANDED_COST' && quote.country === country &&
-    ['origin_price', 'shipping', 'customs', 'fees'].every(f => quoteInputs.some(i => i.field === f && i.status === 'OBSERVED' && finiteNumber(i.value) !== null && finiteNumber(i.value) >= 0)) &&
+    ['origin_price', 'shipping', 'customs', 'fees'].every(f => quoteInputs.some(i => i.field === f && ['OBSERVED', 'CORROBORATED'].includes(i.status) && finiteNumber(i.value) !== null && finiteNumber(i.value) >= 0)) &&
     originPrice !== null && quoteInputs.some(i => i.field === 'origin_price' && finiteNumber(i.value) === originPrice) && finiteNumber(quote.landed_cost) > 0;
   const landed = validQuote ? provenance(Number(quote.landed_cost), 'DERIVED', quote.engine, sourceUrl, quote.observed_at, { derived_from: quoteInputs }) : provenance();
   const sale = quote?.sale_price?.status === 'OBSERVED' && finiteNumber(quote.sale_price.value) > 0 ? quote.sale_price : provenance();
   const margin = landed.value !== null && sale.value !== null
     ? provenance(Math.round((sale.value - landed.value) / sale.value * 10000) / 100, 'DERIVED', 'Collectibles', sourceUrl, quote.observed_at, { derived_from: [landed, sale] }) : provenance();
 
+  // 7. Commercial Signals & Evidence Scoring
   const demand = observed('local_demand');
   const momentum = observed('global_momentum');
   const release = observed('release');
@@ -81,19 +93,21 @@ export function validateCandidate(raw, context = {}) {
   const supplyGap = [tiendamia, mercadolibre].some(m => ['VERIFIED_ABSENT', 'VERIFIED_LOW_SUPPLY'].includes(m.presence));
   const independentInterest = [demand, momentum].some(d => finiteNumber(d.value) > 0 && [tiendamia, mercadolibre].every(m => !m.source_url || new URL(d.source_url).hostname !== new URL(m.source_url).hostname));
   const domains = new Set(observations.filter(o => o.field === 'identity').map(o => new URL(o.source_url).hostname.replace(/^www\./, '')));
+
   const factor = (points, max, reason, evidence) => ({ points, max, reason, confidence: evidence.length ? 'OBSERVED' : 'UNKNOWN', evidence });
   const breakdown = {
     global_momentum: factor(positiveMomentum ? Math.min(25, Number(momentum.value)) : 0, 25, positiveMomentum ? 'Interés global observado' : 'Momentum no verificado; un listing o preorder no demuestra demanda', positiveMomentum ? [momentum] : []),
     novelty: factor(release.value ? (release.value === 'PREORDER' ? 18 : 14) : 0, 20, release.value ? 'Lanzamiento o preventa observado en fuente' : 'Novedad no verificada', release.value ? [release] : []),
     source_confidence: factor(identity.value ? 10 : 0, 15, identity.value ? 'Identidad corroborada en ficha de producto' : 'Identidad pendiente de corroboración', identity.value ? [identity] : []),
-    local_supply_gap: factor(supplyGap && independentInterest ? 15 : 0, 15, supplyGap && independentInterest ? 'Brecha verificada y evidencia independiente de interés' : 'La ausencia o un fallo técnico por sí solos no crean oportunidad', supplyGap && independentInterest ? [demand, momentum].filter(d => d.status === 'OBSERVED') : []),
+    local_supply_gap: factor(supplyGap && independentInterest ? 15 : 0, 15, supplyGap && independentInterest ? 'Brecha verificada y evidencia independiente de interés' : 'La ausencia o un fallo técnico por sí solos no crean oportunidad', supplyGap && independentInterest ? [demand, momentum].filter(d => ['OBSERVED', 'CORROBORATED'].includes(d.status)) : []),
     import_margin: factor(margin.value !== null ? (margin.value >= 30 ? 15 : margin.value >= 20 ? 10 : margin.value >= 10 ? 5 : 0) : 0, 15, margin.value !== null ? 'Margen derivado de costo canónico y precio de venta observado' : 'Margen no calculable', margin.value !== null ? [margin] : []),
     local_demand: factor(positiveDemand ? 10 : 0, 10, positiveDemand ? 'Interés local observado' : 'Sin evidencia local; no equivale a ausencia de demanda', positiveDemand ? [demand] : []),
     corroboration: factor(domains.size >= 2 ? Math.min(5, domains.size) : 0, 5, `${domains.size} fuentes independientes de identidad`, observations.filter(o => o.field === 'identity'))
   };
   const score = Object.values(breakdown).reduce((s, f) => s + f.points, 0);
+
   // Evidence quality/completeness, independent of whether commercial signals are positive.
-  const coverage = [identity.value !== null, image.value !== null, originPrice !== null, demand.status === 'OBSERVED', momentum.status === 'OBSERVED', tiendamia.presence !== 'UNKNOWN' || mercadolibre.presence !== 'UNKNOWN', validQuote].filter(Boolean).length;
+  const coverage = [identity.value !== null, image.value !== null, originPrice !== null, ['OBSERVED', 'CORROBORATED'].includes(demand.status), ['OBSERVED', 'CORROBORATED'].includes(momentum.status), tiendamia.presence !== 'UNKNOWN' || mercadolibre.presence !== 'UNKNOWN', validQuote].filter(Boolean).length;
   const confidence = coverage === 0 ? null : Math.round(coverage / 7 * 100);
   const confidenceLevel = confidence === null ? 'UNKNOWN' : confidence >= 70 ? 'HIGH' : confidence >= 40 ? 'MEDIUM' : 'LOW';
   const imageUrl = publicUrl(image.value);

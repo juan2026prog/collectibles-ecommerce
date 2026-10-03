@@ -184,13 +184,13 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-slate-500">Opportunity</span>
                     <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
-                      {cand.opportunity_score}/100
+                      {cand.opportunity_score > 0 ? `${cand.opportunity_score}/100` : (cand.confidence_level === 'UNKNOWN' ? 'Sin evidencia' : '0/100')}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-slate-500">Trend Score</span>
                     <span className="text-xs font-black text-slate-900 bg-white px-2 py-0.5 rounded-lg border border-slate-200">
-                      {cand.trend_score}/100
+                      {cand.trend_score > 0 ? `${cand.trend_score}/100` : (cand.confidence_level === 'UNKNOWN' ? 'Pendiente' : '0/100')}
                     </span>
                   </div>
                 </div>

@@ -101,13 +101,13 @@ export function extractProductObservations(raw, page, now = new Date().toISOStri
 }
 
 export async function lookupVerifiedTiendamia(identifier, { fetchImpl = fetch, deadline = Date.now() + 4000 } = {}) {
-  if (identifier?.verification !== 'SOURCE_VERIFIED' || !/^[A-Z0-9]{10}$/.test(identifier.value || '')) {
-    return { presence: 'UNKNOWN', reason: 'Identificador no verificado', price: provenance() };
+  if (!['SOURCE_VERIFIED', 'SOURCE_CORROBORATED'].includes(identifier?.verification) || !/^[A-Z0-9]{10}$/.test(identifier?.value || '')) {
+    return { presence: 'UNKNOWN', reason: 'Identificador no verificado ni corroborado', price: provenance() };
   }
   try {
     const page = await fetchSource(`https://tiendamia.com.uy/p/amz/${identifier.value.toLowerCase()}`, { fetchImpl, deadline });
     return parseTiendamiaResponse(page.html, identifier.value, page.status);
-  } catch { return { presence: 'UNKNOWN', reason: 'Consulta no disponible', price: provenance() }; }
+  } catch { return { presence: 'UNKNOWN', reason: 'Consulta no disponible; no demuestra ausencia', price: provenance() }; }
 }
 
 export async function verifyCandidateSources(raw, { country = 'UY', origin = 'MANUAL_RESEARCH', observations: trusted = [], fetchImpl = fetch, index = 0, marketChecks: trustedMarkets = {}, deadline = Date.now() + 12000 } = {}) {

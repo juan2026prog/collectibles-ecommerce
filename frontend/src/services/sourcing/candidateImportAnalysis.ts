@@ -6,7 +6,7 @@ export function calculateCandidateImportAnalysis(item: any, settings: any = {}, 
   const sourcing = Boolean(item.raw_data?.validation_version);
   const quote = item.raw_data?.import_quote;
   if (price === null) return empty;
-  if (sourcing && (item.raw_data?.provenance?.origin_price?.status !== 'OBSERVED' || !quote ||
+  if (sourcing && (!['OBSERVED', 'CORROBORATED'].includes(item.raw_data?.provenance?.origin_price?.status) || !quote ||
     ['shipping', 'customs', 'fees'].some(f => quote[f] == null || !Number.isFinite(Number(quote[f])) || Number(quote[f]) < 0))) return empty;
   const pricing = calculateInternationalPricing({ amazonPrice: price, usaShipping: quote?.shipping ?? 0,
     otherCosts: sourcing ? Number(quote.customs) + Number(quote.fees) : undefined }, { ...settings, target_margin_percent: markup, percentage_markup: markup });
