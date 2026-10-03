@@ -543,6 +543,24 @@ export default async function handler(req, res) {
       ? generateResearchCacheKey(cleanSearchQuery || resolvedInput, 'GLOBAL', modeConfig.key, isManualOverride ? selectedModel : 'AUTO', effectiveTimeScope, effectiveProductFamily, effectiveResultLimit) 
       : null;
 
+    // [RESEARCH_SERVER_TRACE] — Cache key and request params
+    if (isSourcingResearch) {
+      console.info('[RESEARCH_SERVER_TRACE] REQUEST_PARAMS', {
+        request_id: requestId,
+        clean_query: cleanSearchQuery || '(none)',
+        resolved_input_preview: (resolvedInput || '').slice(0, 80),
+        effective_result_limit: effectiveResultLimit,
+        effective_depth: modeConfig.key,
+        effective_time_scope: effectiveTimeScope,
+        effective_product_family: effectiveProductFamily,
+        max_candidates: modeConfig.maxCandidates,
+        max_output_tokens: modeConfig.maxOutputTokens,
+        cache_key: researchCacheKey,
+        force_refresh: context?.force_refresh,
+        is_web_search: isWebSearchNeeded
+      });
+    }
+
     if (isSourcingResearch && client && context?.force_refresh !== true && context?.certification !== true) {
       try {
         const { data: cachedResearch } = await safeDbQuery(
@@ -563,6 +581,15 @@ export default async function handler(req, res) {
             subtrends: cachedResearch.subtrends || [],
             items: cachedResearch.items || []
           };
+          // [RESEARCH_SERVER_TRACE] — L1 cache hit
+          console.info('[RESEARCH_SERVER_TRACE] L1_CACHE_HIT', {
+            request_id: requestId,
+            cache_key: researchCacheKey,
+            cached_item_count: Array.isArray(cachedData.items) ? cachedData.items.length : 0,
+            cache_created_at: cachedResearch.created_at,
+            cache_expires_at: cachedResearch.expires_at,
+            source: 'sourcing_research_cache'
+          });
           const cachedElapsed = 1;
           return res.status(200).json({
             success: true,
@@ -590,6 +617,12 @@ export default async function handler(req, res) {
           });
         }
 
+        // [RESEARCH_SERVER_TRACE] — L1 cache miss
+        console.info('[RESEARCH_SERVER_TRACE] L1_CACHE_MISS', {
+          request_id: requestId,
+          cache_key: researchCacheKey
+        });
+
         // Secondary cache lookup in ai_intelligence_runs
         const { data: cachedRun } = await client
           .from('ai_intelligence_runs')
@@ -607,6 +640,14 @@ export default async function handler(req, res) {
             subtrends: cachedRun.signals || [],
             items: cachedRun.metadata.items || []
           };
+          // [RESEARCH_SERVER_TRACE] — L2 cache hit
+          console.info('[RESEARCH_SERVER_TRACE] L2_CACHE_HIT', {
+            request_id: requestId,
+            cache_key: researchCacheKey,
+            cached_item_count: Array.isArray(cachedData.items) ? cachedData.items.length : 0,
+            run_created_at: cachedRun.created_at,
+            source: 'ai_intelligence_runs'
+          });
           return res.status(200).json({
             success: true,
             status: 'SUCCESS',
@@ -632,6 +673,12 @@ export default async function handler(req, res) {
             }
           });
         }
+
+        // [RESEARCH_SERVER_TRACE] — L2 cache miss → will call OpenAI
+        console.info('[RESEARCH_SERVER_TRACE] L2_CACHE_MISS_PROCEEDING_TO_OPENAI', {
+          request_id: requestId,
+          cache_key: researchCacheKey
+        });
       } catch (cacheErr) {
         console.warn('[AI Execute] Sourcing research cache lookup skipped:', cacheErr.message);
       }
@@ -824,6 +871,27 @@ export default async function handler(req, res) {
         const prevCount = accumulatedCandidates.length;
         accumulatedCandidates = deduplicateResearchCandidates(accumulatedCandidates, parsedBatch.items);
         const newUniquesInBatch = accumulatedCandidates.length - prevCount;
+
+        // [RESEARCH_SERVER_TRACE] — Detailed batch breakdown
+        console.info('[RESEARCH_SERVER_TRACE] BATCH_BREAKDOWN', {
+          request_id: finalRequestId,
+          batch_number: bIdx + 1,
+          batch_target: batch.targetCount,
+          batch_max_output_tokens: batch.maxOutputTokens || dynamicMaxTokens,
+          openai_status: batchResult.status || 'unknown',
+          openai_incomplete_reason: batchResult.incompleteReason || batchResult.incomplete_reason || null,
+          openai_output_tokens: batchResult.usage?.outputTokens || 0,
+          openai_input_tokens: batchResult.usage?.inputTokens || 0,
+          raw_output_length: (batchResult.outputText || '').length,
+          raw_output_preview: (batchResult.outputText || '').slice(0, 200),
+          raw_items_detected: parsedBatch.items.length,
+          parsed_items: parsedBatch.items.length,
+          before_dedupe: prevCount,
+          after_dedupe: accumulatedCandidates.length,
+          new_uniques_in_batch: newUniquesInBatch,
+          accumulated_total: accumulatedCandidates.length,
+          batch_cost_usd: batchResult.pricing?.estimated_cost_usd
+        });
 
         console.info(`[RESEARCH_TRACE] OPENAI_BATCH_RESPONSE_RECEIVED`, {
           request_id: finalRequestId,

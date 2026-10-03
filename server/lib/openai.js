@@ -299,6 +299,8 @@ export async function callOpenAIResponses(options = {}) {
 
     return {
       success: true,
+      status: responseData.status || 'completed',
+      incompleteReason: responseData.incomplete_details?.reason || null,
       text: outputText,
       outputText,
       sources,
