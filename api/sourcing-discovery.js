@@ -2,18 +2,34 @@ import { createClient } from '@supabase/supabase-js';
 import crypto from 'node:crypto';
 import { authenticateRequest } from '../server/lib/authGuard.js';
 import { researchViaGateway } from '../server/lib/sourcingGateway.js';
-import { validateCandidateBatch } from '../server/lib/sourcingSourceVerifier.js';
+import { validateCandidateBatch, verifyCandidateSources } from '../server/lib/sourcingSourceVerifier.js';
 import { canonicalCandidateKey, validateStoredCandidate, deduplicateCanonicalCandidates, SOURCING_PURCHASE_CAPABILITY, AUTO_PUBLISH } from '../shared/sourcingCandidateValidation.js';
 
 const supabase = createClient(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co',
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_f_7xF86CT0DFwT7YupNh_Q_TzmemHNf');
 
 export default async function handler(req, res) {
+  if (typeof res?.setHeader === 'function') res.setHeader('Cache-Control', 'no-store');
   const started = Date.now();
   const auth = await authenticateRequest(req, { allowCron: true });
   if (!auth.authenticated || !auth.isSuperAdmin) return res.status(403).json({ success: false, status: 'FORBIDDEN', error: 'SUPERADMIN requerido' });
   if (req.method !== 'POST' && !(req.method === 'GET' && auth.isCron)) return res.status(405).json({ success: false, error: 'POST requerido' });
+
+  // Consolidated Sourcing Action: on-demand market presence lookup / candidate source verification
+  const { action, asin, source_url, title, brand, id } = req.body || {};
   const country = req.body?.country || req.query?.country || 'UY';
+
+  if (action === 'market_presence' || action === 'validate_candidate' || (asin && source_url && title && action !== 'discovery_run')) {
+    if (action === 'validate_candidate' && title && source_url) {
+      const c = await verifyCandidateSources({ title, url: source_url, asin, brand, id }, { country });
+      return res.status(200).json({ candidate: c });
+    }
+    if (!/^[A-Z0-9]{10}$/i.test(asin || '') || !title || !source_url) {
+      return res.status(200).json({ status: 'NOT_CHECKED', presence: 'UNKNOWN', found: false, exactMatch: false, priceUsd: null, statusMessage: 'Identificador y producto pendientes de verificación' });
+    }
+    const c = await verifyCandidateSources({ asin, title, url: source_url }, { country: country || 'UY' });
+    return res.status(200).json({ asin, ...c.market_presence.tiendamia, identifier_verification: c.provenance.asin.verification });
+  }
   const runId = crypto.randomUUID();
   const trigger = auth.isCron ? 'CRON' : 'MANUAL';
   const health = {};

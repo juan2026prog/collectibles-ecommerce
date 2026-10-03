@@ -84,9 +84,9 @@ export async function checkTiendamiaByAsin(
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
     if (!token) return unknown;
-    const response = await fetch('/api/sourcing-market-presence', { method: 'POST', signal: AbortSignal.timeout(12000),
+    const response = await fetch('/api/sourcing-discovery', { method: 'POST', signal: AbortSignal.timeout(12000),
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ asin, source_url: options.sourceUrl, title: options.title }) });
+      body: JSON.stringify({ action: 'market_presence', asin, source_url: options.sourceUrl, title: options.title }) });
     if (!response.ok) return { ...unknown, status: 'UNAVAILABLE' };
     const payload = await response.json();
     const result = { ...unknown, ...payload, presence: ['PRESENT', 'VERIFIED_ABSENT'].includes(payload.presence) ? payload.presence : 'UNKNOWN' } as TiendamiaMatchResult;
