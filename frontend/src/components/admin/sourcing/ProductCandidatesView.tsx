@@ -74,6 +74,13 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
   const paginatedCandidates = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
+  console.log('[FRONTEND_RESEARCH_TRACE]', {
+    step: 'VIEW_PROP_ITEMS',
+    candidatesReceived: candidates.length,
+    filteredCount: filtered.length,
+    paginatedCount: paginatedCandidates.length
+  });
+
   if (candidates.length === 0) {
     return (
       <div className="bg-white border border-gray-200 rounded-3xl p-12 text-center space-y-3">
@@ -192,7 +199,7 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
                   <div className="flex items-center justify-between text-gray-600">
                     <span className="text-[11px]">Origen ({cand.retailer_source.toUpperCase()}):</span>
                     <strong className="text-gray-900 font-bold">
-                      ${cand.pricing.amazon_price_usd?.toFixed(2) || 'N/A'}
+                      {cand.pricing.amazon_price_usd != null ? `$${cand.pricing.amazon_price_usd.toFixed(2)}` : 'N/A'}
                     </strong>
                   </div>
 
@@ -222,9 +229,11 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
                   <div className="pt-1.5 border-t border-gray-100 flex items-center justify-between font-bold">
                     <span className="text-[11px] text-gray-500">Costo Puesto / Margen:</span>
                     <div className="text-right">
-                      <span className="text-gray-900 font-black">${cand.pricing.landed_cost_estimated_usd.toFixed(2)}</span>
+                      <span className="text-gray-900 font-black">
+                        {cand.pricing.landed_cost_estimated_usd != null ? `$${cand.pricing.landed_cost_estimated_usd.toFixed(2)}` : 'N/A'}
+                      </span>
                       <span className="text-emerald-600 font-black text-[11px] ml-1.5">
-                        (+{cand.pricing.estimated_margin_percent.toFixed(1)}%)
+                        (+{(cand.pricing.estimated_margin_percent ?? 0).toFixed(1)}%)
                       </span>
                     </div>
                   </div>

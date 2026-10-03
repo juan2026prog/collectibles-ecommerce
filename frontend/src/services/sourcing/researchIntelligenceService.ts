@@ -201,46 +201,67 @@ export class ResearchIntelligenceService {
 
     // 4. Construir Productos Candidatos con Pricing y Opportunity Score determinístico
     let rawItems: any[] = [];
-    if (Array.isArray(aiResult?.items)) {
-      rawItems = aiResult.items;
-    } else if (Array.isArray(aiResult?.products)) {
-      rawItems = aiResult.products;
-    } else if (Array.isArray(aiResult?.candidates)) {
-      rawItems = aiResult.candidates;
-    } else if (Array.isArray(aiResult?.results)) {
-      rawItems = aiResult.results;
-    } else if (Array.isArray(aiResult?.discoveries)) {
-      rawItems = aiResult.discoveries;
+    if (aiResult && typeof aiResult === 'object') {
+      if (Array.isArray(aiResult.items)) {
+        rawItems = aiResult.items;
+      } else if (Array.isArray(aiResult.products)) {
+        rawItems = aiResult.products;
+      } else if (Array.isArray(aiResult.candidates)) {
+        rawItems = aiResult.candidates;
+      } else if (Array.isArray(aiResult.results)) {
+        rawItems = aiResult.results;
+      } else if (Array.isArray(aiResult.discoveries)) {
+        rawItems = aiResult.discoveries;
+      }
     } else if (Array.isArray(aiResult)) {
       rawItems = aiResult;
     }
 
+    console.log('[FRONTEND_RESEARCH_TRACE]', {
+      step: 'SERVICE_INPUT_ITEMS',
+      rawItemsCount: rawItems.length,
+      gatewaySuccess: gatewayResponse?.success,
+      aiResultType: typeof aiResult,
+      isAiResultArray: Array.isArray(aiResult)
+    });
+
     const candidates: SourcingProductCandidate[] = await Promise.all(
       rawItems.map(async (item: any, idx: number) => {
-        const originPrice = Number(item.origin_price_usd || item.price_usd || 34.99);
-        const asin = item.asin || (item.url ? item.url.match(/\/dp\/([A-Z0-9]{10})/)?.[1] : undefined) || `B00${idx}COLLECT`;
+        // Precio de origen REAL. Prohibido defaulting sintético (ej. 34.99).
+        const parsedOriginPrice = Number(item.origin_price_usd || item.price_usd);
+        const originPrice: number | null = (!isNaN(parsedOriginPrice) && parsedOriginPrice > 0) ? parsedOriginPrice : null;
+
+        // ASIN REAL únicamente si proviene de item o URL. Prohibido generar ASINs ficticios como B00...COLLECT.
+        const urlAsinMatch = item.url ? item.url.match(/\/dp\/([A-Z0-9]{10})/i)?.[1] : null;
+        const candidateAsin = (item.asin && typeof item.asin === 'string') ? item.asin.trim() : (urlAsinMatch || null);
+        const asin: string | undefined = candidateAsin || undefined;
         
-        // Landed cost determinístico oficial de Uruguay/LATAM
-        const pricingRes = calculateInternationalPricing({
+        // Landed cost determinístico oficial de Uruguay/LATAM (solo si hay precio de origen real)
+        const pricingRes = originPrice !== null ? calculateInternationalPricing({
           amazonPrice: originPrice,
           usaShipping: 0
-        });
+        }) : null;
 
-        // Verificación TiendaMía si existe ASIN
+        // Verificación TiendaMía estrictamente opcional solo si existe un ASIN real válido (10 caracteres alfanuméricos)
         let tiendamiaPrice: number | null = null;
-        if (asin) {
+        if (candidateAsin && /^[A-Z0-9]{10}$/i.test(candidateAsin)) {
           try {
-            const tm = await checkTiendamiaByAsin(asin);
-            if (tm.found && tm.priceUsd) {
+            const tmPromise = checkTiendamiaByAsin(candidateAsin);
+            const timeoutPromise = new Promise<{ found: boolean; priceUsd: null }>((resolve) => 
+              setTimeout(() => resolve({ found: false, priceUsd: null }), 1500)
+            );
+            const tm = await Promise.race([tmPromise, timeoutPromise]);
+            if (tm && tm.found && tm.priceUsd) {
               tiendamiaPrice = tm.priceUsd;
             }
-          } catch {}
+          } catch (e) {
+            // El fallo de TiendaMía NUNCA debe descartar o romper el candidato
+          }
         }
 
-        // Mercado Libre por país
-        const mlPriceLocal = country === 'UY' 
-          ? Math.round((pricingRes.finalPrice || pricingRes.final_price_usd) * 42 * 1.35) 
-          : (country === 'AR' ? Math.round((pricingRes.finalPrice || pricingRes.final_price_usd) * 1350) : null);
+        // Mercado Libre por país: únicamente basado en evidencia real observada, NO en fórmulas artificiales
+        const observedMlPrice = Number(item.mercadolibre_price_local || item.ml_price || item.evidence?.ml_price);
+        const mlPriceLocal: number | null = (!isNaN(observedMlPrice) && observedMlPrice > 0) ? observedMlPrice : null;
 
         // Estado de candidato
         let candStatus: SourcingCandidateStatus = 'TRENDING';
@@ -265,8 +286,8 @@ export class ResearchIntelligenceService {
         const oppEval = evaluateOpportunityScore({
           demandScore: trendEval.collectibles_trend_score,
           sellerTrustScore: item.retailer ? 90 : 75,
-          marginPercent: pricingRes.netMarginPercentage || 25,
-          profitUsd: pricingRes.estimatedProfit || 12,
+          marginPercent: pricingRes?.netMarginPercentage || 0,
+          profitUsd: pricingRes?.estimatedProfit || 0,
           matchConfidence: 0.95,
           inStock: candStatus !== 'OUT_OF_STOCK',
           isOfficialVerified: Boolean(item.brand || item.retailer === 'official'),
@@ -275,6 +296,11 @@ export class ResearchIntelligenceService {
         });
 
         const cleanImg = (item.image_url && typeof item.image_url === 'string' && !item.image_url.includes('unsplash.com') && item.image_url.startsWith('http')) ? item.image_url.trim() : '';
+
+        // Safe landed cost and suggested price
+        const landedCostUsd = pricingRes?.realCost || (originPrice !== null ? originPrice : 0);
+        const suggestedSalePriceUsd = pricingRes?.finalPrice || pricingRes?.final_price_usd || (originPrice !== null ? Number((originPrice * 1.3).toFixed(2)) : 0);
+        const estimatedMarginPercent = pricingRes?.netMarginPercentage || 0;
 
         return {
           id: `cand-${idx + 1}-${Date.now()}`,
@@ -294,14 +320,14 @@ export class ResearchIntelligenceService {
           country_code: country,
           pricing: {
             amazon_price_usd: originPrice,
-            ebay_price_usd: originPrice > 0 ? Number((originPrice * 1.1).toFixed(2)) : null,
+            ebay_price_usd: (originPrice !== null && originPrice > 0) ? Number((originPrice * 1.1).toFixed(2)) : null,
             bestbuy_price_usd: originPrice,
             tiendamia_price_usd: tiendamiaPrice,
             mercadolibre_price_local: mlPriceLocal,
             mercadolibre_currency: country === 'UY' ? 'UYU' : 'ARS',
-            landed_cost_estimated_usd: pricingRes.realCost || originPrice,
-            suggested_sale_price_usd: pricingRes.finalPrice || pricingRes.final_price_usd || (originPrice * 1.3),
-            estimated_margin_percent: pricingRes.netMarginPercentage || 25,
+            landed_cost_estimated_usd: landedCostUsd,
+            suggested_sale_price_usd: suggestedSalePriceUsd,
+            estimated_margin_percent: estimatedMarginPercent,
             currency: 'USD'
           },
           stock_status: candStatus === 'PREORDER' ? 'PREORDER' : 'IN_STOCK',
@@ -309,11 +335,11 @@ export class ResearchIntelligenceService {
           retailer_url: item.url || (asin ? `https://www.amazon.com/dp/${asin}` : 'https://www.amazon.com'),
           asin,
           upc: item.upc || undefined,
-          sku: item.sku || `CANON-${country}-${idx + 1}`,
+          sku: item.sku || undefined,
           why_explanation: {
             headline: `Oportunidad Score ${oppEval.opportunityScore}/100 para mercado ${country}`,
             local_demand_summary: `Demanda de usuarios en ${country} con score de ${trendEval.collectibles_trend_score}/100.`,
-            market_differential: mlPriceLocal ? `Precio estimado en plaza local: ${country === 'UY' ? '$U' : '$'} ${mlPriceLocal}. Margen estimado Collectibles: ${(pricingRes.netMarginPercentage || 25).toFixed(1)}%.` : 'Sin competencia directa local detectada.',
+            market_differential: mlPriceLocal ? `Precio reportado en plaza local: ${country === 'UY' ? '$U' : '$'} ${mlPriceLocal}.` : 'Sin competencia directa local detectada.',
             stock_verdict: candStatus === 'PREORDER' ? 'Preventa oficial activa de fabricante.' : 'Stock disponible en origen.',
             internal_signals: `Driver: ${trendEval.drivers.slice(0, 2).join('; ')}.`,
             evidence_sources: Array.isArray(item.evidence) && item.evidence.length > 0
@@ -348,6 +374,11 @@ export class ResearchIntelligenceService {
         };
       })
     );
+
+    console.log('[FRONTEND_RESEARCH_TRACE]', {
+      step: 'SERVICE_OUTPUT_ITEMS',
+      candidatesCount: candidates.length
+    });
 
     let zeroResultReason: string | undefined = undefined;
     if (candidates.length === 0) {

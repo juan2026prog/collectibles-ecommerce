@@ -188,6 +188,13 @@ export default function AdminSourcingImport() {
         force_refresh: forceRefresh
       });
 
+      console.log('[FRONTEND_RESEARCH_TRACE]', {
+        step: 'ADMIN_RECEIVED_ITEMS',
+        candidatesCount: res?.candidates?.length || 0,
+        trendsCount: res?.trends?.length || 0,
+        success: res?.success
+      });
+
       setTrends(prev => [res.trends[0], ...prev.filter(t => t.topic !== q)]);
       setCandidates(res.candidates);
       setZeroResultReason(res.zero_result_reason);

@@ -85,13 +85,26 @@ export class OpenAIProvider implements AIProviderAdapter {
         };
       }
 
+      const returnedData = (data.data ?? data.text) as T;
+      const parsedItemsCount = Array.isArray((returnedData as any)?.items) 
+        ? (returnedData as any).items.length 
+        : (Array.isArray(returnedData) ? (returnedData as any).length : 0);
+
+      console.log('[FRONTEND_RESEARCH_TRACE]', {
+        step: 'PROVIDER_ITEMS',
+        hasData: Boolean(returnedData),
+        itemsCount: parsedItemsCount,
+        status: data.status,
+        model: data.model
+      });
+
       return {
         success: true,
         status: 'SUCCESS',
         provider: 'OPENAI',
         model: data.model,
         text: data.text,
-        data: (data.data ?? data.text) as T,
+        data: returnedData,
         sources: data.sources || [],
         latency_ms: data.latency_ms || elapsed,
         usage: data.usage,
