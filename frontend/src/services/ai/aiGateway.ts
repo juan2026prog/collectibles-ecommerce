@@ -517,7 +517,7 @@ export class AIGateway {
         is_manual_override: !isAuto,
         research_depth,
         research_depth_label: research_depth === 'ECONOMICO' ? '⚡ Económico' : (research_depth === 'ESTANDAR' ? '🔎 Estándar' : '🧠 Profundo'),
-        max_candidates: research_depth === 'ECONOMICO' ? 5 : (research_depth === 'ESTANDAR' ? 8 : 15),
+        max_candidates: research_depth === 'ECONOMICO' ? 15 : (research_depth === 'ESTANDAR' ? 8 : 15),
         estimated_input_tokens: inputTokensExpected,
         estimated_input_tokens_min: inputTokensMin,
         estimated_input_tokens_expected: inputTokensExpected,
