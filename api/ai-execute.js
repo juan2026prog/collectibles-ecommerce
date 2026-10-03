@@ -19,7 +19,7 @@ import {
 } from '../server/lib/researchCostOptimizer.js';
 import { validateRequestedModel } from '../server/lib/openaiPricing.js';
 import { authenticateRequest, acquireInFlightLock } from '../server/lib/authGuard.js';
-import { validateCandidateBatch } from '../server/lib/sourcingSourceVerifier.js';
+import { validateCandidateBatch, associateSourcesToCandidates } from '../server/lib/sourcingSourceVerifier.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -1251,8 +1251,15 @@ export default async function handler(req, res) {
     const research = ['RESEARCH_INTELLIGENCE', 'SOURCING_WEB_RESEARCH'].includes(engine) || /^(sourcing_research|web_research|sourcing_market_research)$/i.test(operation || '');
     if (research && payload.success && payload.data && typeof payload.data === 'object') {
       const raw = payload.data;
-      const items = Array.isArray(raw) ? raw : [raw.items, raw.products, raw.candidates, raw.results, raw.discoveries].find(Array.isArray) || [];
+      let items = Array.isArray(raw) ? raw : [raw.items, raw.products, raw.candidates, raw.results, raw.discoveries].find(Array.isArray) || [];
       const target = req.body?.country || 'UY';
+      const allSources = payload.sources || [];
+
+      // Deterministically correlate global Web Search citations to candidate items
+      if (allSources.length && items.length) {
+        items = associateSourcesToCandidates(items, allSources);
+      }
+
       let signalRows = [], marketRows = [];
       if (SUPABASE_KEY && items.length) {
         const verifierDb = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -1264,8 +1271,8 @@ export default async function handler(req, res) {
         signalRows = signalResult.data || []; marketRows = marketResult.data || [];
       }
       const canonical = await validateCandidateBatch(items, { country: target, origin: 'MANUAL_RESEARCH', signalRows, marketRows, deadline: Date.now() + 12000 });
-      payload.data = { ...(Array.isArray(raw) ? { items: raw } : raw), canonical_candidates: canonical };
-      console.info('[CANONICAL_VALIDATION_TRACE]', { entry: 'MANUAL_RESEARCH', input: items.length, output: canonical.length, observed: canonical.map(c => Object.values(c.provenance).filter(p => p.status === 'OBSERVED').length) });
+      payload.data = { ...(Array.isArray(raw) ? { items: raw } : raw), items, canonical_candidates: canonical };
+      console.info('[CANONICAL_VALIDATION_TRACE]', { entry: 'MANUAL_RESEARCH', input: items.length, output: canonical.length, observed: canonical.map(c => Object.values(c.provenance).filter(p => ['OBSERVED', 'CORROBORATED'].includes(p.status)).length) });
     }
     return sendJson(payload);
   };

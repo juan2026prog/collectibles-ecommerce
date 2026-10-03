@@ -100,20 +100,196 @@ export function extractProductObservations(raw, page, now = new Date().toISOStri
   return observations;
 }
 
+export function classifySourceDomain(urlStr) {
+  if (!urlStr || typeof urlStr !== 'string') return 'UNKNOWN';
+  try {
+    const domain = new URL(urlStr).hostname.toLowerCase().replace(/^www\./, '');
+    if (domain.includes('mcfarlane') || domain.includes('necaonline') || domain.includes('hasbropulse') || 
+        domain.includes('funko.com') || domain.includes('goodsmile') || domain.includes('sideshow') || 
+        domain.includes('pokemon.com') || domain.includes('bandai') || domain.includes('tamashiiweb') || 
+        domain.includes('mattel.com') || domain.includes('lego.com') || domain.includes('sanrio.com') || 
+        domain.includes('basicfun.com') || domain.includes('spinmaster.com') || domain.includes('jazwares.com') ||
+        domain.includes('youtooz.com')) {
+      return 'OFFICIAL';
+    }
+    if (domain.includes('bigbadtoystore') || domain.includes('entertainmentearth') || domain.includes('bestbuy.') || 
+        domain.includes('target.') || domain.includes('walmart.') || domain.includes('hottopic.com') || 
+        domain.includes('gamestop.com')) {
+      return 'RETAILER';
+    }
+    if (domain.includes('amazon.') || domain.includes('ebay.') || domain.includes('tiendamia.') || domain.includes('mercadolibre.')) {
+      return 'MARKETPLACE';
+    }
+    if (domain.includes('toyark.com') || domain.includes('toynewsi.com') || domain.includes('figurerealm.com') || 
+        domain.includes('bleedingcool.com') || domain.includes('ign.com') || domain.includes('gamespot.com') || 
+        domain.includes('polygon.com') || domain.includes('screenrant.com') || domain.includes('marvelousnews.com') ||
+        domain.includes('gamesradar.com')) {
+      return 'EDITORIAL';
+    }
+    if (domain.includes('reddit.com') || domain.includes('twitter.com') || domain.includes('x.com') || 
+        domain.includes('facebook.com') || domain.includes('instagram.com') || domain.includes('tiktok.com')) {
+      return 'COMMUNITY';
+    }
+    if (domain.includes('youtube.com') || domain.includes('wikipedia.org') || domain.includes('fandom.com') || 
+        domain.includes('vimeo.com')) {
+      return 'MEDIA';
+    }
+    return 'OTHER';
+  } catch {
+    return 'UNKNOWN';
+  }
+}
+
+export function matchProductCitation(item, srcTitle, srcUrl = '') {
+  if (!item || (!srcTitle && !srcUrl)) return false;
+  const norm = str => String(str || '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  
+  const itemAsin = (typeof item.asin === 'string' && /^[A-Z0-9]{10}$/i.test(item.asin.trim())) ? item.asin.trim().toUpperCase() : null;
+  const srcAsin = srcUrl ? extractAmazonAsin(srcUrl) : null;
+  if (itemAsin && srcAsin && itemAsin === srcAsin) return true;
+
+  const itemUrl = publicUrl(item.url);
+  const cleanSrcUrl = publicUrl(srcUrl);
+  if (itemUrl && cleanSrcUrl && itemUrl === cleanSrcUrl) return true;
+
+  const t1 = norm(item.title || item.name);
+  const t2 = norm(srcTitle);
+  if (t1 && t2 && t1 === t2) return true;
+
+  // Extract core keywords
+  const stopwords = new Set(['figura', 'figure', 'figures', 'action', 'scale', 'serie', 'series', 'line', 'coleccion', 'collection', 'edition', 'edicion', 'official', 'oficial', 'pack', 'set', 'the', 'del', 'por', 'from', 'with', 'and', 'para', 'item', 'inch', 'pulgadas', 'review', 'buy', 'online', 'store']);
+  const getTokens = str => norm(str).split(/\s+/).filter(tok => tok.length > 2 && !stopwords.has(tok));
+  
+  const itemTokens = getTokens(t1);
+  const srcTokens = new Set(getTokens(t2));
+
+  if (itemTokens.length === 0 || srcTokens.size === 0) return false;
+
+  // If brand is present, check brand token
+  if (item.brand && item.brand.length > 2) {
+    const brandTokens = getTokens(item.brand);
+    const hasBrand = brandTokens.some(bt => srcTokens.has(bt));
+    if (!hasBrand && !srcUrl.toLowerCase().includes(norm(item.brand).replace(/\s+/g, ''))) {
+      return false;
+    }
+  }
+
+  const matchedTokens = itemTokens.filter(tok => srcTokens.has(tok));
+  const matchRatio = matchedTokens.length / itemTokens.length;
+  return matchedTokens.length >= 2 && matchRatio >= 0.6;
+}
+
+export function associateSourcesToCandidates(items = [], globalSources = []) {
+  if (!Array.isArray(items) || !items.length || !Array.isArray(globalSources) || !globalSources.length) {
+    return items;
+  }
+
+  const cleanSources = globalSources.map(s => ({
+    ...s,
+    url: publicUrl(s.url),
+    type: s.source_type || classifySourceDomain(s.url),
+    domain: s.domain || (s.url ? (() => { try { return new URL(s.url).hostname.replace(/^www\./, ''); } catch { return ''; } })() : '')
+  })).filter(s => s.url);
+
+  return items.map(item => {
+    if (!item) return item;
+    const enriched = { ...item };
+    const commercialSources = Array.isArray(item.commercial_sources) ? [...item.commercial_sources] : [];
+    const discoverySources = Array.isArray(item.discovery_sources) ? [...item.discovery_sources] : [];
+    const itemEvidence = Array.isArray(item.evidence) ? [...item.evidence] : [];
+
+    const itemUrl = publicUrl(item.url);
+
+    for (const src of cleanSources) {
+      const srcUrl = src.url;
+      const srcAsin = extractAmazonAsin(srcUrl);
+      const srcType = src.type;
+      const srcTitle = String(src.title || src.name || src.cited_text || '');
+
+      const isMatch = matchProductCitation(item, srcTitle, srcUrl) || commercialSources.some(cs => cs.product_url && publicUrl(cs.product_url) === srcUrl);
+
+      if (isMatch) {
+        // Disambiguate: ensure no other candidate has a strictly better match
+        const otherMatches = items.filter(other => other !== item && matchProductCitation(other, srcTitle, srcUrl));
+        if (otherMatches.length > 0) {
+          continue; // Ambiguous citation rejected
+        }
+
+        const isCommercial = ['OFFICIAL', 'RETAILER', 'MARKETPLACE'].includes(srcType);
+        if (isCommercial) {
+          if (!commercialSources.some(cs => cs.product_url === srcUrl)) {
+            commercialSources.push({
+              retailer: src.retailer || src.domain || 'Retailer',
+              product_url: srcUrl,
+              price: finiteNumber(src.price) ?? finiteNumber(item.origin_price_usd) ?? null,
+              currency: src.currency || 'USD',
+              image_url: publicUrl(src.image_url) || null,
+              identifier: srcAsin || null,
+              identifier_type: srcAsin ? 'ASIN' : null,
+              source_type: srcType
+            });
+          }
+          // If candidate had an editorial primary URL, upgrade primary URL to commercial source
+          if ((!item.url || !allowed(item.url, PRODUCT_HOSTS)) && allowed(srcUrl, PRODUCT_HOSTS)) {
+            enriched.url = srcUrl;
+            enriched.retailer = src.domain || 'Retailer';
+            if (srcAsin && !enriched.asin) enriched.asin = srcAsin;
+            if (src.image_url && !enriched.image_url) enriched.image_url = src.image_url;
+            if (finiteNumber(src.price) && !finiteNumber(enriched.origin_price_usd)) enriched.origin_price_usd = Number(src.price);
+          }
+        } else {
+          if (!discoverySources.some(ds => ds.url === srcUrl)) {
+            discoverySources.push({
+              name: src.title || src.domain || 'Discovery Source',
+              url: srcUrl,
+              type: srcType
+            });
+          }
+        }
+
+        if (!itemEvidence.some(e => e.url === srcUrl)) {
+          itemEvidence.push({
+            url: srcUrl,
+            retailer: src.domain || null,
+            snippet: src.cited_text || src.title || null,
+            source_type: srcType,
+            observed_at: src.observed_at || new Date().toISOString()
+          });
+        }
+      }
+    }
+
+    enriched.commercial_sources = commercialSources;
+    enriched.discovery_sources = discoverySources;
+    enriched.evidence = itemEvidence;
+    return enriched;
+  });
+}
+
 export function corroborateCandidateEvidence(raw, { observations = [], rejectedFields = new Set(), now = new Date().toISOString() } = {}) {
   const result = [...observations];
   const isRejected = field => rejectedFields instanceof Set ? rejectedFields.has(field) : Array.isArray(rejectedFields) ? rejectedFields.includes(field) : false;
   const hasField = field => result.some(o => o.field === field) || isRejected(field);
 
-  const rawUrl = publicUrl(raw.url || raw.source_url || raw.retailer_url);
-  const isAllowedSource = rawUrl && allowed(rawUrl, PRODUCT_HOSTS);
-  const sourceRetailer = raw.retailer || raw.source_retailer || (rawUrl ? new URL(rawUrl).hostname.replace(/^www\./, '') : null);
+  // Find all commercial sources: primary URL + any commercial_sources entries
+  const commercialCandidates = [
+    ...(raw.url ? [{ product_url: raw.url, retailer: raw.retailer, price: raw.origin_price_usd, image_url: raw.image_url }] : []),
+    ...(Array.isArray(raw.commercial_sources) ? raw.commercial_sources : [])
+  ];
 
-  // 1. Identity Corroboration
-  if (!hasField('identity') && isAllowedSource && typeof raw.title === 'string' && raw.title.trim().length > 0) {
+  const validCommercial = commercialCandidates.find(cs => {
+    const u = publicUrl(cs.product_url || cs.url);
+    return u && allowed(u, PRODUCT_HOSTS);
+  });
+
+  const commUrl = publicUrl(validCommercial?.product_url || validCommercial?.url);
+  const commRetailer = validCommercial?.retailer || (commUrl ? new URL(commUrl).hostname.replace(/^www\./, '') : null);
+
+  // 1. Identity Corroboration (from allowed commercial source)
+  if (!hasField('identity') && commUrl && typeof raw.title === 'string' && raw.title.trim().length > 0) {
     result.push({
       field: 'identity',
-      ...provenance(raw.title.trim(), 'CORROBORATED', sourceRetailer, rawUrl, now, {
+      ...provenance(raw.title.trim(), 'CORROBORATED', commRetailer, commUrl, now, {
         verification: 'SOURCE_CORROBORATED',
         method: 'WEB_SEARCH_CITATION'
       })
@@ -121,26 +297,35 @@ export function corroborateCandidateEvidence(raw, { observations = [], rejectedF
   }
 
   // 2. Identifier (ASIN) Corroboration via Source URL
-  if (!hasField('asin') && rawUrl) {
-    const extractedAsin = extractAmazonAsin(rawUrl);
-    if (extractedAsin) {
-      result.push({
-        field: 'asin',
-        ...provenance(extractedAsin, 'CORROBORATED', 'Amazon', rawUrl, now, {
-          verification: 'SOURCE_CORROBORATED',
-          method: 'URL_EXTRACTION'
-        })
-      });
+  if (!hasField('asin')) {
+    const asinUrl = commUrl || publicUrl(raw.url);
+    if (asinUrl) {
+      const extractedAsin = extractAmazonAsin(asinUrl);
+      if (extractedAsin) {
+        result.push({
+          field: 'asin',
+          ...provenance(extractedAsin, 'CORROBORATED', 'Amazon', asinUrl, now, {
+            verification: 'SOURCE_CORROBORATED',
+            method: 'URL_EXTRACTION'
+          })
+        });
+      }
     }
   }
 
-  // 3. Price Corroboration
-  if (!hasField('origin_price') && isAllowedSource) {
-    const rawPrice = finiteNumber(raw.origin_price_usd ?? raw.price_usd ?? raw.price);
-    if (rawPrice !== null && rawPrice > 0) {
+  // 3. Price Corroboration (ONLY from allowed commercial sources, NEVER from editorial/news)
+  if (!hasField('origin_price')) {
+    const commWithPrice = commercialCandidates.find(cs => {
+      const u = publicUrl(cs.product_url || cs.url);
+      return u && allowed(u, PRODUCT_HOSTS) && finiteNumber(cs.price ?? raw.origin_price_usd ?? raw.price_usd ?? raw.price) !== null && Number(cs.price ?? raw.origin_price_usd ?? raw.price_usd ?? raw.price) > 0;
+    });
+    if (commWithPrice) {
+      const pUrl = publicUrl(commWithPrice.product_url || commWithPrice.url);
+      const pRetailer = commWithPrice.retailer || (pUrl ? new URL(pUrl).hostname.replace(/^www\./, '') : commRetailer);
+      const rawPrice = Number(commWithPrice.price ?? raw.origin_price_usd ?? raw.price_usd ?? raw.price);
       result.push({
         field: 'origin_price',
-        ...provenance(rawPrice, 'CORROBORATED', sourceRetailer, rawUrl, now, {
+        ...provenance(rawPrice, 'CORROBORATED', pRetailer, pUrl, now, {
           currency: 'USD',
           verification: 'SOURCE_CORROBORATED',
           method: 'WEB_SEARCH_CITATION'
@@ -149,16 +334,40 @@ export function corroborateCandidateEvidence(raw, { observations = [], rejectedF
     }
   }
 
-  // 4. Image Corroboration
+  // 4. Image Corroboration (ONLY from allowed image hosts or commercial sources)
   if (!hasField('image')) {
-    const rawImg = publicUrl(raw.image_url || raw.image || raw.imageUrl || raw.thumbnail_url);
-    if (rawImg && allowed(rawImg, IMAGE_HOSTS) && !rawImg.includes('unsplash.com')) {
+    const commWithImage = commercialCandidates.find(cs => {
+      const img = publicUrl(cs.image_url || raw.image_url || raw.image || raw.imageUrl || raw.thumbnail_url);
+      return img && allowed(img, IMAGE_HOSTS) && !img.includes('unsplash.com');
+    });
+    const imgCandidate = publicUrl(commWithImage?.image_url || raw.image_url || raw.image || raw.imageUrl || raw.thumbnail_url);
+    if (imgCandidate && allowed(imgCandidate, IMAGE_HOSTS) && !imgCandidate.includes('unsplash.com')) {
+      const iUrl = publicUrl(commWithImage?.product_url || commWithImage?.url || commUrl || imgCandidate);
+      const iRetailer = commWithImage?.retailer || (iUrl ? new URL(iUrl).hostname.replace(/^www\./, '') : commRetailer) || new URL(imgCandidate).hostname;
       result.push({
         field: 'image',
-        ...provenance(rawImg, 'CORROBORATED', sourceRetailer || new URL(rawImg).hostname, rawUrl || rawImg, now, {
+        ...provenance(imgCandidate, 'CORROBORATED', iRetailer, iUrl, now, {
           verification: 'SOURCE_CORROBORATED',
           exact_product_relationship: true,
           method: 'WEB_SEARCH_CITATION'
+        })
+      });
+    }
+  }
+
+  // 5. Discovery / Release Corroboration (from discovery sources or editorial announcements)
+  if (!hasField('release')) {
+    const hasReleaseSignal = raw.is_preorder || raw.is_new || raw.release_date || (raw.discovery_source && raw.discovery_source.url);
+    if (hasReleaseSignal) {
+      const discoveryUrl = publicUrl(raw.discovery_source?.url || raw.url);
+      const discoveryName = raw.discovery_source?.name || raw.retailer || 'Discovery Announcement';
+      const releaseStatus = raw.is_preorder ? 'PREORDER' : 'NEW';
+      result.push({
+        field: 'release',
+        ...provenance(releaseStatus, 'CORROBORATED', discoveryName, discoveryUrl, now, {
+          source_type: raw.discovery_source?.type || 'EDITORIAL',
+          verification: 'SOURCE_CORROBORATED',
+          method: 'DISCOVERY_CITATION'
         })
       });
     }

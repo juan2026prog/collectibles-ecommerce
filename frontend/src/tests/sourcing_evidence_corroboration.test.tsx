@@ -3,6 +3,8 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import { validateCandidate, finiteNumber } from '../../../shared/sourcingCandidateValidation.js';
 import { 
+  classifySourceDomain,
+  associateSourcesToCandidates,
   corroborateCandidateEvidence, 
   verifyCandidateSources, 
   lookupVerifiedTiendamia 
@@ -15,7 +17,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('Sourcing Multi-Source Evidence Corroboration Layer', () => {
+describe('Sourcing Multi-Source Evidence Corroboration & Association Layer', () => {
   const date = '2026-10-03T12:00:00Z';
 
   // 1. Fixture: Real product with Amazon citation when scraping is blocked by WAF (503/403)
@@ -29,6 +31,96 @@ describe('Sourcing Multi-Source Evidence Corroboration Layer', () => {
     image_url: 'https://m.media-amazon.com/images/I/71abcXYZ.jpg',
     retailer: 'Amazon'
   };
+
+  it('SOURCE CLASSIFICATION: classifies domains into correct categories', () => {
+    expect(classifySourceDomain('https://hasbropulse.com/products/item1')).toBe('OFFICIAL');
+    expect(classifySourceDomain('https://www.bigbadtoystore.com/Product/123')).toBe('RETAILER');
+    expect(classifySourceDomain('https://www.amazon.com/dp/B08552JGRF')).toBe('MARKETPLACE');
+    expect(classifySourceDomain('https://www.toyark.com/2025/12/03/batman')).toBe('EDITORIAL');
+    expect(classifySourceDomain('https://www.reddit.com/r/ActionFigures')).toBe('COMMUNITY');
+    expect(classifySourceDomain('https://www.youtube.com/watch?v=123')).toBe('MEDIA');
+    expect(classifySourceDomain('https://unknown-blog.xyz/news')).toBe('OTHER');
+  });
+
+  it('REAL RESPONSE SHAPE: correlates editorial discovery with global commercial source', () => {
+    // Exact shape from production: Editorial discovery item + global citation list
+    const candidateItems = [
+      {
+        id: 'item-1',
+        title: "Figura de Batman de la serie 'Batman: Hush' por Gong",
+        brand: 'Gong',
+        url: 'https://www.toyark.com/2025/12/03/dc-comics-batman-from-batman-hush-by-gong-578109',
+        retailer: 'Toyark',
+        is_preorder: true,
+        origin_price_usd: 119.99, // Editorial price claim
+        image_url: null,
+        asin: null
+      },
+      {
+        id: 'item-2',
+        title: 'Pokemon Center Eevee Plush 8 Inch',
+        brand: 'Pokemon Center',
+        url: 'https://www.youtube.com/watch?v=xVd-29mbO3E',
+        retailer: 'YouTube',
+        origin_price_usd: null,
+        image_url: null
+      }
+    ];
+
+    const globalSources = [
+      {
+        url: 'https://www.toyark.com/2025/12/03/dc-comics-batman-from-batman-hush-by-gong-578109',
+        title: 'DC Comics - Batman from Batman: Hush by Gong - The Toyark - News',
+        source_type: 'EDITORIAL'
+      },
+      {
+        url: 'https://www.bigbadtoystore.com/Product/VariationDetails/299100',
+        title: "Batman: Hush Batman 1/12 Scale Figure (Gong)",
+        price: 119.99,
+        image_url: 'https://images.bigbadtoystore.com/images/p/full/2025/12/batman-gong.jpg',
+        source_type: 'RETAILER'
+      },
+      {
+        url: 'https://www.amazon.com/dp/B09XYZUNREL',
+        title: 'Unrelated Transformers Optimus Prime Leader Class',
+        source_type: 'MARKETPLACE'
+      }
+    ];
+
+    const correlated = associateSourcesToCandidates(candidateItems, globalSources);
+
+    // Candidate 1 received BigBadToyStore as commercial source and Toyark as discovery source
+    expect(correlated[0].commercial_sources).toHaveLength(1);
+    expect(correlated[0].commercial_sources[0].retailer).toBe('bigbadtoystore.com');
+    expect(correlated[0].commercial_sources[0].product_url).toBe('https://www.bigbadtoystore.com/Product/VariationDetails/299100');
+    expect(correlated[0].discovery_sources).toHaveLength(1);
+    expect(correlated[0].discovery_sources[0].type).toBe('EDITORIAL');
+
+    // Candidate 2 did NOT receive unrelated Transformers source
+    expect(correlated[1].commercial_sources).toHaveLength(0);
+
+    // Corroborate Candidate 1:
+    const observations = corroborateCandidateEvidence(correlated[0]);
+    expect(observations.some(o => o.field === 'origin_price' && o.value === 119.99 && o.status === 'CORROBORATED')).toBe(true);
+    expect(observations.some(o => o.field === 'image' && o.value.includes('bigbadtoystore') && o.status === 'CORROBORATED')).toBe(true);
+    expect(observations.some(o => o.field === 'release' && o.value === 'PREORDER' && o.status === 'CORROBORATED')).toBe(true);
+  });
+
+  it('EDITORIAL ONLY REJECTION: editorial source alone does NOT corroborate price or image', () => {
+    const editorialOnly = {
+      title: 'Batman Hush Figure',
+      url: 'https://www.toyark.com/2025/12/03/batman',
+      retailer: 'Toyark',
+      origin_price_usd: 119.99,
+      image_url: 'https://www.toyark.com/images/hero.jpg' // Editorial hero image
+    };
+
+    const observations = corroborateCandidateEvidence(editorialOnly);
+    // Origin price is NOT corroborated because Toyark is not in PRODUCT_HOSTS
+    expect(observations.some(o => o.field === 'origin_price')).toBe(false);
+    // Image is NOT corroborated because Toyark is not in IMAGE_HOSTS
+    expect(observations.some(o => o.field === 'image')).toBe(false);
+  });
 
   it('CORROBORATED PRODUCER: creates CORROBORATED observations for image, price, identity and ASIN when WAF blocks scraping', async () => {
     // Simulate direct fetch to retailer fails with WAF 403/503

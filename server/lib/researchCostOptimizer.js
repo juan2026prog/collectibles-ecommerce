@@ -345,12 +345,17 @@ Ventana temporal: ${timeLabel}
 Familia de producto: ${familyLabel}${familyInstruction}${batchInstruction}
 
 Instrucciones:
-1. Resuelve alias multilingües si la consulta está en español (ej. "ositos cariñosos" -> "Care Bears", "caballeros del zodiaco" -> "Saint Seiya", "tortugas ninja" -> "TMNT / Teenage Mutant Ninja Turtles", etc.) para descubrir productos oficiales existentes en el mercado global.
-2. Identifica hasta ${maxItems} productos oficiales reales y relevantes, priorizando diversidad de productos y fuentes (fabricantes oficiales, retailers, marketplaces y anuncios de lanzamientos). Si hay menos productos verificables con evidencia suficiente, incluye únicamente los confirmados.
-3. Si la consulta menciona preventas o novedades ("nuevos", "lanzamientos", "preventa"), prioriza lanzamientos recientes; de lo contrario, incluye los coleccionables oficiales más demandados del catálogo.
-4. NUNCA inventes precios, costos, stock ni URLs de imagen. NUNCA inventes productos no verificados. Si un dato no es verificable, devuelve null. Incluye image_url únicamente cuando corresponda de forma verificable al producto exacto encontrado en la fuente oficial/retailer.
+1. Resuelve alias multilingües si la consulta está en español (ej. "ositos cariñosos" -> "Care Bears", "caballeros del zodiaco" -> "Saint Seiya", "tortugas ninja" -> "TMNT / Teenage Mutant Ninja Turtles", etc.) para descubrir coleccionables oficiales existentes en el mercado global.
+2. Identifica hasta ${maxItems} productos oficiales reales y relevantes. Puedes usar fuentes de noticias, blogs (Toyark), Reddit o anuncios para DESCUBRIR productos (discovery_source), pero para cada producto DEBES intentar localizar la ficha comercial exacta (commercial_sources / url) en:
+   - Fabricante/Licenciante oficial (Bandai, Hasbro Pulse, NECA, Good Smile, Funko, LEGO, McFarlane, etc.)
+   - Retailer especializado (BigBadToyStore, Entertainment Earth, etc.)
+   - Retailer global (Amazon con ASIN, Walmart, Target, Best Buy, etc.)
+3. Separa rigurosamente la evidencia:
+   - discovery_source: fuente donde se anunció o descubrió la novedad (ej. Toyark, blog, Reddit).
+   - commercial_sources: tiendas/retailers oficiales donde el producto se vende o reserva con precio real y ficha directa.
+4. NUNCA inventes precios, costos, stock ni URLs de imagen. NUNCA uses un precio de un blog como precio comercial a menos que esté en la ficha de tienda. Si no encuentras ficha comercial verificable, devuelve origin_price_usd: null, image_url: null, asin: null y commercial_sources: []. Incluye image_url únicamente cuando corresponda de forma verificable al producto exacto encontrado en la fuente oficial/retailer.
 5. Devuelve ÚNICAMENTE un JSON compacto con la siguiente estructura:
-{"summary":string,"confidence":number_0_to_1,"subtrends":string[],"items":[{"title":string,"brand":string,"franchise":string,"category":string,"origin_price_usd":number_or_null,"image_url":string_or_null,"asin":string_or_null,"url":string_or_null,"retailer":string,"is_preorder":boolean,"is_new":boolean,"release_date":string_or_null,"evidence_snippet":string}]}`;
+{"summary":string,"confidence":number_0_to_1,"subtrends":string[],"items":[{"title":string,"brand":string,"franchise":string,"category":string,"origin_price_usd":number_or_null,"image_url":string_or_null,"asin":string_or_null,"url":string_or_null,"retailer":string,"is_preorder":boolean,"is_new":boolean,"release_date":string_or_null,"evidence_snippet":string,"discovery_source":{"name":string,"url":string_or_null,"type":string},"commercial_sources":[{"retailer":string,"product_url":string,"price":number_or_null,"currency":string,"image_url":string_or_null,"identifier":string_or_null,"identifier_type":string}]}]}`;
 }
 
 /**
