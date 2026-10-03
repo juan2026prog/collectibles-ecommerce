@@ -100,6 +100,73 @@ export function extractProductObservations(raw, page, now = new Date().toISOStri
   return observations;
 }
 
+export function corroborateCandidateEvidence(raw, { observations = [], rejectedFields = new Set(), now = new Date().toISOString() } = {}) {
+  const result = [...observations];
+  const isRejected = field => rejectedFields instanceof Set ? rejectedFields.has(field) : Array.isArray(rejectedFields) ? rejectedFields.includes(field) : false;
+  const hasField = field => result.some(o => o.field === field) || isRejected(field);
+
+  const rawUrl = publicUrl(raw.url || raw.source_url || raw.retailer_url);
+  const isAllowedSource = rawUrl && allowed(rawUrl, PRODUCT_HOSTS);
+  const sourceRetailer = raw.retailer || raw.source_retailer || (rawUrl ? new URL(rawUrl).hostname.replace(/^www\./, '') : null);
+
+  // 1. Identity Corroboration
+  if (!hasField('identity') && isAllowedSource && typeof raw.title === 'string' && raw.title.trim().length > 0) {
+    result.push({
+      field: 'identity',
+      ...provenance(raw.title.trim(), 'CORROBORATED', sourceRetailer, rawUrl, now, {
+        verification: 'SOURCE_CORROBORATED',
+        method: 'WEB_SEARCH_CITATION'
+      })
+    });
+  }
+
+  // 2. Identifier (ASIN) Corroboration via Source URL
+  if (!hasField('asin') && rawUrl) {
+    const extractedAsin = extractAmazonAsin(rawUrl);
+    if (extractedAsin) {
+      result.push({
+        field: 'asin',
+        ...provenance(extractedAsin, 'CORROBORATED', 'Amazon', rawUrl, now, {
+          verification: 'SOURCE_CORROBORATED',
+          method: 'URL_EXTRACTION'
+        })
+      });
+    }
+  }
+
+  // 3. Price Corroboration
+  if (!hasField('origin_price') && isAllowedSource) {
+    const rawPrice = finiteNumber(raw.origin_price_usd ?? raw.price_usd ?? raw.price);
+    if (rawPrice !== null && rawPrice > 0) {
+      result.push({
+        field: 'origin_price',
+        ...provenance(rawPrice, 'CORROBORATED', sourceRetailer, rawUrl, now, {
+          currency: 'USD',
+          verification: 'SOURCE_CORROBORATED',
+          method: 'WEB_SEARCH_CITATION'
+        })
+      });
+    }
+  }
+
+  // 4. Image Corroboration
+  if (!hasField('image')) {
+    const rawImg = publicUrl(raw.image_url || raw.image || raw.imageUrl || raw.thumbnail_url);
+    if (rawImg && allowed(rawImg, IMAGE_HOSTS) && !rawImg.includes('unsplash.com')) {
+      result.push({
+        field: 'image',
+        ...provenance(rawImg, 'CORROBORATED', sourceRetailer || new URL(rawImg).hostname, rawUrl || rawImg, now, {
+          verification: 'SOURCE_CORROBORATED',
+          exact_product_relationship: true,
+          method: 'WEB_SEARCH_CITATION'
+        })
+      });
+    }
+  }
+
+  return result;
+}
+
 export async function lookupVerifiedTiendamia(identifier, { fetchImpl = fetch, deadline = Date.now() + 4000 } = {}) {
   if (!['SOURCE_VERIFIED', 'SOURCE_CORROBORATED'].includes(identifier?.verification) || !/^[A-Z0-9]{10}$/.test(identifier?.value || '')) {
     return { presence: 'UNKNOWN', reason: 'Identificador no verificado ni corroborado', price: provenance() };
@@ -112,8 +179,9 @@ export async function lookupVerifiedTiendamia(identifier, { fetchImpl = fetch, d
 
 export async function verifyCandidateSources(raw, { country = 'UY', origin = 'MANUAL_RESEARCH', observations: trusted = [], fetchImpl = fetch, index = 0, marketChecks: trustedMarkets = {}, deadline = Date.now() + 12000 } = {}) {
   const urls = [...new Set([raw.url || raw.source_url, ...(Array.isArray(raw.evidence) ? raw.evidence.map(e => e.url) : [])].map(publicUrl).filter(Boolean))].slice(0, 3);
-  const observations = [...trusted];
+  let observations = [...trusted];
   const diagnostics = [];
+  const rejectedFields = new Set();
   for (const url of urls) {
     if (Date.now() >= deadline) { diagnostics.push({ field: 'source', url, reason: 'VERIFICATION_BUDGET_EXHAUSTED' }); continue; }
     try {
@@ -124,15 +192,26 @@ export async function verifyCandidateSources(raw, { country = 'UY', origin = 'MA
           try {
             const img = await fetchSource(o.value, { image: true, fetchImpl, deadline });
             diagnostics.push({ field: 'image', url: o.value, http_status: img.status, content_type: img.type });
-            if (img.status !== 200 || !img.type.startsWith('image/')) continue;
+            if (img.status !== 200 || !img.type.startsWith('image/')) {
+              rejectedFields.add('image');
+              continue;
+            }
             o.verification = 'SOURCE_VERIFIED'; o.http_status = img.status; o.content_type = img.type;
-          } catch (e) { diagnostics.push({ field: 'image', url: o.value, reason: e.message }); continue; }
+          } catch (e) {
+            rejectedFields.add('image');
+            diagnostics.push({ field: 'image', url: o.value, reason: e.message });
+            continue;
+          }
         }
         observations.push(o);
       }
       diagnostics.push({ field: 'source', url, http_status: page.status, identity_verified: extracted.some(o => o.field === 'identity') });
     } catch (e) { diagnostics.push({ field: 'source', url, reason: e.message }); }
   }
+
+  // Corroborate structured evidence from verified web search citations for any fields not directly scraped (e.g. when blocked by retailer WAF)
+  observations = corroborateCandidateEvidence(raw, { observations, rejectedFields });
+
   let candidate = validateCandidate(raw, { country, origin, observations, index });
   const tm = country === 'UY' && Date.now() < deadline ? await lookupVerifiedTiendamia(candidate.provenance.asin, { fetchImpl, deadline }) : { presence: 'UNKNOWN', reason: 'Consulta pendiente' };
   candidate = validateCandidate(raw, { country, origin, observations, index, marketChecks: { ...trustedMarkets, tiendamia: tm } });

@@ -49,7 +49,7 @@ export function validateCandidate(raw, context = {}) {
   const verifiedAsin = observed('asin');
   const asin = verifiedAsin.value || extractedAsin || declaredAsin;
   const identifier = verifiedAsin.value
-    ? { ...verifiedAsin, verification: 'SOURCE_VERIFIED' }
+    ? { ...verifiedAsin, verification: verifiedAsin.verification || 'SOURCE_VERIFIED' }
     : (extractedAsin
       ? provenance(extractedAsin, 'OBSERVED', 'Amazon URL', sourceUrl, context.createdAt || new Date().toISOString(), { verification: 'SOURCE_EXTRACTED' })
       : provenance(asin, 'UNKNOWN', raw.retailer || raw.source_retailer || null, null, null, { verification: declaredAsin ? 'AI_DECLARED' : 'UNVERIFIED' }));
