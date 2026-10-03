@@ -3,7 +3,7 @@ import {
   Flame, TrendingUp, TrendingDown, ArrowRight, Bookmark, 
   EyeOff, Sparkles, CheckCircle2, ShieldAlert, Layers
 } from 'lucide-react';
-import type { SourcingTrendCard } from '../../types/sourcingIntelligence';
+import type { SourcingTrendCard } from '../../../types/sourcingIntelligence';
 
 interface TrendCardGridProps {
   trends: SourcingTrendCard[];

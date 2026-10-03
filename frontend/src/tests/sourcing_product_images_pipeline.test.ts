@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { researchIntelligenceService } from '../services/sourcing/researchIntelligenceService';
 import { aiGateway } from '../services/ai/aiGateway';
+import { validateCandidate } from '../../../shared/sourcingCandidateValidation.js';
 import { deduplicateResearchCandidates } from '../../../server/lib/researchCostOptimizer.js';
 
 describe('Sourcing Product Candidates Image Pipeline & Strict Verification Suite', () => {
@@ -27,6 +28,8 @@ describe('Sourcing Product Candidates Image Pipeline & Strict Verification Suite
       model: 'gpt-4o-mini-2024-07-18',
       data: {
         items: mockBackendItems,
+        // Gateway fixture after server verification; raw model URLs alone are not observed.
+        canonical_candidates: mockBackendItems.map((item, index) => validateCandidate(item, { index, observations: item.url && item.image_url && !/unsplash|placeholder|data:/.test(item.image_url) ? [{ field: 'image', value: item.image_url, status: 'OBSERVED', source: item.retailer || 'Amazon', source_url: item.url, observed_at: '2026-10-03T00:00:00Z', verification: 'SOURCE_VERIFIED', exact_product_relationship: true, http_status: 200, content_type: 'image/jpeg' }] : [] })),
         summary: 'Found 1 item'
       },
       latency_ms: 500
@@ -65,6 +68,8 @@ describe('Sourcing Product Candidates Image Pipeline & Strict Verification Suite
       model: 'gpt-4o-mini-2024-07-18',
       data: {
         items: mockBackendItems,
+        // Gateway fixture after server verification; raw model URLs alone are not observed.
+        canonical_candidates: mockBackendItems.map((item, index) => validateCandidate(item, { index, observations: item.url && item.image_url && !/unsplash|placeholder|data:/.test(item.image_url) ? [{ field: 'image', value: item.image_url, status: 'OBSERVED', source: item.retailer || 'Amazon', source_url: item.url, observed_at: '2026-10-03T00:00:00Z', verification: 'SOURCE_VERIFIED', exact_product_relationship: true, http_status: 200, content_type: 'image/jpeg' }] : [] })),
         summary: 'Found 1 item without image'
       },
       latency_ms: 450
@@ -78,7 +83,7 @@ describe('Sourcing Product Candidates Image Pipeline & Strict Verification Suite
 
     expect(res.candidates).toHaveLength(1);
     expect(res.candidates[0].title).toBe('Care Bears 14" Plush - Tenderheart Bear');
-    expect(res.candidates[0].image_url).toBe('');
+    expect(res.candidates[0].image_url).toBeNull();
     expect(res.candidates[0].gallery_images).toEqual([]);
   });
 
@@ -95,6 +100,7 @@ describe('Sourcing Product Candidates Image Pipeline & Strict Verification Suite
       },
       {
         title: 'Care Bears Good Luck Bear Plush',
+        url: 'https://www.target.com/p/care-bears-good-luck-bear/-/A-12345',
         brand: 'Basic Fun!',
         franchise: 'Care Bears',
         origin_price_usd: 14.99,
@@ -110,6 +116,8 @@ describe('Sourcing Product Candidates Image Pipeline & Strict Verification Suite
       model: 'gpt-4o-mini-2024-07-18',
       data: {
         items: mockBackendItems,
+        // Gateway fixture after server verification; raw model URLs alone are not observed.
+        canonical_candidates: mockBackendItems.map((item, index) => validateCandidate(item, { index, observations: item.url && item.image_url && !/unsplash|placeholder|data:/.test(item.image_url) ? [{ field: 'image', value: item.image_url, status: 'OBSERVED', source: item.retailer || 'Amazon', source_url: item.url, observed_at: '2026-10-03T00:00:00Z', verification: 'SOURCE_VERIFIED', exact_product_relationship: true, http_status: 200, content_type: 'image/jpeg' }] : [] })),
         summary: 'Found 2 items'
       },
       latency_ms: 600
@@ -122,7 +130,7 @@ describe('Sourcing Product Candidates Image Pipeline & Strict Verification Suite
     });
 
     expect(res.candidates).toHaveLength(2);
-    expect(res.candidates[0].image_url).toBe('');
+    expect(res.candidates[0].image_url).toBeNull();
     expect(res.candidates[1].image_url).toBe('https://target.scene7.com/is/image/Target/GUEST_12345');
   });
 
@@ -156,6 +164,8 @@ describe('Sourcing Product Candidates Image Pipeline & Strict Verification Suite
       model: 'gpt-4o-mini-2024-07-18',
       data: {
         items: mockBackendItems,
+        // Gateway fixture after server verification; raw model URLs alone are not observed.
+        canonical_candidates: mockBackendItems.map((item, index) => validateCandidate(item, { index, observations: item.url && item.image_url && !/unsplash|placeholder|data:/.test(item.image_url) ? [{ field: 'image', value: item.image_url, status: 'OBSERVED', source: item.retailer || 'Amazon', source_url: item.url, observed_at: '2026-10-03T00:00:00Z', verification: 'SOURCE_VERIFIED', exact_product_relationship: true, http_status: 200, content_type: 'image/jpeg' }] : [] })),
         summary: 'Found 3 items'
       },
       latency_ms: 500
@@ -169,11 +179,11 @@ describe('Sourcing Product Candidates Image Pipeline & Strict Verification Suite
 
     expect(res.candidates).toHaveLength(3);
     // Unsplash rejected
-    expect(res.candidates[0].image_url).toBe('');
+    expect(res.candidates[0].image_url).toBeNull();
     // Data URI rejected
-    expect(res.candidates[1].image_url).toBe('');
+    expect(res.candidates[1].image_url).toBeNull();
     // Placeholder rejected
-    expect(res.candidates[2].image_url).toBe('');
+    expect(res.candidates[2].image_url).toBeNull();
   });
 
   // Test E: image of another SKU/ASIN is not mistakenly reused across distinct products
@@ -189,9 +199,9 @@ describe('Sourcing Product Candidates Image Pipeline & Strict Verification Suite
     ];
 
     const listB = [
-      // Same product from another batch/source with same ASIN but missing image_url
+      // Same exact product title from another source; an AI-declared ASIN does not prove identity
       {
-        title: 'Care Bears Cheer Bear 14 inch Plush Doll',
+        title: 'Care Bears Cheer Bear 14" Plush',
         brand: 'Basic Fun',
         franchise: 'Care Bears',
         asin: 'B08552JGRF',

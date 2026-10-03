@@ -3,7 +3,7 @@ import {
   Bookmark, Plus, Trash2, Search, Sparkles, Filter, 
   Tag, Layers, ShieldCheck, CheckCircle2, ArrowRight
 } from 'lucide-react';
-import type { WatchlistExpandedItem, WatchlistScopeType } from '../../types/sourcingIntelligence';
+import type { WatchlistExpandedItem, WatchlistScopeType } from '../../../types/sourcingIntelligence';
 
 interface SourcingWatchlistExpandedViewProps {
   watchlistItems: WatchlistExpandedItem[];

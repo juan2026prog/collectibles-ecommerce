@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { researchIntelligenceService } from '../services/sourcing/researchIntelligenceService';
+import { validateCandidate } from '../../../shared/sourcingCandidateValidation.js';
 import { aiGateway } from '../services/ai/aiGateway';
 
 describe('Sourcing Frontend Pipeline & Anti-Synthetic Data Suite', () => {
@@ -32,6 +33,7 @@ describe('Sourcing Frontend Pipeline & Anti-Synthetic Data Suite', () => {
       model: 'gpt-4o-mini-2024-07-18',
       data: {
         items: mockBackendItems,
+        canonical_candidates: mockBackendItems.map((item, index) => validateCandidate(item, { index, observations: item.url && item.origin_price_usd ? [{ field: 'origin_price', value: item.origin_price_usd, currency: 'USD', status: 'OBSERVED', source: 'Amazon', source_url: item.url, observed_at: '2026-10-03T00:00:00Z' }] : [] })),
         summary: 'Found 2 items'
       },
       latency_ms: 1200

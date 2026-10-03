@@ -111,6 +111,7 @@ export type ResearchPackStatus =
   | 'FEATURE_DISABLED';
 
 export type UruguayMatchType = 
+  | 'UNKNOWN'
   | 'EXACT_MATCH' 
   | 'PROBABLE_MATCH' 
   | 'SIMILAR_PRODUCT' 
@@ -126,6 +127,7 @@ export type SourceOfferStatus =
   | 'ERROR';
 
 export type MarketPositionType = 
+  | 'UNKNOWN'
   | 'CHEAPER' 
   | 'SIMILAR' 
   | 'MORE_EXPENSIVE' 
@@ -260,6 +262,7 @@ export interface CanonicalProductView {
 
 
 export interface UruguayMarketSummary {
+  presence?: 'PRESENT' | 'VERIFIED_ABSENT' | 'UNKNOWN';
   source: 'mercado_libre_uy';
   status: UruguayMatchType;
   match_type: UruguayMatchType;
@@ -271,8 +274,8 @@ export interface UruguayMarketSummary {
   avg_price_usd: number | null;
   median_price_usd: number | null;
   max_price_usd: number | null;
-  total_listings: number;
-  sellers_count: number;
+  total_listings: number | null;
+  sellers_count: number | null;
   currency?: string;
   sample_url?: string;
   sample_title?: string;
@@ -603,4 +606,3 @@ export interface ProductPriceSummary {
   delivery_range_min_days?: number | null;
   delivery_range_max_days?: number | null;
 }
-

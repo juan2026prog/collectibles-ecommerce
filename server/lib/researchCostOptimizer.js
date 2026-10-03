@@ -599,12 +599,19 @@ export function deduplicateResearchCandidates(existingList = [], incomingList = 
     const key = `${(candidate.brand || '').toLowerCase().trim()}|${(candidate.franchise || '').toLowerCase().trim()}|${normT}`;
 
     let duplicateIndex = -1;
-    if (asin && seenAsins.has(asin)) {
-      duplicateIndex = merged.findIndex(m => m.asin && m.asin.toUpperCase().trim() === asin);
+    if (asin && candidate.identifier_verification === 'SOURCE_VERIFIED' && seenAsins.has(asin)) {
+      duplicateIndex = merged.findIndex(m => m.identifier_verification === 'SOURCE_VERIFIED' && m.asin && m.asin.toUpperCase().trim() === asin && normalizeTitleForDedupe(m.title) === normT);
     } else if (seenTitles.has(normT)) {
       duplicateIndex = merged.findIndex(m => normalizeTitleForDedupe(m.title) === normT);
     } else if (seenKeys.has(key)) {
       duplicateIndex = merged.findIndex(m => `${(m.brand || '').toLowerCase().trim()}|${(m.franchise || '').toLowerCase().trim()}|${normalizeTitleForDedupe(m.title)}` === key);
+    }
+
+    if (duplicateIndex >= 0) {
+      const previous = merged[duplicateIndex];
+      const variantFields = ['brand', 'character', 'size', 'edition', 'wave', 'color', 'sku', 'version', 'packaging', 'exclusive_retailer', 'release_date'];
+      if (variantFields.some(f => previous[f] && candidate[f] && String(previous[f]).toLowerCase() !== String(candidate[f]).toLowerCase()) ||
+        (previous.asin && candidate.asin && previous.asin !== candidate.asin)) duplicateIndex = -1;
     }
 
     if (duplicateIndex >= 0) {

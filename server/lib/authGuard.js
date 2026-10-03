@@ -9,7 +9,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-const CRON_SECRET = process.env.CRON_SECRET || 'cron_secret_collectibles_2026';
+const CRON_SECRET = process.env.CRON_SECRET;
 
 // In-flight duplicate request registry to prevent double-click paid execution
 const inFlightRequests = new Map();
@@ -24,8 +24,7 @@ export async function authenticateRequest(req, options = {}) {
   const cronSecretHeader = req.headers['x-cron-secret'] || '';
   
   // 1. Check Server-to-Server Vercel Cron Authentication
-  const isVercelCron = req.headers['x-vercel-cron'] === '1' || 
-    (CRON_SECRET && cronSecretHeader === CRON_SECRET) ||
+  const isVercelCron = (CRON_SECRET && cronSecretHeader === CRON_SECRET) ||
     (CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`);
 
   if (isVercelCron && allowCron) {
@@ -116,17 +115,12 @@ export async function authenticateRequest(req, options = {}) {
     // 5. Authoritative RBAC evaluation
     // Check JWT app_metadata and user_metadata
     const jwtAppRole = String(user.app_metadata?.role || user.app_metadata?.roles?.[0] || '').toLowerCase();
-    const jwtUserRole = String(user.user_metadata?.role || user.user_metadata?.roles?.[0] || user.role || '').toLowerCase();
     const isJwtSuper = ['superadmin', 'super_admin', 'god_admin', 'owner', 'founder'].includes(jwtAppRole) ||
-      ['superadmin', 'super_admin', 'god_admin', 'owner', 'founder'].includes(jwtUserRole) ||
-      user.app_metadata?.is_super_admin === true ||
-      user.user_metadata?.is_super_admin === true;
+      user.app_metadata?.is_super_admin === true;
 
     const isJwtAdmin = isJwtSuper ||
       ['admin', 'administrator'].includes(jwtAppRole) ||
-      ['admin', 'administrator'].includes(jwtUserRole) ||
       user.app_metadata?.is_admin === true ||
-      user.user_metadata?.is_admin === true ||
       user.app_metadata?.claims_admin === true;
 
     let isSuperAdmin = isJwtSuper;

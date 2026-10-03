@@ -1,10 +1,12 @@
 import { supabase } from '../../lib/supabase';
-import type { 
-  AIExecuteOptions, 
-  AIExecuteResponse, 
-  AISystemConfig, 
-  AIEngineConfig, 
-  AICountryConfig 
+import type {
+  AIExecuteOptions,
+  AIExecuteResponse,
+  AISystemConfig,
+  AIEngineConfig,
+  AICountryConfig,
+  AIModelsResponse,
+  AIPreFlightEstimate
 } from './types';
 import { nullAIProvider } from './providers/nullProvider';
 import { openAIProvider } from './providers/openAIProvider';
@@ -90,7 +92,7 @@ export class AIGateway {
       }
 
       // 2. Check Country Config if specific 2-letter country is targeted (GLOBAL/ALL is always allowed)
-      const isGlobalScope = !country || country === 'ALL' || country === 'GLOBAL' || country === 'TODOS';
+      const isGlobalScope = !country || ['ALL', 'GLOBAL', 'TODOS'].includes(String(country));
       if (!isGlobalScope) {
         const { data: countryData } = await supabase
           .from('ai_country_config')
@@ -132,7 +134,7 @@ export class AIGateway {
 
       // 4. Resolve Provider
       const targetProviderKey = (engineConfig.provider && engineConfig.provider !== 'NONE')
-        ? engineConfig.provider 
+        ? engineConfig.provider
         : (systemConfig.provider || 'NONE');
 
       const providerAdapter = this.providers.get(targetProviderKey) || this.providers.get('NONE');
@@ -160,11 +162,11 @@ export class AIGateway {
 
       // 5. Execute Provider Adapter
       const result = await (providerAdapter as any).execute(
-        engine, 
-        operation, 
-        payload, 
-        executionContext, 
-        prompt, 
+        engine,
+        operation,
+        payload,
+        executionContext,
+        prompt,
         systemPrompt
       );
 
@@ -474,7 +476,7 @@ export class AIGateway {
       console.warn('[AIGateway] Pre-flight estimation error:', err);
       // Local dynamic fallback estimate without network
       const isAuto = !requested_model || requested_model === 'AUTO';
-      const fallbackModel = isAuto 
+      const fallbackModel = isAuto
         ? (research_depth === 'ECONOMICO' ? 'gpt-4o-mini' : (research_depth === 'ESTANDAR' ? 'gpt-5.6-terra' : 'gpt-5.6-sol'))
         : requested_model;
 

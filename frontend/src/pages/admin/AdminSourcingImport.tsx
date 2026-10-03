@@ -109,9 +109,9 @@ export default function AdminSourcingImport() {
 
       // 3. Poblar workbench con candidatos reales si existen
       if (liveCandidates.length > 0) {
-        const mapped = liveCandidates.map(c => ({
+        const mapped: ImportCandidateItem[] = liveCandidates.map(c => ({
           id: c.id,
-          external_product_id: c.asin || c.sku || c.id,
+          external_product_id: (c.provenance?.asin?.verification === 'SOURCE_VERIFIED' ? c.asin : c.sku) || c.id,
           title: c.title,
           brand: c.brand,
           franchise: c.franchise,
@@ -119,11 +119,11 @@ export default function AdminSourcingImport() {
           image_url: c.image_url,
           gallery_images: c.gallery_images || [c.image_url],
           product_url_external: c.retailer_url,
-          price_usd: c.pricing.amazon_price_usd || 0,
-          rating: 4.8,
-          review_count: 85,
-          availability: c.stock_status === 'IN_STOCK' ? 'in_stock' : 'available',
-          prime: true,
+          price_usd: c.pricing.origin_price_usd ?? null,
+          rating: null,
+          review_count: undefined,
+          availability: c.stock_status === 'IN_STOCK' ? 'in_stock' : c.stock_status === 'PREORDER' ? 'preorder' : 'unknown',
+          prime: undefined,
           seller: c.retailer_source.toUpperCase(),
           source: c.retailer_source,
           data_origin: 'LIVE',
@@ -277,7 +277,7 @@ export default function AdminSourcingImport() {
   const handleSendCandidateToImport = (cand: SourcingProductCandidate) => {
     const newWorkbenchItem: ImportCandidateItem = {
       id: cand.id,
-      external_product_id: cand.asin || cand.sku || cand.id,
+      external_product_id: (cand.provenance?.asin?.verification === 'SOURCE_VERIFIED' ? cand.asin : cand.sku) || cand.id,
       title: cand.title,
       brand: cand.brand,
       franchise: cand.franchise,
@@ -285,10 +285,10 @@ export default function AdminSourcingImport() {
       image_url: cand.image_url,
       gallery_images: cand.gallery_images || [cand.image_url],
       product_url_external: cand.retailer_url,
-      price_usd: cand.pricing.amazon_price_usd || 0,
+      price_usd: cand.pricing.origin_price_usd ?? null,
       rating: 4.8,
-      review_count: 60,
-      availability: cand.stock_status === 'IN_STOCK' ? 'in_stock' : 'available',
+      review_count: undefined,
+      availability: cand.stock_status === 'IN_STOCK' ? 'in_stock' : cand.stock_status === 'PREORDER' ? 'preorder' : 'unknown',
       prime: true,
       seller: cand.retailer_source.toUpperCase(),
       source: cand.retailer_source,

@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, HelpCircle, CheckCircle2, ShieldAlert, Sparkles, 
   ExternalLink, Layers, TrendingUp, DollarSign, Database, ImageOff, Globe, Target, BarChart2
 } from 'lucide-react';
-import type { SourcingProductCandidate } from '../../types/sourcingIntelligence';
+import type { SourcingProductCandidate } from '../../../types/sourcingIntelligence';
 
 interface WhyExplainabilityModalProps {
   candidate: SourcingProductCandidate | null;
@@ -19,12 +19,13 @@ export const WhyExplainabilityModal: React.FC<WhyExplainabilityModalProps> = ({
   onSendToImport
 }) => {
   const [imgError, setImgError] = useState(false);
+  useEffect(() => { setImgError(false); }, [candidate?.image_url]);
 
   if (!isOpen || !candidate) return null;
 
   const why = candidate.why_explanation || {} as any;
   const breakdown = why.scoring_breakdown || null;
-  const isEarlyOpportunity = why.opportunity_type === 'EARLY_MARKET_OPPORTUNITY' || !why.local_demand_summary?.includes('directa');
+  const isEarlyOpportunity = why.opportunity_type === 'EARLY_MARKET_OPPORTUNITY';
 
   const hasValidImage = Boolean(
     candidate.image_url &&
@@ -45,16 +46,7 @@ export const WhyExplainabilityModal: React.FC<WhyExplainabilityModalProps> = ({
     }
   };
 
-  const rawSources = Array.isArray(why.evidence_sources) && why.evidence_sources.length > 0
-    ? why.evidence_sources
-    : (Array.isArray(candidate.raw_evidence) && candidate.raw_evidence.length > 0 ? candidate.raw_evidence : [
-        {
-          name: candidate.retailer_source?.toUpperCase() || 'CANAL OFICIAL',
-          type: 'RETAILER',
-          confidence: candidate.confidence_score || 85,
-          date: candidate.created_at
-        }
-      ]);
+  const rawSources = why.evidence_sources || [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
@@ -134,31 +126,15 @@ export const WhyExplainabilityModal: React.FC<WhyExplainabilityModalProps> = ({
                 <BarChart2 className="w-3.5 h-3.5 text-indigo-500" />
                 <span>Desglose de Scoring Determinístico (Total: {candidate.opportunity_score}/100)</span>
               </h5>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <div className="text-[10px] text-slate-500 font-bold uppercase">1. Global Momentum</div>
-                  <div className="text-sm font-black text-slate-900">{breakdown.global_momentum || 0}/25</div>
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <div className="text-[10px] text-slate-500 font-bold uppercase">2. Novedad / Preorder</div>
-                  <div className="text-sm font-black text-slate-900">{breakdown.novelty || 0}/20</div>
-                </div>
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <div className="text-[10px] text-slate-500 font-bold uppercase">3. Confianza de Fuente</div>
-                  <div className="text-sm font-black text-slate-900">{breakdown.source_confidence || 0}/15</div>
-                </div>
-                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200">
-                  <div className="text-[10px] text-emerald-700 font-bold uppercase">4. Gap de Oferta UY</div>
-                  <div className="text-sm font-black text-emerald-900">{breakdown.local_supply_gap || 0}/15</div>
-                </div>
-                <div className="p-2.5 rounded-xl bg-blue-50 border border-blue-200">
-                  <div className="text-[10px] text-blue-700 font-bold uppercase">5. Margen de Importación</div>
-                  <div className="text-sm font-black text-blue-900">{breakdown.import_margin || 0}/15</div>
-                </div>
-                <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-200">
-                  <div className="text-[10px] text-purple-700 font-bold uppercase">6. Demanda Corroborada</div>
-                  <div className="text-sm font-black text-purple-900">{breakdown.local_demand || 0}/10</div>
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {Object.entries(breakdown).map(([name, factor]: [string, any]) => (
+                  <div key={name} className="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
+                    <div className="text-[10px] text-slate-500 font-bold">{name}</div>
+                    <div className="text-sm font-black">{factor.points}/{factor.max}</div>
+                    <p className="text-xs">{factor.reason}</p>
+                    {factor.evidence?.map((ev: any, index: number) => ev.source_url ? <a key={index} href={ev.source_url} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 block">{ev.source || 'Fuente'} · {ev.status}</a> : null)}
+                  </div>
+                ))}
               </div>
             </div>
           )}
@@ -187,8 +163,8 @@ export const WhyExplainabilityModal: React.FC<WhyExplainabilityModalProps> = ({
                 <p className="text-xs text-blue-950 font-medium leading-relaxed">
                   {why.market_differential || (
                     candidate.pricing?.estimated_margin_percent !== null && candidate.pricing?.estimated_margin_percent !== undefined
-                      ? `Landed cost estimado en USD ${candidate.pricing?.landed_cost_estimated_usd || candidate.pricing?.amazon_price_usd} con margen proyectado de ${candidate.pricing?.estimated_margin_percent}%.`
-                      : `Landed cost estimado en USD ${candidate.pricing?.landed_cost_estimated_usd || candidate.pricing?.amazon_price_usd || 'N/A'}. Margen y PVP pendientes de cotización o referencia en plaza local.`
+                      ? `Landed cost estimado en USD ${candidate.pricing?.landed_cost_estimated_usd ?? 'No calculable'} con margen proyectado de ${candidate.pricing?.estimated_margin_percent}%.`
+                      : `Landed cost estimado en USD ${candidate.pricing?.landed_cost_estimated_usd ?? 'No calculable'}. Margen y PVP pendientes de cotización o referencia en plaza local.`
                   )}
                 </p>
               </div>
@@ -209,9 +185,16 @@ export const WhyExplainabilityModal: React.FC<WhyExplainabilityModalProps> = ({
                   <span>Gap de Oferta Local</span>
                 </span>
                 <p className="text-xs text-purple-950 font-medium leading-relaxed">
-                  {why.local_supply_gap || why.internal_signals || 'Sin oferta directa detectada en Mercado Libre Uruguay ni plaza local.'}
+                  {why.local_supply_gap || why.internal_signals || 'Presencia local no verificada.'}
                 </p>
               </div>
+            </div>
+          </div>
+
+          <div className="text-xs space-y-2">
+            <p><strong>Confianza: {candidate.confidence_level || 'UNKNOWN'}</strong> — {why.confidence_reason || 'Evidencia pendiente'}</p>
+            <div className="border rounded-xl p-3 space-y-1">
+              {Object.entries(candidate.provenance || {}).map(([field, datum]) => <p key={field}><strong>{field}</strong>: {datum.status} · {datum.value == null ? 'No disponible' : String(datum.value)} {datum.verification ? '· ' + datum.verification : ''}</p>)}
             </div>
           </div>
 
@@ -234,7 +217,7 @@ export const WhyExplainabilityModal: React.FC<WhyExplainabilityModalProps> = ({
                   {rawSources.map((ev: any, i: number) => {
                     const sourceName = ev.title || ev.name || ev.domain || ev.url || 'Fuente Oficial';
                     const sourceType = ev.type || ev.source_type || 'WEB_SEARCH';
-                    const confidence = ev.confidence || candidate.confidence_score || 85;
+                    const confidence = ev.confidence ?? null;
                     const dateStr = formatDate(ev.date || ev.observed_at || candidate.created_at);
 
                     return (
@@ -255,7 +238,7 @@ export const WhyExplainabilityModal: React.FC<WhyExplainabilityModalProps> = ({
                           </span>
                         </td>
                         <td className="p-2.5">
-                          <span className="text-emerald-600 font-bold">{confidence}%</span>
+                          <span className="text-emerald-600 font-bold">{confidence === null ? 'No verificado' : confidence + '%'}</span>
                         </td>
                         <td className="p-2.5 pr-3 text-gray-400 text-[11px]">
                           {dateStr}

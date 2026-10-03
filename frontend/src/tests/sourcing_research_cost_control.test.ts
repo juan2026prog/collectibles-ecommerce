@@ -19,15 +19,15 @@ describe('RESEARCH COST OPTIMIZER & PRE-FLIGHT ESTIMATOR (ZERO OPENAI COST)', ()
 
     expect(RESEARCH_MODES.ECONOMICO.model).toBe('gpt-4o-mini');
     expect(RESEARCH_MODES.ECONOMICO.maxCandidates).toBe(15);
-    expect(RESEARCH_MODES.ECONOMICO.maxOutputTokens).toBe(1200);
+    expect(RESEARCH_MODES.ECONOMICO.maxOutputTokens).toBe(2000);
 
     expect(RESEARCH_MODES.ESTANDAR.model).toBe('gpt-5.6-terra');
     expect(RESEARCH_MODES.ESTANDAR.maxCandidates).toBe(8);
-    expect(RESEARCH_MODES.ESTANDAR.maxOutputTokens).toBe(750);
+    expect(RESEARCH_MODES.ESTANDAR.maxOutputTokens).toBe(1200);
 
     expect(RESEARCH_MODES.PROFUNDO.model).toBe('gpt-5.6-terra');
     expect(RESEARCH_MODES.PROFUNDO.maxCandidates).toBe(15);
-    expect(RESEARCH_MODES.PROFUNDO.maxOutputTokens).toBe(1200);
+    expect(RESEARCH_MODES.PROFUNDO.maxOutputTokens).toBe(2000);
 
     // Default resolution falls back safely to ECONOMICO
     expect(resolveResearchMode(undefined).key).toBe('ECONOMICO');
@@ -72,7 +72,7 @@ describe('RESEARCH COST OPTIMIZER & PRE-FLIGHT ESTIMATOR (ZERO OPENAI COST)', ()
     expect(est.model).toBe('gpt-4o-mini');
     expect(est.research_depth).toBe('ECONOMICO');
     expect(est.max_candidates).toBe(15);
-    expect(est.max_output_tokens).toBe(1200);
+    expect(est.max_output_tokens).toBe(2000);
     expect(est.estimated_total_max_usd).toBeLessThanOrEqual(COST_THRESHOLDS.LOW_MAX_USD);
     expect(est.requires_confirmation).toBe(false);
     expect(est.openai_calls_used).toBe(0);
@@ -119,7 +119,9 @@ describe('RESEARCH COST OPTIMIZER & PRE-FLIGHT ESTIMATOR (ZERO OPENAI COST)', ()
   it('7. Sourcing Purchase Capability and Auto-Publish remain strictly disabled', () => {
     // Structural Business Invariant Check
     const prompt = buildOptimizedResearchPrompt('Transformers Liokaiser', 'UY', RESEARCH_MODES.ECONOMICO);
-    expect(prompt).toContain('NUNCA inventes precios, costos ni stock');
+    expect(prompt).toContain('NUNCA inventes precios, costos, stock ni URLs de imagen');
+    expect(prompt).toContain('"image_url":string_or_null');
+    expect(prompt).toContain('producto exacto');
     expect(prompt).not.toContain('buy');
     expect(prompt).not.toContain('purchase');
     expect(prompt).not.toContain('publish');

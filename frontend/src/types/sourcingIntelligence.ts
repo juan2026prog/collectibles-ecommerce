@@ -76,25 +76,31 @@ export interface SourcingProductCandidate {
   franchise: string;
   line?: string;
   character?: string;
-  image_url: string;
+  image_url: string | null;
   gallery_images?: string[];
   category: string;
   status: SourcingCandidateStatus;
   discovered_from: SourcingDiscoveryOrigin;
   trend_score: number; // 0 - 100
   opportunity_score: number; // 0 - 100 (Determinístico oficial)
-  confidence_score: number; // 0 - 100
+  confidence_score: number | null; // Evidence completeness; null means unknown.
+  confidence_level?: SourcingConfidenceLevel | 'UNKNOWN';
+  validation_version?: number;
+  provenance?: Record<string, SourcingDataProvenance>;
+  market_presence?: Record<string, { presence: 'PRESENT' | 'VERIFIED_ABSENT' | 'VERIFIED_LOW_SUPPLY' | 'UNKNOWN'; reason?: string; price?: SourcingDataProvenance }>;
+  validation_diagnostics?: Array<Record<string, unknown>>;
   country_code: string;
   pricing: {
+    origin_price_usd?: number | null;
     amazon_price_usd?: number | null;
     ebay_price_usd?: number | null;
     bestbuy_price_usd?: number | null;
     tiendamia_price_usd?: number | null;
     mercadolibre_price_local?: number | null;
     mercadolibre_currency?: string;
-    landed_cost_estimated_usd: number;
-    suggested_sale_price_usd: number;
-    estimated_margin_percent: number;
+    landed_cost_estimated_usd: number | null;
+    suggested_sale_price_usd: number | null;
+    estimated_margin_percent: number | null;
     currency: string;
   };
   stock_status: 'IN_STOCK' | 'PREORDER' | 'LOW_STOCK' | 'OUT_OF_STOCK' | 'UNKNOWN';
@@ -104,6 +110,10 @@ export interface SourcingProductCandidate {
   upc?: string;
   sku?: string;
   why_explanation: {
+    opportunity_type?: string;
+    confidence_reason?: string;
+    local_supply_gap?: string;
+    scoring_breakdown?: Record<string, { points: number; max: number; reason: string; confidence: string; evidence: SourcingDataProvenance[] }>;
     headline: string;
     local_demand_summary: string;
     market_differential: string;
@@ -112,12 +122,26 @@ export interface SourcingProductCandidate {
     evidence_sources: Array<{
       name: string;
       type: SourcingSignalSourceType;
-      confidence: number;
+      confidence: number | null;
       date: string;
+      url?: string;
+      field?: string;
+      status?: string;
     }>;
   };
   raw_evidence: SourcingSignal[];
   created_at: string;
+}
+
+export interface SourcingDataProvenance {
+  value: unknown;
+  status: 'OBSERVED' | 'DERIVED' | 'UNKNOWN';
+  source: string | null;
+  source_url: string | null;
+  observed_at: string | null;
+  verification?: 'AI_DECLARED' | 'SOURCE_EXTRACTED' | 'SOURCE_VERIFIED';
+  currency?: string;
+  derived_from?: SourcingDataProvenance[];
 }
 
 export type WatchlistScopeType =

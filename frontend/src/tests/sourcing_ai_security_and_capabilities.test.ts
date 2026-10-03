@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+vi.hoisted(() => { process.env.CRON_SECRET = 'sourcing-test-cron-secret'; });
 import { authenticateRequest } from '../../../server/lib/authGuard.js';
 import { 
   getAvailableAIModels, 
@@ -144,7 +145,7 @@ describe('FINAL AI SECURITY + RBAC + MODEL CAPABILITIES TEST SUITE', () => {
     it('4. Allows Vercel Cron server-to-server trigger for automated pipelines', async () => {
       const mockCronReq: any = {
         headers: {
-          'x-vercel-cron': '1'
+          authorization: 'Bearer sourcing-test-cron-secret'
         }
       };
 
@@ -152,6 +153,11 @@ describe('FINAL AI SECURITY + RBAC + MODEL CAPABILITIES TEST SUITE', () => {
       expect(auth.authenticated).toBe(true);
       expect(auth.isCron).toBe(true);
       expect(auth.isAdmin).toBe(true);
+    });
+    it('Rejects a spoofed Vercel Cron header without the configured secret', async () => {
+      const auth = await authenticateRequest({ headers: { 'x-vercel-cron': '1' } }, { allowCron: true });
+      expect(auth.authenticated).toBe(false);
+      expect(auth.isCron).toBe(false);
     });
   });
 

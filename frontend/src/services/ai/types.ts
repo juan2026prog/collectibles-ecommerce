@@ -266,6 +266,13 @@ export interface AIModelsResponse {
 export type ResearchDepthMode = 'ECONOMICO' | 'ESTANDAR' | 'PROFUNDO';
 
 export interface AIPreFlightEstimate {
+  estimated_output_tokens_min?: number;
+  confidence_label?: string;
+  estimated_input_tokens_expected?: number;
+  estimated_output_tokens_expected?: number;
+  estimated_cost_min_usd?: number;
+  estimated_cost_expected_usd?: number;
+  estimated_cost_max_usd?: number;
   success: boolean;
   model: string;
   display_name?: string;

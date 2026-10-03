@@ -10,7 +10,7 @@ import { supabase } from '../../../lib/supabase';
 import { useToast } from '../../admin/Toast';
 import { ProductImage } from '../../common/ProductImage';
 import { extractCandidateImages } from '../../../lib/imageUtils';
-import { calculateInternationalPricing } from '../../../lib/internationalPricing';
+import { calculateCandidateImportAnalysis } from '../../../services/sourcing/candidateImportAnalysis';
 import { sanitizeBrand } from '../../../lib/brandUtils';
 import { checkTiendamiaByAsin, type TiendamiaMatchResult } from '../../../services/sourcing/tiendamiaMatchingService';
 
@@ -27,7 +27,7 @@ export interface ImportCandidateItem {
   image_url: string;
   gallery_images?: string[];
   product_url_external?: string;
-  price_usd: number;
+  price_usd: number | null;
   rating?: number | null;
   review_count?: number;
   availability?: string;
@@ -197,27 +197,8 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
 
   // Pricing helper for candidate items
   const getItemFinancials = useCallback((item: ImportCandidateItem, overrideMarkup?: number) => {
-    const amazonPrice = Number(item.price_usd || 0);
     const markup = overrideMarkup ?? pricingSettings?.target_margin_percent ?? 3;
-    const settings = {
-      ...pricingSettings,
-      target_margin_percent: markup,
-      percentage_markup: markup
-    };
-    const pricing = calculateInternationalPricing({ amazonPrice, usaShipping: 0 }, settings);
-    const realCost = pricing.realCost;
-    const finalPrice = Number((realCost * (1 + (markup / 100))).toFixed(2));
-    const estimatedProfit = Number((finalPrice - realCost).toFixed(2));
-    const marginPercent = finalPrice > 0 ? Number(((estimatedProfit / finalPrice) * 100).toFixed(1)) : markup;
-
-    return {
-      amazonPrice,
-      realCost,
-      markupPercent: markup,
-      marginPercent,
-      estimatedProfit,
-      finalPrice
-    };
+    return calculateCandidateImportAnalysis(item, pricingSettings, markup);
   }, [pricingSettings]);
 
   // Calculate score for candidate
@@ -270,7 +251,8 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
 
     setLoadingTiendamiaAsins(prev => new Set(prev).add(asin));
     try {
-      const res = await checkTiendamiaByAsin(asin);
+      const item = candidates.find(c => c.external_product_id === asin);
+      const res = await checkTiendamiaByAsin(asin, { identifierVerification: item?.raw_data?.provenance?.asin?.verification, sourceUrl: item?.product_url_external, title: item?.title });
       setTiendamiaResults(prev => ({ ...prev, [asin]: res }));
     } catch {
       setTiendamiaResults(prev => ({
@@ -294,7 +276,7 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
         return next;
       });
     }
-  }, [tiendamiaResults, loadingTiendamiaAsins]);
+  }, [tiendamiaResults, loadingTiendamiaAsins, candidates]);
 
   // 1. FILTERING ENGINE (COMBINABLE INTERSECTIONS & CHIPS)
   const filteredCandidates = useMemo(() => {
@@ -467,6 +449,7 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
 
   const selectedFinancials = useMemo(() => {
     let totalRealCost = 0;
+    let incomplete = false;
     let totalProfit = 0;
     let totalSalePrice = 0;
     let itemsWithoutImage = 0;
@@ -474,7 +457,8 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
 
     selectedItemsList.forEach(item => {
       const fin = getItemFinancials(item, batchMarkup);
-      totalRealCost += fin.realCost;
+      if (fin.realCost == null || fin.finalPrice == null) incomplete = true;
+      totalRealCost += fin.realCost ?? 0;
       totalProfit += fin.estimatedProfit;
       totalSalePrice += fin.finalPrice;
       if (!hasValidImage(item)) itemsWithoutImage++;
@@ -484,9 +468,9 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
 
     return {
       count: selectedItemsList.length,
-      totalRealCost: Number(totalRealCost.toFixed(2)),
-      totalProfit: Number(totalProfit.toFixed(2)),
-      totalSalePrice: Number(totalSalePrice.toFixed(2)),
+      totalRealCost: incomplete ? null : Number(totalRealCost.toFixed(2)),
+      totalProfit: incomplete ? null : Number(totalProfit.toFixed(2)),
+      totalSalePrice: incomplete ? null : Number(totalSalePrice.toFixed(2)),
       itemsWithoutImage,
       itemsAlreadyExisting
     };
@@ -514,6 +498,10 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
         return;
       }
 
+      if (itemsToImport.some(item => item.raw_data?.validation_version && (item.raw_data.provenance?.identity?.status !== 'OBSERVED' || getItemFinancials(item, batchMarkup).realCost == null || getItemFinancials(item, batchMarkup).finalPrice == null))) {
+        throw new Error('Completá la verificación del producto y su cotización de importación antes de incorporarlo al catálogo.');
+      }
+
       // Format payload for international_products
       const rowsToInsert = itemsToImport.map(item => {
         const fin = getItemFinancials(item, batchMarkup);
@@ -521,7 +509,7 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
         
         return {
           source_provider: 'zinc',
-          source_retailer: 'amazon',
+          source_retailer: item.source || 'amazon',
           external_product_id: item.external_product_id,
           title: item.title,
           brand: item.brand,
@@ -532,11 +520,11 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
           category_mapping_source: batchCategory ? 'manual' : 'import_workbench',
           category_mapping_confidence: 100,
           image_url: rawImgs[0] || item.image_url || null,
-          product_url_external: item.product_url_external || `https://www.amazon.com/dp/${item.external_product_id}`,
+          product_url_external: item.product_url_external || null,
           base_price_usd: fin.amazonPrice,
           amazon_current_price_usd: fin.amazonPrice,
           pricing_mode: pricingSettings?.pricing_mode || 'amazon_price_plus_fee',
-          usa_domestic_shipping_usd: 0,
+          usa_domestic_shipping_usd: item.raw_data?.import_quote?.shipping ?? 0,
           collectibles_fee_usd: fin.estimatedProfit,
           final_price_usd: fin.finalPrice,
           final_price_uyu: Number((fin.finalPrice * 42.5).toFixed(2)),
@@ -1006,7 +994,7 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
                             <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                               {item.data_origin === 'LIVE' ? (
                                 <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
-                                  Amazon Live
+                                  {item.raw_data?.validation_version ? 'Sourcing / evidencia' : 'Amazon Live'}
                                 </span>
                               ) : (
                                 <span className="text-[9px] font-bold text-gray-600 bg-gray-100 px-1.5 py-0.2 rounded">
@@ -1038,12 +1026,12 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
 
                       {/* AMAZON USD */}
                       <td className="py-3 px-3 text-right font-mono font-medium text-gray-700">
-                        USD {fin.amazonPrice.toFixed(2)}
+                        USD {fin.amazonPrice == null ? 'No calculable' : fin.amazonPrice.toFixed(2)}
                       </td>
 
                       {/* COSTO FINAL USD */}
                       <td className="py-3 px-3 text-right font-mono font-semibold text-gray-900">
-                        USD {fin.realCost.toFixed(2)}
+                        USD {fin.realCost == null ? 'No calculable' : fin.realCost.toFixed(2)}
                       </td>
 
                       {/* TIENDAMÍA USD (Matching exacto por ASIN) */}
@@ -1099,14 +1087,14 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
 
                       {/* VENTA SUGERIDA USD */}
                       <td className="py-3 px-3 text-right font-mono font-bold text-gray-900 text-xs">
-                        USD {fin.finalPrice.toFixed(2)}
+                        USD {fin.finalPrice == null ? 'No calculable' : fin.finalPrice.toFixed(2)}
                       </td>
 
                       {/* GANANCIA USD */}
                       <td className={`py-3 px-3 text-right font-mono font-bold ${
                         fin.estimatedProfit > 0 ? 'text-emerald-600' : 'text-rose-600'
                       }`}>
-                        USD {fin.estimatedProfit.toFixed(2)}
+                        USD {fin.estimatedProfit == null ? 'No calculable' : fin.estimatedProfit.toFixed(2)}
                       </td>
 
                       {/* MARGEN % */}
@@ -1212,9 +1200,9 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
             </div>
 
             <div className="text-xs space-x-3 text-gray-300 font-mono">
-              <span>Costo real: <strong className="text-white">USD {selectedFinancials.totalRealCost.toFixed(2)}</strong></span>
-              <span>Ganancia: <strong className="text-emerald-400">USD {selectedFinancials.totalProfit.toFixed(2)}</strong></span>
-              <span>Venta: <strong className="text-white">USD {selectedFinancials.totalSalePrice.toFixed(2)}</strong></span>
+              <span>Costo real: <strong className="text-white">USD {selectedFinancials.totalRealCost == null ? 'No calculable' : selectedFinancials.totalRealCost.toFixed(2)}</strong></span>
+              <span>Ganancia: <strong className="text-emerald-400">USD {selectedFinancials.totalProfit == null ? 'No calculable' : selectedFinancials.totalProfit.toFixed(2)}</strong></span>
+              <span>Venta: <strong className="text-white">USD {selectedFinancials.totalSalePrice == null ? 'No calculable' : selectedFinancials.totalSalePrice.toFixed(2)}</strong></span>
             </div>
           </div>
 
@@ -1263,15 +1251,15 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
               <div className="grid grid-cols-3 gap-3">
                 <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-center">
                   <div className="text-[10px] text-gray-500 font-bold uppercase">Costo Total Real</div>
-                  <div className="text-base font-black text-gray-900 mt-1">USD {selectedFinancials.totalRealCost.toFixed(2)}</div>
+                  <div className="text-base font-black text-gray-900 mt-1">USD {selectedFinancials.totalRealCost == null ? 'No calculable' : selectedFinancials.totalRealCost.toFixed(2)}</div>
                 </div>
                 <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-center">
                   <div className="text-[10px] text-emerald-700 font-bold uppercase">Ganancia Estimada</div>
-                  <div className="text-base font-black text-emerald-600 mt-1">USD {selectedFinancials.totalProfit.toFixed(2)}</div>
+                  <div className="text-base font-black text-emerald-600 mt-1">USD {selectedFinancials.totalProfit == null ? 'No calculable' : selectedFinancials.totalProfit.toFixed(2)}</div>
                 </div>
                 <div className="p-3 bg-gray-900 text-white rounded-xl text-center">
                   <div className="text-[10px] text-pink-300 font-bold uppercase">Precio Venta Total</div>
-                  <div className="text-base font-black text-white mt-1">USD {selectedFinancials.totalSalePrice.toFixed(2)}</div>
+                  <div className="text-base font-black text-white mt-1">USD {selectedFinancials.totalSalePrice == null ? 'No calculable' : selectedFinancials.totalSalePrice.toFixed(2)}</div>
                 </div>
               </div>
 
@@ -1314,15 +1302,15 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
                         <div className="flex items-center gap-4 shrink-0 font-mono text-right">
                           <div>
                             <div className="text-[10px] text-gray-400">Costo</div>
-                            <div className="font-semibold text-gray-700">USD {fin.realCost.toFixed(2)}</div>
+                            <div className="font-semibold text-gray-700">USD {fin.realCost == null ? 'No calculable' : fin.realCost.toFixed(2)}</div>
                           </div>
                           <div>
                             <div className="text-[10px] text-gray-400">Venta</div>
-                            <div className="font-bold text-gray-900">USD {fin.finalPrice.toFixed(2)}</div>
+                            <div className="font-bold text-gray-900">USD {fin.finalPrice == null ? 'No calculable' : fin.finalPrice.toFixed(2)}</div>
                           </div>
                           <div>
                             <div className="text-[10px] text-gray-400">Ganancia</div>
-                            <div className="font-bold text-emerald-600">USD {fin.estimatedProfit.toFixed(2)}</div>
+                            <div className="font-bold text-emerald-600">USD {fin.estimatedProfit == null ? 'No calculable' : fin.estimatedProfit.toFixed(2)}</div>
                           </div>
                         </div>
                       </div>
@@ -1433,7 +1421,7 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
                   <div className="text-gray-500">Marca: <strong>{detailItem.brand || 'N/A'}</strong></div>
                   <div className="text-gray-500">Franquicia: <strong>{detailItem.franchise || detailItem.raw_data?.franchise || 'N/A'}</strong></div>
                   <div className="text-gray-500">Categoría: <strong>{detailItem.category || detailItem.amazon_category || 'N/A'}</strong></div>
-                  <div className="text-gray-500">Reviews: <strong>{detailItem.review_count || 0} ({detailItem.rating ? `${detailItem.rating} ★` : 'Sin calificación'})</strong></div>
+                  <div className="text-gray-500">Reviews: <strong>{detailItem.review_count ?? 'No disponible'} ({detailItem.rating ? `${detailItem.rating} ★` : 'Sin calificación'})</strong></div>
                   {detailItem.product_url_external && (
                     <a
                       href={detailItem.product_url_external}
@@ -1448,6 +1436,26 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
                 </div>
               </div>
 
+              {detailItem.raw_data?.validation_version && (
+                <div className="border rounded-2xl p-4 space-y-3 text-xs">
+                  <p className="font-bold">Cotización para importar (USD)</p>
+                  <p className="text-gray-500">Ingresá los costos cotizados y el precio de venta validado. Los campos vacíos permanecen pendientes.</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[['shipping', 'Envío cotizado'], ['customs', 'Aduana / impuestos'], ['fees', 'Otros costos cotizados'], ['sale_price', 'Precio de venta validado']].map(([field, label]) => (
+                      <label key={field} className="space-y-1">{label}
+                        <input type="number" min="0" step="0.01" aria-label={label} value={detailItem.raw_data?.import_quote?.[field] ?? ''}
+                          className="block w-full border rounded-lg p-2"
+                          onChange={e => {
+                            const value = e.target.value === '' ? null : Number(e.target.value);
+                            const updated = { ...detailItem, raw_data: { ...detailItem.raw_data, import_quote: { ...detailItem.raw_data.import_quote, [field]: value, observed_at: new Date().toISOString(), source: 'ADMIN_QUOTE' } } };
+                            setDetailItem(updated); setCandidates(prev => prev.map(c => c.id === updated.id ? updated : c));
+                          }} />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* SECCIÓN COSTOS Y PRICING */}
               {(() => {
                 const fin = getItemFinancials(detailItem);
@@ -1457,7 +1465,7 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div className="flex justify-between">
                         <span className="text-gray-500">Precio Amazon:</span>
-                        <span>USD {fin.amazonPrice.toFixed(2)}</span>
+                        <span>USD {fin.amazonPrice == null ? 'No calculable' : fin.amazonPrice.toFixed(2)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-500">Zinc Fee:</span>
@@ -1465,11 +1473,11 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-500">Prex % + Fijo:</span>
-                        <span>USD {((fin.amazonPrice * (pricingSettings?.financial_fee_percent ?? 2.5)/100) + (pricingSettings?.financial_fee_fixed_usd ?? 0.5)).toFixed(2)}</span>
+                        <span>{fin.realCost == null ? 'No calculable' : 'Incluido por el motor canónico'}</span>
                       </div>
                       <div className="flex justify-between font-bold text-gray-900 border-t pt-1">
                         <span>Costo Real Total:</span>
-                        <span>USD {fin.realCost.toFixed(2)}</span>
+                        <span>USD {fin.realCost == null ? 'No calculable' : fin.realCost.toFixed(2)}</span>
                       </div>
                     </div>
 
@@ -1480,11 +1488,11 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
                       </div>
                       <div className="p-2 bg-emerald-50 rounded-lg border border-emerald-200">
                         <div className="text-[9px] text-emerald-700 uppercase font-sans">Ganancia USD</div>
-                        <div className="font-black text-emerald-600">USD {fin.estimatedProfit.toFixed(2)}</div>
+                        <div className="font-black text-emerald-600">USD {fin.estimatedProfit == null ? 'No calculable' : fin.estimatedProfit.toFixed(2)}</div>
                       </div>
                       <div className="p-2 bg-gray-900 text-white rounded-lg">
                         <div className="text-[9px] text-pink-300 uppercase font-sans">Precio Venta</div>
-                        <div className="font-black text-white">USD {fin.finalPrice.toFixed(2)}</div>
+                        <div className="font-black text-white">USD {fin.finalPrice == null ? 'No calculable' : fin.finalPrice.toFixed(2)}</div>
                       </div>
                     </div>
                   </div>
@@ -1559,7 +1567,7 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
                                 </div>
                                 <div>
                                   <div className="text-[10px] text-gray-500 font-sans">Collectibles</div>
-                                  <div className="font-bold text-gray-900">USD {fin.finalPrice.toFixed(2)}</div>
+                                  <div className="font-bold text-gray-900">USD {fin.finalPrice == null ? 'No calculable' : fin.finalPrice.toFixed(2)}</div>
                                 </div>
                                 <div>
                                   <div className="text-[10px] text-gray-500 font-sans">Diferencia</div>

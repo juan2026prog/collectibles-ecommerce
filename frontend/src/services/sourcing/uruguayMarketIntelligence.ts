@@ -1,4 +1,5 @@
 import type { UruguayMarketSummary, UruguayMatchType, MarketPositionType } from '../../types/sourcing';
+import { sameProductTitle } from '../../../../shared/sourcingProductIdentity.js';
 import { supabase } from '../../lib/supabase';
 
 export interface UruguayQueryInput {
@@ -17,7 +18,7 @@ export interface UruguayQueryInput {
 /**
  * Consulta en tiempo real de Mercado Libre Uruguay (server-side vía Edge Function o directo).
  * NUNCA utiliza datasets inventados ni mocks hardcodeados en producción.
- * Si no encuentra coincidencia, retorna NOT_FOUND / NO DETECTADO de forma honesta.
+ * Una consulta limitada sin coincidencias conserva presencia UNKNOWN.
  */
 export async function queryMercadoLibreUruguayReal(input: UruguayQueryInput): Promise<UruguayMarketSummary> {
   const normalizedId = input.normalized_product_id || 'TEMP-' + Math.random().toString(36).substring(2, 9);
@@ -26,45 +27,48 @@ export async function queryMercadoLibreUruguayReal(input: UruguayQueryInput): Pr
   try {
     const searchTerms = (input.character || input.brand || input.title.split(' ')[0] || '').trim();
     if (searchTerms.length > 2) {
-      const { data: mluItems } = await supabase
+      const { data: mluItems, error } = await supabase
         .from('ml_raw_items')
         .select('id, ml_item_id, title, price, currency_id, permalink, available_quantity')
         .ilike('title', `%${searchTerms}%`)
         .limit(5);
 
-      if (mluItems && mluItems.length > 0) {
-        const prices = mluItems.map(it => Number(it.price) / 40).filter(p => !isNaN(p) && p > 0);
+      if (error) return createNoDataMarketSummary(input.title, error.message);
+      const exact = (mluItems || []).filter(m => m.permalink && sameProductTitle(m.title, input.title));
+      if (exact.length > 0) {
+        const prices = exact.filter(it => it.currency_id === 'USD').map(it => Number(it.price)).filter(p => !isNaN(p) && p > 0);
         const minPrice = prices.length > 0 ? Math.min(...prices) : null;
         const avgPrice = prices.length > 0 ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : null;
 
         return {
           source: 'mercado_libre_uy',
-          status: 'SUCCESS',
-          match_type: 'SIMILAR',
+          status: 'EXACT_MATCH',
+          presence: 'PRESENT',
+          match_type: 'EXACT_MATCH',
           match_confidence: 85,
           query: input.title,
-          data_origin: 'LIVE_DB',
-          exact_match_found: false,
+          data_origin: 'LIVE',
+          exact_match_found: true,
           min_price_usd: minPrice,
           avg_price_usd: avgPrice,
-          median_price_usd: avgPrice,
+          median_price_usd: prices.length ? (() => { const sorted = [...prices].sort((a, b) => a - b); const mid = Math.floor(sorted.length / 2); return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2; })() : null,
           max_price_usd: prices.length > 0 ? Math.max(...prices) : null,
-          total_listings: mluItems.length,
-          sellers_count: mluItems.length,
+          total_listings: exact.length,
+          sellers_count: null,
           currency: 'USD',
-          sample_title: mluItems[0].title,
-          sample_url: mluItems[0].permalink || 'https://listado.mercadolibre.com.uy/',
+          sample_title: exact[0].title,
+          sample_url: exact[0].permalink,
           difference_amount: null,
           difference_percent: null,
-          market_position: 'COMPETITIVE',
+          market_position: 'UNKNOWN',
           comparison_diff_usd: null,
           comparison_diff_percent: null,
-          market_verdict: 'COMPETENCIA_LOCAL',
+          market_verdict: 'NO_DISPONIBLE',
           last_checked_at: new Date().toISOString(),
-          exact_matches: [],
+          exact_matches: exact,
           similar_matches: mluItems.map(m => ({
             title: m.title,
-            price_usd: Number(m.price) / 40,
+            price_usd: m.currency_id === 'USD' ? Number(m.price) : null,
             url: m.permalink,
             seller: 'MLU'
           })),
@@ -74,28 +78,6 @@ export async function queryMercadoLibreUruguayReal(input: UruguayQueryInput): Pr
     }
   } catch (dbErr) {
     // Fallback to cache lookup
-  }
-
-  // 2. Fallback de cliente: consultar cache local en supabase table si existe
-  try {
-    const { data: cached } = await supabase
-      .from('sourcing_market_cache')
-      .select('*')
-      .eq('normalized_product_id', normalizedId)
-      .eq('source', 'mercado_libre_uy')
-      .gt('expires_at', new Date().toISOString())
-      .order('checked_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (cached && cached.payload) {
-      return {
-        ...cached.payload,
-        data_origin: 'CACHE'
-      } as UruguayMarketSummary;
-    }
-  } catch {
-    // Cache de tabla no accesible
   }
 
   // 3. Respuesta honesta cuando no hay datos disponibles
@@ -109,8 +91,9 @@ export async function queryMercadoLibreUruguayReal(input: UruguayQueryInput): Pr
 export function createNoDataMarketSummary(title: string, errorReason?: string): UruguayMarketSummary {
   return {
     source: 'mercado_libre_uy',
-    status: errorReason ? 'ERROR' : 'NOT_FOUND',
-    match_type: errorReason ? 'ERROR' : 'NOT_FOUND',
+    status: errorReason ? 'ERROR' : 'UNKNOWN',
+    presence: 'UNKNOWN',
+    match_type: errorReason ? 'ERROR' : 'UNKNOWN',
     match_confidence: 0,
     query: title,
     data_origin: errorReason ? 'ERROR' : 'NO_DATA',
@@ -119,17 +102,17 @@ export function createNoDataMarketSummary(title: string, errorReason?: string): 
     avg_price_usd: null,
     median_price_usd: null,
     max_price_usd: null,
-    total_listings: 0,
-    sellers_count: 0,
+    total_listings: null,
+    sellers_count: null,
     currency: 'USD',
     sample_title: title,
     sample_url: 'https://listado.mercadolibre.com.uy/',
     difference_amount: null,
     difference_percent: null,
-    market_position: 'NO_EXACT_COMPETITION',
+    market_position: 'UNKNOWN',
     comparison_diff_usd: null,
     comparison_diff_percent: null,
-    market_verdict: errorReason ? 'NO_DISPONIBLE' : 'SIN_COMPETENCIA',
+    market_verdict: 'NO_DISPONIBLE',
     last_checked_at: new Date().toISOString(),
     exact_matches: [],
     similar_matches: [],

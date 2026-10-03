@@ -5,6 +5,7 @@
 // ============================================================
 
 import { supabase } from '../../lib/supabase';
+import { storedCandidates } from './canonicalCandidateValidation';
 import { TrendEngine } from './trendEngine';
 import { collectiblesSignalAggregator } from './collectiblesSignalAggregator';
 import { marketSignalAggregator } from './marketSignalAggregator';
@@ -118,54 +119,7 @@ export class SourcingDiscoveryEngine {
       }
 
       if (dbDiscoveries && dbDiscoveries.length > 0) {
-        return dbDiscoveries.map(d => {
-          const rawImg = d.evidence?.image_url || d.image_url || null;
-          const cleanImg = (rawImg && typeof rawImg === 'string' && !rawImg.includes('unsplash.com') && rawImg.startsWith('http')) ? rawImg.trim() : null;
-
-          return {
-            id: d.id,
-            title: d.title,
-            brand: d.brand || 'Collectibles',
-            franchise: d.franchise || '',
-            line: '',
-            character: '',
-            image_url: cleanImg || '',
-            gallery_images: cleanImg ? [cleanImg] : [],
-            category: d.category || 'Figuras de Acción',
-            status: d.status as any,
-            discovered_from: d.discovered_from as any,
-            trend_score: d.trend_score || 0,
-            opportunity_score: d.opportunity_score || 0,
-            confidence_score: d.confidence_score || 80,
-            country_code: d.country,
-          pricing: {
-            amazon_price_usd: d.price_usd || 0,
-            ebay_price_usd: null,
-            bestbuy_price_usd: d.price_usd || null,
-            tiendamia_price_usd: d.evidence?.tiendamia_price || null,
-            mercadolibre_price_local: d.evidence?.ml_price || null,
-            mercadolibre_currency: country === 'UY' ? 'UYU' : 'ARS',
-            landed_cost_estimated_usd: d.landed_cost_usd !== null && d.landed_cost_usd !== undefined ? Number(d.landed_cost_usd) : null,
-            suggested_sale_price_usd: d.suggested_price_usd !== null && d.suggested_price_usd !== undefined ? Number(d.suggested_price_usd) : null,
-            estimated_margin_percent: d.margin_percent !== null && d.margin_percent !== undefined ? Number(d.margin_percent) : null,
-            currency: 'USD'
-          },
-          stock_status: d.stock_status as any,
-          retailer_source: d.source_retailer || 'amazon',
-          retailer_url: d.source_url || '',
-          asin: d.asin,
-          why_explanation: d.why_explanation || {
-            headline: `Oportunidad detectada para ${country}`,
-            local_demand_summary: 'Datos de demanda basados en señales reales.',
-            market_differential: 'Evaluación determinística de precios.',
-            stock_verdict: 'Verificado con fuente.',
-            internal_signals: 'Señales persistidas.',
-            evidence_sources: []
-          },
-          raw_evidence: [],
-          created_at: d.discovered_at
-        };
-      });
+        return storedCandidates(dbDiscoveries);
     }
     } catch (err) {
       console.warn('[SourcingDiscoveryEngine] Error leyendo descubrimientos:', err);

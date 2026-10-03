@@ -3,7 +3,7 @@ import {
   Sparkles, RefreshCw, Layers, Rocket, Flame, Clock, 
   CheckCircle2, ArrowRight, ShieldCheck, Eye, Bookmark, ExternalLink, Download, ImageOff, AlertCircle
 } from 'lucide-react';
-import type { SourcingProductCandidate } from '../../types/sourcingIntelligence';
+import type { SourcingProductCandidate } from '../../../types/sourcingIntelligence';
 
 const ProductThumbnail: React.FC<{ src?: string | null; alt: string; isPreorder?: boolean }> = ({ src, alt, isPreorder }) => {
   const [hasError, setHasError] = useState(false);
@@ -157,9 +157,9 @@ export const SourcingDiscoveryView: React.FC<SourcingDiscoveryViewProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(cand => {
             const isOutside = cand.discovered_from === 'DISCOVERED_OUTSIDE_WATCHLIST';
-            const priceOrigin = cand.pricing?.amazon_price_usd ?? cand.price_usd;
-            const landedCost = cand.pricing?.landed_cost_estimated_usd ?? cand.landed_cost_usd ?? 0;
-            const marginPct = cand.pricing?.estimated_margin_percent ?? cand.margin_percent ?? 0;
+            const priceOrigin = cand.pricing?.amazon_price_usd ?? cand.pricing.origin_price_usd;
+            const landedCost = cand.pricing?.landed_cost_estimated_usd ?? null;
+            const marginPct = cand.pricing?.estimated_margin_percent ?? null;
 
             return (
               <div

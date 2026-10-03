@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
-import { 
-  Sparkles, ExternalLink, Bookmark, HelpCircle, ArrowRight, 
+import React, { useState, useEffect } from 'react';
+import {
+  Sparkles, ExternalLink, Bookmark, HelpCircle, ArrowRight,
   CheckCircle2, AlertTriangle, Layers, Clock, ShieldCheck, Download, Search, ImageOff
 } from 'lucide-react';
-import type { SourcingProductCandidate } from '../../types/sourcingIntelligence';
+import type { SourcingProductCandidate } from '../../../types/sourcingIntelligence';
 
-const ProductThumbnail: React.FC<{ src?: string | null; alt: string; isPreorder?: boolean }> = ({ src, alt, isPreorder }) => {
+export const ProductThumbnail: React.FC<{ src?: string | null; alt: string; isPreorder?: boolean }> = ({ src, alt, isPreorder }) => {
   const [hasError, setHasError] = useState(false);
+  useEffect(() => { setHasError(false); }, [src]);
   const isValid = Boolean(src && typeof src === 'string' && src.startsWith('http') && !src.includes('unsplash.com') && !hasError);
 
   return (
@@ -117,8 +118,8 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
               key={st}
               onClick={() => setStatusFilter(st)}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
-                statusFilter === st 
-                  ? 'bg-slate-900 text-white' 
+                statusFilter === st
+                  ? 'bg-slate-900 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
@@ -194,26 +195,28 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
                   </div>
                 </div>
 
+                <p className="text-[10px] text-slate-500">Confianza: {cand.confidence_level || 'UNKNOWN'} · Índice basado en evidencia</p>
+
                 {/* BENCHMARKS DE PRECIOS & MERCADO */}
                 <div className="space-y-1.5 text-xs">
                   <div className="flex items-center justify-between text-gray-600">
                     <span className="text-[11px]">Origen ({cand.retailer_source.toUpperCase()}):</span>
                     <strong className="text-gray-900 font-bold">
-                      {cand.pricing.amazon_price_usd != null ? `$${cand.pricing.amazon_price_usd.toFixed(2)}` : 'N/A'}
+                      {cand.pricing.origin_price_usd != null ? '$' + cand.pricing.origin_price_usd.toFixed(2) : 'No disponible'}
                     </strong>
                   </div>
 
-                  {cand.pricing.tiendamia_price_usd ? (
+                  {cand.market_presence?.tiendamia?.presence === 'PRESENT' ? (
                     <div className="flex items-center justify-between text-gray-600">
                       <span className="text-[11px]">TiendaMía ({country}):</span>
                       <span className="text-slate-800 font-bold">
-                        ${cand.pricing.tiendamia_price_usd.toFixed(2)}
+                        {cand.pricing.tiendamia_price_usd != null ? '$' + cand.pricing.tiendamia_price_usd.toFixed(2) : 'Presente; precio no disponible'}
                       </span>
                     </div>
                   ) : (
                     <div className="flex items-center justify-between text-gray-400 text-[10px]">
                       <span>TiendaMía:</span>
-                      <span>No listado (Oportunidad)</span>
+                      <span>{cand.market_presence?.tiendamia?.presence === 'VERIFIED_ABSENT' ? 'Ausencia verificada' : 'No verificado'}</span>
                     </div>
                   )}
 
@@ -230,10 +233,10 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
                     <span className="text-[11px] text-gray-500">Costo Puesto / Margen:</span>
                     <div className="text-right">
                       <span className="text-gray-900 font-black">
-                        {cand.pricing.landed_cost_estimated_usd != null ? `$${cand.pricing.landed_cost_estimated_usd.toFixed(2)}` : 'N/A'}
+                        {cand.pricing.landed_cost_estimated_usd != null ? `$${cand.pricing.landed_cost_estimated_usd.toFixed(2)}` : 'No calculable'}
                       </span>
                       <span className="text-emerald-600 font-black text-[11px] ml-1.5">
-                        (+{(cand.pricing.estimated_margin_percent ?? 0).toFixed(1)}%)
+                        {cand.pricing.estimated_margin_percent != null ? cand.pricing.estimated_margin_percent.toFixed(1) + '%' : 'Margen no calculable'}
                       </span>
                     </div>
                   </div>
@@ -304,8 +307,8 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
                 key={i + 1}
                 onClick={() => setCurrentPage(i + 1)}
                 className={`w-7 h-7 rounded-lg transition cursor-pointer flex items-center justify-center ${
-                  currentPage === i + 1 
-                    ? 'bg-slate-900 text-white font-black' 
+                  currentPage === i + 1
+                    ? 'bg-slate-900 text-white font-black'
                     : 'border border-gray-200 hover:bg-gray-50'
                 }`}
               >

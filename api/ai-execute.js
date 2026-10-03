@@ -19,6 +19,7 @@ import {
 } from '../server/lib/researchCostOptimizer.js';
 import { validateRequestedModel } from '../server/lib/openaiPricing.js';
 import { authenticateRequest, acquireInFlightLock } from '../server/lib/authGuard.js';
+import { validateCandidateBatch } from '../server/lib/sourcingSourceVerifier.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -188,7 +189,7 @@ async function safeDbQuery(queryPromise, fallback = { data: null, error: null },
   }
 }
 
-export default async function handler(req, res) {
+async function executeHandler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -1238,4 +1239,35 @@ export default async function handler(req, res) {
       latency_ms: elapsedMs
     });
   }
+}
+
+// Decorate every successful research response, including both cache paths.
+// Existing model routing, batching, budget checks and authentication run first.
+export default async function handler(req, res) {
+  const sendJson = res.json.bind(res);
+  res.json = async payload => {
+    const engine = req.body?.engine;
+    const operation = req.body?.operation;
+    const research = ['RESEARCH_INTELLIGENCE', 'SOURCING_WEB_RESEARCH'].includes(engine) || /^(sourcing_research|web_research|sourcing_market_research)$/i.test(operation || '');
+    if (research && payload.success && payload.data && typeof payload.data === 'object') {
+      const raw = payload.data;
+      const items = Array.isArray(raw) ? raw : [raw.items, raw.products, raw.candidates, raw.results, raw.discoveries].find(Array.isArray) || [];
+      const target = req.body?.country || 'UY';
+      let signalRows = [], marketRows = [];
+      if (SUPABASE_KEY && items.length) {
+        const verifierDb = createClient(SUPABASE_URL, SUPABASE_KEY);
+        const titles = items.map(i => i.title || i.name).filter(Boolean);
+        const [signalResult, marketResult] = await Promise.all([
+          verifierDb.from('sourcing_signals').select('*').in('product_identity', titles).limit(100),
+          target === 'UY' ? verifierDb.from('ml_raw_items').select('title,price,currency_id,permalink').in('title', titles).limit(100) : Promise.resolve({ data: [] })
+        ]);
+        signalRows = signalResult.data || []; marketRows = marketResult.data || [];
+      }
+      const canonical = await validateCandidateBatch(items, { country: target, origin: 'MANUAL_RESEARCH', signalRows, marketRows, deadline: Date.now() + 12000 });
+      payload.data = { ...(Array.isArray(raw) ? { items: raw } : raw), canonical_candidates: canonical };
+      console.info('[CANONICAL_VALIDATION_TRACE]', { entry: 'MANUAL_RESEARCH', input: items.length, output: canonical.length, observed: canonical.map(c => Object.values(c.provenance).filter(p => p.status === 'OBSERVED').length) });
+    }
+    return sendJson(payload);
+  };
+  return executeHandler(req, res);
 }
