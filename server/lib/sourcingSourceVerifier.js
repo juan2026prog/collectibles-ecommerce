@@ -352,6 +352,12 @@ export function mergeCommercialEnrichment(candidates = [], enrichmentItems = [])
       const candId = String(cand.candidate_id || `c_${idx + 1}`).trim().toLowerCase();
       let enrichment = enrichmentByCandId.get(candId);
 
+      if (enrichment && matchedEnrichmentItems.has(enrichment)) {
+        // Prevent duplicate assignment if candidate_id was somehow reused or collided
+        telemetry.ambiguous_matches += 1;
+        enrichment = null;
+      }
+
       if (enrichment) {
         telemetry.candidate_id_exact_matches += 1;
         matchedEnrichmentItems.add(enrichment);
@@ -363,7 +369,7 @@ export function mergeCommercialEnrichment(candidates = [], enrichmentItems = [])
             telemetry.ambiguous_matches += 1;
           } else {
             const fallbackItem = enrichmentByTitle.get(normCandTitle);
-            if (fallbackItem) {
+            if (fallbackItem && !matchedEnrichmentItems.has(fallbackItem)) {
               enrichment = fallbackItem;
               telemetry.title_fallback_matches += 1;
               matchedEnrichmentItems.add(fallbackItem);

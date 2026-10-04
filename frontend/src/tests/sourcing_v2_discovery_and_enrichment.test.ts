@@ -1158,6 +1158,39 @@ describe('Sourcing V2 — Two-Phase Discovery & Commercial Enrichment Architectu
         process.env.OPENAI_API_KEY = originalKey;
       }
     });
+
+    it('prevents cross-candidate contamination when mergeCommercialEnrichment encounters duplicate candidate IDs', () => {
+      const candidates = [
+        { candidate_id: 'c_1', title: 'Batman Plush Funko' },
+        { candidate_id: 'c_1', title: 'Steiff Batman 85th Teddy Bear' } // duplicate ID scenario
+      ];
+
+      const enrichmentItems = [
+        {
+          candidate_id: 'c_1',
+          title: 'Batman Plush Funko',
+          commercial_sources: [
+            {
+              retailer: 'amazon.com',
+              product_url: 'https://www.amazon.com/dp/B08BAT0111',
+              price: 24.99,
+              currency: 'USD'
+            }
+          ]
+        }
+      ];
+
+      const merged = mergeCommercialEnrichment(candidates, enrichmentItems);
+      // Candidate 0 should receive the enrichment
+      expect(merged[0].origin_price_usd).toBe(24.99);
+      expect(merged[0].commercial_sources).toHaveLength(1);
+
+      // Candidate 1 should NOT be contaminated with candidate 0's enrichment
+      expect(merged[1].origin_price_usd).toBeUndefined();
+      expect(merged[1].commercial_sources).toBeUndefined();
+      expect(merged.telemetry.ambiguous_matches).toBe(1);
+    });
   });
 });
+
 

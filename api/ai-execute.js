@@ -737,10 +737,10 @@ async function executeHandler(req, res) {
         }
       }
 
-      // Assign candidate_ids to accumulated discoveries
+      // Assign unique candidate_ids to accumulated discoveries (prevents multi-batch collisions like duplicated c_1)
       accumulatedDiscoveries = accumulatedDiscoveries.map((c, i) => ({
         ...c,
-        candidate_id: c.candidate_id || `c_${i + 1}`
+        candidate_id: `c_${i + 1}`
       }));
 
       // PHASE 2: COMMERCIAL ENRICHMENT BATCHES (Grouped by <= 15 items)
