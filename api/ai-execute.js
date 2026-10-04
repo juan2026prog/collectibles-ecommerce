@@ -546,6 +546,36 @@ async function executeHandler(req, res) {
       ? generateResearchCacheKey(cleanSearchQuery || resolvedInput, 'GLOBAL', modeConfig.key, isManualOverride ? selectedModel : 'AUTO', effectiveTimeScope, effectiveProductFamily, effectiveResultLimit) 
       : null;
 
+    // Tools & Responses API configuration
+    const tools = isWebSearchNeeded ? [{ type: 'web_search' }] : undefined;
+    const toolChoice = isWebSearchNeeded ? (modeConfig.key === 'PROFUNDO' ? 'required' : 'auto') : undefined;
+
+    let result = null;
+    let structuredData = null;
+    let parsedContainerType = 'NONE';
+    let rawCandidateCount = 0;
+    let intelligenceRunStatus = 'SUCCESS';
+    let finalRequestId = requestId;
+    let allSources = [];
+    let totalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+    let totalPricing = {
+      model: selectedModel,
+      input_tokens: 0,
+      output_tokens: 0,
+      total_tokens: 0,
+      input_cost_usd: 0,
+      output_cost_usd: 0,
+      estimated_cost_usd: 0,
+      pricing_status: 'PRICED',
+      pricing_source: 'CENTRAL_REGISTRY'
+    };
+    let batchExecutionTelemetry = {
+      result_limit: effectiveResultLimit,
+      batches_planned: 1,
+      batches_executed: 0,
+      stop_reason: 'COMPLETED'
+    };
+
     // [RESEARCH_SERVER_TRACE] — Cache key and request params
     if (isSourcingResearch) {
       const discoveryPlan = planDiscoveryBatches(effectiveResultLimit, modeConfig);
@@ -1076,8 +1106,15 @@ async function executeHandler(req, res) {
 
   } catch (err) {
     const elapsedMs = Date.now() - startTime;
-    const errorType = err instanceof OpenAIError ? err.errorType : 'OPENAI_ERROR';
-    const statusCode = err instanceof OpenAIError ? err.statusCode : 500;
+    let errorType = 'INTERNAL_SERVER_ERROR';
+    let statusCode = 500;
+    if (err instanceof OpenAIError) {
+      errorType = err.errorType;
+      statusCode = err.statusCode;
+    } else if (err instanceof ReferenceError || err instanceof TypeError) {
+      errorType = 'RESEARCH_INTERNAL_ERROR';
+      statusCode = 500;
+    }
     const safeMessage = err.message || 'An unexpected AI execution error occurred.';
 
     // Log Error Telemetry to ai_error_events

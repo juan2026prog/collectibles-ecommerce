@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { 
   planDiscoveryBatches,
   planEnrichmentBatches,
@@ -253,6 +253,195 @@ describe('Sourcing V2 — Two-Phase Discovery & Commercial Enrichment Architectu
     it('loads api/ai-execute.js without any syntax or scope errors', async () => {
       const aiExecuteModule = await import('../../../api/ai-execute.js');
       expect(typeof aiExecuteModule.default).toBe('function');
+    });
+
+    it('executes handler for Sourcing Research without throwing ReferenceError: tools is not defined', async () => {
+      const originalFetch = globalThis.fetch;
+      const originalKey = process.env.OPENAI_API_KEY;
+      const fetchCalls = [];
+
+      try {
+        process.env.OPENAI_API_KEY = 'mock-test-key-for-vitest';
+
+        // Mock global fetch to handle Responses API requests
+        globalThis.fetch = vi.fn(async (url, init) => {
+          fetchCalls.push({ url, init });
+          const body = JSON.parse(init?.body || '{}');
+          const phase = body.metadata?.research_phase;
+
+          if (phase === 'DISCOVERY') {
+            return {
+              ok: true,
+              status: 200,
+              headers: new Headers({ 'x-request-id': 'req_mock_disc_1' }),
+              json: async () => ({
+                id: 'resp_mock_disc_1',
+                model: 'gpt-4o-mini',
+                output_text: JSON.stringify({
+                  summary: 'Peluches de Batman descubiertos',
+                  confidence: 0.92,
+                  subtrends: ['Batman plush collectors'],
+                  discoveries: [
+                    {
+                      candidate_id: 'c_1',
+                      title: 'Batman Plush 8-inch Action Figure Doll',
+                      brand: 'NECA',
+                      franchise: 'Batman',
+                      category: 'Plush',
+                      discovery_source: 'https://toynewsi.com/batman-plush'
+                    },
+                    {
+                      candidate_id: 'c_2',
+                      title: 'The Dark Knight Phunny Plush',
+                      brand: 'Kidrobot',
+                      franchise: 'Batman',
+                      category: 'Plush',
+                      discovery_source: 'https://toynewsi.com/phunny-batman'
+                    }
+                  ]
+                }),
+                output: [
+                  {
+                    content: [
+                      {
+                        type: 'text',
+                        text: 'Peluches de Batman descubiertos',
+                        annotations: [
+                          {
+                            type: 'url_citation',
+                            url_citation: {
+                              url: 'https://toynewsi.com/batman-plush',
+                              title: 'ToyNewsI Batman Plush'
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                usage: { input_tokens: 450, output_tokens: 180, total_tokens: 630 }
+              })
+            };
+          }
+
+          if (phase === 'COMMERCIAL_ENRICHMENT') {
+            return {
+              ok: true,
+              status: 200,
+              headers: new Headers({ 'x-request-id': 'req_mock_enrich_1' }),
+              json: async () => ({
+                id: 'resp_mock_enrich_1',
+                model: 'gpt-4o-mini',
+                output_text: JSON.stringify({
+                  enrichment: [
+                    {
+                      candidate_id: 'c_1',
+                      asin: 'B08BATPLSH',
+                      commercial_sources: [
+                        {
+                          retailer: 'Amazon',
+                          product_url: 'https://www.amazon.com/dp/B08BATPLSH',
+                          price: 19.99,
+                          currency: 'USD',
+                          image_url: 'https://m.media-amazon.com/images/I/batman.jpg'
+                        }
+                      ]
+                    }
+                  ]
+                }),
+                output: [
+                  {
+                    content: [
+                      {
+                        type: 'text',
+                        text: 'Commercial data enriched',
+                        annotations: [
+                          {
+                            type: 'url_citation',
+                            url_citation: {
+                              url: 'https://www.amazon.com/dp/B08BATPLSH',
+                              title: 'Amazon Product'
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ],
+                usage: { input_tokens: 520, output_tokens: 140, total_tokens: 660 }
+              })
+            };
+          }
+
+          return {
+            ok: true,
+            status: 200,
+            headers: new Headers({ 'x-request-id': 'req_mock_default' }),
+            json: async () => ({ id: 'resp_default', output_text: '{}', usage: {} })
+          };
+        });
+
+        const aiExecuteModule = await import('../../../api/ai-execute.js');
+        const handler = aiExecuteModule.default;
+
+        let responseStatusCode = 200;
+        let responseJson = null;
+        const req = {
+          method: 'POST',
+          headers: {
+            'x-test-auth': 'admin',
+            'authorization': 'Bearer test-mock-token'
+          },
+          body: {
+            engine: 'RESEARCH_INTELLIGENCE',
+            operation: 'sourcing_research',
+            query: 'peluches de batman',
+            country: 'UY',
+            research_depth: 'ECONOMICO',
+            result_limit: 'AUTO',
+            context: {
+              force_refresh: true
+            }
+          }
+        };
+
+        const res = {
+          statusCode: 200,
+          headers: {},
+          setHeader(k, v) { this.headers[k] = v; },
+          status(code) {
+            responseStatusCode = code;
+            this.statusCode = code;
+            return this;
+          },
+          json(payload) {
+            responseJson = payload;
+            return this;
+          },
+          end() {}
+        };
+
+        await handler(req, res);
+
+        // Verify successful execution and no 500 error
+        expect(responseStatusCode).toBe(200);
+        expect(responseJson).toBeDefined();
+        expect(responseJson.success).toBe(true);
+        expect(responseJson.status).toBe('SUCCESS');
+        expect(responseJson.data).toBeDefined();
+        expect(Array.isArray(responseJson.data.items)).toBe(true);
+        expect(responseJson.data.items.length).toBe(2);
+
+        // Verify that fetch calls were made with tools defined
+        const openAiCalls = fetchCalls.filter(c => String(c.url).includes('api.openai.com'));
+        expect(openAiCalls.length).toBeGreaterThanOrEqual(2);
+        const firstCallBody = JSON.parse(openAiCalls[0].init.body);
+        expect(firstCallBody.tools).toBeDefined();
+        expect(firstCallBody.tools[0].type).toBe('web_search');
+      } finally {
+        globalThis.fetch = originalFetch;
+        process.env.OPENAI_API_KEY = originalKey;
+      }
     });
   });
 
