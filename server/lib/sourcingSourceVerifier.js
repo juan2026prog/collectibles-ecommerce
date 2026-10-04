@@ -7,7 +7,8 @@ export { sameProductTitle, normalizeSearchText } from '../../shared/sourcingProd
 export const PRODUCT_HOSTS = ['amazon.com', 'amazon.co.uk', 'amazon.ca', 'ebay.com', 'bestbuy.com', 'walmart.com', 'target.com',
   'mcfarlane.com', 'mcfarlanetoysstore.com', 'hasbropulse.com', 'necaonline.com', 'store.necaonline.com', 'bandai.com', 'tamashiiweb.com',
   'mattel.com', 'shop.mattel.com', 'bigbadtoystore.com', 'entertainmentearth.com', 'sideshow.com', 'hottopic.com', 'lego.com', 'pokemoncenter.com',
-  'funko.com', 'youtooz.com', 'sanrio.com', 'basicfun.com', 'spinmaster.com', 'jazwares.com', 'tiendamia.com.uy'];
+  'funko.com', 'youtooz.com', 'sanrio.com', 'basicfun.com', 'spinmaster.com', 'jazwares.com', 'tiendamia.com.uy',
+  'steiff.com', 'shop.steiff.com', 'ty.com', 'squishmallows.com', 'jakks.com', 'kidrobot.com', 'gund.com'];
 export const IMAGE_HOSTS = [...PRODUCT_HOSTS, 'media-amazon.com', 'ssl-images-amazon.com', 'scene7.com', 'cdn.shopify.com', 'images.squarespace-cdn.com', 'shopify.com', 'cloudfront.net', 'walmartimages.com', 'necaonline.com'];
 export const allowed = (url, hosts) => {
   const clean = publicUrl(url);
@@ -109,6 +110,8 @@ export function classifySourceDomain(urlStr) {
         domain.includes('pokemon.com') || domain.includes('bandai') || domain.includes('tamashiiweb') || 
         domain.includes('mattel.com') || domain.includes('lego.com') || domain.includes('sanrio.com') || 
         domain.includes('basicfun.com') || domain.includes('spinmaster.com') || domain.includes('jazwares.com') ||
+        domain.includes('steiff.com') || domain.includes('ty.com') || domain.includes('squishmallows.com') ||
+        domain.includes('jakks.com') || domain.includes('kidrobot.com') || domain.includes('gund.com') ||
         domain.includes('youtooz.com')) {
       return 'OFFICIAL';
     }

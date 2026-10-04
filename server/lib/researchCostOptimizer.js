@@ -433,11 +433,12 @@ Candidatos descubiertos a verificar en tiendas y retailers:
 ${candidateSummaries}
 
 Instrucciones de enriquecimiento:
-1. Para cada uno de los productos listados arriba (identificados con su [candidate_id]), realiza una búsqueda web orientada a tiendas comerciales y retailers oficiales reales para localizar la ficha comercial exacta de venta o preventa en:
-   - Fabricante oficial o Licenciatario (Bandai, Hasbro Pulse, NECA, Good Smile, Funko, LEGO, McFarlane, Mattel, etc.)
+1. Para cada uno de los productos listados arriba (identificados con su [candidate_id]), realiza búsquedas web dirigidas exclusivamente a localizar la ficha comercial exacta de compra o preventa activa en:
+   - Fabricante oficial / Licenciatario (Bandai, Hasbro Pulse, NECA, Funko, LEGO, McFarlane, Mattel, Steiff, Ty, Squishmallows, Kidrobot, Jakks, etc.)
    - Retailer especializado (BigBadToyStore, Entertainment Earth, Sideshow, etc.)
-   - Marketplace / Retailer global (Amazon con ASIN, Walmart, Target, Best Buy, etc.)
-2. NUNCA inventes precios, costos, stock ni URLs de imagen. NUNCA uses un precio de un blog como precio comercial a menos que esté en la ficha de tienda.
+   - Marketplace / Retailer autorizado (Amazon con ASIN, Walmart, Target, Best Buy, etc.)
+   Estrategia de búsqueda requerida: busca por el título exacto del producto combinando con el retailer o término de compra (ej. "<marca> <título exacto>" buy OR retailer OR site:amazon.com OR site:bigbadtoystore.com). NO busques resúmenes editoriales ni blogs de noticias.
+2. NUNCA inventes precios, costos, stock ni URLs de imagen. NUNCA uses un precio de un blog como precio comercial a menos que esté en la ficha directa de tienda.
 3. Si encuentras la ficha comercial exacta, devuelve:
    - retailer: nombre del retailer / dominio
    - product_url: URL directa de la ficha del producto

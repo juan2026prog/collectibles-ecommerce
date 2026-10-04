@@ -782,11 +782,9 @@ async function executeHandler(req, res) {
               toolChoice,
               textFormat: {
                 type: 'json_schema',
-                json_schema: {
-                  name: 'commercial_enrichment_batch',
-                  strict: true,
-                  schema: COMMERCIAL_ENRICHMENT_JSON_SCHEMA
-                }
+                name: 'commercial_enrichment_batch',
+                strict: true,
+                schema: COMMERCIAL_ENRICHMENT_JSON_SCHEMA
               },
               metadata: {
                 engine: String(engine || ''),

@@ -200,10 +200,24 @@ export async function callOpenAIResponses(options = {}) {
       store: false
     };
 
-    // Support Responses API native structured output format: text: { format: { type: "json_schema", json_schema: { ... } } }
+    // Support Responses API native structured output format:
+    // Responses API expects: text: { format: { type: "json_schema", name: "...", strict: true, schema: { ... } } }
+    // Chat Completions uses response_format: { type: "json_schema", json_schema: { name: "...", strict: true, schema: { ... } } }
+    // Normalize both shapes transparently.
     if (textFormat && typeof textFormat === 'object') {
+      const isJsonSchema = textFormat.type === 'json_schema';
+      const nested = textFormat.json_schema || {};
+      const formatName = textFormat.name || nested.name || 'structured_output';
+      const formatSchema = textFormat.schema || nested.schema || {};
+      const formatStrict = textFormat.strict !== undefined ? textFormat.strict : (nested.strict !== undefined ? nested.strict : true);
+
       requestBody.text = {
-        format: textFormat
+        format: {
+          type: isJsonSchema ? 'json_schema' : (textFormat.type || 'json_schema'),
+          name: formatName,
+          strict: formatStrict,
+          schema: formatSchema
+        }
       };
     }
 
