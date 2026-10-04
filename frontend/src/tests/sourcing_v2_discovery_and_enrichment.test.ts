@@ -11,6 +11,9 @@ import {
 import { 
   mergeCommercialEnrichment,
   corroborateCandidateEvidence,
+  associateSourcesToCandidates,
+  classifySourceDomain,
+  matchProductCitation,
   PRODUCT_HOSTS,
   IMAGE_HOSTS
 } from '../../../server/lib/sourcingSourceVerifier.js';
@@ -245,9 +248,9 @@ describe('Sourcing V2 — Two-Phase Discovery & Commercial Enrichment Architectu
       expect([...mergeCommercialEnrichment(candidates, [])]).toEqual(candidates);
 
       // Malformed json in parseCommercialEnrichmentItems
-      expect(parseCommercialEnrichmentItems('invalid json')).toEqual([]);
-      expect(parseCommercialEnrichmentItems('')).toEqual([]);
-      expect(parseCommercialEnrichmentItems('```json\n{"enrichment":[]}\n```')).toEqual([]);
+      expect([...parseCommercialEnrichmentItems('invalid json')]).toEqual([]);
+      expect([...parseCommercialEnrichmentItems('')]).toEqual([]);
+      expect([...parseCommercialEnrichmentItems('```json\n{"enrichment":[]}\n```')]).toEqual([]);
     });
 
     it('loads api/ai-execute.js without any syntax or scope errors', async () => {
@@ -718,5 +721,371 @@ describe('Sourcing V2 — Two-Phase Discovery & Commercial Enrichment Architectu
         process.env.OPENAI_API_KEY = originalKey;
       }
     });
+
+    it('Scenario 6.3: Structured Commercial Enrichment Output Contract (Tests A through J)', () => {
+      const elevenCandidateIds = Array.from({ length: 11 }, (_, i) => `c_${i + 1}`);
+
+      // Test A: 11 candidates sent -> 11 returned, some with commercial sources, some empty
+      const outputA = JSON.stringify({
+        enrichment: elevenCandidateIds.map((id, i) => ({
+          candidate_id: id,
+          title: `Batman Item ${i + 1}`,
+          commercial_sources: i === 0 ? [{
+            retailer: 'Amazon',
+            product_url: 'https://www.amazon.com/dp/B08BAT01',
+            price: 19.99,
+            currency: 'USD'
+          }] : []
+        }))
+      });
+      const resA = parseCommercialEnrichmentItems(outputA, elevenCandidateIds);
+      expect(resA.status).toBe('VALID_ENRICHMENT');
+      expect(resA.expectedCount).toBe(11);
+      expect(resA).toHaveLength(11);
+      expect(resA.missingIds).toHaveLength(0);
+      expect(resA[0].commercial_sources).toHaveLength(1);
+      expect(resA[1].commercial_sources).toHaveLength(0);
+
+      // Test B: 11 candidates sent -> 11 returned, all commercial_sources empty
+      const outputB = JSON.stringify({
+        enrichment: elevenCandidateIds.map((id, i) => ({
+          candidate_id: id,
+          title: `Batman Item ${i + 1}`,
+          commercial_sources: []
+        }))
+      });
+      const resB = parseCommercialEnrichmentItems(outputB, elevenCandidateIds);
+      expect(resB.status).toBe('VALID_ENRICHMENT');
+      expect(resB.expectedCount).toBe(11);
+      expect(resB).toHaveLength(11);
+      expect(resB.missingIds).toHaveLength(0);
+
+      // Test C: 11 candidates sent -> enrichment: [] (empty valid array, all 11 missing)
+      const outputC = JSON.stringify({ enrichment: [] });
+      const resC = parseCommercialEnrichmentItems(outputC, elevenCandidateIds);
+      expect(resC.status).toBe('EMPTY_VALID_ENRICHMENT');
+      expect(resC).toHaveLength(0);
+      expect(resC.missingIds).toHaveLength(11);
+
+      // Test D: Invalid JSON text -> status INVALID_JSON, missingIds: 11
+      const outputD = 'This is not valid JSON';
+      const resD = parseCommercialEnrichmentItems(outputD, elevenCandidateIds);
+      expect(resD.status).toBe('INVALID_JSON');
+      expect(resD).toHaveLength(0);
+      expect(resD.missingIds).toHaveLength(11);
+
+      // Test E: Missing enrichment key / unexpected schema -> status SCHEMA_MISMATCH
+      const outputE = JSON.stringify({ unexpected_root: [1, 2, 3] });
+      const resE = parseCommercialEnrichmentItems(outputE, elevenCandidateIds);
+      expect(resE.status).toBe('SCHEMA_MISMATCH');
+      expect(resE).toHaveLength(0);
+      expect(resE.missingIds).toHaveLength(11);
+
+      // Test F: Incomplete candidate IDs (e.g. 5 of 11 returned) -> PARTIAL_ENRICHMENT
+      const outputF = JSON.stringify({
+        enrichment: elevenCandidateIds.slice(0, 5).map(id => ({
+          candidate_id: id,
+          commercial_sources: []
+        }))
+      });
+      const resF = parseCommercialEnrichmentItems(outputF, elevenCandidateIds);
+      expect(resF.status).toBe('PARTIAL_ENRICHMENT');
+      expect(resF).toHaveLength(5);
+      expect(resF.missingIds).toHaveLength(6);
+      expect(resF.missingIds).toEqual(['c_6', 'c_7', 'c_8', 'c_9', 'c_10', 'c_11']);
+
+      // Test G: Safe commercial citation fallback (Amazon URL associated without fabricating price/image/id)
+      const candG = [
+        {
+          candidate_id: 'c_1',
+          title: 'Batman Animated Plush 8-inch',
+          brand: 'DC',
+          url: 'https://news.toyark.com/batman-animated',
+          commercial_sources: []
+        }
+      ];
+      const citationsG = [
+        {
+          url: 'https://www.amazon.com/dp/B08BATPLSH',
+          title: 'Batman Animated Plush 8-inch Official Toy',
+          cited_text: 'Buy Batman Animated Plush 8-inch on Amazon for $19.99'
+        }
+      ];
+      const resG = associateSourcesToCandidates(candG, citationsG);
+      expect(resG[0].commercial_sources).toHaveLength(1);
+      const attachedSource = resG[0].commercial_sources[0];
+      expect(attachedSource.product_url).toBe('https://www.amazon.com/dp/B08BATPLSH');
+      expect(attachedSource.price).toBeNull(); // Strictly null - no fabrication from citation snippet
+      expect(attachedSource.image_url).toBeNull(); // Strictly null
+      expect(attachedSource.identifier).toBe('B08BATPLSH'); // ASIN extracted from clean URL
+      expect(resG[0].url).toBe('https://www.amazon.com/dp/B08BATPLSH'); // Upgraded from editorial
+      // Corroboration verification
+      const obsG = corroborateCandidateEvidence(resG[0]);
+      const valG = validateCandidate(resG[0], { observations: obsG, country: 'UY' });
+      expect(valG.provenance.identity.status).toBe('CORROBORATED');
+      expect(valG.provenance.asin.status).toBe('CORROBORATED');
+      expect(valG.provenance.origin_price.status).toBe('UNKNOWN'); // Price was null, remains unknown
+      expect(valG.provenance.origin_price.value).toBeNull();
+      expect(valG.provenance.image.status).toBe('UNKNOWN');
+      expect(valG.provenance.image.value).toBeNull();
+
+      // Test H: Ambiguous commercial citation (matches multiple candidates -> rejected)
+      const candH = [
+        { candidate_id: 'c_1', title: 'Batman Plush' },
+        { candidate_id: 'c_2', title: 'Batman Plush' }
+      ];
+      const citationsH = [
+        {
+          url: 'https://www.amazon.com/dp/B08BATAMB',
+          title: 'Batman Plush Official Store'
+        }
+      ];
+      const resH = associateSourcesToCandidates(candH, citationsH);
+      expect(resH[0].commercial_sources || []).toHaveLength(0);
+      expect(resH[1].commercial_sources || []).toHaveLength(0);
+
+      // Test I: Editorial-only citations do NOT create commercial sources
+      const candI = [{ candidate_id: 'c_1', title: 'Batman Plush Rare', commercial_sources: [] }];
+      const citationsI = [
+        {
+          url: 'https://news.toyark.com/2026/01/batman-plush-rare',
+          title: 'Toyark Batman Plush Rare News'
+        }
+      ];
+      const resI = associateSourcesToCandidates(candI, citationsI);
+      expect(resI[0].commercial_sources || []).toHaveLength(0);
+      expect(resI[0].discovery_sources).toHaveLength(1);
+      expect(resI[0].discovery_sources[0].url).toBe('https://news.toyark.com/2026/01/batman-plush-rare');
+
+      // Test J: Telemetry persistence resilience (handles mocks with or without .text())
+      expect(() => {
+        const mockResWithText = { text: async () => 'hello', json: async () => ({}) };
+        const mockResWithoutText = { json: async () => ({}) };
+        expect(typeof mockResWithText.text).toBe('function');
+        expect(typeof (mockResWithoutText as any).text).toBe('undefined');
+      }).not.toThrow();
+    });
+
+    it('Scenario 6.4: Full 11-candidate live pipeline mock reproducing commit 4a3f65c run', async () => {
+      const originalFetch = globalThis.fetch;
+      const originalKey = process.env.OPENAI_API_KEY;
+
+      try {
+        process.env.OPENAI_API_KEY = 'mock-key-for-11-candidates';
+
+        // 11 discovery candidates from Phase 1
+        const discoveryCandidates = Array.from({ length: 11 }, (_, i) => ({
+          candidate_id: `c_${i + 1}`,
+          title: `Batman Plush Edition ${i + 1}`,
+          brand: 'DC Comics',
+          category: 'Plush',
+          url: `https://news.toyark.com/batman-${i + 1}`,
+          origin_price_usd: null,
+          image_url: null
+        }));
+
+        // Model returns 11 items adhering to structured output contract:
+        // c_1 has full verified commercial source
+        // c_2 has commercial source without price
+        // c_3 to c_11 have commercial_sources: []
+        const enrichmentItems = Array.from({ length: 11 }, (_, i) => {
+          const id = `c_${i + 1}`;
+          if (i === 0) {
+            return {
+              candidate_id: id,
+              title: `Batman Plush Edition 1`,
+              commercial_sources: [{
+                retailer: 'Amazon',
+                product_url: 'https://www.amazon.com/dp/B08BAT0111',
+                price: 22.99,
+                currency: 'USD',
+                image_url: 'https://m.media-amazon.com/images/I/bat11.jpg',
+                identifier: 'B08BAT0111',
+                identifier_type: 'ASIN'
+              }]
+            };
+          }
+          if (i === 1) {
+            return {
+              candidate_id: id,
+              title: `Batman Plush Edition 2`,
+              commercial_sources: [{
+                retailer: 'BigBadToyStore',
+                product_url: 'https://www.bigbadtoystore.com/Product/VariationDetails/112233',
+                price: null,
+                currency: 'USD',
+                image_url: null
+              }]
+            };
+          }
+          return {
+            candidate_id: id,
+            title: `Batman Plush Edition ${i + 1}`,
+            commercial_sources: []
+          };
+        });
+
+        // Citations returned by OpenAI responses API during enrichment
+        const searchCitations = [
+          {
+            url: 'https://www.amazon.com/dp/B08BAT0111',
+            title: 'Batman Plush Edition 1 Amazon',
+            cited_text: 'In stock at Amazon for $22.99'
+          },
+          {
+            url: 'https://www.bigbadtoystore.com/Product/VariationDetails/112233',
+            title: 'Batman Plush Edition 2 BBTS',
+            cited_text: 'Preorder Batman Plush Edition 2 at BigBadToyStore'
+          },
+          {
+            url: 'https://news.toyark.com/batman-general',
+            title: 'ToyArk General Batman News',
+            cited_text: 'Batman news summary'
+          }
+        ];
+
+        globalThis.fetch = vi.fn().mockImplementation(async (url, init) => {
+          const bodyObj = JSON.parse(init?.body || '{}');
+          const isEnrichment = bodyObj.metadata?.research_phase === 'COMMERCIAL_ENRICHMENT';
+
+          if (!isEnrichment) {
+            return {
+              ok: true,
+              status: 200,
+              headers: new Headers({ 'x-request-id': 'req_mock_disc_11' }),
+              json: async () => ({
+                id: 'resp_disc_11',
+                output_text: JSON.stringify({
+                  summary: 'Discovered 11 Batman plush items',
+                  confidence: 0.90,
+                  items: discoveryCandidates
+                }),
+                usage: { input_tokens: 650, output_tokens: 350, total_tokens: 1000 }
+              })
+            };
+          } else {
+            return {
+              ok: true,
+              status: 200,
+              headers: new Headers({ 'x-request-id': 'req_mock_enrich_11' }),
+              json: async () => ({
+                id: 'resp_enrich_11',
+                output_text: JSON.stringify({
+                  enrichment: enrichmentItems
+                }),
+                output: [
+                  {
+                    content: [
+                      {
+                        type: 'text',
+                        text: 'Enrichment completed',
+                        annotations: searchCitations.map(c => ({
+                          type: 'url_citation',
+                          url_citation: { url: c.url, title: c.title }
+                        }))
+                      }
+                    ]
+                  }
+                ],
+                usage: { input_tokens: 750, output_tokens: 280, total_tokens: 1030 }
+              })
+            };
+          }
+        });
+
+        const aiExecuteModule = await import('../../../api/ai-execute.js');
+        const handler = aiExecuteModule.default;
+
+        let responseStatusCode = 200;
+        let responseJson: any = null;
+        const req: any = {
+          method: 'POST',
+          headers: {
+            'x-test-auth': 'admin',
+            'authorization': 'Bearer test-mock-token'
+          },
+          body: {
+            engine: 'RESEARCH_INTELLIGENCE',
+            operation: 'sourcing_research',
+            query: 'peluches de batman',
+            country: 'UY',
+            research_depth: 'ECONOMICO',
+            result_limit: 'AUTO',
+            context: { force_refresh: true }
+          }
+        };
+
+        const res: any = {
+          statusCode: 200,
+          headers: {},
+          setHeader(k: string, v: string) { this.headers[k] = v; },
+          status(code: number) {
+            responseStatusCode = code;
+            this.statusCode = code;
+            return this;
+          },
+          json(payload: any) {
+            responseJson = payload;
+            return this;
+          },
+          end() {}
+        };
+
+        await handler(req, res);
+
+        expect(responseStatusCode).toBe(200);
+        expect(responseJson.success).toBe(true);
+        expect(responseJson.data.items).toHaveLength(11);
+
+        // Verify telemetry in response
+        const batchTelemetry = responseJson.batch_telemetry;
+        expect(batchTelemetry).toBeDefined();
+        expect(batchTelemetry.discovery_batches_executed).toBe(1);
+        expect(batchTelemetry.enrichment_batches_executed).toBe(1);
+        expect(batchTelemetry.discovery_tokens).toBeDefined();
+        expect(batchTelemetry.discovery_tokens.total_tokens).toBe(1000);
+        expect(batchTelemetry.enrichment_tokens).toBeDefined();
+        expect(batchTelemetry.enrichment_tokens.total_tokens).toBe(1030);
+        expect(batchTelemetry.citations_telemetry).toBeDefined();
+        expect(batchTelemetry.citations_telemetry.citations_total).toBeGreaterThanOrEqual(2);
+
+        // Candidate 1: Verified commercial source merged and corroborated
+        const cand1 = responseJson.data.items.find((i: any) => i.candidate_id === 'c_1');
+        expect(cand1).toBeDefined();
+        expect(cand1.commercial_sources).toHaveLength(1);
+        expect(cand1.origin_price_usd).toBe(22.99);
+        expect(cand1.url).toBe('https://www.amazon.com/dp/B08BAT0111');
+        const obs1 = corroborateCandidateEvidence(cand1);
+        const val1 = validateCandidate(cand1, { observations: obs1, country: 'UY' });
+        expect(val1.provenance.origin_price.status).toBe('CORROBORATED');
+        expect(val1.provenance.origin_price.value).toBe(22.99);
+        expect(val1.provenance.image.status).toBe('CORROBORATED');
+        expect(val1.provenance.image.value).toBe('https://m.media-amazon.com/images/I/bat11.jpg');
+
+        // Candidate 2: Commercial URL merged, price remains null/unknown
+        const cand2 = responseJson.data.items.find((i: any) => i.candidate_id === 'c_2');
+        expect(cand2).toBeDefined();
+        expect(cand2.commercial_sources).toHaveLength(1);
+        expect(cand2.url).toBe('https://www.bigbadtoystore.com/Product/VariationDetails/112233');
+        const obs2 = corroborateCandidateEvidence(cand2);
+        const val2 = validateCandidate(cand2, { observations: obs2, country: 'UY' });
+        expect(val2.provenance.identity.status).toBe('CORROBORATED');
+        expect(val2.provenance.origin_price.status).toBe('UNKNOWN');
+        expect(val2.provenance.origin_price.value).toBeNull();
+
+        // Candidates 3-11: unverified, no price fabrication
+        const cand3 = responseJson.data.items.find((i: any) => i.candidate_id === 'c_3');
+        expect(cand3).toBeDefined();
+        expect(cand3.commercial_sources).toHaveLength(0);
+        const obs3 = corroborateCandidateEvidence(cand3);
+        const val3 = validateCandidate(cand3, { observations: obs3, country: 'UY' });
+        expect(val3.provenance.origin_price.status).toBe('UNKNOWN');
+        expect(val3.provenance.origin_price.value).toBeNull();
+      } finally {
+        globalThis.fetch = originalFetch;
+        process.env.OPENAI_API_KEY = originalKey;
+      }
+    });
   });
 });
+

@@ -4,12 +4,12 @@ import { sameProductTitle, normalizeSearchText } from '../../shared/sourcingProd
 export { sameProductTitle, normalizeSearchText } from '../../shared/sourcingProductIdentity.js';
 
 // Verification never fetches arbitrary model/client hosts. Unknown domains stay UNKNOWN.
-const PRODUCT_HOSTS = ['amazon.com', 'amazon.co.uk', 'amazon.ca', 'ebay.com', 'bestbuy.com', 'walmart.com', 'target.com',
+export const PRODUCT_HOSTS = ['amazon.com', 'amazon.co.uk', 'amazon.ca', 'ebay.com', 'bestbuy.com', 'walmart.com', 'target.com',
   'mcfarlane.com', 'mcfarlanetoysstore.com', 'hasbropulse.com', 'necaonline.com', 'store.necaonline.com', 'bandai.com', 'tamashiiweb.com',
   'mattel.com', 'shop.mattel.com', 'bigbadtoystore.com', 'entertainmentearth.com', 'sideshow.com', 'hottopic.com', 'lego.com', 'pokemoncenter.com',
   'funko.com', 'youtooz.com', 'sanrio.com', 'basicfun.com', 'spinmaster.com', 'jazwares.com', 'tiendamia.com.uy'];
-const IMAGE_HOSTS = [...PRODUCT_HOSTS, 'media-amazon.com', 'ssl-images-amazon.com', 'scene7.com', 'cdn.shopify.com', 'images.squarespace-cdn.com', 'shopify.com', 'cloudfront.net', 'walmartimages.com', 'necaonline.com'];
-const allowed = (url, hosts) => {
+export const IMAGE_HOSTS = [...PRODUCT_HOSTS, 'media-amazon.com', 'ssl-images-amazon.com', 'scene7.com', 'cdn.shopify.com', 'images.squarespace-cdn.com', 'shopify.com', 'cloudfront.net', 'walmartimages.com', 'necaonline.com'];
+export const allowed = (url, hosts) => {
   const clean = publicUrl(url);
   if (!clean) return false;
   const u = new URL(clean);
@@ -215,27 +215,25 @@ export function associateSourcesToCandidates(items = [], globalSources = []) {
           continue; // Ambiguous citation rejected
         }
 
-        const isCommercial = ['OFFICIAL', 'RETAILER', 'MARKETPLACE'].includes(srcType);
+        const isCommercial = ['OFFICIAL', 'RETAILER', 'MARKETPLACE'].includes(srcType) && allowed(srcUrl, PRODUCT_HOSTS);
         if (isCommercial) {
           if (!commercialSources.some(cs => cs.product_url === srcUrl)) {
             commercialSources.push({
               retailer: src.retailer || src.domain || 'Retailer',
               product_url: srcUrl,
-              price: finiteNumber(src.price) ?? finiteNumber(item.origin_price_usd) ?? null,
-              currency: src.currency || 'USD',
-              image_url: publicUrl(src.image_url) || null,
+              price: null,
+              currency: 'USD',
+              image_url: null,
               identifier: srcAsin || null,
               identifier_type: srcAsin ? 'ASIN' : null,
               source_type: srcType
             });
           }
-          // If candidate had an editorial primary URL, upgrade primary URL to commercial source
-          if ((!item.url || !allowed(item.url, PRODUCT_HOSTS)) && allowed(srcUrl, PRODUCT_HOSTS)) {
+          // If candidate had an editorial primary URL, upgrade primary URL to commercial source (URL only)
+          if (!item.url || !allowed(item.url, PRODUCT_HOSTS)) {
             enriched.url = srcUrl;
             enriched.retailer = src.domain || 'Retailer';
             if (srcAsin && !enriched.asin) enriched.asin = srcAsin;
-            if (src.image_url && !enriched.image_url) enriched.image_url = src.image_url;
-            if (finiteNumber(src.price) && !finiteNumber(enriched.origin_price_usd)) enriched.origin_price_usd = Number(src.price);
           }
         } else {
           if (!discoverySources.some(ds => ds.url === srcUrl)) {

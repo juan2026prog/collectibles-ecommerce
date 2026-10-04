@@ -447,13 +447,27 @@ Instrucciones de enriquecimiento:
    - identifier: ASIN de Amazon, UPC, EAN o SKU oficial si está disponible
    - identifier_type: "ASIN" | "UPC" | "EAN" | "SKU" | null
    - evidence: fragmento que sustenta el precio y disponibilidad
-4. Si un producto NO tiene ficha comercial verificable en tiendas oficiales o retailers permitidos, devuelve commercial_sources: [].
+4. REGLA OBLIGATORIA DE CANDIDATOS: El array "enrichment" DEBE contener EXACTAMENTE UN OBJETO POR CADA CANDIDATO listado arriba (${candidates.length} elementos en total).
+   - NUNCA omitas ningún candidate_id.
+   - Si no encuentras ficha comercial verificable en tiendas oficiales o retailers permitidos para un candidato, incluye el candidato obligatoriamente con "commercial_sources": [].
 5. Devuelve ÚNICAMENTE un JSON compacto con la siguiente estructura:
-{"enrichment":[{"candidate_id":"c_1","commercial_sources":[{"retailer":string,"product_url":string,"price":number_or_null,"currency":"USD","image_url":string_or_null,"identifier":string_or_null,"identifier_type":string_or_null,"evidence":string}]}]}`;
+{"enrichment":[{"candidate_id":"c_1","title":"título exacto","commercial_sources":[{"retailer":string,"product_url":string,"price":number_or_null,"currency":"USD","image_url":string_or_null,"identifier":string_or_null,"identifier_type":string_or_null,"evidence":string}]}]}`;
 }
 
-export function parseCommercialEnrichmentItems(outputText) {
-  if (!outputText || typeof outputText !== 'string') return [];
+export function parseCommercialEnrichmentItems(outputText, expectedCandidateIds = []) {
+  const result = [];
+  result.status = 'EMPTY_VALID_ENRICHMENT';
+  result.rawOutputLength = typeof outputText === 'string' ? outputText.length : 0;
+  result.expectedCount = Array.isArray(expectedCandidateIds) ? expectedCandidateIds.length : 0;
+  result.returnedIds = [];
+  result.missingIds = [];
+
+  if (!outputText || typeof outputText !== 'string' || !outputText.trim()) {
+    result.status = 'EMPTY_INPUT';
+    result.missingIds = [...expectedCandidateIds];
+    return result;
+  }
+
   let structured = null;
   const clean = outputText.trim().replace(/^\`\`\`(?:json)?/i, '').replace(/\`\`\`$/i, '').trim();
   try {
@@ -481,19 +495,74 @@ export function parseCommercialEnrichmentItems(outputText) {
     } catch {}
   }
 
-  if (!structured) return [];
+  // Fallback: If model returned an object with candidate_ids as keys e.g. {"c_1": {...}}
+  if (!structured && clean.startsWith('{')) {
+    try {
+      const genericObj = JSON.parse(clean);
+      if (genericObj && typeof genericObj === 'object' && !Array.isArray(genericObj)) {
+        const keys = Object.keys(genericObj);
+        if (keys.some(k => k.startsWith('c_'))) {
+          structured = {
+            enrichment: keys.filter(k => k.startsWith('c_')).map(k => ({
+              candidate_id: k,
+              ...(typeof genericObj[k] === 'object' ? genericObj[k] : {})
+            }))
+          };
+        }
+      }
+    } catch {}
+  }
 
-  const list = Array.isArray(structured) 
-    ? structured 
-    : (Array.isArray(structured.enrichment) 
-      ? structured.enrichment 
-      : (Array.isArray(structured.items) ? structured.items : []));
+  if (!structured) {
+    result.status = 'INVALID_JSON';
+    result.missingIds = [...expectedCandidateIds];
+    return result;
+  }
 
-  return list.map(item => ({
-    candidate_id: item.candidate_id || item.id || null,
-    title: item.title || null,
-    commercial_sources: Array.isArray(item.commercial_sources) ? item.commercial_sources : (item.product_url ? [item] : [])
-  })).filter(e => Boolean(e.candidate_id || e.title));
+  let list = null;
+  if (Array.isArray(structured)) {
+    list = structured;
+  } else if (Array.isArray(structured.enrichment)) {
+    list = structured.enrichment;
+  } else if (Array.isArray(structured.items)) {
+    list = structured.items;
+  } else {
+    result.status = 'SCHEMA_MISMATCH';
+    result.missingIds = [...expectedCandidateIds];
+    return result;
+  }
+
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    const cid = item.candidate_id || item.id || null;
+    const title = item.title || null;
+    const sources = Array.isArray(item.commercial_sources) ? item.commercial_sources : (item.product_url ? [item] : []);
+
+    if (cid || title) {
+      if (cid) {
+        result.returnedIds.push(String(cid).trim().toLowerCase());
+      }
+      result.push({
+        candidate_id: cid,
+        title,
+        commercial_sources: sources
+      });
+    }
+  }
+
+  // Detect missing candidate IDs
+  if (Array.isArray(expectedCandidateIds) && expectedCandidateIds.length > 0) {
+    const returnedSet = new Set(result.returnedIds);
+    result.missingIds = expectedCandidateIds.filter(expectedId => !returnedSet.has(String(expectedId).trim().toLowerCase()));
+  }
+
+  if (result.length > 0) {
+    result.status = (result.missingIds.length > 0) ? 'PARTIAL_ENRICHMENT' : 'VALID_ENRICHMENT';
+  } else {
+    result.status = 'EMPTY_VALID_ENRICHMENT';
+  }
+
+  return result;
 }
 
 /**

@@ -587,6 +587,10 @@ async function executeHandler(req, res) {
       let accumulatedSubtrends = new Set();
       let discoveryStopReason = 'COMPLETED';
       let discoveryBatchesExecuted = 0;
+      let discoveryUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+      let discoveryPricing = { estimated_cost_usd: 0 };
+      let enrichmentUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+      let enrichmentPricing = { estimated_cost_usd: 0 };
 
       console.info(`[RESEARCH_TRACE] PHASE_1_DISCOVERY_STARTED`, {
         request_id: requestId,
@@ -667,6 +671,11 @@ async function executeHandler(req, res) {
         result = batchResult;
 
         // Accumulate tokens and pricing
+        discoveryUsage.inputTokens += (batchResult.usage?.inputTokens || 0);
+        discoveryUsage.outputTokens += (batchResult.usage?.outputTokens || 0);
+        discoveryUsage.totalTokens += (batchResult.usage?.totalTokens || 0);
+        discoveryPricing.estimated_cost_usd = Number((discoveryPricing.estimated_cost_usd + (batchResult.pricing?.estimated_cost_usd || 0)).toFixed(6));
+
         totalUsage.inputTokens += (batchResult.usage?.inputTokens || 0);
         totalUsage.outputTokens += (batchResult.usage?.outputTokens || 0);
         totalUsage.totalTokens += (batchResult.usage?.totalTokens || 0);
@@ -792,6 +801,11 @@ async function executeHandler(req, res) {
           enrichmentBatchesExecuted++;
           finalRequestId = enrichResult.requestId || finalRequestId;
 
+          enrichmentUsage.inputTokens += (enrichResult.usage?.inputTokens || 0);
+          enrichmentUsage.outputTokens += (enrichResult.usage?.outputTokens || 0);
+          enrichmentUsage.totalTokens += (enrichResult.usage?.totalTokens || 0);
+          enrichmentPricing.estimated_cost_usd = Number((enrichmentPricing.estimated_cost_usd + (enrichResult.pricing?.estimated_cost_usd || 0)).toFixed(6));
+
           totalUsage.inputTokens += (enrichResult.usage?.inputTokens || 0);
           totalUsage.outputTokens += (enrichResult.usage?.outputTokens || 0);
           totalUsage.totalTokens += (enrichResult.usage?.totalTokens || 0);
@@ -804,9 +818,10 @@ async function executeHandler(req, res) {
             allSources.push(...enrichResult.sources);
           }
 
+          const expectedIds = chunk.map((c, i) => c.candidate_id || `c_${eBatch.startIndex + i + 1}`);
           let parsedEnrichment = [];
           try {
-            parsedEnrichment = parseCommercialEnrichmentItems(enrichResult.outputText);
+            parsedEnrichment = parseCommercialEnrichmentItems(enrichResult.outputText, expectedIds);
           } catch (parseEnrichErr) {
             console.warn('[RESEARCH_WARN] ENRICHMENT_PARSE_ERROR', parseEnrichErr.message);
           }
@@ -815,8 +830,12 @@ async function executeHandler(req, res) {
           console.info('[RESEARCH_SERVER_TRACE] ENRICHMENT_BATCH_RECEIVED', {
             request_id: finalRequestId,
             enrichment_batch: eIdx + 1,
+            parser_status: parsedEnrichment.status || 'UNKNOWN',
+            expected_count: parsedEnrichment.expectedCount ?? expectedIds.length,
             parsed_enrichment_count: parsedEnrichment.length,
+            missing_ids: parsedEnrichment.missingIds || [],
             commercial_sources_found: parsedEnrichment.reduce((acc, p) => acc + (p.commercial_sources?.length || 0), 0),
+            citations_total: Array.isArray(enrichResult.sources) ? enrichResult.sources.length : 0,
             batch_cost_usd: enrichResult.pricing?.estimated_cost_usd
           });
 
@@ -837,7 +856,24 @@ async function executeHandler(req, res) {
         } catch (mergeErr) {
           console.warn('[RESEARCH_WARN] ENRICHMENT_MERGE_ERROR', mergeErr.message);
         }
+
+        // Safe Fallback: Associate global web search citations to candidates without fabricating price/image/id
+        try {
+          accumulatedDiscoveries = associateSourcesToCandidates(accumulatedDiscoveries, allSources);
+        } catch (assocErr) {
+          console.warn('[RESEARCH_WARN] CITATION_ASSOCIATION_ERROR', assocErr.message);
+        }
       }
+
+      // Compute citation classification telemetry across all batches
+      const citationStats = (allSources || []).reduce((acc, s) => {
+        const t = classifyDomain(s.url);
+        acc.total++;
+        if (t === 'RETAILER' || t === 'MARKETPLACE' || t === 'OFFICIAL') acc.authorized_domain++;
+        else if (t === 'EDITORIAL') acc.editorial++;
+        else acc.other++;
+        return acc;
+      }, { total: 0, authorized_domain: 0, editorial: 0, other: 0 });
 
       batchExecutionTelemetry = {
         result_limit: effectiveResultLimit,
@@ -847,7 +883,25 @@ async function executeHandler(req, res) {
         discovery_stop_reason: discoveryStopReason,
         enrichment_batches_executed: enrichmentBatchesExecuted,
         total_batches_executed: discoveryBatchesExecuted + enrichmentBatchesExecuted,
-        stop_reason: discoveryStopReason
+        stop_reason: discoveryStopReason,
+        citations_telemetry: {
+          citations_total: citationStats.total,
+          citations_authorized_domain: citationStats.authorized_domain,
+          citations_editorial: citationStats.editorial,
+          citations_other: citationStats.other
+        },
+        discovery_tokens: {
+          input_tokens: discoveryUsage.inputTokens,
+          output_tokens: discoveryUsage.outputTokens,
+          total_tokens: discoveryUsage.totalTokens,
+          cost_usd: discoveryPricing.estimated_cost_usd
+        },
+        enrichment_tokens: {
+          input_tokens: enrichmentUsage.inputTokens,
+          output_tokens: enrichmentUsage.outputTokens,
+          total_tokens: enrichmentUsage.totalTokens,
+          cost_usd: enrichmentPricing.estimated_cost_usd
+        }
       };
 
       parsedContainerType = 'items';
