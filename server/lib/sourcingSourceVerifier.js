@@ -9,7 +9,7 @@ export const PRODUCT_HOSTS = ['amazon.com', 'amazon.co.uk', 'amazon.ca', 'ebay.c
   'mattel.com', 'shop.mattel.com', 'bigbadtoystore.com', 'entertainmentearth.com', 'sideshow.com', 'hottopic.com', 'lego.com', 'pokemoncenter.com',
   'funko.com', 'youtooz.com', 'sanrio.com', 'basicfun.com', 'spinmaster.com', 'jazwares.com', 'tiendamia.com.uy',
   'steiff.com', 'shop.steiff.com', 'ty.com', 'squishmallows.com', 'jakks.com', 'kidrobot.com', 'gund.com'];
-export const IMAGE_HOSTS = [...PRODUCT_HOSTS, 'media-amazon.com', 'ssl-images-amazon.com', 'scene7.com', 'cdn.shopify.com', 'images.squarespace-cdn.com', 'shopify.com', 'cloudfront.net', 'walmartimages.com', 'necaonline.com'];
+export const IMAGE_HOSTS = [...PRODUCT_HOSTS, 'media-amazon.com', 'ssl-images-amazon.com', 'images-na.ssl-images-amazon.com', 'scene7.com', 'cdn.shopify.com', 'images.squarespace-cdn.com', 'shopify.com', 'cloudfront.net', 'walmartimages.com', 'necaonline.com'];
 export const allowed = (url, hosts) => {
   const clean = publicUrl(url);
   if (!clean) return false;

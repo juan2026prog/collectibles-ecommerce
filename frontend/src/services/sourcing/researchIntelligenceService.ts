@@ -16,6 +16,7 @@ import { TrendEngine } from './trendEngine';
 import { manualCandidates } from './canonicalCandidateValidation';
 import { calculateInternationalPricing } from '../../lib/internationalPricing';
 import { checkTiendamiaByAsin } from './tiendamiaMatchingService';
+import { resolveZincProductsForCandidates } from './zincProductResolver';
 import type {
   SourcingResearchQueryRequest,
   SourcingResearchResponse,
@@ -225,9 +226,26 @@ export class ResearchIntelligenceService {
       isAiResultArray: Array.isArray(aiResult)
     });
 
-    const candidates: SourcingProductCandidate[] = Array.isArray(aiResult?.canonical_candidates)
+    let candidates: SourcingProductCandidate[] = Array.isArray(aiResult?.canonical_candidates)
       ? aiResult.canonical_candidates
       : manualCandidates(rawItems, country);
+
+    // 5. Enriquecimiento Visual y Comercial Canónico vía Zinc Product Resolver
+    // Reutiliza la misma capacidad de búsqueda e imágenes de "Productos para Importar"
+    try {
+      if (candidates.length > 0) {
+        const { resolvedCandidates, telemetry } = await resolveZincProductsForCandidates(candidates);
+        candidates = resolvedCandidates;
+        console.log('[FRONTEND_RESEARCH_TRACE]', {
+          step: 'ZINC_RESOLUTION_COMPLETED',
+          candidatesCount: candidates.length,
+          telemetry
+        });
+      }
+    } catch (zincErr: any) {
+      console.warn('[FRONTEND_RESEARCH_WARN] ZINC_RESOLUTION_ERROR', zincErr.message);
+    }
+
     // Query/citation counts do not establish product demand or momentum.
     mainTrendCard.market_trend_score = candidates.length ? Math.max(...candidates.map(c => c.trend_score)) : 0;
     mainTrendCard.collectibles_trend_score = 0;
