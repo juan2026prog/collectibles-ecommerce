@@ -491,8 +491,9 @@ export function parseCommercialEnrichmentItems(outputText) {
 
   return list.map(item => ({
     candidate_id: item.candidate_id || item.id || null,
+    title: item.title || null,
     commercial_sources: Array.isArray(item.commercial_sources) ? item.commercial_sources : (item.product_url ? [item] : [])
-  })).filter(e => Boolean(e.candidate_id));
+  })).filter(e => Boolean(e.candidate_id || e.title));
 }
 
 /**

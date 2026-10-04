@@ -1,7 +1,7 @@
 import { validateCandidate, deduplicateCanonicalCandidates, extractAmazonAsin, publicUrl, provenance, finiteNumber } from '../../shared/sourcingCandidateValidation.js';
 import { parseTiendamiaResponse } from '../../shared/sourcingMarketPresence.js';
-import { sameProductTitle } from '../../shared/sourcingProductIdentity.js';
-export { sameProductTitle } from '../../shared/sourcingProductIdentity.js';
+import { sameProductTitle, normalizeSearchText } from '../../shared/sourcingProductIdentity.js';
+export { sameProductTitle, normalizeSearchText } from '../../shared/sourcingProductIdentity.js';
 
 // Verification never fetches arbitrary model/client hosts. Unknown domains stay UNKNOWN.
 const PRODUCT_HOSTS = ['amazon.com', 'amazon.co.uk', 'amazon.ca', 'ebay.com', 'bestbuy.com', 'walmart.com', 'target.com',
@@ -272,72 +272,167 @@ export function associateSourcesToCandidates(items = [], globalSources = []) {
  * candidate_id matches are merged, but all sources/images/prices still pass canonical validation & corroboration.
  */
 export function mergeCommercialEnrichment(candidates = [], enrichmentItems = []) {
-  if (!Array.isArray(candidates) || candidates.length === 0) return [];
-  if (!Array.isArray(enrichmentItems) || enrichmentItems.length === 0) return candidates;
+  const telemetry = {
+    enrichment_items_input: Array.isArray(enrichmentItems) ? enrichmentItems.length : 0,
+    candidate_id_exact_matches: 0,
+    title_fallback_matches: 0,
+    unmatched_enrichment_items: 0,
+    ambiguous_matches: 0,
+    commercial_sources_input: 0,
+    commercial_sources_merged: 0,
+    commercial_sources_rejected: 0,
+    candidate_merge_errors: 0
+  };
 
-  const enrichmentMap = new Map();
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    const res = [];
+    res.telemetry = telemetry;
+    return res;
+  }
+
+  if (!Array.isArray(enrichmentItems) || enrichmentItems.length === 0) {
+    const res = [...candidates];
+    res.telemetry = telemetry;
+    return res;
+  }
+
+  // Count total commercial sources in input
   for (const item of enrichmentItems) {
-    if (item.candidate_id) {
-      enrichmentMap.set(String(item.candidate_id).trim().toLowerCase(), item);
+    if (Array.isArray(item.commercial_sources)) {
+      telemetry.commercial_sources_input += item.commercial_sources.length;
     }
   }
 
-  return candidates.map((cand, idx) => {
-    const candId = String(cand.candidate_id || `c_${idx + 1}`).trim().toLowerCase();
-    const enrichment = enrichmentMap.get(candId) || 
-      enrichmentItems.find(e => e.candidate_id === candId || (e.title && cand.title && normalizeSearchText(e.title) === normalizeSearchText(cand.title)));
+  // Index enrichment items by exact candidate_id
+  const enrichmentByCandId = new Map();
+  for (const item of enrichmentItems) {
+    if (item.candidate_id) {
+      enrichmentByCandId.set(String(item.candidate_id).trim().toLowerCase(), item);
+    }
+  }
 
-    if (!enrichment || !Array.isArray(enrichment.commercial_sources) || enrichment.commercial_sources.length === 0) {
+  // Build title index for fallback, checking for ambiguous/duplicate titles
+  const enrichmentByTitle = new Map();
+  const ambiguousEnrichmentTitles = new Set();
+
+  for (const item of enrichmentItems) {
+    if (item.title) {
+      const normTitle = normalizeSearchText(item.title);
+      if (normTitle) {
+        if (enrichmentByTitle.has(normTitle)) {
+          ambiguousEnrichmentTitles.add(normTitle);
+        } else {
+          enrichmentByTitle.set(normTitle, item);
+        }
+      }
+    }
+  }
+
+  // Build candidate title index to detect candidate-side title ambiguities
+  const candidateTitlesCount = new Map();
+  for (const cand of candidates) {
+    if (cand && cand.title) {
+      const norm = normalizeSearchText(cand.title);
+      if (norm) {
+        candidateTitlesCount.set(norm, (candidateTitlesCount.get(norm) || 0) + 1);
+      }
+    }
+  }
+
+  const matchedEnrichmentItems = new Set();
+
+  const mergedList = candidates.map((cand, idx) => {
+    try {
+      if (!cand || typeof cand !== 'object') {
+        telemetry.candidate_merge_errors += 1;
+        return cand;
+      }
+      const candId = String(cand.candidate_id || `c_${idx + 1}`).trim().toLowerCase();
+      let enrichment = enrichmentByCandId.get(candId);
+
+      if (enrichment) {
+        telemetry.candidate_id_exact_matches += 1;
+        matchedEnrichmentItems.add(enrichment);
+      } else if (cand.title) {
+        const normCandTitle = normalizeSearchText(cand.title);
+        if (normCandTitle) {
+          // If candidate title appears multiple times among candidates or enrichment items, it is ambiguous
+          if ((candidateTitlesCount.get(normCandTitle) || 0) > 1 || ambiguousEnrichmentTitles.has(normCandTitle)) {
+            telemetry.ambiguous_matches += 1;
+          } else {
+            const fallbackItem = enrichmentByTitle.get(normCandTitle);
+            if (fallbackItem) {
+              enrichment = fallbackItem;
+              telemetry.title_fallback_matches += 1;
+              matchedEnrichmentItems.add(fallbackItem);
+            }
+          }
+        }
+      }
+
+      if (!enrichment || !Array.isArray(enrichment.commercial_sources) || enrichment.commercial_sources.length === 0) {
+        return cand;
+      }
+
+      const merged = { ...cand };
+      const existingCommercial = Array.isArray(merged.commercial_sources) ? [...merged.commercial_sources] : [];
+
+      for (const src of enrichment.commercial_sources) {
+        const srcUrl = publicUrl(src.product_url || src.url);
+        if (!srcUrl) {
+          telemetry.commercial_sources_rejected += 1;
+          continue;
+        }
+
+        const srcAsin = extractAmazonAsin(srcUrl) || (src.identifier_type === 'ASIN' ? src.identifier : null);
+        const srcType = classifySourceDomain(srcUrl);
+
+        const entry = {
+          retailer: src.retailer || (srcUrl ? new URL(srcUrl).hostname.replace(/^www\./, '') : 'Retailer'),
+          product_url: srcUrl,
+          price: finiteNumber(src.price) ?? null,
+          currency: src.currency || 'USD',
+          image_url: publicUrl(src.image_url) || null,
+          identifier: srcAsin || src.identifier || null,
+          identifier_type: srcAsin ? 'ASIN' : (src.identifier_type || null),
+          evidence: src.evidence || null,
+          source_type: srcType
+        };
+
+        if (!existingCommercial.some(e => e.product_url === srcUrl)) {
+          existingCommercial.push(entry);
+          telemetry.commercial_sources_merged += 1;
+        }
+
+        // Upgrade primary candidate fields if this source is an allowed commercial product host
+        if (allowed(srcUrl, PRODUCT_HOSTS)) {
+          if (!merged.url || !allowed(merged.url, PRODUCT_HOSTS)) {
+            merged.url = srcUrl;
+            merged.retailer = entry.retailer;
+          }
+          if (srcAsin && !merged.asin) {
+            merged.asin = srcAsin;
+          }
+          if (entry.image_url && (!merged.image_url || !allowed(merged.image_url, IMAGE_HOSTS))) {
+            merged.image_url = entry.image_url;
+          }
+          if (entry.price !== null && !finiteNumber(merged.origin_price_usd)) {
+            merged.origin_price_usd = entry.price;
+          }
+        }
+      }
+
+      merged.commercial_sources = existingCommercial;
+      return merged;
+    } catch (candErr) {
+      telemetry.candidate_merge_errors += 1;
       return cand;
     }
-
-    const merged = { ...cand };
-    const existingCommercial = Array.isArray(merged.commercial_sources) ? [...merged.commercial_sources] : [];
-
-    for (const src of enrichment.commercial_sources) {
-      const srcUrl = publicUrl(src.product_url || src.url);
-      if (!srcUrl) continue;
-
-      const srcAsin = extractAmazonAsin(srcUrl) || (src.identifier_type === 'ASIN' ? src.identifier : null);
-      const srcType = classifySourceDomain(srcUrl);
-
-      const entry = {
-        retailer: src.retailer || (srcUrl ? new URL(srcUrl).hostname.replace(/^www\./, '') : 'Retailer'),
-        product_url: srcUrl,
-        price: finiteNumber(src.price) ?? null,
-        currency: src.currency || 'USD',
-        image_url: publicUrl(src.image_url) || null,
-        identifier: srcAsin || src.identifier || null,
-        identifier_type: srcAsin ? 'ASIN' : (src.identifier_type || null),
-        evidence: src.evidence || null,
-        source_type: srcType
-      };
-
-      if (!existingCommercial.some(e => e.product_url === srcUrl)) {
-        existingCommercial.push(entry);
-      }
-
-      // Upgrade primary candidate fields if this source is an allowed commercial product host
-      if (allowed(srcUrl, PRODUCT_HOSTS)) {
-        if (!merged.url || !allowed(merged.url, PRODUCT_HOSTS)) {
-          merged.url = srcUrl;
-          merged.retailer = entry.retailer;
-        }
-        if (srcAsin && !merged.asin) {
-          merged.asin = srcAsin;
-        }
-        if (entry.image_url && (!merged.image_url || !allowed(merged.image_url, IMAGE_HOSTS))) {
-          merged.image_url = entry.image_url;
-        }
-        if (entry.price !== null && !finiteNumber(merged.origin_price_usd)) {
-          merged.origin_price_usd = entry.price;
-        }
-      }
-    }
-
-    merged.commercial_sources = existingCommercial;
-    return merged;
   });
+
+  telemetry.unmatched_enrichment_items = enrichmentItems.length - matchedEnrichmentItems.size;
+  mergedList.telemetry = telemetry;
+  return mergedList;
 }
 
 export function corroborateCandidateEvidence(raw, { observations = [], rejectedFields = new Set(), now = new Date().toISOString() } = {}) {

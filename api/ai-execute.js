@@ -828,6 +828,12 @@ async function executeHandler(req, res) {
         // Merge commercial enrichment items into discoveries
         try {
           accumulatedDiscoveries = mergeCommercialEnrichment(accumulatedDiscoveries, allEnrichmentItems);
+          if (accumulatedDiscoveries.telemetry) {
+            console.info('[RESEARCH_SERVER_TRACE] ENRICHMENT_MERGE_COMPLETED', {
+              request_id: finalRequestId,
+              ...accumulatedDiscoveries.telemetry
+            });
+          }
         } catch (mergeErr) {
           console.warn('[RESEARCH_WARN] ENRICHMENT_MERGE_ERROR', mergeErr.message);
         }
