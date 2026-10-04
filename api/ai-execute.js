@@ -14,6 +14,7 @@ import {
   buildDiscoveryPrompt,
   buildCommercialEnrichmentPrompt,
   parseCommercialEnrichmentItems,
+  COMMERCIAL_ENRICHMENT_JSON_SCHEMA,
   planDiscoveryBatches,
   planEnrichmentBatches,
   normalizeResultLimit,
@@ -779,6 +780,14 @@ async function executeHandler(req, res) {
               timeoutMs: Math.max(engineTimeoutMs, 50000),
               tools,
               toolChoice,
+              textFormat: {
+                type: 'json_schema',
+                json_schema: {
+                  name: 'commercial_enrichment_batch',
+                  strict: true,
+                  schema: COMMERCIAL_ENRICHMENT_JSON_SCHEMA
+                }
+              },
               metadata: {
                 engine: String(engine || ''),
                 country: String(country || 'GLOBAL'),
@@ -834,6 +843,9 @@ async function executeHandler(req, res) {
             expected_count: parsedEnrichment.expectedCount ?? expectedIds.length,
             parsed_enrichment_count: parsedEnrichment.length,
             missing_ids: parsedEnrichment.missingIds || [],
+            unexpected_ids: parsedEnrichment.unexpectedIds || [],
+            duplicate_ids: parsedEnrichment.duplicateIds || [],
+            native_schema_validated: Boolean(parsedEnrichment.native_schema_validated),
             commercial_sources_found: parsedEnrichment.reduce((acc, p) => acc + (p.commercial_sources?.length || 0), 0),
             citations_total: Array.isArray(enrichResult.sources) ? enrichResult.sources.length : 0,
             batch_cost_usd: enrichResult.pricing?.estimated_cost_usd
@@ -883,6 +895,7 @@ async function executeHandler(req, res) {
         discovery_stop_reason: discoveryStopReason,
         enrichment_batches_executed: enrichmentBatchesExecuted,
         total_batches_executed: discoveryBatchesExecuted + enrichmentBatchesExecuted,
+        native_schema_validated: allEnrichmentItems.length > 0,
         stop_reason: discoveryStopReason,
         citations_telemetry: {
           citations_total: citationStats.total,

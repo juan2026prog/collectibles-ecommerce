@@ -167,7 +167,8 @@ export async function callOpenAIResponses(options = {}) {
     instructions,
     tools,
     toolChoice,
-    metadata
+    metadata,
+    textFormat
   } = options;
 
   const apiKey = process.env.OPENAI_API_KEY;
@@ -198,6 +199,13 @@ export async function callOpenAIResponses(options = {}) {
       input,
       store: false
     };
+
+    // Support Responses API native structured output format: text: { format: { type: "json_schema", json_schema: { ... } } }
+    if (textFormat && typeof textFormat === 'object') {
+      requestBody.text = {
+        format: textFormat
+      };
+    }
 
     // GPT-5.6 Responses models reject the temperature parameter.
     // Keep it only for model families that explicitly support it.

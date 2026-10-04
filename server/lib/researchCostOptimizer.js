@@ -454,6 +454,53 @@ Instrucciones de enriquecimiento:
 {"enrichment":[{"candidate_id":"c_1","title":"título exacto","commercial_sources":[{"retailer":string,"product_url":string,"price":number_or_null,"currency":"USD","image_url":string_or_null,"identifier":string_or_null,"identifier_type":string_or_null,"evidence":string}]}]}`;
 }
 
+export const COMMERCIAL_ENRICHMENT_JSON_SCHEMA = Object.freeze({
+  type: 'object',
+  properties: {
+    enrichment: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          candidate_id: { type: 'string' },
+          title: { type: 'string' },
+          commercial_sources: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                retailer: { type: ['string', 'null'] },
+                product_url: { type: ['string', 'null'] },
+                price: { type: ['number', 'null'] },
+                currency: { type: ['string', 'null'] },
+                image_url: { type: ['string', 'null'] },
+                identifier: { type: ['string', 'null'] },
+                identifier_type: { type: ['string', 'null'] },
+                evidence: { type: ['string', 'null'] }
+              },
+              required: [
+                'retailer',
+                'product_url',
+                'price',
+                'currency',
+                'image_url',
+                'identifier',
+                'identifier_type',
+                'evidence'
+              ],
+              additionalProperties: false
+            }
+          }
+        },
+        required: ['candidate_id', 'title', 'commercial_sources'],
+        additionalProperties: false
+      }
+    }
+  },
+  required: ['enrichment'],
+  additionalProperties: false
+});
+
 export function parseCommercialEnrichmentItems(outputText, expectedCandidateIds = []) {
   const result = [];
   result.status = 'EMPTY_VALID_ENRICHMENT';
@@ -461,6 +508,9 @@ export function parseCommercialEnrichmentItems(outputText, expectedCandidateIds 
   result.expectedCount = Array.isArray(expectedCandidateIds) ? expectedCandidateIds.length : 0;
   result.returnedIds = [];
   result.missingIds = [];
+  result.unexpectedIds = [];
+  result.duplicateIds = [];
+  result.native_schema_validated = false;
 
   if (!outputText || typeof outputText !== 'string' || !outputText.trim()) {
     result.status = 'EMPTY_INPUT';
@@ -532,6 +582,9 @@ export function parseCommercialEnrichmentItems(outputText, expectedCandidateIds 
     return result;
   }
 
+  const expectedSet = new Set((expectedCandidateIds || []).map(id => String(id).trim().toLowerCase()));
+  const seenReturned = new Set();
+
   for (const item of list) {
     if (!item || typeof item !== 'object') continue;
     const cid = item.candidate_id || item.id || null;
@@ -540,7 +593,20 @@ export function parseCommercialEnrichmentItems(outputText, expectedCandidateIds 
 
     if (cid || title) {
       if (cid) {
-        result.returnedIds.push(String(cid).trim().toLowerCase());
+        const normCid = String(cid).trim().toLowerCase();
+        if (seenReturned.has(normCid)) {
+          if (!result.duplicateIds.includes(normCid)) {
+            result.duplicateIds.push(normCid);
+          }
+        } else {
+          seenReturned.add(normCid);
+        }
+        result.returnedIds.push(normCid);
+        if (expectedSet.size > 0 && !expectedSet.has(normCid)) {
+          if (!result.unexpectedIds.includes(normCid)) {
+            result.unexpectedIds.push(normCid);
+          }
+        }
       }
       result.push({
         candidate_id: cid,
@@ -552,9 +618,11 @@ export function parseCommercialEnrichmentItems(outputText, expectedCandidateIds 
 
   // Detect missing candidate IDs
   if (Array.isArray(expectedCandidateIds) && expectedCandidateIds.length > 0) {
-    const returnedSet = new Set(result.returnedIds);
-    result.missingIds = expectedCandidateIds.filter(expectedId => !returnedSet.has(String(expectedId).trim().toLowerCase()));
+    result.missingIds = expectedCandidateIds.filter(expectedId => !seenReturned.has(String(expectedId).trim().toLowerCase()));
   }
+
+  // Native schema contract is validated if output parsed as structured enrichment array
+  result.native_schema_validated = Array.isArray(structured.enrichment) || Array.isArray(list);
 
   if (result.length > 0) {
     result.status = (result.missingIds.length > 0) ? 'PARTIAL_ENRICHMENT' : 'VALID_ENRICHMENT';

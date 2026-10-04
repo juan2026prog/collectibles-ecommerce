@@ -217,13 +217,14 @@ export function associateSourcesToCandidates(items = [], globalSources = []) {
 
         const isCommercial = ['OFFICIAL', 'RETAILER', 'MARKETPLACE'].includes(srcType) && allowed(srcUrl, PRODUCT_HOSTS);
         if (isCommercial) {
+          const srcImg = (src.image_url && allowed(src.image_url, IMAGE_HOSTS)) ? src.image_url : null;
           if (!commercialSources.some(cs => cs.product_url === srcUrl)) {
             commercialSources.push({
               retailer: src.retailer || src.domain || 'Retailer',
               product_url: srcUrl,
               price: null,
               currency: 'USD',
-              image_url: null,
+              image_url: srcImg,
               identifier: srcAsin || null,
               identifier_type: srcAsin ? 'ASIN' : null,
               source_type: srcType
