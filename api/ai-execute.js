@@ -11,15 +11,18 @@ import {
   resolveResearchMode, 
   generateResearchCacheKey, 
   normalizeQuery, 
-  buildOptimizedResearchPrompt,
+  buildDiscoveryPrompt,
+  buildCommercialEnrichmentPrompt,
+  parseCommercialEnrichmentItems,
   calculatePreFlightEstimate,
-  planResearchBatches,
+  planDiscoveryBatches,
+  planEnrichmentBatches,
   normalizeResultLimit,
   deduplicateResearchCandidates
 } from '../server/lib/researchCostOptimizer.js';
 import { validateRequestedModel } from '../server/lib/openaiPricing.js';
 import { authenticateRequest, acquireInFlightLock } from '../server/lib/authGuard.js';
-import { validateCandidateBatch, associateSourcesToCandidates } from '../server/lib/sourcingSourceVerifier.js';
+import { validateCandidateBatch, associateSourcesToCandidates, mergeCommercialEnrichment } from '../server/lib/sourcingSourceVerifier.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -546,243 +549,17 @@ async function executeHandler(req, res) {
 
     // [RESEARCH_SERVER_TRACE] — Cache key and request params
     if (isSourcingResearch) {
-      console.info('[RESEARCH_SERVER_TRACE] REQUEST_PARAMS', {
-        request_id: requestId,
-        clean_query: cleanSearchQuery || '(none)',
-        resolved_input_preview: (resolvedInput || '').slice(0, 80),
-        effective_result_limit: effectiveResultLimit,
-        effective_depth: modeConfig.key,
-        effective_time_scope: effectiveTimeScope,
-        effective_product_family: effectiveProductFamily,
-        max_candidates: modeConfig.maxCandidates,
-        max_output_tokens: modeConfig.maxOutputTokens,
-        cache_key: researchCacheKey,
-        force_refresh: context?.force_refresh,
-        is_web_search: isWebSearchNeeded
-      });
-    }
-
-    if (isSourcingResearch && client && context?.force_refresh !== true && context?.certification !== true) {
-      try {
-        const { data: cachedResearch } = await safeDbQuery(
-          client
-            .from('sourcing_research_cache')
-            .select('*')
-            .eq('cache_key', researchCacheKey)
-            .gt('expires_at', new Date().toISOString())
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-        );
-
-        if (cachedResearch) {
-          const cachedData = {
-            summary: cachedResearch.summary,
-            confidence: Number(cachedResearch.confidence || 0.85),
-            subtrends: cachedResearch.subtrends || [],
-            items: cachedResearch.items || []
-          };
-          // [RESEARCH_SERVER_TRACE] — L1 cache hit
-          console.info('[RESEARCH_SERVER_TRACE] L1_CACHE_HIT', {
-            request_id: requestId,
-            cache_key: researchCacheKey,
-            cached_item_count: Array.isArray(cachedData.items) ? cachedData.items.length : 0,
-            cache_created_at: cachedResearch.created_at,
-            cache_expires_at: cachedResearch.expires_at,
-            source: 'sourcing_research_cache'
-          });
-          const cachedElapsed = 1;
-          return res.status(200).json({
-            success: true,
-            status: 'SUCCESS',
-            provider: 'OPENAI',
-            model: cachedResearch.model || modeConfig.model,
-            cached: true,
-            text: JSON.stringify(cachedData),
-            data: cachedData,
-            sources: cachedResearch.sources || [],
-            request_id: `cached_${cachedResearch.cache_key?.slice(0, 12) || Date.now()}`,
-            latency_ms: cachedElapsed,
-            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-            pricing: {
-              model: cachedResearch.model || modeConfig.model,
-              input_tokens: 0,
-              output_tokens: 0,
-              total_tokens: 0,
-              input_cost_usd: 0,
-              output_cost_usd: 0,
-              estimated_cost_usd: 0,
-              pricing_status: 'PRICED',
-              pricing_source: 'SOURCING_RESEARCH_CACHE'
-            }
-          });
-        }
-
-        // [RESEARCH_SERVER_TRACE] — L1 cache miss
-        console.info('[RESEARCH_SERVER_TRACE] L1_CACHE_MISS', {
-          request_id: requestId,
-          cache_key: researchCacheKey
-        });
-
-        // Secondary cache lookup in ai_intelligence_runs
-        const { data: cachedRun } = await client
-          .from('ai_intelligence_runs')
-          .select('*')
-          .eq('evidence_fingerprint', researchCacheKey)
-          .eq('status', 'SUCCESS')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (cachedRun && cachedRun.metadata) {
-          const cachedData = {
-            summary: cachedRun.summary,
-            confidence: Number(cachedRun.confidence || 0.85),
-            subtrends: cachedRun.signals || [],
-            items: cachedRun.metadata.items || []
-          };
-          // [RESEARCH_SERVER_TRACE] — L2 cache hit
-          console.info('[RESEARCH_SERVER_TRACE] L2_CACHE_HIT', {
-            request_id: requestId,
-            cache_key: researchCacheKey,
-            cached_item_count: Array.isArray(cachedData.items) ? cachedData.items.length : 0,
-            run_created_at: cachedRun.created_at,
-            source: 'ai_intelligence_runs'
-          });
-          return res.status(200).json({
-            success: true,
-            status: 'SUCCESS',
-            provider: 'OPENAI',
-            model: cachedRun.model || modeConfig.model,
-            cached: true,
-            text: JSON.stringify(cachedData),
-            data: cachedData,
-            sources: cachedRun.metadata.sources || [],
-            request_id: `cached_${cachedRun.request_id || Date.now()}`,
-            latency_ms: 1,
-            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-            pricing: {
-              model: cachedRun.model || modeConfig.model,
-              input_tokens: 0,
-              output_tokens: 0,
-              total_tokens: 0,
-              input_cost_usd: 0,
-              output_cost_usd: 0,
-              estimated_cost_usd: 0,
-              pricing_status: 'PRICED',
-              pricing_source: 'INTELLIGENCE_RUNS_CACHE'
-            }
-          });
-        }
-
-        // [RESEARCH_SERVER_TRACE] — L2 cache miss → will call OpenAI
-        console.info('[RESEARCH_SERVER_TRACE] L2_CACHE_MISS_PROCEEDING_TO_OPENAI', {
-          request_id: requestId,
-          cache_key: researchCacheKey
-        });
-      } catch (cacheErr) {
-        console.warn('[AI Execute] Sourcing research cache lookup skipped:', cacheErr.message);
-      }
-    }
-
-    // 2b. Fingerprint Cache Lookup for Advisory Analysis
-    if (isStructuredAdvisoryEngine && client && context?.force_refresh !== true && context?.certification !== true) {
-      try {
-        const cacheTtlHours = 2;
-        const cacheCutoff = new Date(Date.now() - (cacheTtlHours * 3600 * 1000)).toISOString();
-        const { data: cachedRun } = await client
-          .from('ai_intelligence_runs')
-          .select('*')
-          .eq('evidence_fingerprint', evidenceFingerprint)
-          .eq('engine', engine)
-          .eq('status', 'SUCCESS')
-          .gte('created_at', cacheCutoff)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (cachedRun) {
-          return res.status(200).json({
-            success: true,
-            status: 'SUCCESS',
-            provider: 'OPENAI',
-            model: cachedRun.model,
-            cached: true,
-            data: {
-              summary: cachedRun.summary,
-              confidence: cachedRun.confidence,
-              scoreAdjustment: cachedRun.score_adjustment,
-              action: cachedRun.advisory_action,
-              signals: cachedRun.signals,
-              risks: cachedRun.risks,
-              recommendations: cachedRun.recommendations,
-              evidenceIds: cachedRun.evidence_ids
-            },
-            request_id: cachedRun.request_id,
-            latency_ms: 1,
-            usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
-            pricing: {
-              model: cachedRun.model,
-              input_tokens: 0,
-              output_tokens: 0,
-              total_tokens: 0,
-              input_cost_usd: 0,
-              output_cost_usd: 0,
-              estimated_cost_usd: 0,
-              pricing_status: 'PRICED',
-              pricing_source: 'EVIDENCE_FINGERPRINT_CACHE'
-            }
-          });
-        }
-      } catch (cacheErr) {
-        console.warn('[AI Execute] Fingerprint cache lookup skipped:', cacheErr.message);
-      }
-    }
-
-    const resolvedInstructions = isSourcingResearch 
-      ? buildOptimizedResearchPrompt(cleanSearchQuery || resolvedInput, country, modeConfig, effectiveTimeScope, effectiveProductFamily)
-      : instructionsFor(engine, operation);
-
-    const tools = isWebSearchNeeded ? [{ type: 'web_search' }] : undefined;
-    const toolChoice = isWebSearchNeeded ? (modeConfig.key === 'PROFUNDO' ? 'required' : 'auto') : undefined;
-
-    let result = null;
-    let structuredData = null;
-    let parsedContainerType = 'NONE';
-    let rawCandidateCount = 0;
-    let intelligenceRunStatus = 'SUCCESS';
-    let finalRequestId = requestId;
-    let allSources = [];
-    let totalUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
-    let totalPricing = {
-      model: selectedModel,
-      input_tokens: 0,
-      output_tokens: 0,
-      total_tokens: 0,
-      input_cost_usd: 0,
-      output_cost_usd: 0,
-      estimated_cost_usd: 0,
-      pricing_status: 'PRICED',
-      pricing_source: 'CENTRAL_REGISTRY'
-    };
-    let batchExecutionTelemetry = {
-      result_limit: effectiveResultLimit,
-      batches_planned: 1,
-      batches_executed: 0,
-      stop_reason: 'COMPLETED'
-    };
-
-    if (isSourcingResearch) {
-      const batchPlan = planResearchBatches(effectiveResultLimit, modeConfig);
-      batchExecutionTelemetry.batches_planned = batchPlan.batchCount;
-      const targetCount = batchPlan.targetCount;
-      let accumulatedCandidates = [];
+      const discoveryPlan = planDiscoveryBatches(effectiveResultLimit, modeConfig);
+      const targetCount = discoveryPlan.targetCount;
+      const minTarget = discoveryPlan.minimumUsefulTarget;
+      let accumulatedDiscoveries = [];
       let lastSummary = 'Investigación comercial completada.';
       let lastConfidence = 0.85;
       let accumulatedSubtrends = new Set();
-      let stopReason = 'COMPLETED';
+      let discoveryStopReason = 'COMPLETED';
+      let discoveryBatchesExecuted = 0;
 
-      console.info(`[RESEARCH_TRACE] BATCH_PLAN_STARTED`, {
+      console.info(`[RESEARCH_TRACE] PHASE_1_DISCOVERY_STARTED`, {
         request_id: requestId,
         query: cleanSearchQuery || resolvedInput,
         target_country: country || 'GLOBAL',
@@ -790,15 +567,23 @@ async function executeHandler(req, res) {
         time_scope: effectiveTimeScope,
         research_depth: modeConfig.key,
         result_limit: effectiveResultLimit,
-        batches_planned: batchPlan.batchCount,
-        target_count: targetCount
+        target_count: targetCount,
+        min_target: minTarget,
+        max_batches: discoveryPlan.maxBatches
       });
 
-      for (let bIdx = 0; bIdx < batchPlan.batches.length; bIdx++) {
-        const batch = batchPlan.batches[bIdx];
-        const excludeTitles = accumulatedCandidates.map(c => c.title).filter(Boolean);
+      // PHASE 1: DISCOVERY BATCHES
+      for (let bIdx = 0; bIdx < discoveryPlan.batches.length; bIdx++) {
+        const batch = discoveryPlan.batches[bIdx];
+        const excludeTitles = accumulatedDiscoveries.map(c => c.title).filter(Boolean);
 
-        const batchInstructions = buildOptimizedResearchPrompt(
+        // If batch 2 and batch 1 already got >= minTarget (e.g. >= 8 for AUTO), don't run batch 2
+        if (bIdx > 0 && accumulatedDiscoveries.length >= minTarget) {
+          discoveryStopReason = 'MINIMUM_TARGET_SATISFIED';
+          break;
+        }
+
+        const batchInstructions = buildDiscoveryPrompt(
           cleanSearchQuery || resolvedInput,
           country,
           modeConfig,
@@ -807,16 +592,14 @@ async function executeHandler(req, res) {
           effectiveResultLimit,
           {
             batchIndex: bIdx + 1,
-            totalBatches: batchPlan.batchCount,
             targetCount: batch.targetCount,
             excludeTitles
           }
         );
 
-        console.info(`[RESEARCH_TRACE] OPENAI_BATCH_REQUEST_STARTED`, {
+        console.info(`[RESEARCH_TRACE] DISCOVERY_BATCH_REQUEST_STARTED`, {
           request_id: requestId,
           batch_index: bIdx + 1,
-          total_batches: batchPlan.batchCount,
           target_count: batch.targetCount,
           exclude_count: excludeTitles.length
         });
@@ -835,103 +618,177 @@ async function executeHandler(req, res) {
             country: String(country || 'GLOBAL'),
             operation: String(operation || 'execute'),
             research_depth: modeConfig.key,
+            research_phase: 'DISCOVERY',
             batch_index: String(bIdx + 1),
-            total_batches: String(batchPlan.batchCount),
             result_limit: String(effectiveResultLimit)
           }
         });
 
-        batchExecutionTelemetry.batches_executed++;
+        discoveryBatchesExecuted++;
         finalRequestId = batchResult.requestId || finalRequestId;
-        result = batchResult; // Keep last for responseId etc.
+        result = batchResult;
 
         // Accumulate tokens and pricing
         totalUsage.inputTokens += (batchResult.usage?.inputTokens || 0);
         totalUsage.outputTokens += (batchResult.usage?.outputTokens || 0);
         totalUsage.totalTokens += (batchResult.usage?.totalTokens || 0);
 
-        totalPricing.input_tokens += (batchResult.pricing?.input_tokens || 0);
-        totalPricing.output_tokens += (batchResult.pricing?.output_tokens || 0);
-        totalPricing.total_tokens += (batchResult.pricing?.total_tokens || 0);
         totalPricing.input_cost_usd = Number((totalPricing.input_cost_usd + (batchResult.pricing?.input_cost_usd || 0)).toFixed(6));
         totalPricing.output_cost_usd = Number((totalPricing.output_cost_usd + (batchResult.pricing?.output_cost_usd || 0)).toFixed(6));
         totalPricing.estimated_cost_usd = Number((totalPricing.estimated_cost_usd + (batchResult.pricing?.estimated_cost_usd || 0)).toFixed(6));
 
-        // Accumulate sources
         if (Array.isArray(batchResult.sources)) {
           allSources.push(...batchResult.sources);
         }
 
-        // Parse items from this batch
         const parsedBatch = parseSourcingItems(batchResult.outputText);
         if (parsedBatch.summary) lastSummary = parsedBatch.summary;
         if (parsedBatch.confidence) lastConfidence = parsedBatch.confidence;
         (parsedBatch.subtrends || []).forEach(st => accumulatedSubtrends.add(st));
 
         rawCandidateCount += parsedBatch.items.length;
-        const prevCount = accumulatedCandidates.length;
-        accumulatedCandidates = deduplicateResearchCandidates(accumulatedCandidates, parsedBatch.items);
-        const newUniquesInBatch = accumulatedCandidates.length - prevCount;
+        const prevCount = accumulatedDiscoveries.length;
+        accumulatedDiscoveries = deduplicateResearchCandidates(accumulatedDiscoveries, parsedBatch.items);
+        const newUniquesInBatch = accumulatedDiscoveries.length - prevCount;
 
-        // [RESEARCH_SERVER_TRACE] — Detailed batch breakdown
-        console.info('[RESEARCH_SERVER_TRACE] BATCH_BREAKDOWN', {
+        console.info('[RESEARCH_SERVER_TRACE] DISCOVERY_BATCH_BREAKDOWN', {
           request_id: finalRequestId,
           batch_number: bIdx + 1,
           batch_target: batch.targetCount,
-          batch_max_output_tokens: batch.maxOutputTokens || dynamicMaxTokens,
-          openai_status: batchResult.status || 'unknown',
-          openai_incomplete_reason: batchResult.incompleteReason || batchResult.incomplete_reason || null,
-          openai_output_tokens: batchResult.usage?.outputTokens || 0,
-          openai_input_tokens: batchResult.usage?.inputTokens || 0,
-          raw_output_length: (batchResult.outputText || '').length,
-          raw_output_preview: (batchResult.outputText || '').slice(0, 200),
           raw_items_detected: parsedBatch.items.length,
-          parsed_items: parsedBatch.items.length,
           before_dedupe: prevCount,
-          after_dedupe: accumulatedCandidates.length,
+          after_dedupe: accumulatedDiscoveries.length,
           new_uniques_in_batch: newUniquesInBatch,
-          accumulated_total: accumulatedCandidates.length,
+          accumulated_total: accumulatedDiscoveries.length,
           batch_cost_usd: batchResult.pricing?.estimated_cost_usd
         });
 
-        console.info(`[RESEARCH_TRACE] OPENAI_BATCH_RESPONSE_RECEIVED`, {
-          request_id: finalRequestId,
-          batch_index: bIdx + 1,
-          items_in_batch: parsedBatch.items.length,
-          new_uniques: newUniquesInBatch,
-          total_accumulated: accumulatedCandidates.length,
-          batch_tokens: batchResult.usage?.totalTokens,
-          batch_cost_usd: batchResult.pricing?.estimated_cost_usd
-        });
-
-        // Early Stop condition 1: Target limit reached
-        if (accumulatedCandidates.length >= targetCount) {
-          stopReason = 'LIMIT_REACHED';
-          accumulatedCandidates = accumulatedCandidates.slice(0, targetCount);
+        // If target limit reached, stop discovery
+        if (accumulatedDiscoveries.length >= targetCount) {
+          discoveryStopReason = 'LIMIT_REACHED';
+          accumulatedDiscoveries = accumulatedDiscoveries.slice(0, targetCount);
           break;
         }
 
-        // Early Stop condition 2: No more unique candidates found in this batch (saturation)
-        if (bIdx > 0 && newUniquesInBatch === 0 && parsedBatch.items.length > 0) {
-          stopReason = 'SATURATION_NO_NEW_CANDIDATES';
+        // If no new candidates found in batch 2
+        if (bIdx > 0 && newUniquesInBatch === 0) {
+          discoveryStopReason = 'SATURATION_NO_NEW_CANDIDATES';
           break;
         }
 
-        // Early Stop condition 3: Budget check before next batch
-        if (bIdx < batchPlan.batches.length - 1 && totalPricing.estimated_cost_usd >= 0.08) {
-          stopReason = 'BUDGET_CAP_REACHED';
+        // Budget safety
+        if (totalPricing.estimated_cost_usd >= 0.08) {
+          discoveryStopReason = 'BUDGET_CAP_REACHED';
           break;
         }
       }
 
-      batchExecutionTelemetry.stop_reason = stopReason;
+      // Assign candidate_ids to accumulated discoveries
+      accumulatedDiscoveries = accumulatedDiscoveries.map((c, i) => ({
+        ...c,
+        candidate_id: c.candidate_id || `c_${i + 1}`
+      }));
+
+      // PHASE 2: COMMERCIAL ENRICHMENT BATCHES (Grouped by <= 15 items)
+      let enrichmentBatchesExecuted = 0;
+      let allEnrichmentItems = [];
+
+      if (accumulatedDiscoveries.length > 0 && isWebSearchNeeded) {
+        const enrichmentPlan = planEnrichmentBatches(accumulatedDiscoveries.length, modeConfig);
+
+        console.info(`[RESEARCH_TRACE] PHASE_2_COMMERCIAL_ENRICHMENT_STARTED`, {
+          request_id: finalRequestId,
+          candidates_to_enrich: accumulatedDiscoveries.length,
+          enrichment_batches_planned: enrichmentPlan.batchCount
+        });
+
+        for (let eIdx = 0; eIdx < enrichmentPlan.batches.length; eIdx++) {
+          const eBatch = enrichmentPlan.batches[eIdx];
+          const chunk = accumulatedDiscoveries.slice(eBatch.startIndex, eBatch.endIndex);
+
+          const enrichmentPrompt = buildCommercialEnrichmentPrompt(chunk, country, modeConfig);
+
+          console.info(`[RESEARCH_TRACE] ENRICHMENT_BATCH_REQUEST_STARTED`, {
+            request_id: finalRequestId,
+            enrichment_batch_index: eIdx + 1,
+            total_enrichment_batches: enrichmentPlan.batchCount,
+            candidates_in_chunk: chunk.length
+          });
+
+          const enrichResult = await callOpenAIResponses({
+            model: selectedModel,
+            input: `Verificar fichas comerciales para lote ${eIdx + 1}`,
+            instructions: enrichmentPrompt,
+            temperature: 0.2,
+            maxTokens: eBatch.maxOutputTokens || 2000,
+            timeoutMs: Math.max(engineTimeoutMs, 50000),
+            tools,
+            toolChoice,
+            metadata: {
+              engine: String(engine || ''),
+              country: String(country || 'GLOBAL'),
+              operation: String(operation || 'execute'),
+              research_depth: modeConfig.key,
+              research_phase: 'COMMERCIAL_ENRICHMENT',
+              enrichment_batch: String(eIdx + 1),
+              total_enrichment_batches: String(enrichmentPlan.batchCount)
+            }
+          });
+
+          enrichmentBatchesExecuted++;
+          finalRequestId = enrichResult.requestId || finalRequestId;
+
+          totalUsage.inputTokens += (enrichResult.usage?.inputTokens || 0);
+          totalUsage.outputTokens += (enrichResult.usage?.outputTokens || 0);
+          totalUsage.totalTokens += (enrichResult.usage?.totalTokens || 0);
+
+          totalPricing.input_cost_usd = Number((totalPricing.input_cost_usd + (enrichResult.pricing?.input_cost_usd || 0)).toFixed(6));
+          totalPricing.output_cost_usd = Number((totalPricing.output_cost_usd + (enrichResult.pricing?.output_cost_usd || 0)).toFixed(6));
+          totalPricing.estimated_cost_usd = Number((totalPricing.estimated_cost_usd + (enrichResult.pricing?.estimated_cost_usd || 0)).toFixed(6));
+
+          if (Array.isArray(enrichResult.sources)) {
+            allSources.push(...enrichResult.sources);
+          }
+
+          const parsedEnrichment = parseCommercialEnrichmentItems(enrichResult.outputText);
+          allEnrichmentItems.push(...parsedEnrichment);
+
+          console.info('[RESEARCH_SERVER_TRACE] ENRICHMENT_BATCH_RECEIVED', {
+            request_id: finalRequestId,
+            enrichment_batch: eIdx + 1,
+            parsed_enrichment_count: parsedEnrichment.length,
+            commercial_sources_found: parsedEnrichment.reduce((acc, p) => acc + (p.commercial_sources?.length || 0), 0),
+            batch_cost_usd: enrichResult.pricing?.estimated_cost_usd
+          });
+
+          if (totalPricing.estimated_cost_usd >= 0.09) {
+            break;
+          }
+        }
+
+        // Merge commercial enrichment items into discoveries
+        accumulatedDiscoveries = mergeCommercialEnrichment(accumulatedDiscoveries, allEnrichmentItems);
+      }
+
+      batchExecutionTelemetry = {
+        result_limit: effectiveResultLimit,
+        target_count: targetCount,
+        discovery_batches_planned: discoveryPlan.maxBatches,
+        discovery_batches_executed: discoveryBatchesExecuted,
+        discovery_stop_reason: discoveryStopReason,
+        enrichment_batches_executed: enrichmentBatchesExecuted,
+        total_batches_executed: discoveryBatchesExecuted + enrichmentBatchesExecuted,
+        stop_reason: discoveryStopReason
+      };
+
       parsedContainerType = 'items';
       structuredData = {
         summary: lastSummary,
         confidence: lastConfidence,
         subtrends: Array.from(accumulatedSubtrends),
-        items: accumulatedCandidates
+        items: accumulatedDiscoveries
       };
+    }
     } else {
       // Non-sourcing single-call advisory engines
       const resolvedInstructions = instructionsFor(engine, operation);

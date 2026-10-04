@@ -266,6 +266,80 @@ export function associateSourcesToCandidates(items = [], globalSources = []) {
   });
 }
 
+/**
+ * Merges Phase 2 Commercial Enrichment results into Phase 1 Discovered Candidates
+ * Preserves strict anti-synthetic validation invariants:
+ * candidate_id matches are merged, but all sources/images/prices still pass canonical validation & corroboration.
+ */
+export function mergeCommercialEnrichment(candidates = [], enrichmentItems = []) {
+  if (!Array.isArray(candidates) || candidates.length === 0) return [];
+  if (!Array.isArray(enrichmentItems) || enrichmentItems.length === 0) return candidates;
+
+  const enrichmentMap = new Map();
+  for (const item of enrichmentItems) {
+    if (item.candidate_id) {
+      enrichmentMap.set(String(item.candidate_id).trim().toLowerCase(), item);
+    }
+  }
+
+  return candidates.map((cand, idx) => {
+    const candId = String(cand.candidate_id || `c_${idx + 1}`).trim().toLowerCase();
+    const enrichment = enrichmentMap.get(candId) || 
+      enrichmentItems.find(e => e.candidate_id === candId || (e.title && cand.title && normalizeSearchText(e.title) === normalizeSearchText(cand.title)));
+
+    if (!enrichment || !Array.isArray(enrichment.commercial_sources) || enrichment.commercial_sources.length === 0) {
+      return cand;
+    }
+
+    const merged = { ...cand };
+    const existingCommercial = Array.isArray(merged.commercial_sources) ? [...merged.commercial_sources] : [];
+
+    for (const src of enrichment.commercial_sources) {
+      const srcUrl = publicUrl(src.product_url || src.url);
+      if (!srcUrl) continue;
+
+      const srcAsin = extractAmazonAsin(srcUrl) || (src.identifier_type === 'ASIN' ? src.identifier : null);
+      const srcType = classifySourceDomain(srcUrl);
+
+      const entry = {
+        retailer: src.retailer || (srcUrl ? new URL(srcUrl).hostname.replace(/^www\./, '') : 'Retailer'),
+        product_url: srcUrl,
+        price: finiteNumber(src.price) ?? null,
+        currency: src.currency || 'USD',
+        image_url: publicUrl(src.image_url) || null,
+        identifier: srcAsin || src.identifier || null,
+        identifier_type: srcAsin ? 'ASIN' : (src.identifier_type || null),
+        evidence: src.evidence || null,
+        source_type: srcType
+      };
+
+      if (!existingCommercial.some(e => e.product_url === srcUrl)) {
+        existingCommercial.push(entry);
+      }
+
+      // Upgrade primary candidate fields if this source is an allowed commercial product host
+      if (allowed(srcUrl, PRODUCT_HOSTS)) {
+        if (!merged.url || !allowed(merged.url, PRODUCT_HOSTS)) {
+          merged.url = srcUrl;
+          merged.retailer = entry.retailer;
+        }
+        if (srcAsin && !merged.asin) {
+          merged.asin = srcAsin;
+        }
+        if (entry.image_url && (!merged.image_url || !allowed(merged.image_url, IMAGE_HOSTS))) {
+          merged.image_url = entry.image_url;
+        }
+        if (entry.price !== null && !finiteNumber(merged.origin_price_usd)) {
+          merged.origin_price_usd = entry.price;
+        }
+      }
+    }
+
+    merged.commercial_sources = existingCommercial;
+    return merged;
+  });
+}
+
 export function corroborateCandidateEvidence(raw, { observations = [], rejectedFields = new Set(), now = new Date().toISOString() } = {}) {
   const result = [...observations];
   const isRejected = field => rejectedFields instanceof Set ? rejectedFields.has(field) : Array.isArray(rejectedFields) ? rejectedFields.includes(field) : false;

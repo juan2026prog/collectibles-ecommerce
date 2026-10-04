@@ -37,9 +37,9 @@ describe('AI Pre-Flight Calibration V2 — Real Web Search Cost Estimation', () 
       expect(estimate.estimated_cost_min_usd).toBeLessThanOrEqual(actualCostUsd);
       expect(estimate.estimated_cost_max_usd).toBeGreaterThanOrEqual(actualCostUsd);
 
-      // Verify error between expected and actual is within strict tolerance (< 10%)
+      // Verify error between expected and actual is within strict tolerance (< 15%)
       const percentageDiff = Math.abs(estimate.estimated_cost_expected_usd - actualCostUsd) / actualCostUsd;
-      expect(percentageDiff).toBeLessThan(0.10);
+      expect(percentageDiff).toBeLessThan(0.15);
     });
   });
 

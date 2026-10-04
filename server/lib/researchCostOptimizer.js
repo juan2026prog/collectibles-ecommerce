@@ -199,63 +199,104 @@ export function normalizeResultLimit(limitInput) {
   return 'AUTO';
 }
 
-export function planResearchBatches(resultLimit, modeConfig = RESEARCH_MODES.ECONOMICO) {
+export function planDiscoveryBatches(resultLimit, modeConfig = RESEARCH_MODES.ECONOMICO) {
   const normLimit = normalizeResultLimit(resultLimit);
   if (normLimit === 'AUTO') {
-    // Default safe limit: 15 products in 1 batch for ECONOMICO, 8 for ESTANDAR, 15 for PROFUNDO
-    const limitNum = modeConfig.maxCandidates || 15;
+    // AUTO(15): Target ideal up to 15, minimum useful target = 8.
+    // At most 2 batches: batch 1 aims for 15. If batch 1 yields < 8, batch 2 executes aiming for remaining.
     return {
       resultLimit: 'AUTO',
-      targetCount: limitNum,
+      targetCount: 15,
+      minimumUsefulTarget: 8,
       batchCount: 1,
-      batchSize: limitNum,
-      batches: [{ batchIndex: 1, targetCount: limitNum, maxOutputTokens: modeConfig.maxOutputTokens || 1200 }]
+      maxBatches: 2,
+      batchSize: 15,
+      batches: [
+        { batchIndex: 1, targetCount: 15, maxOutputTokens: modeConfig.maxOutputTokens || 1200 },
+        { batchIndex: 2, targetCount: 10, maxOutputTokens: 1000 }
+      ]
     };
   }
 
   const targetCount = Number(normLimit);
-  // Batch sizing: For 10 -> 1 batch of 10
-  // For 25 -> 2 batches (15, 10) or 2 batches of 15
-  // For 50 -> 3 batches (20, 20, 15)
-  // For 100 -> 5 batches (20, 20, 20, 20, 20)
-  let batchCount = 1;
+  let maxBatches = 1;
+  let minimumUsefulTarget = targetCount;
   let batches = [];
 
   if (targetCount === 10) {
-    batchCount = 1;
-    batches = [{ batchIndex: 1, targetCount: 10, maxOutputTokens: 900 }];
+    maxBatches = 1;
+    minimumUsefulTarget = 6;
+    batches = [{ batchIndex: 1, targetCount: 10, maxOutputTokens: 1200 }];
   } else if (targetCount === 25) {
-    batchCount = 2;
+    maxBatches = 2;
+    minimumUsefulTarget = 15;
     batches = [
-      { batchIndex: 1, targetCount: 15, maxOutputTokens: 1200 },
-      { batchIndex: 2, targetCount: 10, maxOutputTokens: 900 }
+      { batchIndex: 1, targetCount: 15, maxOutputTokens: 1500 },
+      { batchIndex: 2, targetCount: 10, maxOutputTokens: 1200 }
     ];
   } else if (targetCount === 50) {
-    batchCount = 3;
+    maxBatches = 3;
+    minimumUsefulTarget = 30;
     batches = [
-      { batchIndex: 1, targetCount: 20, maxOutputTokens: 1500 },
-      { batchIndex: 2, targetCount: 20, maxOutputTokens: 1500 },
-      { batchIndex: 3, targetCount: 15, maxOutputTokens: 1200 }
+      { batchIndex: 1, targetCount: 20, maxOutputTokens: 1800 },
+      { batchIndex: 2, targetCount: 20, maxOutputTokens: 1800 },
+      { batchIndex: 3, targetCount: 15, maxOutputTokens: 1500 }
     ];
   } else if (targetCount === 100) {
-    batchCount = 5;
+    maxBatches = 5;
+    minimumUsefulTarget = 60;
     batches = [
-      { batchIndex: 1, targetCount: 20, maxOutputTokens: 1500 },
-      { batchIndex: 2, targetCount: 20, maxOutputTokens: 1500 },
-      { batchIndex: 3, targetCount: 20, maxOutputTokens: 1500 },
-      { batchIndex: 4, targetCount: 20, maxOutputTokens: 1500 },
-      { batchIndex: 5, targetCount: 20, maxOutputTokens: 1500 }
+      { batchIndex: 1, targetCount: 20, maxOutputTokens: 1800 },
+      { batchIndex: 2, targetCount: 20, maxOutputTokens: 1800 },
+      { batchIndex: 3, targetCount: 20, maxOutputTokens: 1800 },
+      { batchIndex: 4, targetCount: 20, maxOutputTokens: 1800 },
+      { batchIndex: 5, targetCount: 20, maxOutputTokens: 1800 }
     ];
   } else {
-    batchCount = 1;
-    batches = [{ batchIndex: 1, targetCount: targetCount, maxOutputTokens: 1200 }];
+    maxBatches = 1;
+    minimumUsefulTarget = Math.max(1, Math.floor(targetCount * 0.6));
+    batches = [{ batchIndex: 1, targetCount: targetCount, maxOutputTokens: 1500 }];
   }
 
   return {
     resultLimit: normLimit,
     targetCount,
-    batchCount,
+    minimumUsefulTarget,
+    batchCount: maxBatches,
+    maxBatches,
     batchSize: batches[0]?.targetCount || 15,
+    batches
+  };
+}
+
+export function planResearchBatches(resultLimit, modeConfig = RESEARCH_MODES.ECONOMICO) {
+  return planDiscoveryBatches(resultLimit, modeConfig);
+}
+
+export function planEnrichmentBatches(candidateCount, modeConfig = RESEARCH_MODES.ECONOMICO) {
+  const count = Math.max(0, candidateCount || 0);
+  if (count === 0) return { batchCount: 0, batchSize: 15, batches: [] };
+
+  const batchSize = 15;
+  const batchCount = Math.ceil(count / batchSize);
+  const batches = [];
+
+  for (let i = 0; i < batchCount; i++) {
+    const startIdx = i * batchSize;
+    const endIdx = Math.min(count, (i + 1) * batchSize);
+    batches.push({
+      batchIndex: i + 1,
+      startIndex: startIdx,
+      endIndex: endIdx,
+      count: endIdx - startIdx,
+      maxOutputTokens: modeConfig.maxOutputTokens || 2000
+    });
+  }
+
+  return {
+    batchCount,
+    batchSize,
+    totalCandidates: count,
     batches
   };
 }
@@ -304,12 +345,23 @@ export function estimateTokensLocally(text) {
 }
 
 /**
- * Generates compact targeted prompt instructions for web research based on mode
+ * Generates deterministic cache key for commercial enrichment per candidate identity
  */
-export function buildOptimizedResearchPrompt(query, country = 'UY', modeConfig = RESEARCH_MODES.ECONOMICO, timeScope = 'ALL_TIME', productFamily = 'ALL', resultLimit = 'AUTO', batchContext = null) {
+export function generateEnrichmentCacheKey(candidateTitle, brand = '', franchise = '', scope = 'GLOBAL') {
+  const normTitle = normalizeQuery(candidateTitle);
+  const normBrand = normalizeQuery(brand);
+  const normFranchise = normalizeQuery(franchise);
+  const rawKey = `ENRICH|${normTitle}|${normBrand}|${normFranchise}|${scope}`;
+  return crypto.createHash('sha256').update(rawKey).digest('hex');
+}
+
+/**
+ * Generates Phase 1 Discovery prompt instructions
+ */
+export function buildDiscoveryPrompt(query, country = 'UY', modeConfig = RESEARCH_MODES.ECONOMICO, timeScope = 'ALL_TIME', productFamily = 'ALL', resultLimit = 'AUTO', batchContext = null) {
   const currentYear = new Date().getFullYear();
-  const batchPlan = planResearchBatches(resultLimit, modeConfig);
-  const maxItems = batchContext?.targetCount || (resultLimit && resultLimit !== 'AUTO' ? Number(resultLimit) : modeConfig.maxCandidates);
+  const batchPlan = planDiscoveryBatches(resultLimit, modeConfig);
+  const maxItems = batchContext?.targetCount || (resultLimit && resultLimit !== 'AUTO' ? Number(resultLimit) : batchPlan.targetCount);
   const normFamily = normalizeProductFamily(productFamily);
   const familyObj = COLLECTIBLES_PRODUCT_FAMILIES.find(f => f.id === normFamily);
   const familyLabel = familyObj ? familyObj.label : 'Todos';
@@ -333,29 +385,114 @@ export function buildOptimizedResearchPrompt(query, country = 'UY', modeConfig =
     : '';
 
   const batchInstruction = batchContext?.excludeTitles && batchContext.excludeTitles.length > 0
-    ? `\nLote actual: ${batchContext.batchIndex} de ${batchContext.totalBatches}. EXCLUIR los siguientes productos ya descubiertos en lotes anteriores para garantizar diversidad: ${batchContext.excludeTitles.slice(0, 15).join('; ')}.`
+    ? `\nLote adicional (Búsqueda de productos complementarios): EXCLUIR los siguientes ${batchContext.excludeTitles.length} productos ya descubiertos para no duplicar resultados: ${batchContext.excludeTitles.slice(0, 20).join('; ')}.`
     : '';
 
-  return `INVESTIGACIÓN COMERCIAL SOURCING (MODO: ${modeConfig.key}):
+  return `INVESTIGACIÓN COMERCIAL SOURCING — FASE 1: DESCUBRIMIENTO (MODO: ${modeConfig.key}):
 Consulta: "${query}"
 Año actual: ${currentYear}
 Mercado objetivo comercial: ${targetCountryLabel}
-Alcance de descubrimiento: GLOBAL (fabricantes oficiales, retailers internacionales y tiendas globales)
+Alcance de descubrimiento: GLOBAL (fabricantes oficiales, medios especializados, bases de datos de lanzamientos, blogs, retailers globales)
 Ventana temporal: ${timeLabel}
 Familia de producto: ${familyLabel}${familyInstruction}${batchInstruction}
 
-Instrucciones:
-1. Resuelve alias multilingües si la consulta está en español (ej. "ositos cariñosos" -> "Care Bears", "caballeros del zodiaco" -> "Saint Seiya", "tortugas ninja" -> "TMNT / Teenage Mutant Ninja Turtles", etc.) para descubrir coleccionables oficiales existentes en el mercado global.
-2. Identifica hasta ${maxItems} productos oficiales reales y relevantes. Puedes usar fuentes de noticias, blogs (Toyark), Reddit o anuncios para DESCUBRIR productos (discovery_source), pero para cada producto DEBES intentar localizar la ficha comercial exacta (commercial_sources / url) en:
-   - Fabricante/Licenciante oficial (Bandai, Hasbro Pulse, NECA, Good Smile, Funko, LEGO, McFarlane, etc.)
-   - Retailer especializado (BigBadToyStore, Entertainment Earth, etc.)
-   - Retailer global (Amazon con ASIN, Walmart, Target, Best Buy, etc.)
-3. Separa rigurosamente la evidencia:
-   - discovery_source: fuente donde se anunció o descubrió la novedad (ej. Toyark, blog, Reddit).
-   - commercial_sources: tiendas/retailers oficiales donde el producto se vende o reserva con precio real y ficha directa.
-4. NUNCA inventes precios, costos, stock ni URLs de imagen. NUNCA uses un precio de un blog como precio comercial a menos que esté en la ficha de tienda. Si no encuentras ficha comercial verificable, devuelve origin_price_usd: null, image_url: null, asin: null y commercial_sources: []. Incluye image_url únicamente cuando corresponda de forma verificable al producto exacto encontrado en la fuente oficial/retailer.
+Instrucciones de descubrimiento:
+1. Resuelve alias multilingües si la consulta está en español (ej. "ositos cariñosos" -> "Care Bears", "caballeros del zodiaco" -> "Saint Seiya", "tortugas ninja" -> "TMNT / Teenage Mutant Ninja Turtles", "peluches de batman" -> "Batman plush toys", etc.) para descubrir coleccionables oficiales existentes en el mercado global.
+2. Identifica hasta ${maxItems} coleccionables oficiales reales donde cada uno corresponda a un producto exacto. Puedes usar fuentes editoriales, blogs (Toyark, BleedingCool), Reddit, YouTube, foros, o anuncios de fabricantes para DESCUBRIR productos.
+3. Extrae la información básica de identidad de cada producto: título, marca fabricante, franquicia, categoría, variante/edición, tamaño aproximado, si es preventa o novedad, fecha de lanzamiento y enlace de la fuente de descubrimiento (discovery_source).
+4. Asigna a cada producto un candidate_id único incremental (ej. "c_1", "c_2", "c_3"...).
+5. NUNCA inventes productos inexistentes ni datos ficticios. NUNCA inventes precios, costos, stock ni URLs de imagen ("image_url":string_or_null).
+6. Devuelve ÚNICAMENTE un JSON compacto con la siguiente estructura:
+{"summary":string,"confidence":number_0_to_1,"subtrends":string[],"items":[{"candidate_id":string,"title":string,"brand":string,"franchise":string,"category":string,"line":string_or_null,"character":string_or_null,"variant":string_or_null,"size":string_or_null,"image_url":string_or_null,"is_preorder":boolean,"is_new":boolean,"release_date":string_or_null,"evidence_snippet":string,"discovery_source":{"name":string,"url":string_or_null,"type":string}}]}`;
+}
+
+export function buildOptimizedResearchPrompt(query, country = 'UY', modeConfig = RESEARCH_MODES.ECONOMICO, timeScope = 'ALL_TIME', productFamily = 'ALL', resultLimit = 'AUTO', batchContext = null) {
+  return buildDiscoveryPrompt(query, country, modeConfig, timeScope, productFamily, resultLimit, batchContext);
+}
+
+/**
+ * Generates Phase 2 Grouped Commercial Enrichment prompt instructions
+ */
+export function buildCommercialEnrichmentPrompt(candidates = [], country = 'UY', modeConfig = RESEARCH_MODES.ECONOMICO) {
+  const currentYear = new Date().getFullYear();
+  const candidateSummaries = candidates.map((c, i) => {
+    const id = c.candidate_id || `c_${i + 1}`;
+    const brand = c.brand ? ` | Marca: ${c.brand}` : '';
+    const franchise = c.franchise ? ` | Franquicia: ${c.franchise}` : '';
+    const variant = c.variant ? ` | Variante: ${c.variant}` : '';
+    const size = c.size ? ` | Tamaño: ${c.size}` : '';
+    const disc = c.discovery_source?.name ? ` | Descubierto en: ${c.discovery_source.name}` : '';
+    return `[${id}] "${c.title}"${brand}${franchise}${variant}${size}${disc}`;
+  }).join('\n');
+
+  return `INVESTIGACIÓN COMERCIAL SOURCING — FASE 2: ENRIQUECIMIENTO COMERCIAL (MODO: ${modeConfig.key}):
+Año actual: ${currentYear}
+Mercado objetivo: ${country || 'GLOBAL'}
+
+Candidatos descubiertos a verificar en tiendas y retailers:
+${candidateSummaries}
+
+Instrucciones de enriquecimiento:
+1. Para cada uno de los productos listados arriba (identificados con su [candidate_id]), realiza una búsqueda web orientada a tiendas comerciales y retailers oficiales reales para localizar la ficha comercial exacta de venta o preventa en:
+   - Fabricante oficial o Licenciatario (Bandai, Hasbro Pulse, NECA, Good Smile, Funko, LEGO, McFarlane, Mattel, etc.)
+   - Retailer especializado (BigBadToyStore, Entertainment Earth, Sideshow, etc.)
+   - Marketplace / Retailer global (Amazon con ASIN, Walmart, Target, Best Buy, etc.)
+2. NUNCA inventes precios, costos, stock ni URLs de imagen. NUNCA uses un precio de un blog como precio comercial a menos que esté en la ficha de tienda.
+3. Si encuentras la ficha comercial exacta, devuelve:
+   - retailer: nombre del retailer / dominio
+   - product_url: URL directa de la ficha del producto
+   - price: precio de origen en USD (numérico)
+   - currency: "USD"
+   - image_url: URL directa de la imagen oficial del producto en la tienda
+   - identifier: ASIN de Amazon, UPC, EAN o SKU oficial si está disponible
+   - identifier_type: "ASIN" | "UPC" | "EAN" | "SKU" | null
+   - evidence: fragmento que sustenta el precio y disponibilidad
+4. Si un producto NO tiene ficha comercial verificable en tiendas oficiales o retailers permitidos, devuelve commercial_sources: [].
 5. Devuelve ÚNICAMENTE un JSON compacto con la siguiente estructura:
-{"summary":string,"confidence":number_0_to_1,"subtrends":string[],"items":[{"title":string,"brand":string,"franchise":string,"category":string,"origin_price_usd":number_or_null,"image_url":string_or_null,"asin":string_or_null,"url":string_or_null,"retailer":string,"is_preorder":boolean,"is_new":boolean,"release_date":string_or_null,"evidence_snippet":string,"discovery_source":{"name":string,"url":string_or_null,"type":string},"commercial_sources":[{"retailer":string,"product_url":string,"price":number_or_null,"currency":string,"image_url":string_or_null,"identifier":string_or_null,"identifier_type":string}]}]}`;
+{"enrichment":[{"candidate_id":"c_1","commercial_sources":[{"retailer":string,"product_url":string,"price":number_or_null,"currency":"USD","image_url":string_or_null,"identifier":string_or_null,"identifier_type":string_or_null,"evidence":string}]}]}`;
+}
+
+export function parseCommercialEnrichmentItems(outputText) {
+  if (!outputText || typeof outputText !== 'string') return [];
+  let structured = null;
+  const clean = outputText.trim().replace(/^\`\`\`(?:json)?/i, '').replace(/\`\`\`$/i, '').trim();
+  try {
+    structured = JSON.parse(clean);
+  } catch {
+    const match = outputText.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    if (match && match[1]) {
+      try {
+        structured = JSON.parse(match[1].trim());
+      } catch {}
+    }
+  }
+
+  if (!structured) {
+    try {
+      const enrichmentMatch = clean.match(/"enrichment"\s*:\s*\[([\s\S]*)/i);
+      if (enrichmentMatch) {
+        const rawBlock = enrichmentMatch[1];
+        const lastClose = rawBlock.lastIndexOf(']');
+        if (lastClose !== -1) {
+          const validBlock = rawBlock.slice(0, lastClose + 1);
+          structured = { enrichment: JSON.parse(`[${validBlock.replace(/,\s*$/, '')}]`) };
+        }
+      }
+    } catch {}
+  }
+
+  if (!structured) return [];
+
+  const list = Array.isArray(structured) 
+    ? structured 
+    : (Array.isArray(structured.enrichment) 
+      ? structured.enrichment 
+      : (Array.isArray(structured.items) ? structured.items : []));
+
+  return list.map(item => ({
+    candidate_id: item.candidate_id || item.id || null,
+    commercial_sources: Array.isArray(item.commercial_sources) ? item.commercial_sources : (item.product_url ? [item] : [])
+  })).filter(e => Boolean(e.candidate_id));
 }
 
 /**
@@ -377,10 +514,10 @@ export function calculatePreFlightEstimate({
   const effectiveFamily = productFamily !== 'ALL' ? productFamily : (product_family || 'ALL');
   const mode = resolveResearchMode(researchDepth);
   const normLimit = normalizeResultLimit(resultLimit);
-  const batchPlan = planResearchBatches(normLimit, mode);
+  const batchPlan = planDiscoveryBatches(normLimit, mode);
 
-  const prompt = buildOptimizedResearchPrompt(query, country, mode, timeScope, effectiveFamily, normLimit);
-  const basePromptTokens = estimateTokensLocally(prompt);
+  const discoveryPrompt = buildDiscoveryPrompt(query, country, mode, timeScope, effectiveFamily, normLimit);
+  const discoveryPromptTokens = estimateTokensLocally(discoveryPrompt);
   const complexity = analyzeQueryComplexity(query);
 
   // Validate manual model override
@@ -398,36 +535,41 @@ export function calculatePreFlightEstimate({
   const rawInputMaxPerBatch = isWebSearch ? mode.expectedWebInputTokensMax : (mode.noWebInputTokensMax || 1500);
 
   // Output tokens per batch
-  const defaultBatchMax = isWebSearch ? (batchPlan.batches[0]?.maxOutputTokens || mode.maxOutputTokens) : (mode.noWebOutputTokensMax || 750);
-  const singleBatchMaxOutput = defaultBatchMax;
+  const singleBatchMaxOutput = isWebSearch ? (batchPlan.batches[0]?.maxOutputTokens || mode.maxOutputTokens) : (mode.noWebOutputTokensMax || 750);
   const rawOutputMinPerBatch = isWebSearch ? mode.expectedWebOutputTokensMin : (mode.noWebOutputTokensMin || 200);
-  const rawOutputExpectedPerBatch = Math.round(singleBatchMaxOutput * 0.65);
-  const rawOutputMaxPerBatch = singleBatchMaxOutput;
+  const rawOutputExpectedPerBatch = isWebSearch ? (mode.expectedWebOutputTokens || 600) : (mode.noWebOutputTokens || 300);
 
-  // Single batch token calculations
-  const singleBatchInputMin = Math.round(basePromptTokens + rawInputMinPerBatch);
-  const singleBatchInputExpected = Math.round((basePromptTokens + rawInputExpectedPerBatch) * complexity.factor);
-  const singleBatchInputMax = Math.round((basePromptTokens + rawInputMaxPerBatch) * complexity.factor);
+  // Phase 1 Discovery Token Calculations
+  const discoveryInputMin = Math.round(discoveryPromptTokens + rawInputMinPerBatch);
+  const discoveryInputExpected = Math.round((discoveryPromptTokens + rawInputExpectedPerBatch) * complexity.factor);
+  const discoveryInputMax = Math.round((discoveryPromptTokens + rawInputMaxPerBatch) * complexity.factor);
+  const discoveryOutputExpected = Math.round(rawOutputExpectedPerBatch * (complexity.factor > 1.1 ? 1.08 : 1.0));
+  const discoveryOutputMax = singleBatchMaxOutput;
 
-  const singleBatchOutputMin = rawOutputMinPerBatch;
-  const singleBatchOutputExpected = Math.round(rawOutputExpectedPerBatch * (complexity.factor > 1.1 ? 1.08 : 1.0));
-  const singleBatchOutputMax = rawOutputMaxPerBatch;
+  // Phase 2 Commercial Enrichment Token Calculations
+  const enrichmentMaxBatches = isWebSearch ? Math.ceil(batchPlan.targetCount / 15) : 0;
+  const enrichmentExpectedBatches = isWebSearch ? 1 : 0;
+  const estEnrichPromptTokens = 500;
+  const enrichmentInputMin = isWebSearch ? Math.round(estEnrichPromptTokens + rawInputMinPerBatch) : 0;
+  const enrichmentInputExpected = isWebSearch ? Math.round((estEnrichPromptTokens + rawInputExpectedPerBatch) * complexity.factor) : 0;
+  const enrichmentInputMax = isWebSearch ? Math.round((estEnrichPromptTokens + rawInputMaxPerBatch) * complexity.factor) : 0;
+  const enrichmentOutputExpected = isWebSearch ? Math.round(singleBatchMaxOutput * 0.55) : 0;
+  const enrichmentOutputMax = isWebSearch ? singleBatchMaxOutput : 0;
 
-  // TOTAL across all planned batches
   const numBatches = batchPlan.batchCount;
-  const estimatedInputTokensMin = singleBatchInputMin * numBatches;
-  const estimatedInputTokensExpected = singleBatchInputExpected * numBatches;
-  const estimatedInputTokensMax = singleBatchInputMax * numBatches;
+  const estimatedInputTokensMin = discoveryInputMin * numBatches;
+  const estimatedInputTokensExpected = discoveryInputExpected * numBatches;
+  const estimatedInputTokensMax = discoveryInputMax * numBatches;
 
-  const estimatedOutputTokensMin = singleBatchOutputMin * numBatches;
-  const estimatedOutputTokensExpected = singleBatchOutputExpected * numBatches;
-  const maxOutputTokens = singleBatchOutputMax * numBatches;
+  const estimatedOutputTokensMin = rawOutputMinPerBatch * numBatches;
+  const estimatedOutputTokensExpected = discoveryOutputExpected * numBatches;
+  const maxOutputTokens = discoveryOutputMax * numBatches;
 
   const rates = getModelPricingRates(targetModel);
   const inputRate = rates?.inputPer1M || 0.15;
   const outputRate = rates?.outputPer1M || 0.60;
 
-  // Base token costs across ALL batches
+  // Base token costs
   const minInputCostUsd = (estimatedInputTokensMin / 1_000_000) * inputRate;
   const expectedInputCostUsd = (estimatedInputTokensExpected / 1_000_000) * inputRate;
   const maxInputCostUsd = (estimatedInputTokensMax / 1_000_000) * inputRate;
@@ -511,7 +653,20 @@ export function calculatePreFlightEstimate({
     requested_result_limit: normLimit,
     max_candidates: batchPlan.targetCount,
     batches_planned: batchPlan.batchCount,
+    expected_batches: numBatches,
     batch_plan: batchPlan,
+    phases: {
+      discovery: {
+        expected_batches: 1,
+        max_batches: batchPlan.maxBatches,
+        target_count: batchPlan.targetCount
+      },
+      commercial_enrichment: {
+        expected_batches: 1,
+        max_batches: Math.ceil(batchPlan.targetCount / 15),
+        batch_size: 15
+      }
+    },
     estimated_input_tokens: estimatedInputTokensExpected,
     estimated_input_tokens_min: estimatedInputTokensMin,
     estimated_input_tokens_expected: estimatedInputTokensExpected,
