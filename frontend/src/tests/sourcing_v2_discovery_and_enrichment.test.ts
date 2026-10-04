@@ -225,8 +225,34 @@ describe('Sourcing V2 — Two-Phase Discovery & Commercial Enrichment Architectu
 
       expect(est.estimated_cost_expected_usd).toBeGreaterThan(0);
       expect(est.estimated_cost_max_usd).toBeGreaterThanOrEqual(est.estimated_cost_expected_usd);
-      expect(est.estimated_cost_max_usd).toBeLessThan(0.02); // Fits well within micro-dollar budget
+      expect(est.estimated_cost_max_usd).toBeLessThan(0.02);
       expect(est.openai_calls_used).toBe(0);
+    });
+  });
+
+  describe('5. Robustness & Regression Protection', () => {
+    it('handles empty, partial, and varied enrichment responses without crashing', () => {
+      const candidates = [
+        { candidate_id: 'c_1', title: 'Batman Plush' },
+        { candidate_id: 'c_2', title: 'Robin Plush' }
+      ];
+
+      // Missing commercial_sources
+      const partial1 = [{ candidate_id: 'c_1' }];
+      expect(() => mergeCommercialEnrichment(candidates, partial1)).not.toThrow();
+
+      // Empty enrichment array
+      expect(mergeCommercialEnrichment(candidates, [])).toEqual(candidates);
+
+      // Malformed json in parseCommercialEnrichmentItems
+      expect(parseCommercialEnrichmentItems('invalid json')).toEqual([]);
+      expect(parseCommercialEnrichmentItems('')).toEqual([]);
+      expect(parseCommercialEnrichmentItems('```json\n{"enrichment":[]}\n```')).toEqual([]);
+    });
+
+    it('loads api/ai-execute.js without any syntax or scope errors', async () => {
+      const aiExecuteModule = await import('../../../api/ai-execute.js');
+      expect(typeof aiExecuteModule.default).toBe('function');
     });
   });
 

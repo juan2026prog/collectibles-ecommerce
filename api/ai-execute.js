@@ -14,7 +14,6 @@ import {
   buildDiscoveryPrompt,
   buildCommercialEnrichmentPrompt,
   parseCommercialEnrichmentItems,
-  calculatePreFlightEstimate,
   planDiscoveryBatches,
   planEnrichmentBatches,
   normalizeResultLimit,
@@ -604,25 +603,34 @@ async function executeHandler(req, res) {
           exclude_count: excludeTitles.length
         });
 
-        const batchResult = await callOpenAIResponses({
-          model: selectedModel,
-          input: cleanSearchQuery || resolvedInput,
-          instructions: batchInstructions,
-          temperature: 0.2,
-          maxTokens: batch.maxOutputTokens || dynamicMaxTokens,
-          timeoutMs: isWebSearchNeeded ? Math.max(engineTimeoutMs, 50000) : engineTimeoutMs,
-          tools,
-          toolChoice,
-          metadata: {
-            engine: String(engine || ''),
-            country: String(country || 'GLOBAL'),
-            operation: String(operation || 'execute'),
-            research_depth: modeConfig.key,
-            research_phase: 'DISCOVERY',
-            batch_index: String(bIdx + 1),
-            result_limit: String(effectiveResultLimit)
-          }
-        });
+        let batchResult;
+        try {
+          batchResult = await callOpenAIResponses({
+            model: selectedModel,
+            input: cleanSearchQuery || resolvedInput,
+            instructions: batchInstructions,
+            temperature: 0.2,
+            maxTokens: batch.maxOutputTokens || dynamicMaxTokens,
+            timeoutMs: isWebSearchNeeded ? Math.max(engineTimeoutMs, 50000) : engineTimeoutMs,
+            tools,
+            toolChoice,
+            metadata: {
+              engine: String(engine || ''),
+              country: String(country || 'GLOBAL'),
+              operation: String(operation || 'execute'),
+              research_depth: modeConfig.key,
+              research_phase: 'DISCOVERY',
+              batch_index: String(bIdx + 1),
+              result_limit: String(effectiveResultLimit)
+            }
+          });
+        } catch (openaiErr) {
+          console.error('[RESEARCH_ERROR] DISCOVERY_OPENAI_CALL_FAILED', {
+            batch_index: bIdx + 1,
+            error: openaiErr.message
+          });
+          throw openaiErr;
+        }
 
         discoveryBatchesExecuted++;
         finalRequestId = batchResult.requestId || finalRequestId;
@@ -641,21 +649,27 @@ async function executeHandler(req, res) {
           allSources.push(...batchResult.sources);
         }
 
-        const parsedBatch = parseSourcingItems(batchResult.outputText);
+        let parsedBatch = { items: [], summary: null, confidence: 0.85, subtrends: [] };
+        try {
+          parsedBatch = parseSourcingItems(batchResult.outputText);
+        } catch (parseErr) {
+          console.warn('[RESEARCH_WARN] DISCOVERY_PARSE_ERROR', parseErr.message);
+        }
+
         if (parsedBatch.summary) lastSummary = parsedBatch.summary;
         if (parsedBatch.confidence) lastConfidence = parsedBatch.confidence;
         (parsedBatch.subtrends || []).forEach(st => accumulatedSubtrends.add(st));
 
-        rawCandidateCount += parsedBatch.items.length;
+        rawCandidateCount += (parsedBatch.items?.length || 0);
         const prevCount = accumulatedDiscoveries.length;
-        accumulatedDiscoveries = deduplicateResearchCandidates(accumulatedDiscoveries, parsedBatch.items);
+        accumulatedDiscoveries = deduplicateResearchCandidates(accumulatedDiscoveries, parsedBatch.items || []);
         const newUniquesInBatch = accumulatedDiscoveries.length - prevCount;
 
         console.info('[RESEARCH_SERVER_TRACE] DISCOVERY_BATCH_BREAKDOWN', {
           request_id: finalRequestId,
           batch_number: bIdx + 1,
           batch_target: batch.targetCount,
-          raw_items_detected: parsedBatch.items.length,
+          raw_items_detected: (parsedBatch.items || []).length,
           before_dedupe: prevCount,
           after_dedupe: accumulatedDiscoveries.length,
           new_uniques_in_batch: newUniquesInBatch,
@@ -715,25 +729,35 @@ async function executeHandler(req, res) {
             candidates_in_chunk: chunk.length
           });
 
-          const enrichResult = await callOpenAIResponses({
-            model: selectedModel,
-            input: `Verificar fichas comerciales para lote ${eIdx + 1}`,
-            instructions: enrichmentPrompt,
-            temperature: 0.2,
-            maxTokens: eBatch.maxOutputTokens || 2000,
-            timeoutMs: Math.max(engineTimeoutMs, 50000),
-            tools,
-            toolChoice,
-            metadata: {
-              engine: String(engine || ''),
-              country: String(country || 'GLOBAL'),
-              operation: String(operation || 'execute'),
-              research_depth: modeConfig.key,
-              research_phase: 'COMMERCIAL_ENRICHMENT',
-              enrichment_batch: String(eIdx + 1),
-              total_enrichment_batches: String(enrichmentPlan.batchCount)
-            }
-          });
+          let enrichResult;
+          try {
+            enrichResult = await callOpenAIResponses({
+              model: selectedModel,
+              input: `Verificar fichas comerciales para lote ${eIdx + 1}`,
+              instructions: enrichmentPrompt,
+              temperature: 0.2,
+              maxTokens: eBatch.maxOutputTokens || 2000,
+              timeoutMs: Math.max(engineTimeoutMs, 50000),
+              tools,
+              toolChoice,
+              metadata: {
+                engine: String(engine || ''),
+                country: String(country || 'GLOBAL'),
+                operation: String(operation || 'execute'),
+                research_depth: modeConfig.key,
+                research_phase: 'COMMERCIAL_ENRICHMENT',
+                enrichment_batch: String(eIdx + 1),
+                total_enrichment_batches: String(enrichmentPlan.batchCount)
+              }
+            });
+          } catch (enrichOpenAiErr) {
+            console.warn('[RESEARCH_WARN] ENRICHMENT_OPENAI_CALL_FAILED', {
+              enrichment_batch: eIdx + 1,
+              error: enrichOpenAiErr.message
+            });
+            // Commercial enrichment failure is non-blocking: discovery candidates are preserved
+            break;
+          }
 
           enrichmentBatchesExecuted++;
           finalRequestId = enrichResult.requestId || finalRequestId;
@@ -750,7 +774,12 @@ async function executeHandler(req, res) {
             allSources.push(...enrichResult.sources);
           }
 
-          const parsedEnrichment = parseCommercialEnrichmentItems(enrichResult.outputText);
+          let parsedEnrichment = [];
+          try {
+            parsedEnrichment = parseCommercialEnrichmentItems(enrichResult.outputText);
+          } catch (parseEnrichErr) {
+            console.warn('[RESEARCH_WARN] ENRICHMENT_PARSE_ERROR', parseEnrichErr.message);
+          }
           allEnrichmentItems.push(...parsedEnrichment);
 
           console.info('[RESEARCH_SERVER_TRACE] ENRICHMENT_BATCH_RECEIVED', {
@@ -767,7 +796,11 @@ async function executeHandler(req, res) {
         }
 
         // Merge commercial enrichment items into discoveries
-        accumulatedDiscoveries = mergeCommercialEnrichment(accumulatedDiscoveries, allEnrichmentItems);
+        try {
+          accumulatedDiscoveries = mergeCommercialEnrichment(accumulatedDiscoveries, allEnrichmentItems);
+        } catch (mergeErr) {
+          console.warn('[RESEARCH_WARN] ENRICHMENT_MERGE_ERROR', mergeErr.message);
+        }
       }
 
       batchExecutionTelemetry = {
@@ -788,7 +821,6 @@ async function executeHandler(req, res) {
         subtrends: Array.from(accumulatedSubtrends),
         items: accumulatedDiscoveries
       };
-    }
     } else {
       // Non-sourcing single-call advisory engines
       const resolvedInstructions = instructionsFor(engine, operation);
