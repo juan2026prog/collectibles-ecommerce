@@ -233,10 +233,26 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
                     <span className="text-[11px] text-gray-500">Costo Puesto / Margen:</span>
                     <div className="text-right">
                       <span className="text-gray-900 font-black">
-                        {cand.pricing.landed_cost_estimated_usd != null ? `$${cand.pricing.landed_cost_estimated_usd.toFixed(2)}` : 'No calculable'}
+                        {cand.pricing.landed_cost_estimated_usd != null
+                          ? `$${cand.pricing.landed_cost_estimated_usd.toFixed(2)}`
+                          : (cand.pricing as any)?.landed_cost_status === 'MISSING_WEIGHT'
+                            ? 'No calculable — falta peso'
+                            : (cand.pricing as any)?.landed_cost_status === 'MISSING_ORIGIN_PRICE'
+                              ? 'No calculable — falta precio de origen'
+                              : (cand.pricing as any)?.landed_cost_status === 'ENGINE_ERROR'
+                                ? 'Error de cálculo'
+                                : 'No calculable'}
                       </span>
                       <span className="text-emerald-600 font-black text-[11px] ml-1.5">
-                        {cand.pricing.estimated_margin_percent != null ? cand.pricing.estimated_margin_percent.toFixed(1) + '%' : 'Margen no calculable'}
+                        {cand.pricing.estimated_margin_percent != null
+                          ? cand.pricing.estimated_margin_percent.toFixed(1) + '%'
+                          : (cand.pricing as any)?.margin_status === 'SALE_PRICE_UNKNOWN'
+                            ? 'Falta precio de referencia'
+                            : (cand.pricing as any)?.margin_status === 'LANDED_COST_UNKNOWN'
+                              ? 'Sin costo puesto'
+                              : (cand.pricing as any)?.margin_status === 'BOTH_UNKNOWN'
+                                ? 'Pendiente de datos'
+                                : 'Margen no calculable'}
                       </span>
                     </div>
                   </div>

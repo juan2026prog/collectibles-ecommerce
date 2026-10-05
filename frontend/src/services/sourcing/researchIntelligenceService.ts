@@ -17,6 +17,7 @@ import { manualCandidates } from './canonicalCandidateValidation';
 import { calculateInternationalPricing } from '../../lib/internationalPricing';
 import { checkTiendamiaByAsin } from './tiendamiaMatchingService';
 import { resolveZincProductsForCandidates } from './zincProductResolver';
+import { enrichCandidatesCommercialData } from './candidateCommercialEnrichment';
 import type {
   SourcingResearchQueryRequest,
   SourcingResearchResponse,
@@ -241,6 +242,18 @@ export class ResearchIntelligenceService {
           candidatesCount: candidates.length,
           telemetry
         });
+
+        // 6. Enriquecimiento Comercial Post-Zinc Canónico
+        // Landed Cost, TiendaMía, Mercado Libre UY, Margen y Opportunity Score
+        try {
+          candidates = await enrichCandidatesCommercialData(candidates, country);
+          console.log('[FRONTEND_RESEARCH_TRACE]', {
+            step: 'COMMERCIAL_ENRICHMENT_COMPLETED',
+            candidatesCount: candidates.length
+          });
+        } catch (commErr: any) {
+          console.warn('[FRONTEND_RESEARCH_WARN] COMMERCIAL_ENRICHMENT_ERROR', commErr.message);
+        }
       }
     } catch (zincErr: any) {
       console.warn('[FRONTEND_RESEARCH_WARN] ZINC_RESOLUTION_ERROR', zincErr.message);
