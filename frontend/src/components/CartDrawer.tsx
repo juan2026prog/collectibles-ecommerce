@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  ShoppingCart, X, Clock, Trash2, Minus, Plus, Tag, FileText, ArrowRight, Sparkles 
+  ShoppingCart, X, Clock, Trash2, Minus, Plus, Tag, FileText, ArrowRight, Sparkles, AlertCircle 
 } from 'lucide-react';
 import { useCartContext } from '../contexts/CartContext';
 import { useCurrency } from '../contexts/CurrencyContext';
@@ -11,7 +11,7 @@ import { usePromotions, evaluateItemDiscount } from '../hooks/usePromotions';
 import { trackGA4Event, trackClarityEvent, mapCartItemsToGA4 } from '../lib/analyticsTracker';
 import { useImageProtection } from '../hooks/useImageProtection';
 import { formatUSD } from '../lib/formatters';
-import { formatProductMoney, resolveCartItemPrice } from '../lib/priceResolver';
+import { formatProductMoney, resolveCartItemPrice, inspectCartCurrencies } from '../lib/priceResolver';
 
 export default function CartDrawer() {
   const navigate = useNavigate();
@@ -103,6 +103,9 @@ export default function CartDrawer() {
 
   const { promotions } = usePromotions();
   
+  // Inspección canónica de monedas en carrito
+  const cartCurrencyInfo = inspectCartCurrencies(items);
+
   let autoDiscountAmount = 0;
   items.forEach(item => {
     autoDiscountAmount += evaluateItemDiscount(item as any, promotions);
@@ -120,7 +123,7 @@ export default function CartDrawer() {
       viewCartTrackedRef.current = true;
       
       trackGA4Event('view_cart', {
-        currency: 'UYU',
+        currency: cartCurrencyInfo.canonicalCurrency || 'UYU',
         value: total - autoDiscountAmount,
         items: mapCartItemsToGA4(items)
       });
@@ -129,11 +132,16 @@ export default function CartDrawer() {
     }
   }, [isDrawerOpen, items, total, autoDiscountAmount]);
 
-  // Close drawer on navigate to checkout
+  // Close drawer on navigate to checkout (guarded against mixed carts)
   const handleCheckoutRedirect = () => {
+    if (cartCurrencyInfo.isMixed) {
+      alert("Los productos locales e internacionales deben comprarse por separado.");
+      return;
+    }
+
     // GA4 event: begin_checkout (Phase 2)
     trackGA4Event('begin_checkout', {
-      currency: 'UYU',
+      currency: cartCurrencyInfo.canonicalCurrency || 'UYU',
       value: total - autoDiscountAmount,
       items: mapCartItemsToGA4(items)
     });
@@ -215,6 +223,24 @@ export default function CartDrawer() {
             </div>
           ) : (
             <>
+              {/* Mixed Currency Warning Banner */}
+              {cartCurrencyInfo.isMixed && (
+                <div className="bg-amber-950/40 border border-amber-500/50 rounded-xl p-3.5 space-y-1.5 animate-fade-in">
+                  <div className="flex items-center gap-2 text-amber-400 font-bold text-xs">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>Carrito mixto detectado</span>
+                  </div>
+                  <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                    Tu carrito contiene productos en Pesos Uruguayos (UYU) y en Dólares (USD). Los productos locales e internacionales deben comprarse por separado.
+                  </p>
+                  <div className="pt-1 flex gap-3 text-[10px] text-slate-300 font-medium">
+                    <span>Locales: <strong className="text-white">$ {cartCurrencyInfo.totalUYU.toLocaleString('es-UY')} UYU</strong></span>
+                    <span>•</span>
+                    <span>Internacionales: <strong className="text-white">US$ {cartCurrencyInfo.totalUSD.toFixed(2)}</strong></span>
+                  </div>
+                </div>
+              )}
+
               {/* Timer Banner */}
               <div className="bg-slate-900/80 border border-white/5 rounded-xl px-4 py-2.5 flex items-center justify-center gap-2 text-xs text-slate-300">
                 <Clock className="w-4 h-4 text-amber-400" />
@@ -508,10 +534,23 @@ export default function CartDrawer() {
               <div className="flex justify-between items-center">
                 <span className="font-black text-white uppercase tracking-wider">Total</span>
                 <div className="text-right">
-                  <span className="text-xl font-black text-[#f00856]">
-                    {formatCurrencyPrice(grandTotal)}
-                  </span>
-                  {selectedCurrency !== 'UYU' && (
+                  {cartCurrencyInfo.isMixed ? (
+                    <div className="text-right">
+                      <span className="text-sm font-bold text-amber-400 block">
+                        $ {cartCurrencyInfo.totalUYU.toLocaleString('es-UY')} UYU
+                      </span>
+                      <span className="text-sm font-bold text-blue-400 block">
+                        + US$ {cartCurrencyInfo.totalUSD.toFixed(2)}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-xl font-black text-[#f00856]">
+                      {cartCurrencyInfo.hasUSD
+                        ? `US$ ${(total - autoDiscountAmount + (shipping > 0 ? 0 : 0)).toFixed(2)}`
+                        : formatCurrencyPrice(grandTotal)}
+                    </span>
+                  )}
+                  {selectedCurrency !== 'UYU' && !cartCurrencyInfo.hasUSD && (
                     <p className="text-[9px] text-slate-500 mt-1 leading-none">
                       El cobro final se realiza en pesos uruguayos.
                     </p>
@@ -523,10 +562,15 @@ export default function CartDrawer() {
             {/* Main checkout button */}
             <button
               onClick={handleCheckoutRedirect}
-              className="w-full bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white font-extrabold text-sm uppercase py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/10 transition-all transform hover:-translate-y-0.5 active:translate-y-0 min-h-[48px]"
+              disabled={cartCurrencyInfo.isMixed}
+              className={`w-full font-extrabold text-sm uppercase py-4 rounded-xl flex items-center justify-center gap-2 transition-all min-h-[48px] ${
+                cartCurrencyInfo.isMixed
+                  ? 'bg-slate-700 text-slate-400 cursor-not-allowed opacity-80'
+                  : 'bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-white shadow-lg shadow-emerald-500/10 transform hover:-translate-y-0.5 active:translate-y-0'
+              }`}
             >
-              Finalizar Pago
-              <ArrowRight className="w-4 h-4" />
+              {cartCurrencyInfo.isMixed ? 'Separar carrito para continuar' : 'Finalizar Pago'}
+              {!cartCurrencyInfo.isMixed && <ArrowRight className="w-4 h-4" />}
             </button>
 
             <button

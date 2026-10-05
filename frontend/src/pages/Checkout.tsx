@@ -14,7 +14,7 @@ import { getProductImage, resolveImage } from '../lib/imageUtils';
 import { usePromotions, evaluateItemDiscount, evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { getProductPaymentRestrictions } from '../hooks/useData';
 import { trackGA4Event, trackClarityEvent, mapCartItemsToGA4 } from '../lib/analyticsTracker';
-import { resolveCartItemPrice } from '../lib/priceResolver';
+import { resolveCartItemPrice, resolveProductPrice, inspectCartCurrencies } from '../lib/priceResolver';
 import { generateMetaEventId, trackInitiateCheckout, trackAddPaymentInfo } from '../lib/meta/metaPixel';
 import { calculateUruboxEstimate, getEstimatedWeightKg } from '../lib/urubox';
 import CheckoutStepper from '../components/checkout/CheckoutStepper';
@@ -135,6 +135,9 @@ export default function Checkout() {
   const { formatCurrencyPrice, selectedCurrency, setSelectedCurrency, convertUSDToARS, convertARSToUSD, getFxRateUsdToArs } = useCurrency();
   const { user } = useAuth();
   const [internationalShippingRate, setInternationalShippingRate] = useState<number>(0);
+
+  // Inspección canónica de monedas en checkout
+  const cartCurrencyInfo = useMemo(() => inspectCartCurrencies(items), [items]);
 
   const [form, setForm] = useState({
     email: user?.email || '',
@@ -1978,13 +1981,16 @@ export default function Checkout() {
   const handleAddSuggestion = (p: any) => {
     const variant = p.variants?.[0];
     if (!variant) return;
-    const resolvedPrice = resolveCartItemPrice(p, variant);
+    const resolved = resolveProductPrice(p, variant);
     addItem({
       product_id: p.id,
       variant_id: variant.id,
       quantity: 1,
       title: p.title,
-      price: resolvedPrice,
+      price: resolved.amount,
+      currency: resolved.currency,
+      is_international: resolved.isInternational,
+      base_price: resolved.basePrice,
       image: getProductImage(p),
       variant_name: variant.name || '',
       category_id: p.category_id,
@@ -2219,6 +2225,12 @@ export default function Checkout() {
       return;
     }
 
+    // BLOQUEO FINANCIERO CRÍTICO: Carrito mixto
+    if (cartCurrencyInfo.isMixed) {
+      setCheckoutError('Los productos locales e internacionales deben comprarse por separado.');
+      return;
+    }
+
     // VALIDACIÓN DEFENSIVA: antes de crear la orden (Phase 1.5)
     if (!validateStep2() || isPaymentBlocked()) {
       setCheckoutError('Los datos de envío no son válidos o falta calcular el costo de DAC. Por favor revisá la sección de envío.');
@@ -2346,7 +2358,7 @@ export default function Checkout() {
         affiliate_code: affiliateCode.trim() || undefined,
         reservation_id: activeReservationId || undefined,
         payment_method: paymentMethod,
-        currency: selectedCurrency,
+        currency: cartCurrencyInfo.canonicalCurrency || (form.country === 'Argentina' ? 'USD' : (selectedCurrency || 'UYU')),
         shipping_method: primaryMethod,
         shipping_address: {
           first_name: form.first_name,
@@ -2742,6 +2754,11 @@ export default function Checkout() {
   };
 
   const canAdvanceStep = (step: number): boolean => {
+    // REGLA FINANCIERA P0: Jamás permitir checkout de carrito mixto (UYU + USD)
+    if (cartCurrencyInfo.isMixed) {
+      return false;
+    }
+
     if (step === 1) {
       return !!(form.email && form.first_name && form.last_name && form.phone);
     }
@@ -2872,6 +2889,26 @@ export default function Checkout() {
           if (currentStep > step) setCurrentStep(step);
         }}
       />
+
+      {cartCurrencyInfo.isMixed && (
+        <div className="mb-6 p-4 bg-amber-950/50 border border-amber-500/50 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-amber-200 shadow-xl">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+            <div>
+              <h4 className="font-bold text-sm text-white">Carrito con monedas mixtas detectado</h4>
+              <p className="text-xs text-amber-200/90 mt-0.5">
+                Tu pedido contiene productos locales en <strong>UYU ($ {cartCurrencyInfo.totalUYU.toLocaleString('es-UY')})</strong> e internacionales en <strong>USD (US$ {cartCurrencyInfo.totalUSD.toFixed(2)})</strong>. Los productos locales e internacionales deben comprarse por separado.
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/cart"
+            className="self-start sm:self-center px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black font-extrabold text-xs uppercase rounded-xl transition-all whitespace-nowrap shadow-md"
+          >
+            Modificar carrito
+          </Link>
+        </div>
+      )}
 
       {checkoutError && (
         <div className="mb-6 p-4 bg-red-900/30 border border-red-500/30 text-sm text-red-400 rounded-xl flex items-center justify-between">

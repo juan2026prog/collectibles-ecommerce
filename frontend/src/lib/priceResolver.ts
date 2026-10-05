@@ -273,3 +273,48 @@ export function formatProductPriceCanonical(
     exchangeRate
   });
 }
+
+export interface CartCurrencyInspection {
+  hasUYU: boolean;
+  hasUSD: boolean;
+  isMixed: boolean;
+  totalUYU: number;
+  totalUSD: number;
+  canonicalCurrency: 'UYU' | 'USD' | null;
+}
+
+/**
+ * 7. Inspecciona las monedas de una lista de ítems de carrito para prevenir mezclas inválidas.
+ */
+export function inspectCartCurrencies(items: Array<{ price?: number; quantity?: number; currency?: string; is_international?: boolean }>): CartCurrencyInspection {
+  let hasUYU = false;
+  let hasUSD = false;
+  let totalUYU = 0;
+  let totalUSD = 0;
+
+  for (const item of items || []) {
+    const isUSD = item.currency === 'USD' || item.is_international === true;
+    const qty = Math.max(1, Number(item.quantity) || 1);
+    const price = Number(item.price) || 0;
+
+    if (isUSD) {
+      hasUSD = true;
+      totalUSD += price * qty;
+    } else {
+      hasUYU = true;
+      totalUYU += price * qty;
+    }
+  }
+
+  const isMixed = hasUYU && hasUSD;
+  const canonicalCurrency = isMixed ? null : (hasUSD ? 'USD' : (hasUYU ? 'UYU' : null));
+
+  return {
+    hasUYU,
+    hasUSD,
+    isMixed,
+    totalUYU: Number(totalUYU.toFixed(2)),
+    totalUSD: Number(totalUSD.toFixed(2)),
+    canonicalCurrency
+  };
+}

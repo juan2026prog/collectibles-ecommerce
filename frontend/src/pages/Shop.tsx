@@ -14,7 +14,7 @@ import { getProductImage } from '../lib/imageUtils';
 import { supabase } from '../lib/supabase';
 import { trackSearch, generateMetaEventId } from '../lib/meta/metaPixel';
 import { trackGA4Event, trackClarityEvent, mapCartItemsToGA4 } from '../lib/analyticsTracker';
-import { resolveCartItemPrice } from '../lib/priceResolver';
+import { resolveCartItemPrice, resolveProductPrice } from '../lib/priceResolver';
 import { useImageProtection } from '../hooks/useImageProtection';
 import { rankProducts } from '../services/sourcing/personalizationEngine';
 import { trackPersonalizationSignal } from '../lib/analyticsTracker';
@@ -399,13 +399,16 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   function handleAddToCart(p: any) {
     const variant = p.variants?.[0];
     if (!variant) return;
-    const resolvedPrice = resolveCartItemPrice(p, variant);
+    const resolved = resolveProductPrice(p, variant);
     cart.addItem({ 
       product_id: p.id, 
       variant_id: variant.id, 
       quantity: 1, 
       title: p.title, 
-      price: resolvedPrice, 
+      price: resolved.amount, 
+      currency: resolved.currency,
+      is_international: resolved.isInternational,
+      base_price: resolved.basePrice,
       image: getProductImage(p), 
       variant_name: variant.name, 
       category_id: p.category_id, 

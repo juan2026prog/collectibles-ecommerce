@@ -439,6 +439,7 @@ export default function ProductDetail() {
         title: product.title,
         price: finalPrice,
         base_price: product.base_price || finalPrice,
+        currency: 'USD',
         image: displayImage,
         image_url: displayImage,
         quantity,

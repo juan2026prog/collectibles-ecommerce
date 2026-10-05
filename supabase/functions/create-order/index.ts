@@ -263,7 +263,7 @@ function sanitizePayloadForLogging(data: any) {
     // 3. Consulta segura y correcta a la tabla real 'products' (columna 'base_price')
     const { data: products, error: productError } = await supabase
       .from("products")
-      .select("id, title, base_price, category_id, brand_id, vendor_id, vendor_store_id, vendors(store_name, promotions_opt_in, ships_to_argentina, shipping_settings), product_tags(tag_id)")
+      .select("id, title, base_price, currency, price_currency, source_provider, is_international, category_id, brand_id, vendor_id, vendor_store_id, vendors(store_name, promotions_opt_in, ships_to_argentina, shipping_settings), product_tags(tag_id)")
       .in("id", productIds);
 
     if (productError) {
@@ -344,6 +344,49 @@ function sanitizePayloadForLogging(data: any) {
       for (const variant of variants || []) {
         variantPriceAdjustmentMap.set(variant.id, Number(variant.price_adjustment || 0));
       }
+    }
+
+    // --- REGLA FINANCIERA CANÓNICA Y SEGREGACIÓN DE MONEDAS ---
+    const resolveDbProductCurrency = (prod: any): 'UYU' | 'USD' => {
+      if (!prod) return 'UYU';
+      const explicit = (prod.currency || prod.price_currency)?.toString().toUpperCase().trim();
+      if (explicit === 'UYU') return 'UYU';
+      if (explicit === 'USD') return 'USD';
+      const source = (prod.source_provider || '').toString().toLowerCase().trim();
+      if (['amazon', 'ebay', 'bestbuy', 'zinc'].includes(source) || prod.is_international === true) {
+        return 'USD';
+      }
+      return 'UYU';
+    };
+
+    let hasUYUOrderItems = false;
+    let hasUSDOrderItems = false;
+
+    for (const item of payload.items) {
+      const pId = item.product_id || item.id;
+      const dbProd = productsList.find(p => p.id === pId);
+      const itemCurr = resolveDbProductCurrency(dbProd);
+      if (itemCurr === 'USD') {
+        hasUSDOrderItems = true;
+      } else {
+        hasUYUOrderItems = true;
+      }
+    }
+
+    // BLOQUEO P0: Carrito mixto
+    if (hasUYUOrderItems && hasUSDOrderItems) {
+      console.error("[Create Order] Mixed currency cart rejected: items contain both UYU and USD.");
+      return new Response(JSON.stringify({
+        success: false,
+        error: "MIXED_CURRENCY_NOT_SUPPORTED: Los productos locales e internacionales deben comprarse por separado.",
+        details: {
+          reason: "MIXED_CURRENCY_NOT_SUPPORTED",
+          message: "Los productos locales (UYU) e internacionales (USD) deben procesarse en compras independientes."
+        }
+      }), {
+        status: 400,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
+      });
     }
 
     // 6, 7, 8, 9. Verificación robusta de precios, vendor_id y stock
@@ -1545,7 +1588,7 @@ function sanitizePayloadForLogging(data: any) {
     const { data: orderResult, error: rpcError } = await supabase.rpc("create_order_atomic", {
       p_customer_id: user?.id || null,
       p_total_amount: totalAmount,
-      p_currency: isArgentinaOrder ? "USD" : payload.currency,
+      p_currency: isArgentinaOrder ? "USD" : (hasUSDOrderItems ? "USD" : (payload.currency || "UYU")),
       p_payment_method: payload.payment_method,
       p_customer_email: payload.customer_email,
       p_customer_phone: payload.customer_phone || null,

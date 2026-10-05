@@ -1081,8 +1081,13 @@ export function useCart() {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
-          // Filter out broken items that might have NaN, null or undefined prices
-          return parsed.filter(item => typeof item.price === 'number' && !isNaN(item.price));
+          // Filter out broken items that might have NaN, null or undefined prices, and ensure explicit currency
+          return parsed
+            .filter(item => typeof item.price === 'number' && !isNaN(item.price))
+            .map(item => ({
+              ...item,
+              currency: item.currency || (item.is_international ? 'USD' : 'UYU')
+            }));
         }
       }
       return [];
@@ -1101,8 +1106,14 @@ export function useCart() {
       return; // Do not add broken items
     }
     
-    // Ensure the item always stores the price as a number type
-    const safeItem = { ...item, price: numericPrice };
+    // Ensure the item always stores the price as a number type and explicit currency
+    const itemCurrency: 'UYU' | 'USD' = item.currency || (item.is_international ? 'USD' : 'UYU');
+    const safeItem = { 
+      ...item, 
+      price: numericPrice,
+      currency: itemCurrency,
+      is_international: itemCurrency === 'USD' || Boolean(item.is_international)
+    };
 
     setItems(prev => {
       const existing = prev.find(i => i.variant_id === safeItem.variant_id && i.vendor_id === safeItem.vendor_id);
