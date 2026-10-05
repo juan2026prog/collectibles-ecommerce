@@ -168,6 +168,237 @@ export function buildZincResolutionQuery(candidate: {
  * 3. AMBIGUOUS: Múltiples productos muy similares sin diferenciación clara o score marginal (0.70 - 0.81)
  * 4. NO_MATCH: Score < 0.70 o conflicto directo de variante
  */
+/**
+ * Diccionario de normalización bilingüe determinístico para atributos y tipos de producto.
+ */
+const BILINGUAL_TOKEN_MAP: Record<string, string> = {
+  'peluche': 'plush',
+  'peluches': 'plush',
+  'pulgada': 'inch',
+  'pulgadas': 'inch',
+  'pulg': 'inch',
+  'figura': 'figure',
+  'figuras': 'figure',
+  'estatua': 'statue',
+  'estatuas': 'statue',
+  'muñeco': 'doll',
+  'muñecos': 'doll',
+  'edicion': 'edition',
+  'edición': 'edition',
+  'aniversario': 'anniversary',
+  'estandar': 'standard',
+  'estándar': 'standard',
+  'clasico': 'classic',
+  'clásico': 'classic'
+};
+
+/**
+ * Normaliza y extrae especificación de tamaño/escala en pulgadas normalizadas (ej: '8in', '10in', '12in').
+ * Convierte de forma determinística equivalencias comunes de cm a pulgadas cuando la correspondencia es inequívoca:
+ * 20.3 cm / 20 cm -> 8in
+ * 25 cm -> 10in
+ * 30 cm / 30.5 cm -> 12in
+ * 17.8 cm / 18 cm -> 7in
+ * 12.7 cm / 13 cm -> 5in
+ */
+export function normalizeSizeOrScale(text: string): { normalizedInches?: string; rawValue: string } {
+  if (!text) return { rawValue: '' };
+  const raw = text.trim();
+  const lower = raw.toLowerCase()
+    .replace(/["']/g, ' inch ')
+    .replace(/-/g, ' ');
+
+  // 1. Detección directa de pulgadas: '8 pulgadas', '8-inch', '8 in', '8inch', '8"'
+  const inchMatch = lower.match(/(\d+(?:\.\d+)?)\s*(?:inch|inches|pulgada|pulgadas|in)\b/);
+  if (inchMatch) {
+    const val = parseFloat(inchMatch[1]);
+    const rounded = Math.round(val);
+    return { normalizedInches: `${rounded}in`, rawValue: raw };
+  }
+
+  // 2. Detección de cm: '20.3 cm', '25 cm', '30 cm', '17.8 cm'
+  const cmMatch = lower.match(/(\d+(?:\.\d+)?)\s*cm\b/);
+  if (cmMatch) {
+    const cm = parseFloat(cmMatch[1]);
+    // Conversión a pulgadas con redondeo a enteros estándar de retail (5, 7, 8, 10, 12, etc.)
+    const convertedInches = cm / 2.54;
+    const rounded = Math.round(convertedInches);
+    // Tolerancia estricta: sólo si el redondeo dista menos de 0.4 pulgadas del valor real convertido
+    if (Math.abs(convertedInches - rounded) <= 0.45) {
+      return { normalizedInches: `${rounded}in`, rawValue: raw };
+    }
+  }
+
+  // 3. Escalas proporcionales: '1:12', '1/12', '1:6'
+  const ratioMatch = lower.match(/1[:\/](\d+)/);
+  if (ratioMatch) {
+    return { normalizedInches: `1:${ratioMatch[1]}`, rawValue: raw };
+  }
+
+  return { rawValue: raw };
+}
+
+/**
+ * Extrae tokens núcleo (core tokens) eliminando ruido comercial y palabras funcionales sin identidad.
+ * Preserva estrictamente marcas, personajes, líneas, variantes y números clave.
+ */
+export function extractCoreTokens(text: string): Set<string> {
+  if (!text) return new Set();
+  const words = cleanText(text).toLowerCase().split(' ').filter(w => w.length > 0);
+  const core = new Set<string>();
+
+  const commercialStopwords = new Set([
+    'official', 'licensed', 'authentic', 'original', 'collectible', 'collectibles',
+    'toy', 'toys', 'kids', 'adults', 'gift', 'gifts', 'birthday', 'item', 'merchandise',
+    'stuffed', 'animal', 'soft', 'super', 'ultrasoft', 'huggable', 'cuddle', 'pillow',
+    'para', 'para', 'con', 'and', 'the', 'for', 'with', 'from', 'del', 'los', 'las', 'por'
+  ]);
+
+  for (const w of words) {
+    const translated = BILINGUAL_TOKEN_MAP[w] || w;
+    if (commercialStopwords.has(translated)) continue;
+    if (translated.length <= 1) continue;
+    core.add(translated);
+  }
+
+  return core;
+}
+
+export interface ExtractedProductIdentity {
+  brand?: string;
+  character?: string;
+  franchise?: string;
+  productLine?: string;
+  productType?: string;
+  variant?: string;
+  edition?: string;
+  sizeInches?: string;
+  coreTokens: Set<string>;
+}
+
+/**
+ * Extrae los componentes de identidad canónicos a partir del título y metadata del producto.
+ */
+export function extractSemanticIdentity(item: {
+  title?: string;
+  brand?: string;
+  claims?: any;
+}): ExtractedProductIdentity {
+  const rawTitle = (item.title || '').trim();
+  const lowerTitle = rawTitle.toLowerCase();
+  const claims = item.claims || {};
+
+  // 1. Marca
+  let brand = (item.brand && item.brand !== 'No verificado' && item.brand !== 'Collectibles')
+    ? item.brand.trim()
+    : '';
+  if (!brand) {
+    if (lowerTitle.includes('squishmallow')) brand = 'Squishmallows';
+    else if (lowerTitle.includes('steiff')) brand = 'Steiff';
+    else if (lowerTitle.includes('funko')) brand = 'Funko';
+    else if (lowerTitle.includes('ty ')) brand = 'Ty';
+    else if (lowerTitle.includes('kenner')) brand = 'Kenner';
+    else if (lowerTitle.includes('jakks pacific') || lowerTitle.includes('jakks')) brand = 'Jakks Pacific';
+    else if (lowerTitle.includes('lego')) brand = 'LEGO';
+    else if (lowerTitle.includes('kids preferred')) brand = 'KIDS PREFERRED';
+    else if (lowerTitle.includes('mcfarlane')) brand = 'McFarlane Toys';
+    else if (lowerTitle.includes('mattel')) brand = 'Mattel';
+    else if (lowerTitle.includes('hasbro')) brand = 'Hasbro';
+  }
+
+  // 2. Personaje
+  let character = claims.character || '';
+  if (!character) {
+    if (lowerTitle.includes('batman')) character = 'Batman';
+    else if (lowerTitle.includes('joker')) character = 'The Joker';
+    else if (lowerTitle.includes('superman')) character = 'Superman';
+    else if (lowerTitle.includes('sonic')) character = 'Sonic';
+    else if (lowerTitle.includes('robin')) character = 'Robin';
+    else if (lowerTitle.includes('ryu')) character = 'Ryu';
+    else if (lowerTitle.includes('chun-li') || lowerTitle.includes('chun li')) character = 'Chun-Li';
+  }
+
+  // 3. Franquicia / Licencia
+  let franchise = claims.franchise || '';
+  if (!franchise) {
+    if (lowerTitle.includes('dc comics') || lowerTitle.includes('dc ') || lowerTitle.includes('batman')) franchise = 'DC';
+    else if (lowerTitle.includes('marvel') || lowerTitle.includes('spider-man')) franchise = 'Marvel';
+    else if (lowerTitle.includes('sonic the hedgehog') || lowerTitle.includes('sonic')) franchise = 'Sonic';
+    else if (lowerTitle.includes('street fighter')) franchise = 'Street Fighter';
+  }
+
+  // 4. Tipo de Producto
+  let productType = '';
+  if (lowerTitle.includes('peluche') || lowerTitle.includes('plush') || lowerTitle.includes('teddy bear') || lowerTitle.includes('stuffed')) {
+    productType = 'plush';
+  } else if (lowerTitle.includes('lego') || lowerTitle.includes('building set') || lowerTitle.includes('batmobile')) {
+    productType = 'building_or_vehicle';
+  } else if (lowerTitle.includes('action figure') || lowerTitle.includes('figura de accion') || lowerTitle.includes('figura')) {
+    productType = 'figure';
+  }
+
+  // 5. Línea de producto específica (ej: HugMees, Beanie Bouncer, Total Justice, Pop, Phunny)
+  let productLine = '';
+  if (lowerTitle.includes('hugmees') || lowerTitle.includes('hug mees')) productLine = 'HugMees';
+  else if (lowerTitle.includes('beanie bouncer') || lowerTitle.includes('beanie babies')) productLine = 'Beanie Bouncer';
+  else if (lowerTitle.includes('total justice')) productLine = 'Total Justice';
+  else if (lowerTitle.includes('pop!') || lowerTitle.includes('pop movies') || lowerTitle.includes('pop heroes')) productLine = 'Pop';
+  else if (lowerTitle.includes('phunny')) productLine = 'Phunny';
+
+  // 6. Variante / Edición específica
+  let variant = claims.variant || '';
+  if (!variant) {
+    if (lowerTitle.includes('patchwork')) variant = 'Patchwork';
+    else if (lowerTitle.includes('player 2')) variant = 'Player 2';
+    else if (lowerTitle.includes('bloody')) variant = 'Bloody';
+    else if (lowerTitle.includes('classic blue')) variant = 'Classic Blue';
+    else if (lowerTitle.includes('dark knight')) variant = 'Dark Knight';
+  }
+
+  let edition = claims.edition || '';
+  if (!edition) {
+    if (lowerTitle.includes('85th anniversary') || lowerTitle.includes('85th') || lowerTitle.includes('85 aniversario')) {
+      edition = '85th Anniversary';
+    }
+  }
+
+  // 7. Tamaño / Escala normalizada
+  let sizeInches = '';
+  const candidateSizeRaw = claims.scale || claims.size || '';
+  if (candidateSizeRaw) {
+    const parsed = normalizeSizeOrScale(candidateSizeRaw);
+    if (parsed.normalizedInches) sizeInches = parsed.normalizedInches;
+  }
+  if (!sizeInches) {
+    const parsedFromTitle = normalizeSizeOrScale(rawTitle);
+    if (parsedFromTitle.normalizedInches) sizeInches = parsedFromTitle.normalizedInches;
+  }
+
+  const coreTokens = extractCoreTokens(rawTitle);
+
+  return {
+    brand,
+    character,
+    franchise,
+    productLine,
+    productType,
+    variant,
+    edition,
+    sizeInches,
+    coreTokens
+  };
+}
+
+/**
+ * Evalúa determinísticamente si un producto Zinc coincide con el candidato
+ * mediante Análisis de Identidad Canónica por Componentes.
+ * 
+ * Jerarquía de Decisión:
+ * 1. EXACT: ASIN exacto validado o concordancia exhaustiva de componentes
+ * 2. STRONG: Sin conflictos duros + múltiples concordancias determinísticas (Marca + Personaje + Tipo + Tamaño/Línea)
+ * 3. AMBIGUOUS: Identidad plausible pero variante/edición crítica no corroborada o múltiples resultados competitivos
+ * 4. NO_MATCH: Conflicto duro de marca/personaje/tipo o evidencia insuficiente
+ */
 export function matchZincCandidate(
   candidate: {
     id?: string;
@@ -190,7 +421,7 @@ export function matchZincCandidate(
 
   const candidateAsin = (candidate.asin || candidate.claims?.asin || '').trim().toUpperCase();
 
-  // LEVEL 1 — EXACT ASIN MATCH
+  // NIVEL 1 — EXACT ASIN MATCH
   if (candidateAsin && /^[A-Z0-9]{10}$/.test(candidateAsin)) {
     const exactMatch = zincProducts.find(p => (p.asin || p.external_product_id || '').toUpperCase() === candidateAsin);
     if (exactMatch) {
@@ -204,117 +435,234 @@ export function matchZincCandidate(
     }
   }
 
-  const candTitle = (candidate.title || '').trim();
-  const candBrand = (candidate.brand && candidate.brand !== 'No verificado' ? candidate.brand : '').trim();
-  const candAttrs: any = {
-    brand: candBrand
-  };
-  if (candidate.claims?.scale || candidate.claims?.size) candAttrs.scale = candidate.claims?.scale || candidate.claims?.size;
-  if (!candAttrs.scale) {
-    const extractedCand = ProductNormalizationService.extractAttributesFromTitle(candTitle);
-    if (extractedCand.scale) candAttrs.scale = extractedCand.scale;
-  }
-  if (candidate.claims?.variant) candAttrs.variant = candidate.claims?.variant;
-  if (candidate.claims?.edition) candAttrs.edition = candidate.claims?.edition;
-  if (candidate.claims?.version) candAttrs.version = candidate.claims?.version;
+  const candId = extractSemanticIdentity(candidate);
 
-  // Evaluate each returned product
-  const scoredMatches: { product: ZincResolvedProduct; score: number; reasons: string[]; conflict: boolean; conflictReason?: string }[] = [];
+  const scoredMatches: {
+    product: ZincResolvedProduct;
+    score: number;
+    level: ZincResolutionMatchLevel;
+    reasons: string[];
+    hardConflict: boolean;
+    conflictReason?: string;
+  }[] = [];
 
   for (const prod of zincProducts) {
-    const prodTitle = prod.title || '';
-    const prodBrand = prod.brand || '';
+    const prodId = extractSemanticIdentity({
+      title: prod.title || '',
+      brand: prod.brand || '',
+      claims: prod.raw_data
+    });
 
-    // Check variant conflict with ProductMatchingEngine rules
-    const prodAttrs: any = {
-      brand: prodBrand
-    };
-    if (prod.raw_data?._normalized?.scale || prod.raw_data?.scale) prodAttrs.scale = prod.raw_data?._normalized?.scale || prod.raw_data?.scale;
-    if (!prodAttrs.scale) {
-      const extractedProd = ProductNormalizationService.extractAttributesFromTitle(prodTitle);
-      if (extractedProd.scale) prodAttrs.scale = extractedProd.scale;
-    }
-    if (prod.raw_data?._normalized?.variant || prod.raw_data?.variant) prodAttrs.variant = prod.raw_data?._normalized?.variant || prod.raw_data?.variant;
-    if (prod.raw_data?._normalized?.edition || prod.raw_data?.edition) prodAttrs.edition = prod.raw_data?._normalized?.edition || prod.raw_data?.edition;
+    const reasons: string[] = [];
 
-    // Check edition and scale conflict
-    let conflict = { hasConflict: false, reason: undefined as string | undefined };
-    if (candAttrs.edition || prodAttrs.edition || candAttrs.scale || prodAttrs.scale || candAttrs.variant || prodAttrs.variant) {
-      conflict = ProductMatchingEngine.checkVariantConflict(candAttrs, {
-        ...prodAttrs,
-        canonical_title: prodTitle
-      });
+    // ──────────────────────────────────────────────────────────
+    // CONFLICTOS DUROS (HARD CONFLICTS) -> Inmediato NO_MATCH
+    // ──────────────────────────────────────────────────────────
 
-      // Also check scale conflict if scale is specified in inches or numbers
-      if (!conflict.hasConflict && candAttrs.scale && prodAttrs.scale) {
-        const s1 = String(candAttrs.scale).trim().toLowerCase().replace(/[\s"'-]/g, '');
-        const s2 = String(prodAttrs.scale).trim().toLowerCase().replace(/[\s"'-]/g, '');
-        if (s1 !== s2) {
-          conflict = {
-            hasConflict: true,
-            reason: `SCALE_MISMATCH: Candidate scale (${candAttrs.scale}) vs Product scale (${prodAttrs.scale})`
-          };
-        }
+    // 1. Conflicto de Marca (Brand Conflict)
+    if (candId.brand && prodId.brand) {
+      const b1 = cleanText(candId.brand).toLowerCase();
+      const b2 = cleanText(prodId.brand).toLowerCase();
+      // Si ambas marcas están identificadas y son incompatibles (ej: Steiff vs Funko, Ty vs Kids Preferred, Kenner vs LEGO)
+      if (b1 !== b2 && !b1.includes(b2) && !b2.includes(b1)) {
+        scoredMatches.push({
+          product: prod,
+          score: 0,
+          level: 'NO_MATCH',
+          reasons: [`BRAND_CONFLICT:${candId.brand}_VS_${prodId.brand}`],
+          hardConflict: true,
+          conflictReason: `BRAND_CONFLICT: Candidate (${candId.brand}) vs Product (${prodId.brand})`
+        });
+        continue;
       }
     }
 
-    if (conflict.hasConflict) {
+    // 2. Conflicto de Personaje (Character Conflict)
+    if (candId.character && prodId.character) {
+      const c1 = candId.character.toLowerCase();
+      const c2 = prodId.character.toLowerCase();
+      if (c1 !== c2 && !c1.includes(c2) && !c2.includes(c1)) {
+        scoredMatches.push({
+          product: prod,
+          score: 0,
+          level: 'NO_MATCH',
+          reasons: [`CHARACTER_CONFLICT:${candId.character}_VS_${prodId.character}`],
+          hardConflict: true,
+          conflictReason: `CHARACTER_CONFLICT: Candidate (${candId.character}) vs Product (${prodId.character})`
+        });
+        continue;
+      }
+    }
+
+    // 3. Conflicto de Tipo de Producto (Product Type Conflict)
+    // Ej: Peluche (plush) vs Set de Bloques / Vehículo (building_or_vehicle)
+    if (candId.productType && prodId.productType && candId.productType !== prodId.productType) {
       scoredMatches.push({
         product: prod,
         score: 0,
-        reasons: [`VARIANT_CONFLICT:${conflict.reason}`],
-        conflict: true,
-        conflictReason: conflict.reason
+        level: 'NO_MATCH',
+        reasons: [`PRODUCT_TYPE_CONFLICT:${candId.productType}_VS_${prodId.productType}`],
+        hardConflict: true,
+        conflictReason: `PRODUCT_TYPE_CONFLICT: Candidate is ${candId.productType}, product is ${prodId.productType}`
       });
       continue;
     }
 
-    // Similarity calculation
-    const candNormWords = cleanText(candTitle).toLowerCase().split(' ').filter(w => w.length > 2);
-    const prodNormWords = cleanText(prodTitle).toLowerCase().split(' ').filter(w => w.length > 2);
-
-    if (candNormWords.length === 0 || prodNormWords.length === 0) {
-      scoredMatches.push({ product: prod, score: 0, reasons: ['EMPTY_TOKENS'], conflict: false });
+    // 4. Conflicto de Tamaño Mayor (Major Size Conflict)
+    // Ej: 8in vs 20in, 12in vs 7in
+    if (candId.sizeInches && prodId.sizeInches && candId.sizeInches !== prodId.sizeInches) {
+      scoredMatches.push({
+        product: prod,
+        score: 0,
+        level: 'NO_MATCH',
+        reasons: [`SIZE_MISMATCH:${candId.sizeInches}_VS_${prodId.sizeInches}`],
+        hardConflict: true,
+        conflictReason: `SIZE_MISMATCH: Candidate (${candId.sizeInches}) vs Product (${prodId.sizeInches})`
+      });
       continue;
     }
 
-    const candWordSet = new Set(candNormWords);
-    const prodWordSet = new Set(prodNormWords);
+    // ──────────────────────────────────────────────────────────
+    // EVALUACIÓN DE SEÑALES POSITIVAS Y COMPONENTES
+    // ──────────────────────────────────────────────────────────
+    let componentScore = 0.0;
 
-    let intersection = 0;
-    candWordSet.forEach(w => {
-      if (prodWordSet.has(w)) intersection++;
-    });
-
-    const union = new Set([...candWordSet, ...prodWordSet]).size;
-    const jaccard = union > 0 ? intersection / union : 0;
-
-    // Brand alignment bonus
-    let brandBonus = 0;
-    if (candBrand && prodBrand) {
-      const b1 = cleanText(candBrand).toLowerCase();
-      const b2 = cleanText(prodBrand).toLowerCase();
+    // A. Concordancia de Marca (0.25)
+    let brandMatched = false;
+    if (candId.brand && prodId.brand) {
+      const b1 = cleanText(candId.brand).toLowerCase();
+      const b2 = cleanText(prodId.brand).toLowerCase();
       if (b1 === b2 || b1.includes(b2) || b2.includes(b1)) {
-        brandBonus = 0.15;
+        componentScore += 0.25;
+        brandMatched = true;
+        reasons.push(`BRAND_MATCH:${candId.brand}`);
       }
-    } else if (candBrand && cleanText(prodTitle).toLowerCase().includes(cleanText(candBrand).toLowerCase())) {
-      brandBonus = 0.10;
+    } else if (candId.brand && (prod.title || '').toLowerCase().includes(candId.brand.toLowerCase())) {
+      componentScore += 0.20;
+      brandMatched = true;
+      reasons.push(`BRAND_IN_TITLE:${candId.brand}`);
     }
 
-    const finalScore = Math.min(1.0, Number((jaccard + brandBonus).toFixed(2)));
+    // B. Concordancia de Personaje (0.25)
+    let characterMatched = false;
+    if (candId.character && prodId.character && candId.character.toLowerCase() === prodId.character.toLowerCase()) {
+      componentScore += 0.25;
+      characterMatched = true;
+      reasons.push(`CHARACTER_MATCH:${candId.character}`);
+    } else if (candId.character && (prod.title || '').toLowerCase().includes(candId.character.toLowerCase())) {
+      componentScore += 0.20;
+      characterMatched = true;
+      reasons.push(`CHARACTER_IN_TITLE:${candId.character}`);
+    }
+
+    // C. Concordancia de Tipo de Producto (0.15)
+    let typeMatched = false;
+    if (candId.productType && prodId.productType && candId.productType === prodId.productType) {
+      componentScore += 0.15;
+      typeMatched = true;
+      reasons.push(`TYPE_MATCH:${candId.productType}`);
+    }
+
+    // D. Concordancia de Tamaño/Escala (0.15)
+    let sizeMatched = false;
+    if (candId.sizeInches && prodId.sizeInches && candId.sizeInches === prodId.sizeInches) {
+      componentScore += 0.15;
+      sizeMatched = true;
+      reasons.push(`SIZE_MATCH:${candId.sizeInches}`);
+    }
+
+    // E. Concordancia de Línea de Producto (0.10)
+    let lineMatched = false;
+    if (candId.productLine && prodId.productLine && candId.productLine.toLowerCase() === prodId.productLine.toLowerCase()) {
+      componentScore += 0.10;
+      lineMatched = true;
+      reasons.push(`LINE_MATCH:${candId.productLine}`);
+    } else if (candId.productLine && !prodId.productLine) {
+      // Si el candidato requiere una línea específica (ej: HugMees) pero el producto no la tiene -> penalización
+      componentScore -= 0.15;
+      reasons.push(`LINE_MISSING_IN_PRODUCT:${candId.productLine}`);
+    }
+
+    // F. Concordancia de Edición / Variante Crítica (0.10 o AMBIGUOUS)
+    let editionConfirmed = true;
+    if (candId.edition) {
+      if (prodId.edition && prodId.edition.toLowerCase() === candId.edition.toLowerCase()) {
+        componentScore += 0.10;
+        reasons.push(`EDITION_CORROBORATED:${candId.edition}`);
+      } else {
+        editionConfirmed = false;
+        reasons.push(`EDITION_UNCONFIRMED:${candId.edition}`);
+      }
+    }
+
+    let variantConfirmed = true;
+    if (candId.variant) {
+      if (prodId.variant && prodId.variant.toLowerCase() === candId.variant.toLowerCase()) {
+        componentScore += 0.10;
+        reasons.push(`VARIANT_CORROBORATED:${candId.variant}`);
+      } else {
+        variantConfirmed = false;
+        reasons.push(`VARIANT_UNCONFIRMED:${candId.variant}`);
+      }
+    }
+
+    // G. Similitud de Core Tokens (0.15 máximo)
+    let coreJaccard = 0;
+    if (candId.coreTokens.size > 0 && prodId.coreTokens.size > 0) {
+      let intersection = 0;
+      candId.coreTokens.forEach(t => {
+        if (prodId.coreTokens.has(t)) intersection++;
+      });
+      const union = new Set([...candId.coreTokens, ...prodId.coreTokens]).size;
+      coreJaccard = union > 0 ? intersection / union : 0;
+      componentScore += Number((coreJaccard * 0.15).toFixed(2));
+      reasons.push(`CORE_JACCARD:${(coreJaccard * 100).toFixed(0)}%`);
+    }
+
+    const finalScore = Math.min(1.0, Math.max(0, Number(componentScore.toFixed(2))));
+
+    // Determinar nivel de coincidencia por reglas de identidad
+    let matchLevel: ZincResolutionMatchLevel = 'NO_MATCH';
+
+    // Regla de Protección Estricta: Si el candidato tiene una Variante o Edición explícita relevante no corroborada:
+    // NO puede ser STRONG. Se clasifica como AMBIGUOUS si el resto coincide, o NO_MATCH si el score es bajo.
+    if (!editionConfirmed || !variantConfirmed) {
+      if (brandMatched && characterMatched && finalScore >= 0.55) {
+        matchLevel = 'AMBIGUOUS';
+        reasons.push('VARIANT_OR_EDITION_NOT_CORROBORATED_REQUIRES_CONFIRMATION');
+      } else {
+        matchLevel = 'NO_MATCH';
+      }
+    } else {
+      // Si la identidad concordante es sólida:
+      // (Marca + Personaje + Tipo + Tamaño/Línea sin conflictos)
+      if (brandMatched && characterMatched && (typeMatched || lineMatched) && finalScore >= 0.70) {
+        matchLevel = 'STRONG';
+      } else if (brandMatched && characterMatched && finalScore >= 0.58) {
+        matchLevel = 'AMBIGUOUS';
+      } else if (finalScore >= 0.75) {
+        matchLevel = 'STRONG';
+      } else if (finalScore >= 0.55) {
+        matchLevel = 'AMBIGUOUS';
+      } else {
+        matchLevel = 'NO_MATCH';
+      }
+    }
+
     scoredMatches.push({
       product: prod,
       score: finalScore,
-      reasons: [`JACCARD:${(jaccard * 100).toFixed(0)}%`, `BRAND_BONUS:${brandBonus}`],
-      conflict: false
+      level: matchLevel,
+      reasons,
+      hardConflict: false
     });
   }
 
-  // Filter non-conflicting candidates and sort by score descending
-  const validMatches = scoredMatches.filter(m => !m.conflict).sort((a, b) => b.score - a.score);
+  // Filtrar candidatos sin conflictos duros y ordenar por score descendente
+  const validMatches = scoredMatches.filter(m => !m.hardConflict).sort((a, b) => b.score - a.score);
 
   if (validMatches.length === 0) {
-    const firstConflict = scoredMatches.find(m => m.conflict);
+    const firstConflict = scoredMatches.find(m => m.hardConflict);
     return {
       level: 'NO_MATCH',
       confidenceScore: 0,
@@ -327,15 +675,17 @@ export function matchZincCandidate(
 
   const topMatch = validMatches[0];
 
-  // Check for ambiguity: if runner up is very close in score (delta < 0.05) and has distinct ASIN
+  // Comprobar ambigüedad competitiva: si hay dos productos muy parecidos en score (delta < 0.05) con ASINs diferentes
   if (validMatches.length > 1) {
     const runnerUp = validMatches[1];
     if (topMatch.score >= 0.65 && runnerUp.score >= 0.65 && (topMatch.score - runnerUp.score) < 0.05) {
-      if ((topMatch.product.asin || topMatch.product.external_product_id) !== (runnerUp.product.asin || runnerUp.product.external_product_id)) {
+      const topAsin = topMatch.product.asin || topMatch.product.external_product_id;
+      const runnerAsin = runnerUp.product.asin || runnerUp.product.external_product_id;
+      if (topAsin !== runnerAsin) {
         return {
           level: 'AMBIGUOUS',
           confidenceScore: topMatch.score,
-          matchedProduct: null, // Ambiguous match never assigns image/asin
+          matchedProduct: null, // Ambigüedad competitiva nunca asigna imagen
           reasons: ['MULTIPLE_SIMILAR_ZINC_MATCHES_DETECTED', `DELTA:${(topMatch.score - runnerUp.score).toFixed(2)}`],
           variantConflictDetected: false
         };
@@ -343,8 +693,7 @@ export function matchZincCandidate(
     }
   }
 
-  // LEVEL 2 — STRONG MATCH (Score >= 0.78)
-  if (topMatch.score >= 0.78) {
+  if (topMatch.level === 'STRONG') {
     return {
       level: 'STRONG',
       confidenceScore: topMatch.score,
@@ -354,18 +703,16 @@ export function matchZincCandidate(
     };
   }
 
-  // Marginal match (0.65 <= score < 0.78) -> Treat as AMBIGUOUS to protect identity integrity
-  if (topMatch.score >= 0.65) {
+  if (topMatch.level === 'AMBIGUOUS') {
     return {
       level: 'AMBIGUOUS',
       confidenceScore: topMatch.score,
-      matchedProduct: null,
-      reasons: ['MARGINAL_SIMILARITY_SCORE_REQUIRES_CONFIRMATION', ...topMatch.reasons],
+      matchedProduct: null, // AMBIGUOUS no asigna imagen
+      reasons: topMatch.reasons,
       variantConflictDetected: false
     };
   }
 
-  // LEVEL 4 — NO_MATCH (Score < 0.65)
   return {
     level: 'NO_MATCH',
     confidenceScore: topMatch.score,

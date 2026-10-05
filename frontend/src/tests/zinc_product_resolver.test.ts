@@ -4,6 +4,8 @@ import {
   matchZincCandidate,
   resolveZincProductsForCandidates,
   clearZincResolverCache,
+  normalizeSizeOrScale,
+  extractCoreTokens,
   type ZincResolvedProduct
 } from '../services/sourcing/zincProductResolver';
 import {
@@ -317,4 +319,347 @@ describe('CANONICAL AMAZON / ZINC SEARCH & SOURCING RESOLVER SUITE (SURGICAL 546
     expect(evalResult.variantConflictDetected).toBe(true);
     expect(evalResult.matchedProduct).toBeNull();
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // SEMANTIC PRODUCT IDENTITY & CERTIFICATION TESTS (REAL RUN FIXTURES)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // TEST 13: Normalización bilingüe peluche ↔ plush
+  it('TEST 13: Normalización bilingüe determinística (peluche ↔ plush)', () => {
+    const tokens = extractCoreTokens('Peluche de Batman');
+    expect(tokens.has('plush')).toBe(true);
+    expect(tokens.has('batman')).toBe(true);
+  });
+
+  // TEST 14: Normalización de unidades pulgadas ↔ inch
+  it('TEST 14: Normalización de unidades (pulgadas / in / inch)', () => {
+    expect(normalizeSizeOrScale('8 pulgadas').normalizedInches).toBe('8in');
+    expect(normalizeSizeOrScale('8-Inch').normalizedInches).toBe('8in');
+    expect(normalizeSizeOrScale('8"').normalizedInches).toBe('8in');
+    expect(normalizeSizeOrScale('10 in').normalizedInches).toBe('10in');
+  });
+
+  // TEST 15: Equivalencia cm ↔ inch con tolerancia estricta
+  it('TEST 15: Equivalencia cm ↔ inch (20.3 cm -> 8in, 25 cm -> 10in, 30 cm -> 12in)', () => {
+    expect(normalizeSizeOrScale('20.3 cm').normalizedInches).toBe('8in');
+    expect(normalizeSizeOrScale('25 cm').normalizedInches).toBe('10in');
+    expect(normalizeSizeOrScale('30 cm').normalizedInches).toBe('12in');
+    expect(normalizeSizeOrScale('17.8 cm').normalizedInches).toBe('7in');
+  });
+
+  // TEST 16: CASE A REAL — Squishmallows Batman 8in -> STRONG MATCH & RESOLVE IMAGE
+  it('TEST 16: CASE A REAL -> Squishmallows Batman 8in resuelve como STRONG MATCH y asigna imagen', () => {
+    const candidate = {
+      id: 'cand_squish_8',
+      title: 'Squishmallows Peluche DC Batman 8 pulgadas Comics 20 3 cm',
+      brand: 'Squishmallows'
+    };
+
+    const mockZincProducts: ZincResolvedProduct[] = [
+      normalizeAmazonZincProduct({
+        external_product_id: 'B0GWFGBBRQ',
+        title: 'Squishmallows Batman 8-Inch Plush – DC Comics Superhero Stuffed Animal, Soft Collectible Plush Toy, Official Kellytoy',
+        brand: 'Squishmallows',
+        price_usd: 24.99,
+        main_image_url_external: 'https://m.media-amazon.com/images/I/31W0kt5sO1L._AC_UL320_.jpg'
+      }, 'ZINC_LIVE')
+    ];
+
+    const evalResult = matchZincCandidate(candidate, mockZincProducts);
+
+    expect(evalResult.level).toBe('STRONG');
+    expect(evalResult.matchedProduct).not.toBeNull();
+    expect(evalResult.matchedProduct?.asin).toBe('B0GWFGBBRQ');
+    expect(evalResult.matchedProduct?.image_url).toBe('https://m.media-amazon.com/images/I/31W0kt5sO1L._AC_UL320_.jpg');
+  });
+
+  // TEST 17: CASE C REAL — Squishmallows HugMees 25cm vs 10in -> STRONG MATCH
+  it('TEST 17: CASE C REAL -> Squishmallows HugMees 25cm vs 10in resuelve como STRONG MATCH', () => {
+    const candidate = {
+      id: 'cand_hugmees_25',
+      title: 'Squishmallows Peluche DC Batman HugMees 25 cm',
+      brand: 'Squishmallows'
+    };
+
+    const mockZincProducts: ZincResolvedProduct[] = [
+      normalizeAmazonZincProduct({
+        external_product_id: 'B0D4F7SPV2',
+        title: 'Squishmallows Original DC 10in Batman HugMees – Ultrasoft Official Jazwares Plush (Medium-Sized)',
+        brand: 'Squishmallows',
+        price_usd: 15.99,
+        main_image_url_external: 'https://m.media-amazon.com/images/I/71AiYvF6seL._AC_UL320_.jpg'
+      }, 'ZINC_LIVE')
+    ];
+
+    const evalResult = matchZincCandidate(candidate, mockZincProducts);
+
+    expect(evalResult.level).toBe('STRONG');
+    expect(evalResult.matchedProduct?.asin).toBe('B0D4F7SPV2');
+  });
+
+  // TEST 18: CASE B REAL — Steiff 85th Anniversary sin corroborar -> AMBIGUOUS (protege variantes)
+  it('TEST 18: CASE B REAL -> Steiff con edición 85th no corroborada en resultado queda AMBIGUOUS sin asignar producto', () => {
+    const candidate = {
+      id: 'cand_steiff_85',
+      title: 'Steiff Peluche Batman 85th Anniversary DC Comics 30 cm',
+      brand: 'Steiff'
+    };
+
+    const mockZincProducts: ZincResolvedProduct[] = [
+      normalizeAmazonZincProduct({
+        external_product_id: 'B0DWNB5NT8',
+        title: 'Steiff DC Superhero Teddy Bear - Officially Licensed Plush Toy, DC Batman, 12" Tall',
+        brand: 'Steiff',
+        price_usd: 49.00,
+        main_image_url_external: 'https://m.media-amazon.com/images/I/81-x4t4g+zL._AC_UL320_.jpg'
+      }, 'ZINC_LIVE')
+    ];
+
+    const evalResult = matchZincCandidate(candidate, mockZincProducts);
+
+    expect(evalResult.level).toBe('AMBIGUOUS');
+    expect(evalResult.matchedProduct).toBeNull(); // No asigna imagen a ciegas
+  });
+
+  // TEST 19: Steiff 85th Anniversary con edición corroborada -> STRONG MATCH
+  it('TEST 19: Steiff con edición 85th Anniversary explícitamente corroborada resuelve como STRONG', () => {
+    const candidate = {
+      id: 'cand_steiff_85_corr',
+      title: 'Steiff Peluche Batman 85th Anniversary DC Comics 30 cm',
+      brand: 'Steiff'
+    };
+
+    const mockZincProducts: ZincResolvedProduct[] = [
+      normalizeAmazonZincProduct({
+        external_product_id: 'B0DWNB5NT8',
+        title: 'Steiff DC Superhero Teddy Bear 85th Anniversary Limited Edition - DC Batman, 12" Tall',
+        brand: 'Steiff',
+        price_usd: 49.00,
+        main_image_url_external: 'https://m.media-amazon.com/images/I/81-x4t4g+zL._AC_UL320_.jpg'
+      }, 'ZINC_LIVE')
+    ];
+
+    const evalResult = matchZincCandidate(candidate, mockZincProducts);
+
+    expect(evalResult.level).toBe('STRONG');
+    expect(evalResult.matchedProduct?.asin).toBe('B0DWNB5NT8');
+  });
+
+  // TEST 20: CASE D REAL — Funko Patchwork faltante -> NO STRONG (AMBIGUOUS o NO_MATCH)
+  it('TEST 20: CASE D REAL -> Funko Patchwork sin corroboración de variante NO es STRONG y no asigna imagen', () => {
+    const candidate = {
+      id: 'cand_funko_patchwork',
+      title: 'Funko Peluche Batman Patchwork DC Comics 17 8 cm',
+      brand: 'Funko'
+    };
+
+    const mockZincProducts: ZincResolvedProduct[] = [
+      normalizeAmazonZincProduct({
+        external_product_id: 'B003FYICXU',
+        title: 'Funko Batman Plushies',
+        brand: 'Funko',
+        main_image_url_external: 'https://m.media-amazon.com/images/I/71RR8+hLi3L._AC_UL320_.jpg'
+      }, 'ZINC_LIVE')
+    ];
+
+    const evalResult = matchZincCandidate(candidate, mockZincProducts);
+
+    expect(evalResult.level).not.toBe('STRONG');
+    expect(evalResult.matchedProduct).toBeNull();
+  });
+
+  // TEST 21: CASE E REAL — Kenner Total Justice vs LEGO Batmobile -> NO_MATCH por conflicto duro
+  it('TEST 21: CASE E REAL -> Kenner Total Justice vs LEGO Batmobile resulta en NO_MATCH por conflicto de marca y tipo', () => {
+    const candidate = {
+      id: 'cand_kenner',
+      title: 'Kenner Batman Total Justice DC 5 pulgadas',
+      brand: 'Kenner'
+    };
+
+    const mockZincProducts: ZincResolvedProduct[] = [
+      normalizeAmazonZincProduct({
+        external_product_id: 'B0CYM31FMM',
+        title: 'LEGO DC Batman: The Classic TV Series Batmobile 76328',
+        brand: 'LEGO'
+      }, 'ZINC_LIVE')
+    ];
+
+    const evalResult = matchZincCandidate(candidate, mockZincProducts);
+
+    expect(evalResult.level).toBe('NO_MATCH');
+    expect(evalResult.matchedProduct).toBeNull();
+  });
+
+  // TEST 22: CASE F REAL — Ty vs KIDS PREFERRED -> NO_MATCH por conflicto de marca
+  it('TEST 22: CASE F REAL -> Ty vs KIDS PREFERRED resulta en NO_MATCH por conflicto duro de marca', () => {
+    const candidate = {
+      id: 'cand_ty',
+      title: 'Ty Peluche Beanie Bouncer Batman DC Comics',
+      brand: 'Ty'
+    };
+
+    const mockZincProducts: ZincResolvedProduct[] = [
+      normalizeAmazonZincProduct({
+        external_product_id: 'B0DVVS8RR9',
+        title: 'KIDS PREFERRED WB DC Batman Extra Soft Plush Stuffed Superhero Toy – 12 Inch Plush',
+        brand: 'KIDS PREFERRED'
+      }, 'ZINC_LIVE')
+    ];
+
+    const evalResult = matchZincCandidate(candidate, mockZincProducts);
+
+    expect(evalResult.level).toBe('NO_MATCH');
+    expect(evalResult.matchedProduct).toBeNull();
+  });
+
+  // TEST 23: Conflicto duro de personaje (Batman vs Superman) -> NO_MATCH
+  it('TEST 23: Conflicto de personaje (Batman vs Superman) produce NO_MATCH inmediato', () => {
+    const candidate = {
+      id: 'cand_pers_1',
+      title: 'Squishmallows Peluche Batman 8 pulgadas',
+      brand: 'Squishmallows'
+    };
+
+    const mockZincProducts: ZincResolvedProduct[] = [
+      normalizeAmazonZincProduct({
+        external_product_id: 'B00SUP01',
+        title: 'Squishmallows Superman 8-Inch Plush Stuffed Toy',
+        brand: 'Squishmallows'
+      }, 'ZINC_LIVE')
+    ];
+
+    const evalResult = matchZincCandidate(candidate, mockZincProducts);
+
+    expect(evalResult.level).toBe('NO_MATCH');
+    expect(evalResult.matchedProduct).toBeNull();
+  });
+
+  // TEST 24: Conflicto duro de tamaño mayor (8in vs 20in) -> NO_MATCH
+  it('TEST 24: Conflicto de tamaño mayor (8in vs 20in) produce NO_MATCH', () => {
+    const candidate = {
+      id: 'cand_size_1',
+      title: 'Squishmallows Batman 8 pulgadas',
+      brand: 'Squishmallows'
+    };
+
+    const mockZincProducts: ZincResolvedProduct[] = [
+      normalizeAmazonZincProduct({
+        external_product_id: 'B00BIG01',
+        title: 'Squishmallows Batman 20-Inch Giant Plush Stuffed Toy',
+        brand: 'Squishmallows'
+      }, 'ZINC_LIVE')
+    ];
+
+    const evalResult = matchZincCandidate(candidate, mockZincProducts);
+
+    expect(evalResult.level).toBe('NO_MATCH');
+    expect(evalResult.matchedProduct).toBeNull();
+  });
+
+  // TEST 25: ASIN exacto produce nivel EXACT
+  it('TEST 25: ASIN exacto produce nivel EXACT inmediatamente', () => {
+    const candidate = {
+      id: 'cand_exact_asin',
+      title: 'Generic Batman Toy',
+      asin: 'B0GWFGBBRQ'
+    };
+
+    const mockZincProducts: ZincResolvedProduct[] = [
+      normalizeAmazonZincProduct({
+        external_product_id: 'B0GWFGBBRQ',
+        title: 'Squishmallows Batman 8-Inch Plush',
+        brand: 'Squishmallows'
+      }, 'ZINC_LIVE')
+    ];
+
+    const evalResult = matchZincCandidate(candidate, mockZincProducts);
+
+    expect(evalResult.level).toBe('EXACT');
+    expect(evalResult.confidenceScore).toBe(1.0);
+    expect(evalResult.matchedProduct?.asin).toBe('B0GWFGBBRQ');
+  });
+
+  // TEST 26: Imagen, precio y ASIN se asignan ÚNICAMENTE en EXACT o STRONG
+  it('TEST 26: resolveZincProductsForCandidates asigna imagen, precio y ASIN únicamente a EXACT/STRONG', async () => {
+    const mockSearchFn = vi.fn().mockImplementation(async (query: string) => {
+      if (query.includes('Squishmallows')) {
+        return {
+          success: true,
+          status: 'SUCCESS',
+          statusCode: 200,
+          products: [normalizeAmazonZincProduct({
+            external_product_id: 'B0GWFGBBRQ',
+            title: 'Squishmallows Batman 8-Inch Plush',
+            brand: 'Squishmallows',
+            price_usd: 24.99,
+            main_image_url_external: 'https://m.media-amazon.com/images/I/squish.jpg'
+          }, 'ZINC_LIVE')],
+          resolution_source: 'ZINC_LIVE',
+          total: 1
+        };
+      }
+      return {
+        success: true,
+        status: 'SUCCESS',
+        statusCode: 200,
+        products: [normalizeAmazonZincProduct({
+          external_product_id: 'B0UNKNOWN99',
+          title: 'Unrelated Batman Keychain',
+          brand: 'Generic',
+          price_usd: 5.99,
+          main_image_url_external: 'https://m.media-amazon.com/images/I/unrelated.jpg'
+        }, 'ZINC_LIVE')],
+        resolution_source: 'ZINC_LIVE',
+        total: 1
+      };
+    });
+
+    const candidates = manualCandidates([
+      { id: 'c_strong', title: 'Squishmallows Peluche DC Batman 8 pulgadas Comics 20 3 cm', brand: 'Squishmallows' },
+      { id: 'c_nomatch', title: 'Kenner Batman Total Justice DC 5 pulgadas', brand: 'Kenner' }
+    ], 'UY');
+
+    const result = await resolveZincProductsForCandidates(candidates, { searchFn: mockSearchFn });
+
+    // Candidato 1: STRONG -> imagen y precio asignados
+    expect(result.resolvedCandidates[0].image_url).toBe('https://m.media-amazon.com/images/I/squish.jpg');
+    expect(result.resolvedCandidates[0].pricing?.origin_price_usd).toBe(24.99);
+    expect(result.resolvedCandidates[0].asin).toBe('B0GWFGBBRQ');
+
+    // Candidato 2: NO_MATCH -> imagen nula, precio no contaminado
+    expect(result.resolvedCandidates[1].image_url).toBeNull();
+    expect(result.resolvedCandidates[1].asin).toBeUndefined();
+    expect(result.telemetry.images_resolved).toBe(1);
+    expect(result.telemetry.strong_matches).toBe(1);
+    expect(result.telemetry.no_matches).toBe(1);
+  });
+
+  // TEST 27: Aislamiento estricto de candidatos (cero contaminación cruzada)
+  it('TEST 27: Aislamiento estricto 1:1 de candidatos (no se transfieren imágenes)', async () => {
+    const mockSearchFn = vi.fn().mockResolvedValue({
+      success: true,
+      status: 'SUCCESS',
+      statusCode: 200,
+      products: [normalizeAmazonZincProduct({
+        external_product_id: 'B0GWFGBBRQ',
+        title: 'Squishmallows Batman 8-Inch Plush',
+        brand: 'Squishmallows',
+        main_image_url_external: 'https://m.media-amazon.com/images/I/squish.jpg'
+      }, 'ZINC_LIVE')],
+      resolution_source: 'ZINC_LIVE',
+      total: 1
+    });
+
+    const candidates = manualCandidates([
+      { id: 'c_cand_1', title: 'Squishmallows Peluche DC Batman 8 pulgadas', brand: 'Squishmallows' },
+      { id: 'c_cand_2', title: 'Ty Peluche Batman DC Comics', brand: 'Ty' }
+    ], 'UY');
+
+    const result = await resolveZincProductsForCandidates(candidates, { searchFn: mockSearchFn });
+
+    expect(result.resolvedCandidates[0].image_url).toBe('https://m.media-amazon.com/images/I/squish.jpg');
+    // c_cand_2 tiene marca Ty, el mock devuelve Squishmallows -> Brand conflict -> NO_MATCH -> null image
+    expect(result.resolvedCandidates[1].image_url).toBeNull();
+  });
 });
+
