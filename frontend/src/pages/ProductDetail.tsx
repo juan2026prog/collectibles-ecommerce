@@ -16,6 +16,7 @@ import { analytics } from '../lib/analytics';
 import { trackGA4Event } from '../lib/analyticsTracker';
 import { trackViewContent, generateMetaEventId } from '../lib/meta/metaPixel';
 import SEO from '../components/SEO';
+import { generateProductSchema, generateBreadcrumbs, generateMetaTitle, generateMetaDescription, generateCanonical } from '../utils/seoHelpers';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { supabase } from '../lib/supabase';
 import { resolveProductPrice, resolveProductNativeCurrency, formatProductMoney } from '../lib/priceResolver';
