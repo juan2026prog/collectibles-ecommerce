@@ -93,6 +93,20 @@ export const SourcingDiscoveryView: React.FC<SourcingDiscoveryViewProps> = ({
           >
             Escaneo periódico de nuevos lanzamientos, preorders y picos de demanda en retailers oficiales sin necesidad de introducir términos manuales.
           </p>
+
+          {/* Preflight Info Badge ($0 Preflight) */}
+          <div className="flex items-center gap-3 pt-1 text-[11px] text-purple-200">
+            <span className="flex items-center gap-1 bg-purple-900/60 px-2 py-0.5 rounded-lg border border-purple-700/50">
+              <ShieldCheck className="w-3.5 h-3.5 text-purple-300" />
+              <span>Modo: ECONÓMICO</span>
+            </span>
+            <span className="bg-purple-900/60 px-2 py-0.5 rounded-lg border border-purple-700/50">
+              Preflight: <strong>$0.00 (0 llamadas)</strong>
+            </span>
+            <span className="bg-purple-900/60 px-2 py-0.5 rounded-lg border border-purple-700/50">
+              Candidatos: <strong>{candidates.length}</strong>
+            </span>
+          </div>
         </div>
 
         <button

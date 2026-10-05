@@ -141,5 +141,6 @@ export default async function handler(req, res) {
     duration_ms: Date.now() - started, sources_successful: successful, sources_failed: failed, source_health: health,
     signals_breakdown: { global_signals: observations.filter(s => s.country === 'GLOBAL').length, local_signals: local.length, total_signals: observations.length },
     trends_breakdown: { global_trends: 0, local_trends: 0 }, discoveries_created: created, candidates_generated: candidates.length, raw_counts: counters,
+    candidates,
     ai_calls: aiCalls, ai_cost_usd: aiCost, purchases_executed: 0, auto_publications: 0, completed_at: new Date().toISOString() });
 }

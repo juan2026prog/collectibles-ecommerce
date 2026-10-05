@@ -252,12 +252,21 @@ export default function AdminSourcingImport() {
         throw new Error(data.error || `Error ${response.status}: Acceso no autorizado o fallo de escaneo.`);
       }
 
+      // Si el endpoint retorna candidatos descubiertos, pasarlos por el pipeline canónico unificado
+      if (Array.isArray(data.candidates) && data.candidates.length > 0) {
+        try {
+          await sourcingDiscoveryEngine.processDiscoveredCandidates(data.candidates, selectedCountry);
+        } catch (pipeErr: any) {
+          console.warn('[Discovery] Error en pipeline canónico post-discovery:', pipeErr.message);
+        }
+      }
+
       // Recargar datos reales persistidos
       await loadIntelligenceForCountry(selectedCountry);
 
       addToast({
-        title: 'Discovery Server-Side Completado',
-        message: `Escaneo finalizado con éxito (${data.status}). Señales: ${data.signals_created || 0}, Descubrimientos: ${data.discoveries_created || 0}.`,
+        title: 'Discovery Completado & Enriquecido',
+        message: `Escaneo finalizado con éxito (${data.status}). Señales: ${data.signals_created || 0}, Descubrimientos: ${data.discoveries_created || 0}. Pipeline Zinc + Comercial completado.`,
         type: 'success'
       });
     } catch (err: any) {

@@ -9,6 +9,9 @@ import { storedCandidates } from './canonicalCandidateValidation';
 import { TrendEngine } from './trendEngine';
 import { collectiblesSignalAggregator } from './collectiblesSignalAggregator';
 import { marketSignalAggregator } from './marketSignalAggregator';
+import { resolveZincProductsForCandidates } from './zincProductResolver';
+import { enrichCandidatesCommercialData } from './candidateCommercialEnrichment';
+import { deduplicateCanonicalCandidates } from '../../../../shared/sourcingCandidateValidation.js';
 import type { SourcingTrendCard, SourcingProductCandidate } from '../../types/sourcingIntelligence';
 
 export class SourcingDiscoveryEngine {
@@ -120,12 +123,96 @@ export class SourcingDiscoveryEngine {
 
       if (dbDiscoveries && dbDiscoveries.length > 0) {
         return storedCandidates(dbDiscoveries);
-    }
+      }
     } catch (err) {
       console.warn('[SourcingDiscoveryEngine] Error leyendo descubrimientos:', err);
     }
 
     return [];
+  }
+
+  /**
+   * Ejecuta el pipeline canónico unificado sobre candidatos descubiertos por Automatic Discovery:
+   * 1. Deduplicación canónica
+   * 2. Zinc Product Resolution (ASIN / imagen / precio origen / identidad comercial)
+   * 3. Enriquecimiento comercial (Landed cost, TiendaMía, Mercado Libre UY, Margen, Opportunity Score)
+   * 4. Persistencia en sourcing_discoveries post-enriquecimiento
+   */
+  public async processDiscoveredCandidates(
+    rawCandidates: SourcingProductCandidate[],
+    country: string = 'UY'
+  ): Promise<SourcingProductCandidate[]> {
+    if (!rawCandidates || rawCandidates.length === 0) return [];
+
+    console.log('[DISCOVERY_PIPELINE_TRACE] Starting canonical pipeline for discovered candidates:', rawCandidates.length);
+
+    // 1. Deduplicación canónica
+    let candidates = deduplicateCanonicalCandidates(rawCandidates);
+
+    // 2. Zinc Product Resolution (ASIN, imagen, origin price)
+    try {
+      const { resolvedCandidates, telemetry } = await resolveZincProductsForCandidates(candidates);
+      candidates = resolvedCandidates;
+      console.log('[DISCOVERY_PIPELINE_TRACE] Zinc resolution completed for discovery:', {
+        candidatesCount: candidates.length,
+        telemetry
+      });
+    } catch (zincErr: any) {
+      console.warn('[DISCOVERY_PIPELINE_WARN] Zinc resolution failed for discovery:', zincErr.message);
+    }
+
+    // 3. Commercial Enrichment (Landed Cost, TiendaMía, MLU, Margen, Opportunity Score)
+    try {
+      candidates = await enrichCandidatesCommercialData(candidates, country);
+      console.log('[DISCOVERY_PIPELINE_TRACE] Commercial enrichment completed for discovery:', candidates.length);
+    } catch (commErr: any) {
+      console.warn('[DISCOVERY_PIPELINE_WARN] Commercial enrichment failed for discovery:', commErr.message);
+    }
+
+    // 4. Persistir resultados enriquecidos en sourcing_discoveries
+    try {
+      for (const c of candidates) {
+        if (!c.id) continue;
+        const row = {
+          country,
+          title: c.title,
+          brand: c.brand,
+          franchise: c.franchise,
+          category: c.category,
+          status: c.status,
+          discovered_from: c.discovered_from,
+          trend_score: c.trend_score,
+          opportunity_score: c.opportunity_score,
+          confidence_score: c.confidence_score,
+          source_retailer: c.retailer_source,
+          source_url: c.retailer_url,
+          asin: c.asin || null,
+          price_usd: c.pricing.origin_price_usd,
+          landed_cost_usd: c.pricing.landed_cost_estimated_usd,
+          suggested_price_usd: c.pricing.suggested_sale_price_usd,
+          margin_percent: c.pricing.estimated_margin_percent,
+          why_explanation: c.why_explanation,
+          evidence: {
+            canonical_candidate: c,
+            source_url: c.retailer_url,
+            image_url: c.image_url,
+            verification_version: c.validation_version
+          },
+          last_verified_at: new Date().toISOString()
+        };
+
+        await supabase
+          .from('sourcing_discoveries')
+          .update(row)
+          .eq('country', country)
+          .eq('title', c.title);
+      }
+      console.log('[DISCOVERY_PIPELINE_TRACE] Post-enrichment persistence completed for discovery candidates.');
+    } catch (persistErr: any) {
+      console.warn('[DISCOVERY_PIPELINE_WARN] Post-enrichment persistence error:', persistErr.message);
+    }
+
+    return candidates;
   }
 }
 
