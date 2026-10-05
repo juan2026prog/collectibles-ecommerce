@@ -54,6 +54,8 @@ export interface ZincResolutionTelemetry {
   zinc_live_results: number;
   zinc_fallback_results: number;
   cache_hits: number;
+  query_dedupe_hits: number;
+  network_requests: number;
   exact_matches: number;
   strong_matches: number;
   ambiguous_matches: number;
@@ -129,8 +131,8 @@ export function buildZincResolutionQuery(candidate: {
     const words = cleanText(str).split(' ').filter(w => w.length > 0);
     for (const w of words) {
       const lower = w.toLowerCase();
-      // Skip generic noise words
-      if (['unverified', 'official', 'licensed', 'merchandise'].includes(lower)) continue;
+      // Skip generic noise words, redundancy, and local/dimension duplication
+      if (['unverified', 'official', 'licensed', 'merchandise', 'peluche', 'plush', 'comics', 'comic', 'cm', 'pulgadas'].includes(lower)) continue;
       if (!seenTokens.has(lower)) {
         seenTokens.add(lower);
         outputTokens.push(w);
@@ -154,8 +156,8 @@ export function buildZincResolutionQuery(candidate: {
   if (variant) addTokens(variant);
   if (scale) addTokens(scale);
 
-  // Cap query at 10 most relevant tokens to keep search sharp
-  return outputTokens.slice(0, 10).join(' ');
+  // Cap query at 6 most relevant tokens to keep search sharp
+  return outputTokens.slice(0, 6).join(' ');
 }
 
 /**
@@ -208,6 +210,10 @@ export function matchZincCandidate(
     brand: candBrand
   };
   if (candidate.claims?.scale || candidate.claims?.size) candAttrs.scale = candidate.claims?.scale || candidate.claims?.size;
+  if (!candAttrs.scale) {
+    const extractedCand = ProductNormalizationService.extractAttributesFromTitle(candTitle);
+    if (extractedCand.scale) candAttrs.scale = extractedCand.scale;
+  }
   if (candidate.claims?.variant) candAttrs.variant = candidate.claims?.variant;
   if (candidate.claims?.edition) candAttrs.edition = candidate.claims?.edition;
   if (candidate.claims?.version) candAttrs.version = candidate.claims?.version;
@@ -224,16 +230,32 @@ export function matchZincCandidate(
       brand: prodBrand
     };
     if (prod.raw_data?._normalized?.scale || prod.raw_data?.scale) prodAttrs.scale = prod.raw_data?._normalized?.scale || prod.raw_data?.scale;
+    if (!prodAttrs.scale) {
+      const extractedProd = ProductNormalizationService.extractAttributesFromTitle(prodTitle);
+      if (extractedProd.scale) prodAttrs.scale = extractedProd.scale;
+    }
     if (prod.raw_data?._normalized?.variant || prod.raw_data?.variant) prodAttrs.variant = prod.raw_data?._normalized?.variant || prod.raw_data?.variant;
     if (prod.raw_data?._normalized?.edition || prod.raw_data?.edition) prodAttrs.edition = prod.raw_data?._normalized?.edition || prod.raw_data?.edition;
 
-    // Check edition conflict ONLY when explicit edition claims or conflicting edition keywords exist
+    // Check edition and scale conflict
     let conflict = { hasConflict: false, reason: undefined as string | undefined };
     if (candAttrs.edition || prodAttrs.edition || candAttrs.scale || prodAttrs.scale || candAttrs.variant || prodAttrs.variant) {
       conflict = ProductMatchingEngine.checkVariantConflict(candAttrs, {
         ...prodAttrs,
         canonical_title: prodTitle
       });
+
+      // Also check scale conflict if scale is specified in inches or numbers
+      if (!conflict.hasConflict && candAttrs.scale && prodAttrs.scale) {
+        const s1 = String(candAttrs.scale).trim().toLowerCase().replace(/[\s"'-]/g, '');
+        const s2 = String(prodAttrs.scale).trim().toLowerCase().replace(/[\s"'-]/g, '');
+        if (s1 !== s2) {
+          conflict = {
+            hasConflict: true,
+            reason: `SCALE_MISMATCH: Candidate scale (${candAttrs.scale}) vs Product scale (${prodAttrs.scale})`
+          };
+        }
+      }
     }
 
     if (conflict.hasConflict) {
@@ -379,6 +401,8 @@ export async function resolveZincProductsForCandidates(
     zinc_live_results: 0,
     zinc_fallback_results: 0,
     cache_hits: 0,
+    query_dedupe_hits: 0,
+    network_requests: 0,
     exact_matches: 0,
     strong_matches: 0,
     ambiguous_matches: 0,
@@ -400,12 +424,18 @@ export async function resolveZincProductsForCandidates(
     const asin = (c.asin || c.claims?.asin || '').trim().toUpperCase();
     if (asin && /^[A-Z0-9]{10}$/.test(asin)) {
       const existing = asinToCandidateIndices.get(asin) || [];
+      if (existing.length > 0) {
+        telemetry.query_dedupe_hits++;
+      }
       existing.push(idx);
       asinToCandidateIndices.set(asin, existing);
     } else {
       const q = buildZincResolutionQuery(c);
       if (q) {
         const existing = queryToCandidateIndices.get(q) || [];
+        if (existing.length > 0) {
+          telemetry.query_dedupe_hits++;
+        }
         existing.push(idx);
         queryToCandidateIndices.set(q, existing);
       }
@@ -418,6 +448,7 @@ export async function resolveZincProductsForCandidates(
 
   const executeSearch = async (term: string): Promise<AmazonZincSearchResult> => {
     telemetry.zinc_requests_attempted++;
+    telemetry.network_requests++;
     try {
       const res = await searchFn(term);
       if (res.success) {
@@ -453,7 +484,7 @@ export async function resolveZincProductsForCandidates(
     }
   };
 
-  // Resolve ASIN lookups
+  // Resolve ASIN lookups sequentially
   for (const [asin] of asinToCandidateIndices) {
     const cached = asinCache.get(asin);
     if (cached && cached.expiresAt > Date.now()) {
@@ -467,18 +498,22 @@ export async function resolveZincProductsForCandidates(
     asinResultsMap.set(asin, searchRes);
   }
 
-  // Resolve Text queries
-  for (const [q] of queryToCandidateIndices) {
-    const cached = queryCache.get(q);
-    if (cached && cached.expiresAt > Date.now()) {
-      telemetry.cache_hits++;
-      queryResultsMap.set(q, cached.result);
-      continue;
-    }
+  // Resolve Text queries with controlled concurrency (chunks of 2)
+  const textQueries = Array.from(queryToCandidateIndices.keys());
+  for (let i = 0; i < textQueries.length; i += 2) {
+    const batch = textQueries.slice(i, i + 2);
+    await Promise.all(batch.map(async (q) => {
+      const cached = queryCache.get(q);
+      if (cached && cached.expiresAt > Date.now()) {
+        telemetry.cache_hits++;
+        queryResultsMap.set(q, cached.result);
+        return;
+      }
 
-    const searchRes = await executeSearch(q);
-    queryCache.set(q, { result: searchRes, expiresAt: Date.now() + ttlMs });
-    queryResultsMap.set(q, searchRes);
+      const searchRes = await executeSearch(q);
+      queryCache.set(q, { result: searchRes, expiresAt: Date.now() + ttlMs });
+      queryResultsMap.set(q, searchRes);
+    }));
   }
 
   // Step 3: Match and enrich each candidate strictly 1:1
@@ -506,6 +541,7 @@ export async function resolveZincProductsForCandidates(
       });
 
       const clone: SourcingProductCandidate = { ...candidate };
+      (clone as any).commercial_resolution_status = searchRes.status;
       // Preservar honestamente que no se resolvió por error de provider/auth
       if (!clone.image_url || clone.provenance?.image?.status === 'UNKNOWN') {
         clone.image_url = null;
@@ -533,6 +569,8 @@ export async function resolveZincProductsForCandidates(
       const isFallback = resolutionSource === 'IMPORT_CANDIDATE_CACHE' || matched.resolution_source === 'IMPORT_CANDIDATE_CACHE';
       const provenanceMethod = isFallback ? 'IMPORT_CANDIDATE_CACHE' : 'ZINC_PRODUCT_DATA';
       const provenanceSource = isFallback ? 'Amazon / Collectibles DB Cache' : 'Amazon / Zinc';
+
+      (clone as any).commercial_resolution_status = 'SUCCESS';
 
       // 1. Image Resolution (Zinc product image)
       if (matched.image_url) {
@@ -601,6 +639,7 @@ export async function resolveZincProductsForCandidates(
         };
       }
     } else {
+      (clone as any).commercial_resolution_status = evaluation.level;
       // In AMBIGUOUS or NO_MATCH, keep image null unless already corroborating from another trusted source
       if (!clone.image_url || clone.provenance?.image?.status === 'UNKNOWN') {
         clone.image_url = null;

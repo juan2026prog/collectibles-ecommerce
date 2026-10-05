@@ -54,6 +54,10 @@ export interface AmazonZincSearchResult {
   success: boolean;
   status: AmazonZincSearchStatus;
   statusCode?: number;
+  edge_status?: number;
+  provider_status?: number;
+  provider_error_code?: string;
+  provider_error_message?: string;
   products: CanonicalAmazonZincProduct[];
   resolution_source: AmazonZincResolutionSource | null;
   error?: string;
@@ -171,6 +175,7 @@ export class AmazonZincSearchService {
         const errorMsg = error.message || String(error);
         const isAuth = errorMsg.includes('401') || errorMsg.includes('403') || errorMsg.toLowerCase().includes('unauthorized') || errorMsg.toLowerCase().includes('forbidden') || errorMsg.toLowerCase().includes('jwt');
         const isRate = errorMsg.includes('429') || errorMsg.toLowerCase().includes('rate limit');
+        const isTimeoutOrLimit = errorMsg.includes('546') || errorMsg.includes('WORKER_RESOURCE_LIMIT') || errorMsg.toLowerCase().includes('timeout') || errorMsg.toLowerCase().includes('gateway');
 
         const classifiedStatus: AmazonZincSearchStatus = isAuth 
           ? 'AUTH_ERROR' 
@@ -178,9 +183,16 @@ export class AmazonZincSearchService {
             ? 'RATE_LIMITED' 
             : 'PROVIDER_ERROR';
 
+        let edgeStatus = isAuth ? 403 : 500;
+        if (errorMsg.includes('546')) edgeStatus = 546;
+        else if (errorMsg.includes('504')) edgeStatus = 504;
+
+        const errorCode = isTimeoutOrLimit ? 'WORKER_RESOURCE_LIMIT' : (isAuth ? 'AUTH_FAILED' : 'PROVIDER_FAILURE');
+
         console.warn('[AMAZON_ZINC_SEARCH] Edge Function failed with error:', {
           query: cleanQuery,
           status: classifiedStatus,
+          edge_status: edgeStatus,
           error: errorMsg
         });
 
@@ -191,7 +203,10 @@ export class AmazonZincSearchService {
             return {
               success: true,
               status: classifiedStatus, // Se preserva honestamente el estado de error de la llamada live
-              statusCode: isAuth ? 403 : 500,
+              statusCode: edgeStatus,
+              edge_status: edgeStatus,
+              provider_error_code: errorCode,
+              provider_error_message: errorMsg,
               products: fallbackResult,
               resolution_source: 'IMPORT_CANDIDATE_CACHE',
               error: `Live call failed (${errorMsg}), returned DB cache fallback`,
@@ -203,7 +218,10 @@ export class AmazonZincSearchService {
         return {
           success: false,
           status: classifiedStatus,
-          statusCode: isAuth ? 403 : 500,
+          statusCode: edgeStatus,
+          edge_status: edgeStatus,
+          provider_error_code: errorCode,
+          provider_error_message: errorMsg,
           products: [],
           resolution_source: null,
           error: errorMsg,
@@ -219,6 +237,7 @@ export class AmazonZincSearchService {
           success: true,
           status: 'SUCCESS',
           statusCode: 200,
+          edge_status: 200,
           products,
           resolution_source: 'ZINC_LIVE',
           total: products.length
@@ -232,6 +251,7 @@ export class AmazonZincSearchService {
           return {
             success: true,
             status: 'SUCCESS',
+            statusCode: 200,
             products: fallbackResult,
             resolution_source: 'IMPORT_CANDIDATE_CACHE',
             total: fallbackResult.length
@@ -243,6 +263,7 @@ export class AmazonZincSearchService {
         success: true,
         status: 'NO_RESULTS',
         statusCode: 200,
+        edge_status: 200,
         products: [],
         resolution_source: null,
         total: 0
@@ -278,21 +299,55 @@ export class AmazonZincSearchService {
   }
 
   /**
-   * Consulta a la base de datos para candidatos previamente importados (Fallback)
+   * Consulta optimizada a la base de datos para candidatos previamente importados (Fallback).
+   * REGLAS:
+   * 1. Solo campos estrictamente necesarios (no select=*).
+   * 2. Búsqueda directa por ASIN/external_product_id si el término es un ASIN.
+   * 3. Búsqueda textual simplificada y tokenizada en lugar de ILIKE sobre oraciones largas.
+   * 4. Abort timeout seguro (4 segundos) para evitar bloqueos del gateway.
    */
-  private async queryDatabaseFallback(query: string, limit: number): Promise<CanonicalAmazonZincProduct[]> {
+  public async queryDatabaseFallback(query: string, limit: number = 10): Promise<CanonicalAmazonZincProduct[]> {
+    const clean = (query || '').trim();
+    if (!clean) return [];
+
     try {
+      const isAsin = /^[A-Z0-9]{10}$/i.test(clean);
+      const fields = 'external_product_id,title,brand,image_url,main_image_url_external,price_usd,product_url_external,availability,rating,review_count';
+
+      if (isAsin) {
+        const { data: byAsin } = await supabase
+          .from('international_import_candidates')
+          .select(fields)
+          .eq('external_product_id', clean.toUpperCase())
+          .limit(limit);
+
+        if (byAsin && byAsin.length > 0) {
+          return byAsin.map(c => normalizeAmazonZincProduct(c, 'IMPORT_CANDIDATE_CACHE'));
+        }
+      }
+
+      // Si es textual: extraer 2-3 palabras clave más significativas (evitar frases largas que provoquen 504)
+      const meaningfulTokens = clean
+        .normalize('NFKC')
+        .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+        .split(/\s+/)
+        .filter(w => w.length > 2 && !['peluche', 'plush', 'comics', 'comic', 'figure', 'figura'].includes(w.toLowerCase()))
+        .slice(0, 3);
+
+      const targetSearch = meaningfulTokens.length > 0 ? meaningfulTokens.join(' ') : clean.slice(0, 30);
+
       const { data: dbCandidates } = await supabase
         .from('international_import_candidates')
-        .select('*')
-        .ilike('title', `%${query.trim()}%`)
+        .select(fields)
+        .ilike('title', `%${targetSearch}%`)
         .limit(limit);
 
       if (dbCandidates && dbCandidates.length > 0) {
         return dbCandidates.map(c => normalizeAmazonZincProduct(c, 'IMPORT_CANDIDATE_CACHE'));
       }
       return [];
-    } catch {
+    } catch (err: any) {
+      console.warn('[AMAZON_ZINC_SEARCH] queryDatabaseFallback error:', err?.message);
       return [];
     }
   }
