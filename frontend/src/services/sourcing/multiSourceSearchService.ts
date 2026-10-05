@@ -19,6 +19,7 @@ import { amazonSourceAdapter } from './adapters/AmazonSourceAdapter';
 import { ProductNormalizationService } from './ProductNormalizationService';
 import { ProductMatchingEngine } from './ProductMatchingEngine';
 import { calculateInternationalPricing } from '../../lib/internationalPricing';
+import { amazonZincSearchService } from './amazonZincSearchService';
 import { 
   mapExternalConditionToCanonical, 
   detectRetroInBox, 
@@ -223,7 +224,7 @@ export class MultiSourceSearchService {
   }
 
   /**
-   * Búsqueda en Amazon vía Zinc API / Edge Functions
+   * Búsqueda en Amazon vía servicio canónico compartido (Zinc API / DB Fallback)
    */
   private async searchAmazon(
     query: string,
@@ -231,70 +232,41 @@ export class MultiSourceSearchService {
     maxResults: number = 20
   ): Promise<{ source: RetailerSource; items: any[]; error?: string; status?: 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_CONFIGURED' | 'ERROR' }> {
     try {
-      const { data, error } = await supabase.functions.invoke('zinc-search-products', {
-        body: { query, max_results: maxResults, page, retailer: 'amazon' }
+      const result = await amazonZincSearchService.search(query, {
+        page,
+        maxResults,
+        allowFallback: true
       });
 
-      if (error) {
+      if (!result.success && result.products.length === 0) {
         return {
           source: 'amazon',
           items: [],
-          status: 'UNAVAILABLE',
-          error: error.message
+          status: result.status === 'AUTH_ERROR' ? 'UNAVAILABLE' : 'ERROR',
+          error: result.error
         };
       }
 
-      const rawResults = (data?.results || data?.candidates || []);
-      if (Array.isArray(rawResults) && rawResults.length > 0) {
+      if (result.products.length > 0) {
         return {
           source: 'amazon',
-          items: rawResults.map((r: any) => ({
-            url: r.url || r.product_url_external || `https://www.amazon.com/dp/${r.external_product_id || r.product_id}`,
+          items: result.products.map(p => ({
+            url: p.product_url || `https://www.amazon.com/dp/${p.asin}`,
             retailer: 'amazon',
-            title: r.title,
-            price: r.price !== undefined && r.price !== null ? (r.price > 1000 ? r.price / 100 : r.price) : (r.price_usd ?? null),
-            brand: r.brand,
-            upc: r.upc,
-            asin: r.external_product_id || r.product_id,
-            image_url: r.image_url || r.main_image_url_external || r.image,
-            availability: r.availability || (r.prime ? 'in_stock' : 'unknown'),
+            title: p.title,
+            price: p.price_usd,
+            brand: p.brand || 'Collectibles',
+            upc: undefined,
+            asin: p.asin,
+            image_url: p.image_url,
+            availability: p.availability || 'unknown',
             condition: 'new',
-            rating: r.rating || r.stars || null,
-            review_count: r.review_count || r.num_reviews || 0,
-            seller: r.seller || 'Amazon.com',
-            prime: Boolean(r.prime || r.amazon_delivery_type === 'prime'),
-            category: r.category || r.category_path || null,
-            data_origin: 'LIVE'
-          })),
-          status: 'AVAILABLE'
-        };
-      }
-
-      // Fallback a candidatos previamente guardados en base de datos
-      const { data: dbCandidates } = await supabase
-        .from('international_import_candidates')
-        .select('*')
-        .ilike('title', `%${query.trim()}%`)
-        .limit(maxResults);
-
-      if (dbCandidates && dbCandidates.length > 0) {
-        return {
-          source: 'amazon',
-          items: dbCandidates.map((c: any) => ({
-            url: c.product_url_external || `https://www.amazon.com/dp/${c.external_product_id}`,
-            retailer: 'amazon',
-            title: c.title,
-            price: Number(c.price_usd || 0),
-            brand: c.brand || 'Collectibles',
-            asin: c.external_product_id,
-            image_url: c.image_url || c.main_image_url_external,
-            availability: c.availability || 'available',
-            condition: 'new',
-            rating: c.rating || null,
-            review_count: c.review_count || 0,
-            seller: 'Amazon.com (DB Cache)',
-            prime: c.amazon_delivery_type === 'prime',
-            data_origin: 'DATABASE'
+            rating: p.rating,
+            review_count: p.review_count,
+            seller: p.seller,
+            prime: p.prime,
+            category: p.category,
+            data_origin: p.resolution_source === 'IMPORT_CANDIDATE_CACHE' ? 'DATABASE' : 'LIVE'
           })),
           status: 'AVAILABLE'
         };

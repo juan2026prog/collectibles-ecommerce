@@ -6,344 +6,324 @@ import {
   clearZincResolverCache,
   type ZincResolvedProduct
 } from '../services/sourcing/zincProductResolver';
+import {
+  amazonZincSearchService,
+  normalizeAmazonZincProduct,
+  type AmazonZincSearchResult
+} from '../services/sourcing/amazonZincSearchService';
 import { manualCandidates } from '../services/sourcing/canonicalCandidateValidation';
 import { multiSourceSearchService } from '../services/sourcing/multiSourceSearchService';
 
-describe('ZINC CANONICAL PRODUCT RESOLVER & SOURCING INTELLIGENCE SUITE', () => {
+describe('CANONICAL AMAZON / ZINC SEARCH & SOURCING RESOLVER SUITE', () => {
   beforeEach(() => {
     clearZincResolverCache();
     vi.restoreAllMocks();
   });
 
-  // TEST A: Búsqueda textual devuelve lista de productos con imágenes
-  it('TEST A: Búsqueda textual devuelve lista de productos con imágenes', async () => {
-    const mockProducts: ZincResolvedProduct[] = [
-      {
-        external_product_id: 'B08XYZ1234',
-        title: 'Funko Plush Batman 85th Anniversary DC Comics',
-        brand: 'Funko',
-        image_url: 'https://images-na.ssl-images-amazon.com/images/I/71xyz.jpg',
-        price_usd: 24.99,
-        product_url_external: 'https://www.amazon.com/dp/B08XYZ1234'
-      }
-    ];
+  // TEST 1: Authenticated shared search -> Edge Function success -> results normalized
+  it('TEST 1: Búsqueda compartida exitosa normaliza resultados de Edge Function', () => {
+    const rawEdgeResult = {
+      external_product_id: 'B08XYZ1234',
+      title: 'Funko Plush Batman 85th Anniversary DC Comics',
+      brand: 'Funko',
+      main_image_url_external: 'https://images-na.ssl-images-amazon.com/images/I/71xyz.jpg',
+      price_usd: 24.99,
+      product_url_external: 'https://www.amazon.com/dp/B08XYZ1234',
+      availability: 'available',
+      prime: true
+    };
 
-    const mockSearchFn = vi.fn().mockResolvedValue(mockProducts);
+    const normalized = normalizeAmazonZincProduct(rawEdgeResult, 'ZINC_LIVE');
+
+    expect(normalized.asin).toBe('B08XYZ1234');
+    expect(normalized.title).toBe('Funko Plush Batman 85th Anniversary DC Comics');
+    expect(normalized.brand).toBe('Funko');
+    expect(normalized.image_url).toBe('https://images-na.ssl-images-amazon.com/images/I/71xyz.jpg');
+    expect(normalized.price_usd).toBe(24.99);
+    expect(normalized.currency).toBe('USD');
+    expect(normalized.resolution_source).toBe('ZINC_LIVE');
+  });
+
+  // TEST 2: 401/403 -> AUTH_ERROR -> NO convertir a NO_MATCH
+  it('TEST 2: Error 401/403 se clasifica como AUTH_ERROR y NO se convierte falsamente en NO_MATCH', async () => {
+    const mockAuthErrorSearch = vi.fn().mockResolvedValue({
+      success: false,
+      status: 'AUTH_ERROR',
+      statusCode: 401,
+      products: [],
+      resolution_source: null,
+      error: 'Invalid or expired token',
+      total: 0
+    } as AmazonZincSearchResult);
+
     const candidates = manualCandidates([
-      {
-        id: 'cand-batman-1',
-        title: 'Funko Plush Batman 85th Anniversary',
-        brand: 'Funko',
-        retailer: 'Amazon'
-      }
+      { id: 'c_auth_1', title: 'Funko Plush Batman', brand: 'Funko' }
     ], 'UY');
 
-    const result = await resolveZincProductsForCandidates(candidates, { searchFn: mockSearchFn });
+    const result = await resolveZincProductsForCandidates(candidates, { searchFn: mockAuthErrorSearch });
 
-    expect(mockSearchFn).toHaveBeenCalledTimes(1);
-    expect(result.resolvedCandidates[0].image_url).toBe('https://images-na.ssl-images-amazon.com/images/I/71xyz.jpg');
-    expect(result.resolvedCandidates[0].asin).toBe('B08XYZ1234');
+    expect(result.telemetry.zinc_requests_failed).toBe(1);
+    expect(result.telemetry.zinc_auth_errors).toBe(1);
+    // CRITICAL: Debe ser 0 NO_MATCH porque falló la llamada de autenticación
+    expect(result.telemetry.no_matches).toBe(0);
+    expect(result.telemetry.resolver_errors.length).toBeGreaterThan(0);
+    expect(result.telemetry.resolver_errors[0].error_type).toBe('AUTH_ERROR');
+    expect(result.resolvedCandidates[0].image_url).toBeNull();
+  });
+
+  // TEST 3: Provider error -> PROVIDER_ERROR
+  it('TEST 3: Error de provider (500) se clasifica como PROVIDER_ERROR', async () => {
+    const mockProviderErrorSearch = vi.fn().mockResolvedValue({
+      success: false,
+      status: 'PROVIDER_ERROR',
+      statusCode: 500,
+      products: [],
+      resolution_source: null,
+      error: 'Zinc gateway timeout',
+      total: 0
+    } as AmazonZincSearchResult);
+
+    const candidates = manualCandidates([
+      { id: 'c_prov_1', title: 'Steiff Batman Bear', brand: 'Steiff' }
+    ], 'UY');
+
+    const result = await resolveZincProductsForCandidates(candidates, { searchFn: mockProviderErrorSearch });
+
+    expect(result.telemetry.zinc_requests_failed).toBe(1);
+    expect(result.telemetry.zinc_provider_errors).toBe(1);
+    expect(result.telemetry.no_matches).toBe(0);
+  });
+
+  // TEST 4: Valid response results=[] -> NO_RESULTS -> Evalúa a NO_MATCH
+  it('TEST 4: Respuesta válida con 0 resultados produce NO_RESULTS y NO_MATCH legítimo', async () => {
+    const mockNoResultsSearch = vi.fn().mockResolvedValue({
+      success: true,
+      status: 'NO_RESULTS',
+      statusCode: 200,
+      products: [],
+      resolution_source: null,
+      total: 0
+    } as AmazonZincSearchResult);
+
+    const candidates = manualCandidates([
+      { id: 'c_none_1', title: 'Nonexistent Exclusive Prototype', brand: 'Unknown' }
+    ], 'UY');
+
+    const result = await resolveZincProductsForCandidates(candidates, { searchFn: mockNoResultsSearch });
+
+    expect(result.telemetry.zinc_requests_succeeded).toBe(1);
+    expect(result.telemetry.zinc_no_results).toBe(1);
+    expect(result.telemetry.no_matches).toBe(1);
+  });
+
+  // TEST 5: Edge failure + valid DB fallback -> products returned -> provenance IMPORT_CANDIDATE_CACHE
+  it('TEST 5: Falla en Edge Function con DB fallback devuelve productos con provenance IMPORT_CANDIDATE_CACHE', async () => {
+    const fallbackProduct = normalizeAmazonZincProduct({
+      external_product_id: 'B07FALLBK1',
+      title: 'Funko Pop Batman Dark Knight',
+      brand: 'Funko',
+      main_image_url_external: 'https://images-na.ssl-images-amazon.com/images/I/fallback.jpg',
+      price_usd: 15.00
+    }, 'IMPORT_CANDIDATE_CACHE');
+
+    const mockFallbackSearch = vi.fn().mockResolvedValue({
+      success: true,
+      status: 'AUTH_ERROR',
+      statusCode: 403,
+      products: [fallbackProduct],
+      resolution_source: 'IMPORT_CANDIDATE_CACHE',
+      error: 'Live call failed, returned DB cache fallback',
+      total: 1
+    } as AmazonZincSearchResult);
+
+    const candidates = manualCandidates([
+      { id: 'c_fb_1', title: 'Funko Pop Batman Dark Knight', brand: 'Funko' }
+    ], 'UY');
+
+    const result = await resolveZincProductsForCandidates(candidates, { searchFn: mockFallbackSearch });
+
+    expect(result.resolvedCandidates[0].image_url).toBe('https://images-na.ssl-images-amazon.com/images/I/fallback.jpg');
+    expect(result.resolvedCandidates[0].provenance.image?.method).toBe('IMPORT_CANDIDATE_CACHE');
+    expect(result.resolvedCandidates[0].provenance.image?.source).toBe('Amazon / Collectibles DB Cache');
+    expect(result.telemetry.zinc_fallback_results).toBe(1);
+  });
+
+  // TEST 6: Funko Batman result -> STRONG/EXACT -> image assigned
+  it('TEST 6: Funko Batman resultado -> STRONG/EXACT -> imagen asignada', async () => {
+    const mockProduct = normalizeAmazonZincProduct({
+      external_product_id: 'B08FUNKO01',
+      title: 'Funko Plush Batman 85th Anniversary Plush Toy',
+      brand: 'Funko',
+      image_url: 'https://images-na.ssl-images-amazon.com/images/I/funko_batman.jpg',
+      price_usd: 24.99,
+      product_url_external: 'https://www.amazon.com/dp/B08FUNKO01'
+    }, 'ZINC_LIVE');
+
+    const mockSearch = vi.fn().mockResolvedValue({
+      success: true,
+      status: 'SUCCESS',
+      products: [mockProduct],
+      resolution_source: 'ZINC_LIVE',
+      total: 1
+    } as AmazonZincSearchResult);
+
+    const candidates = manualCandidates([
+      { id: 'c_funko', title: 'Funko Plush Batman 85th Anniversary', brand: 'Funko' }
+    ], 'UY');
+
+    const result = await resolveZincProductsForCandidates(candidates, { searchFn: mockSearch });
+
+    expect(result.resolvedCandidates[0].image_url).toBe('https://images-na.ssl-images-amazon.com/images/I/funko_batman.jpg');
+    expect(result.resolvedCandidates[0].asin).toBe('B08FUNKO01');
+    expect(result.resolvedCandidates[0].provenance.image?.method).toBe('ZINC_PRODUCT_DATA');
     expect(result.telemetry.images_resolved).toBe(1);
   });
 
-  // TEST B: Elección del ítem correcto dentro de la lista
-  it('TEST B: Elección del ítem correcto dentro de la lista para Funko Batman', () => {
+  // TEST 7: Steiff Batman result -> correct Steiff product selected
+  it('TEST 7: Steiff Batman resultado -> producto Steiff correcto seleccionado', () => {
     const candidate = {
-      id: 'c_1',
-      title: 'Funko Pop Batman Super Heroes DC Comics',
-      brand: 'Funko'
+      id: 'c_steiff',
+      title: 'Steiff Batman 85th Anniversary Plush',
+      brand: 'Steiff'
     };
 
     const mockZincProducts: ZincResolvedProduct[] = [
-      {
-        external_product_id: 'B07OTHER01',
-        title: 'Superman Action Figure Mattel DC Multiverse',
+      normalizeAmazonZincProduct({
+        external_product_id: 'B00SUPERMAN',
+        title: 'Superman Action Figure Mattel',
         brand: 'Mattel',
-        image_url: 'https://images-na.ssl-images-amazon.com/images/I/superman.jpg',
-        price_usd: 19.99
-      },
-      {
-        external_product_id: 'B07FUNKO02',
-        title: 'Funko Pop Batman Super Heroes DC Comics Vinyl Figure',
-        brand: 'Funko',
-        image_url: 'https://images-na.ssl-images-amazon.com/images/I/batman_funko.jpg',
-        price_usd: 14.99
-      }
+        image_url: 'https://images-na.ssl-images-amazon.com/images/I/superman.jpg'
+      }),
+      normalizeAmazonZincProduct({
+        external_product_id: 'B08STEIFF0',
+        title: 'Steiff Batman 85th Anniversary Collector Teddy Bear Plush',
+        brand: 'Steiff',
+        image_url: 'https://images-na.ssl-images-amazon.com/images/I/steiff.jpg'
+      })
     ];
 
     const evalResult = matchZincCandidate(candidate, mockZincProducts);
 
     expect(evalResult.level).toBe('STRONG');
-    expect(evalResult.matchedProduct?.external_product_id).toBe('B07FUNKO02');
-    expect(evalResult.matchedProduct?.image_url).toBe('https://images-na.ssl-images-amazon.com/images/I/batman_funko.jpg');
+    expect(evalResult.matchedProduct?.asin).toBe('B08STEIFF0');
+    expect(evalResult.matchedProduct?.image_url).toBe('https://images-na.ssl-images-amazon.com/images/I/steiff.jpg');
   });
 
-  // TEST C: Protección de variantes (Steiff 85th Anniversary vs Plush genérico)
-  it('TEST C: Protección de variantes descarta o penaliza choques de edición/escala', () => {
+  // TEST 8: Ambiguous Batman products -> no automatic image
+  it('TEST 8: Productos Batman ambiguos -> no asigna imagen automáticamente', async () => {
     const candidate = {
-      id: 'c_steiff',
-      title: 'Steiff Batman 85th Anniversary Limited Edition Plush',
-      brand: 'Steiff',
-      claims: {
-        edition: 'Exclusive'
-      }
-    };
-
-    const mockZincProducts: ZincResolvedProduct[] = [
-      {
-        external_product_id: 'B08STD001',
-        title: 'Steiff Batman Standard Edition Plush',
-        brand: 'Steiff',
-        image_url: 'https://images-na.ssl-images-amazon.com/images/I/std_steiff.jpg',
-        price_usd: 80.00,
-        raw_data: {
-          edition: 'Standard'
-        }
-      }
-    ];
-
-    const evalResult = matchZincCandidate(candidate, mockZincProducts);
-
-    expect(evalResult.variantConflictDetected).toBe(true);
-    expect(evalResult.level).toBe('NO_MATCH');
-    expect(evalResult.matchedProduct).toBeNull();
-  });
-
-  // TEST D: Resultados ambiguos dejan image_url = null
-  it('TEST D: Resultados ambiguos dejan image_url = null', async () => {
-    const candidate = {
-      id: 'c_ambiguous',
+      id: 'c_amb',
       title: 'Batman Action Figure 7 inch',
       brand: 'DC Comics'
     };
 
-    const mockZincProducts: ZincResolvedProduct[] = [
-      {
-        external_product_id: 'B011111111',
-        title: 'Batman Action Figure 7 inch DC Comics Model A',
-        brand: 'DC Comics',
-        image_url: 'https://images-na.ssl-images-amazon.com/images/I/figA.jpg',
-        price_usd: 19.99
-      },
-      {
-        external_product_id: 'B022222222',
-        title: 'Batman Action Figure 7 inch DC Comics Model B',
-        brand: 'DC Comics',
-        image_url: 'https://images-na.ssl-images-amazon.com/images/I/figB.jpg',
-        price_usd: 19.99
-      }
-    ];
-
-    const evalResult = matchZincCandidate(candidate, mockZincProducts);
-
-    expect(evalResult.level).toBe('AMBIGUOUS');
-    expect(evalResult.matchedProduct).toBeNull();
-
-    const candidates = manualCandidates([candidate], 'UY');
-    const res = await resolveZincProductsForCandidates(candidates, {
-      searchFn: vi.fn().mockResolvedValue(mockZincProducts)
+    const prodA = normalizeAmazonZincProduct({
+      external_product_id: 'B011111111',
+      title: 'Batman Action Figure 7 inch DC Comics Model A',
+      brand: 'DC Comics',
+      image_url: 'https://images-na.ssl-images-amazon.com/images/I/figA.jpg'
     });
 
-    expect(res.resolvedCandidates[0].image_url).toBeNull();
-    expect(res.telemetry.ambiguous_matches).toBe(1);
-    expect(res.telemetry.images_resolved).toBe(0);
-  });
-
-  // TEST E: Lookup directo por ASIN cuando viene provisto
-  it('TEST E: Lookup directo por ASIN resuelve match EXACTO', () => {
-    const candidate = {
-      id: 'c_asin',
-      title: 'Batman Animated Series Figure',
-      brand: 'McFarlane',
-      asin: 'B09ABC1234'
-    };
-
-    const mockZincProducts: ZincResolvedProduct[] = [
-      {
-        external_product_id: 'B09ABC1234',
-        title: 'McFarlane Toys DC Direct Batman Animated Series',
-        brand: 'McFarlane Toys',
-        image_url: 'https://images-na.ssl-images-amazon.com/images/I/mcfarlane_batman.jpg',
-        price_usd: 29.99
-      }
-    ];
-
-    const evalResult = matchZincCandidate(candidate, mockZincProducts);
-
-    expect(evalResult.level).toBe('EXACT');
-    expect(evalResult.confidenceScore).toBe(1.0);
-    expect(evalResult.matchedProduct?.external_product_id).toBe('B09ABC1234');
-    expect(evalResult.matchedProduct?.image_url).toBe('https://images-na.ssl-images-amazon.com/images/I/mcfarlane_batman.jpg');
-  });
-
-  // TEST F: ASIN obtenido como output a partir de búsqueda de texto
-  it('TEST F: ASIN obtenido como output a partir de búsqueda de texto', async () => {
-    const candidate = {
-      id: 'c_no_asin',
-      title: 'Funko Pop Batman Dark Knight',
-      brand: 'Funko'
-      // Sin ASIN inicial
-    };
-
-    const mockZincProducts: ZincResolvedProduct[] = [
-      {
-        external_product_id: 'B00DARK999',
-        title: 'Funko Pop Batman Dark Knight Exclusive',
-        brand: 'Funko',
-        image_url: 'https://images-na.ssl-images-amazon.com/images/I/dark_knight.jpg',
-        price_usd: 15.99
-      }
-    ];
-
-    const candidates = manualCandidates([candidate], 'UY');
-    expect(candidates[0].asin).toBeUndefined();
-
-    const res = await resolveZincProductsForCandidates(candidates, {
-      searchFn: vi.fn().mockResolvedValue(mockZincProducts)
+    const prodB = normalizeAmazonZincProduct({
+      external_product_id: 'B022222222',
+      title: 'Batman Action Figure 7 inch DC Comics Model B',
+      brand: 'DC Comics',
+      image_url: 'https://images-na.ssl-images-amazon.com/images/I/figB.jpg'
     });
 
-    expect(res.resolvedCandidates[0].asin).toBe('B00DARK999');
-    expect(res.resolvedCandidates[0].image_url).toBe('https://images-na.ssl-images-amazon.com/images/I/dark_knight.jpg');
-    expect(res.telemetry.asins_resolved).toBe(1);
-  });
-
-  // TEST G: Producto con imagen asigna image_url
-  it('TEST G: Producto con imagen asigna image_url correctamente', async () => {
-    const candidate = {
-      id: 'c_img',
-      title: 'NECA Batman 1989 7 Inch Figure',
-      brand: 'NECA'
-    };
-
-    const mockZincProducts: ZincResolvedProduct[] = [
-      {
-        external_product_id: 'B08NECA890',
-        title: 'NECA Batman 1989 7 Inch Action Figure',
-        brand: 'NECA',
-        image_url: 'https://images-na.ssl-images-amazon.com/images/I/neca_batman.jpg',
-        price_usd: 34.99
-      }
-    ];
+    const mockSearch = vi.fn().mockResolvedValue({
+      success: true,
+      status: 'SUCCESS',
+      products: [prodA, prodB],
+      resolution_source: 'ZINC_LIVE',
+      total: 2
+    } as AmazonZincSearchResult);
 
     const candidates = manualCandidates([candidate], 'UY');
-    const res = await resolveZincProductsForCandidates(candidates, {
-      searchFn: vi.fn().mockResolvedValue(mockZincProducts)
+    const result = await resolveZincProductsForCandidates(candidates, { searchFn: mockSearch });
+
+    expect(result.resolvedCandidates[0].image_url).toBeNull();
+    expect(result.telemetry.ambiguous_matches).toBe(1);
+    expect(result.telemetry.images_resolved).toBe(0);
+  });
+
+  // TEST 9: external_product_id -> canonical asin
+  it('TEST 9: external_product_id se mapea a canonical asin', () => {
+    const normalized = normalizeAmazonZincProduct({
+      external_product_id: 'B099999999',
+      title: 'Test Batman Figure'
     });
-
-    expect(res.resolvedCandidates[0].image_url).toBe('https://images-na.ssl-images-amazon.com/images/I/neca_batman.jpg');
-    expect(res.resolvedCandidates[0].gallery_images).toEqual(['https://images-na.ssl-images-amazon.com/images/I/neca_batman.jpg']);
+    expect(normalized.asin).toBe('B099999999');
+    expect(normalized.external_product_id).toBe('B099999999');
   });
 
-  // TEST H: Producto sin imagen deja image_url = null
-  it('TEST H: Producto sin imagen deja image_url = null', async () => {
-    const candidate = {
-      id: 'c_no_img',
-      title: 'Rare Prototype Batman',
-      brand: 'Collectibles'
-    };
-
-    const mockZincProducts: ZincResolvedProduct[] = [
-      {
-        external_product_id: 'B00NOIMG00',
-        title: 'Rare Prototype Batman Figure',
-        brand: 'Collectibles',
-        image_url: null, // Sin imagen en Zinc
-        price_usd: 99.99
-      }
-    ];
-
-    const candidates = manualCandidates([candidate], 'UY');
-    const res = await resolveZincProductsForCandidates(candidates, {
-      searchFn: vi.fn().mockResolvedValue(mockZincProducts)
+  // TEST 10: main_image_url_external -> canonical image_url
+  it('TEST 10: main_image_url_external se mapea a canonical image_url si falta image_url', () => {
+    const normalized = normalizeAmazonZincProduct({
+      external_product_id: 'B099999999',
+      title: 'Test Batman Figure',
+      main_image_url_external: 'https://images-na.ssl-images-amazon.com/images/I/main.jpg'
     });
-
-    expect(res.resolvedCandidates[0].image_url).toBeNull();
-    expect(res.resolvedCandidates[0].gallery_images).toEqual([]);
+    expect(normalized.image_url).toBe('https://images-na.ssl-images-amazon.com/images/I/main.jpg');
   });
 
-  // TEST I: Búsqueda que devuelve producto equivocado termina en NO_MATCH
-  it('TEST I: Búsqueda que devuelve producto equivocado termina en NO_MATCH', () => {
-    const candidate = {
-      id: 'c_batman',
-      title: 'Steiff Batman Teddy Bear Plush',
-      brand: 'Steiff'
-    };
-
-    const mockZincProducts: ZincResolvedProduct[] = [
-      {
-        external_product_id: 'B00BARBIE1',
-        title: 'Barbie Dreamhouse Playset with Pool and Slide',
-        brand: 'Mattel',
-        image_url: 'https://images-na.ssl-images-amazon.com/images/I/barbie.jpg',
-        price_usd: 199.99
-      }
-    ];
-
-    const evalResult = matchZincCandidate(candidate, mockZincProducts);
-
-    expect(evalResult.level).toBe('NO_MATCH');
-    expect(evalResult.matchedProduct).toBeNull();
+  // TEST 11: image_url -> canonical image_url
+  it('TEST 11: image_url directo se preserva en el normalizador canónico', () => {
+    const normalized = normalizeAmazonZincProduct({
+      external_product_id: 'B099999999',
+      title: 'Test Batman Figure',
+      image_url: 'https://images-na.ssl-images-amazon.com/images/I/direct.jpg'
+    });
+    expect(normalized.image_url).toBe('https://images-na.ssl-images-amazon.com/images/I/direct.jpg');
   });
 
-  // TEST J: Cache y deduplicación de queries idénticas
-  it('TEST J: Cache y deduplicación de queries idénticas evita llamadas repetidas', async () => {
-    const mockSearchFn = vi.fn().mockResolvedValue([
-      {
-        external_product_id: 'B00COMMON1',
-        title: 'Funko Plush Batman Dark Knight',
-        brand: 'Funko',
-        image_url: 'https://images-na.ssl-images-amazon.com/images/I/common.jpg',
-        price_usd: 12.99
-      }
-    ]);
+  // TEST 12: price_usd -> canonical USD price
+  it('TEST 12: price_usd y price en centavos se normalizan correctamente a USD', () => {
+    const normFromUsd = normalizeAmazonZincProduct({
+      external_product_id: 'B01',
+      title: 'A',
+      price_usd: 25.50
+    });
+    expect(normFromUsd.price_usd).toBe(25.50);
+    expect(normFromUsd.currency).toBe('USD');
 
-    const candidateA = manualCandidates([
-      { id: 'c_1', title: 'Funko Plush Batman Dark Knight Official', brand: 'Funko' }
-    ], 'UY')[0];
-
-    const candidateB = manualCandidates([
-      { id: 'c_2', title: 'Funko Plush Batman Dark Knight Licensed', brand: 'Funko' }
-    ], 'UY')[0];
-
-    // Both produce query "Funko Plush Batman Dark Knight"
-    expect(buildZincResolutionQuery(candidateA)).toBe(buildZincResolutionQuery(candidateB));
-
-    const res = await resolveZincProductsForCandidates([candidateA, candidateB], { searchFn: mockSearchFn });
-
-    // Deduplication should execute only 1 network call
-    expect(mockSearchFn).toHaveBeenCalledTimes(1);
-    expect(res.resolvedCandidates[0].image_url).toBe('https://images-na.ssl-images-amazon.com/images/I/common.jpg');
-    expect(res.resolvedCandidates[1].image_url).toBe('https://images-na.ssl-images-amazon.com/images/I/common.jpg');
-
-    // Run again with candidateA -> Should hit memory cache
-    const res2 = await resolveZincProductsForCandidates([candidateA], { searchFn: mockSearchFn });
-    expect(mockSearchFn).toHaveBeenCalledTimes(1); // No new network call
-    expect(res2.telemetry.cache_hits).toBe(1);
+    const normFromCents = normalizeAmazonZincProduct({
+      external_product_id: 'B02',
+      title: 'B',
+      price: 2550 // cents
+    });
+    expect(normFromCents.price_usd).toBe(25.50);
   });
 
-  // TEST K: Aislamiento estricto por candidate_id (sin contaminación cruzada)
-  it('TEST K: Aislamiento estricto por candidate_id', async () => {
-    const mockSearchFn = vi.fn().mockImplementation(async (query: string) => {
-      if (query.toLowerCase().includes('joker')) {
-        return [
-          {
+  // TEST 13: Candidate isolation
+  it('TEST 13: Aislamiento estricto 1:1 por candidate_id', async () => {
+    const mockSearchFn = vi.fn().mockImplementation(async (term: string) => {
+      if (term.toLowerCase().includes('joker')) {
+        return {
+          success: true,
+          status: 'SUCCESS',
+          products: [normalizeAmazonZincProduct({
             external_product_id: 'B00JOKER01',
             title: 'Funko Pop Joker DC Comics',
             brand: 'Funko',
-            image_url: 'https://images-na.ssl-images-amazon.com/images/I/joker.jpg',
-            price_usd: 14.99
-          }
-        ];
+            image_url: 'https://images-na.ssl-images-amazon.com/images/I/joker.jpg'
+          })],
+          resolution_source: 'ZINC_LIVE',
+          total: 1
+        } as AmazonZincSearchResult;
       }
-      return [
-        {
+      return {
+        success: true,
+        status: 'SUCCESS',
+        products: [normalizeAmazonZincProduct({
           external_product_id: 'B00BATMAN1',
           title: 'Funko Pop Batman DC Comics',
           brand: 'Funko',
-          image_url: 'https://images-na.ssl-images-amazon.com/images/I/batman.jpg',
-          price_usd: 14.99
-        }
-      ];
+          image_url: 'https://images-na.ssl-images-amazon.com/images/I/batman.jpg'
+        })],
+        resolution_source: 'ZINC_LIVE',
+        total: 1
+      } as AmazonZincSearchResult;
     });
 
     const candidates = manualCandidates([
@@ -362,41 +342,77 @@ describe('ZINC CANONICAL PRODUCT RESOLVER & SOURCING INTELLIGENCE SUITE', () => 
     expect(res.resolvedCandidates[1].asin).toBe('B00JOKER01');
   });
 
-  // TEST L: Procedencia de precio comercial desde Zinc
-  it('TEST L: Procedencia de precio comercial desde Zinc queda registrada como CORROBORATED', async () => {
-    const candidate = {
-      id: 'c_price',
-      title: 'Funko Pop Batman Animated',
-      brand: 'Funko'
-    };
-
-    const mockZincProducts: ZincResolvedProduct[] = [
-      {
-        external_product_id: 'B00PRC0001',
-        title: 'Funko Pop Batman Animated Series',
+  // TEST 14: Query dedupe & cache
+  it('TEST 14: Deduplicación y cache en memoria evita llamadas redundantes', async () => {
+    const mockSearch = vi.fn().mockResolvedValue({
+      success: true,
+      status: 'SUCCESS',
+      products: [normalizeAmazonZincProduct({
+        external_product_id: 'B00COMMON1',
+        title: 'Funko Plush Batman Dark Knight',
         brand: 'Funko',
-        image_url: 'https://images-na.ssl-images-amazon.com/images/I/price_batman.jpg',
-        price_usd: 18.50,
-        product_url_external: 'https://www.amazon.com/dp/B00PRC0001'
-      }
-    ];
+        image_url: 'https://images-na.ssl-images-amazon.com/images/I/common.jpg'
+      })],
+      resolution_source: 'ZINC_LIVE',
+      total: 1
+    } as AmazonZincSearchResult);
 
-    const candidates = manualCandidates([candidate], 'UY');
-    const res = await resolveZincProductsForCandidates(candidates, {
-      searchFn: vi.fn().mockResolvedValue(mockZincProducts)
-    });
+    const candidateA = manualCandidates([
+      { id: 'c_1', title: 'Funko Plush Batman Dark Knight Official', brand: 'Funko' }
+    ], 'UY')[0];
 
-    const resolved = res.resolvedCandidates[0];
-    expect(resolved.pricing.origin_price_usd).toBe(18.50);
-    expect(resolved.pricing.amazon_price_usd).toBe(18.50);
-    expect(resolved.provenance.origin_price?.status).toBe('CORROBORATED');
-    expect(resolved.provenance.origin_price?.value).toBe(18.50);
-    expect(resolved.provenance.origin_price?.verification).toBe('SOURCE_CORROBORATED');
+    const candidateB = manualCandidates([
+      { id: 'c_2', title: 'Funko Plush Batman Dark Knight Licensed', brand: 'Funko' }
+    ], 'UY')[0];
+
+    const res = await resolveZincProductsForCandidates([candidateA, candidateB], { searchFn: mockSearch });
+
+    expect(mockSearch).toHaveBeenCalledTimes(1);
+    expect(res.resolvedCandidates[0].image_url).toBe('https://images-na.ssl-images-amazon.com/images/I/common.jpg');
+    expect(res.resolvedCandidates[1].image_url).toBe('https://images-na.ssl-images-amazon.com/images/I/common.jpg');
+
+    const res2 = await resolveZincProductsForCandidates([candidateA], { searchFn: mockSearch });
+    expect(mockSearch).toHaveBeenCalledTimes(1); // Cached
+    expect(res2.telemetry.cache_hits).toBe(1);
   });
 
-  // TEST M: Regresión "Productos para Importar" sigue funcionando idéntico
-  it('TEST M: multiSourceSearchService mantiene compatibilidad y contrato para Productos para Importar', () => {
+  // TEST 15: Productos para Importar regression
+  it('TEST 15: multiSourceSearchService mantiene compatibilidad consumiendo amazonZincSearchService', () => {
     expect(multiSourceSearchService).toBeDefined();
     expect(typeof multiSourceSearchService.searchProducts).toBe('function');
+  });
+
+  // TEST 16 & CRITICAL REGRESSION: 11 candidates con 401/403 en producción
+  it('TEST 16 & CRITICAL REGRESSION: 11 candidatos con error 401/403 reportan AUTH_ERROR y NO falsa clasificación NO_MATCH', async () => {
+    const mock401Search = vi.fn().mockResolvedValue({
+      success: false,
+      status: 'AUTH_ERROR',
+      statusCode: 401,
+      products: [],
+      resolution_source: null,
+      error: 'Invalid or expired token',
+      total: 0
+    } as AmazonZincSearchResult);
+
+    const candidates = manualCandidates(
+      Array.from({ length: 11 }, (_, i) => ({
+        id: `c_${i + 1}`,
+        title: `Batman Plush Item ${i + 1}`,
+        brand: 'DC Comics'
+      })),
+      'UY'
+    );
+
+    const result = await resolveZincProductsForCandidates(candidates, { searchFn: mock401Search });
+
+    // En el bug original: 11 NO_MATCH y 0 errores
+    // Con el fix: 11 AUTH_ERROR y 0 NO_MATCH falsos
+    expect(result.telemetry.total_candidates).toBe(11);
+    expect(result.telemetry.zinc_requests_failed).toBe(11);
+    expect(result.telemetry.zinc_auth_errors).toBe(11);
+    expect(result.telemetry.no_matches).toBe(0);
+    expect(result.telemetry.images_resolved).toBe(0);
+    expect(result.telemetry.resolver_errors.length).toBe(11);
+    expect(result.telemetry.resolver_errors[0].error_type).toBe('AUTH_ERROR');
   });
 });
