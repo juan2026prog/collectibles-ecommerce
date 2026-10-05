@@ -49,7 +49,7 @@ describe('ProductGridCard CRO Mobile', () => {
     );
 
     expect(screen.getByText('Figura Funko Pop Batman')).toBeInTheDocument();
-    expect(screen.getByText('$1500')).toBeInTheDocument();
+    expect(screen.getByText('$ 1.500 UYU')).toBeInTheDocument();
     expect(screen.getByText(/Vendido por/i)).toBeInTheDocument();
     expect(screen.getByText('Collectibles')).toBeInTheDocument();
   });

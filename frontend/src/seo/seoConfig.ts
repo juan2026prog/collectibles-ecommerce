@@ -1,3 +1,5 @@
+import { resolveProductPrice } from '../lib/priceResolver';
+
 export const BASE_URL = 'https://collectibles.uy';
 
 export interface SeoConfig {
@@ -330,8 +332,9 @@ export function generateProductSchema(product: any, brand?: any, category?: any,
     ? images.map(i => (typeof i === 'string' ? i : i.url))
     : [mainImage];
 
-  const currency = product.currency || 'UYU';
-  const price = Number(product.base_price || 0);
+  const pricing = resolveProductPrice(product);
+  const currency = pricing.currency;
+  const price = pricing.finalPrice;
 
   let availability = 'https://schema.org/InStock';
   if (product.stock_quantity === 0 || product.is_out_of_stock) {

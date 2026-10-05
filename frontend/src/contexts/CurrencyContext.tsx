@@ -1,4 +1,4 @@
-﻿import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import {
   CurrencyService,
   type DisplayCurrency,
@@ -20,6 +20,7 @@ interface CurrencyContextProps {
   exchangeRateDetails: Record<Currency, ExchangeRateDetail>;
   loading: boolean;
   formatCurrencyPrice: (amountUSD: number, overrideCurrency?: Currency) => string;
+  formatProductPrice: (options: { amount: number; sourceCurrency?: 'UYU' | 'USD'; displayCurrency?: Currency }) => string;
   convertUsdToDisplay: (amountUSD: number, currency?: Currency) => number | null;
   refreshRates: () => Promise<void>;
   // Backward compatibility methods
@@ -39,7 +40,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
         return stored;
       }
     }
-    return 'USD';
+    return 'UYU';
   });
 
   const [rateDetails, setRateDetails] = useState<Record<Currency, ExchangeRateDetail>>(() => getAllStoredExchangeRates());
@@ -96,6 +97,43 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     });
   }, [selectedCurrency, exchangeRates]);
 
+  const formatProductPrice = useCallback((options: { amount: number; sourceCurrency?: 'UYU' | 'USD'; displayCurrency?: Currency }) => {
+    const { amount, sourceCurrency = 'UYU', displayCurrency = selectedCurrency } = options;
+    const uyuRate = exchangeRates.UYU || 40.0835;
+
+    // Si la moneda origen es UYU
+    if (sourceCurrency === 'UYU') {
+      if (displayCurrency === 'UYU') {
+        return `$ ${Math.round(amount).toLocaleString('es-UY')} UYU`;
+      }
+      if (displayCurrency === 'USD') {
+        const usdVal = amount / uyuRate;
+        const formatted = new Intl.NumberFormat('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(usdVal);
+        return `US$ ${formatted}`;
+      }
+      // Otra displayCurrency regional (ARS, CLP, etc.)
+      const usdEquivalent = amount / uyuRate;
+      const targetRate = exchangeRates[displayCurrency] || 1.0;
+      const regionalVal = usdEquivalent * targetRate;
+      const formatted = Math.round(regionalVal).toLocaleString('es-UY');
+      return `$ ${formatted} ${displayCurrency}`;
+    }
+
+    // Si la moneda origen es USD
+    if (displayCurrency === 'USD') {
+      const formatted = new Intl.NumberFormat('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+      return `US$ ${formatted}`;
+    }
+    if (displayCurrency === 'UYU') {
+      const uyuVal = Math.round(amount * uyuRate);
+      return `$ ${uyuVal.toLocaleString('es-UY')} UYU`;
+    }
+    const targetRate = exchangeRates[displayCurrency] || 1.0;
+    const regionalVal = amount * targetRate;
+    const formatted = Math.round(regionalVal).toLocaleString('es-UY');
+    return `$ ${formatted} ${displayCurrency}`;
+  }, [selectedCurrency, exchangeRates]);
+
   const refreshRates = useCallback(async () => {
     setLoading(true);
     const updated = await fetchLiveExchangeRates();
@@ -131,6 +169,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     exchangeRateDetails: rateDetails,
     loading,
     formatCurrencyPrice,
+    formatProductPrice,
     convertUsdToDisplay,
     refreshRates,
     convertFromUYU,
@@ -144,6 +183,7 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     rateDetails,
     loading,
     formatCurrencyPrice,
+    formatProductPrice,
     convertUsdToDisplay,
     refreshRates,
     convertFromUYU,

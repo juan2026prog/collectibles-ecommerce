@@ -11,6 +11,7 @@ import { usePromotions, evaluateItemDiscount } from '../hooks/usePromotions';
 import { trackGA4Event, trackClarityEvent, mapCartItemsToGA4 } from '../lib/analyticsTracker';
 import { useImageProtection } from '../hooks/useImageProtection';
 import { formatUSD } from '../lib/formatters';
+import { formatProductMoney, resolveCartItemPrice } from '../lib/priceResolver';
 
 export default function CartDrawer() {
   const navigate = useNavigate();
@@ -393,11 +394,17 @@ export default function CartDrawer() {
                         {/* Price */}
                         <div className="flex flex-col items-end">
                           <span data-testid="cart-drawer-item-subtotal" className={`text-sm font-black ${isItemIntl ? 'text-sky-400' : 'text-emerald-400'}`}>
-                            {isItemIntl ? formatUSD(displayPrice) : formatCurrencyPrice(displayPrice)}
+                            {formatProductMoney({
+                              amount: displayPrice,
+                              currency: isItemIntl ? 'USD' : (item.currency || 'UYU')
+                            })}
                           </span>
                           {itemDiscount > 0 && (
                             <span className="text-[10px] text-slate-500 line-through">
-                              {isItemIntl ? formatUSD(item.price * item.quantity) : formatCurrencyPrice(item.price * item.quantity)}
+                              {formatProductMoney({
+                                amount: item.price * item.quantity,
+                                currency: isItemIntl ? 'USD' : (item.currency || 'UYU')
+                              })}
                             </span>
                           )}
                         </div>

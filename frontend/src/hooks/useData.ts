@@ -1057,6 +1057,8 @@ export interface CartItem {
   vendor_logo?: string;
   tag_ids?: string[];
   is_international?: boolean;
+  currency?: 'UYU' | 'USD';
+  base_price?: number;
   urubox_estimate?: number;
   weight_kg?: number;
   category_name?: string;

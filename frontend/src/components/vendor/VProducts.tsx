@@ -1687,7 +1687,7 @@ export default function VProducts() {
                           </div>
                           <div className="p-6 grid grid-cols-2 lg:grid-cols-4 gap-6">
                              <div>
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Precio ($)</label>
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Precio ($ UYU)</label>
                                 <input id="field-base_price" name="base_price" type="number" className={`w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none ${getFieldError('base_price') ? 'border-red-500 bg-red-50/20' : ''}`} value={form.base_price} onChange={e => {
                                   setForm({...form, base_price: e.target.value});
                                   if (validationErrors.some(err => err.field === 'base_price')) setValidationErrors(prev => prev.filter(err => err.field !== 'base_price'));
@@ -1700,7 +1700,7 @@ export default function VProducts() {
                                 )}
                              </div>
                              <div>
-                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Precio Rebajado</label>
+                                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-1">Precio Rebajado ($ UYU)</label>
                                 <input type="number" className="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white outline-none" value={form.compare_at_price} onChange={e => setForm({...form, compare_at_price: e.target.value})} />
                              </div>
                              <div>

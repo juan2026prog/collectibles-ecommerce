@@ -16,9 +16,9 @@ import { analytics } from '../lib/analytics';
 import { trackGA4Event } from '../lib/analyticsTracker';
 import { trackViewContent, generateMetaEventId } from '../lib/meta/metaPixel';
 import SEO from '../components/SEO';
-import { generateProductSchema, generateBreadcrumbs, generateMetaTitle, generateMetaDescription, generateCanonical } from '../utils/seoHelpers';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { supabase } from '../lib/supabase';
+import { resolveProductPrice, resolveProductNativeCurrency, formatProductMoney } from '../lib/priceResolver';
 import { formatUSD } from '../lib/formatters';
 import SoldByCard from '../components/SoldByCard';
 import ProductShippingBlock from '../components/ProductShippingBlock';
@@ -287,7 +287,9 @@ export default function ProductDetail() {
   useEffect(() => {
     if (product && viewTrackedRef.current !== product.id) {
       viewTrackedRef.current = product.id;
-      const basePrice = Number(product.base_price || 0);
+      const resolvedPricing = resolveProductPrice(product);
+      const eventCurrency = resolvedPricing.currency;
+      const eventPrice = resolvedPricing.finalPrice;
       const metaEventId = generateMetaEventId('ViewContent', product.id);
 
       trackViewContent(metaEventId, {
@@ -295,19 +297,19 @@ export default function ProductDetail() {
         content_name: product.title,
         category: product.category?.name,
         brand: product.brand?.name,
-        value: basePrice,
-        currency: 'UYU'
+        value: eventPrice,
+        currency: eventCurrency
       });
 
       trackGA4Event('view_item', {
-        currency: 'UYU',
-        value: basePrice,
+        currency: eventCurrency,
+        value: eventPrice,
         items: [{
           item_id: String(product.id),
           item_name: String(product.title),
           item_brand: product.brand?.name || undefined,
           item_category: product.category?.name || undefined,
-          price: basePrice
+          price: eventPrice
         }]
       });
     }
@@ -370,6 +372,7 @@ export default function ProductDetail() {
   const displayOldPrice = basePriceWithVariant;
   const hasDiscount = promoResult.discount > 0;
   const discountPercent = hasDiscount ? Math.round((promoResult.discount / basePriceWithVariant) * 100) : 0;
+  const productCurrency = resolveProductNativeCurrency(product);
 
   const images = Array.isArray(product.images) && product.images.length > 0
     ? [...product.images].sort((a: any, b: any) => (a.sort_order || a.position || 0) - (b.sort_order || b.position || 0))
@@ -462,6 +465,7 @@ export default function ProductDetail() {
       title: product.title,
       price: finalPrice,
       base_price: product.base_price,
+      currency: resolveProductNativeCurrency(product),
       image: displayImage,
       image_url: displayImage,
       quantity,
@@ -640,13 +644,19 @@ export default function ProductDetail() {
           <div className="pt-4 border-t border-white/10 space-y-3">
             <div className="text-[11px] uppercase text-slate-400 font-bold tracking-wider">Precio actual</div>
             <div className="flex items-baseline gap-4 flex-wrap">
-              <span className={`text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight ${isIntl ? 'text-sky-400' : 'text-white'}`}>
-                {isIntl ? formatUSD(product.final_price_usd || product.base_price || displayPrice) : formatCurrencyPrice(displayPrice)}
+              <span className={`text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight ${productCurrency === 'USD' ? 'text-sky-400' : 'text-white'}`}>
+                {formatProductMoney({
+                  amount: productCurrency === 'USD' ? (product.final_price_usd || product.base_price || displayPrice) : displayPrice,
+                  currency: productCurrency
+                })}
               </span>
               {hasDiscount && (
                 <div className="flex items-center gap-2">
                   <span className="text-lg sm:text-xl text-slate-500 line-through font-semibold">
-                    {isIntl ? formatUSD(product.amazon_list_price_usd || displayOldPrice) : formatCurrencyPrice(displayOldPrice)}
+                    {formatProductMoney({
+                      amount: productCurrency === 'USD' ? (product.amazon_list_price_usd || displayOldPrice) : displayOldPrice,
+                      currency: productCurrency
+                    })}
                   </span>
                   <span className="bg-[#f00856]/15 text-[#f00856] text-xs font-bold px-2.5 py-0.5 rounded-md uppercase border border-[#f00856]/30">
                     {discountPercent}% OFF
@@ -1178,8 +1188,11 @@ export default function ProductDetail() {
               />
               <div className="overflow-hidden min-w-0">
                 <p className="text-white font-bold text-xs truncate">{product.title}</p>
-                <p className={`font-extrabold text-sm leading-tight ${isIntl ? 'text-sky-400' : 'text-[#f00856]'}`}>
-                  {isIntl ? formatUSD(product.final_price_usd || product.base_price || finalPrice) : formatCurrencyPrice(finalPrice)}
+                <p className={`font-extrabold text-sm leading-tight ${productCurrency === 'USD' ? 'text-sky-400' : 'text-[#f00856]'}`}>
+                  {formatProductMoney({
+                    amount: productCurrency === 'USD' ? (product.final_price_usd || product.base_price || finalPrice) : finalPrice,
+                    currency: productCurrency
+                  })}
                 </p>
               </div>
             </div>

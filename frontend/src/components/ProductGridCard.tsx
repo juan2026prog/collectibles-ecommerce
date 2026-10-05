@@ -12,11 +12,12 @@ import { getProductGroupBadge, getAllProductGroupBadges } from '../hooks/useData
 import { useImageProtection } from '../hooks/useImageProtection';
 import { getConditionBadgeInfo } from '../config/conditionConfig';
 import { formatUSD } from '../lib/formatters';
+import { resolveProductPrice, formatProductMoney } from '../lib/priceResolver';
 
 interface ProductGridCardProps {
   product: any;
   onAddToCart: (product: any) => void;
-  formatPrice: (price: number) => string;
+  formatPrice?: (price: number) => string;
   applicablePromos?: any[];
 }
 
@@ -32,12 +33,10 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
   const [addState, setAddState] = useState<'idle' | 'loading' | 'added'>('idle');
 
   const img = getProductImage(product);
-  const finalPrice = Number(product.base_price || 0) + Number(product.variants?.[0]?.price_adjustment || 0);
-  const isInternational = Boolean(
-    product.is_international || 
-    product.source_provider === 'zinc' || 
-    product.shipping_type === 'international_courier_direct'
-  );
+  const resolvedPriceInfo = resolveProductPrice(product, product.variants?.[0]);
+  const finalPrice = resolvedPriceInfo.amount;
+  const isInternational = resolvedPriceInfo.isInternational;
+  const productCurrency = resolvedPriceInfo.currency;
 
   const handleCardClick = () => {
     trackClarityEvent('product_card_click');
@@ -264,11 +263,11 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
         <div className="mt-2.5 flex items-center justify-between gap-2">
           <div className="flex flex-wrap items-baseline gap-1.5">
             <span className={`font-black text-base md:text-lg leading-none ${isInternational ? 'text-sky-400' : 'text-[#f00856]'}`}>
-              {isInternational ? formatUSD(displayPrice) : formatPrice(displayPrice)}
+              {formatProductMoney({ amount: displayPrice, currency: productCurrency })}
             </span>
             {hasDiscount && (
               <span className="text-[10px] text-slate-500 line-through leading-none">
-                {isInternational ? formatUSD(displayOldPrice) : formatPrice(displayOldPrice)}
+                {formatProductMoney({ amount: displayOldPrice, currency: productCurrency })}
               </span>
             )}
           </div>
