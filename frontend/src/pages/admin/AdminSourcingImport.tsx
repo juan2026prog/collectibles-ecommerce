@@ -66,6 +66,7 @@ export default function AdminSourcingImport() {
   const [searchQuery, setSearchQuery] = useState<string>(urlQuery || '');
   const [selectedResultLimit, setSelectedResultLimit] = useState<'AUTO' | 10 | 25 | 50 | 100>('AUTO');
   const [selectedResearchSources, setSelectedResearchSources] = useState<SourcingResearchSource[]>(['WEB', 'AMAZON']);
+  const [selectedDiscoverySources, setSelectedDiscoverySources] = useState<SourcingResearchSource[]>(['WEB', 'AMAZON']);
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [isDiscoveryScanning, setIsDiscoveryScanning] = useState<boolean>(false);
   const [quickFilterState, setQuickFilterState] = useState<string>('all');
@@ -266,7 +267,7 @@ export default function AdminSourcingImport() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ trigger: 'MANUAL', country: selectedCountry })
+        body: JSON.stringify({ trigger: 'MANUAL', country: selectedCountry, sources: selectedDiscoverySources })
       });
 
       const data = await response.json();
@@ -514,6 +515,8 @@ export default function AdminSourcingImport() {
           country={selectedCountry}
           onRunDiscoveryScan={handleRunDiscoveryScan}
           isScanning={isDiscoveryScanning}
+          discoverySources={selectedDiscoverySources}
+          onDiscoverySourcesChange={setSelectedDiscoverySources}
           onSendToImport={handleSendCandidateToImport}
           onOpenWhyModal={(c) => {
             setSelectedCandidateForWhy(c);
