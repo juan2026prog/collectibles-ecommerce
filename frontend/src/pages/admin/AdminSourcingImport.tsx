@@ -160,6 +160,15 @@ export default function AdminSourcingImport() {
     research_depth?: string;
   } | null>(null);
 
+  const [lastDiscoveryTelemetry, setLastDiscoveryTelemetry] = useState<{
+    input_tokens: number | null;
+    output_tokens: number | null;
+    total_tokens: number | null;
+    cost_usd: number | null;
+    cached: boolean;
+    calls: number;
+  } | null>(null);
+
   // Handle Manual Research Execution
   const handleExecuteSearch = async (
     queryOverride?: string, 
@@ -247,6 +256,17 @@ export default function AdminSourcingImport() {
       });
 
       const data = await response.json();
+
+      if (data?.ai_usage) {
+        setLastDiscoveryTelemetry({
+          input_tokens: data.ai_usage.input_tokens ?? null,
+          output_tokens: data.ai_usage.output_tokens ?? null,
+          total_tokens: data.ai_usage.total_tokens ?? null,
+          cost_usd: data.ai_usage.cost_usd ?? null,
+          cached: Boolean(data.ai_usage.cached),
+          calls: Number(data.ai_usage.calls || 0)
+        });
+      }
 
       if (!response.ok || data.status === 'FORBIDDEN') {
         throw new Error(data.error || `Error ${response.status}: Acceso no autorizado o fallo de escaneo.`);
@@ -484,6 +504,7 @@ export default function AdminSourcingImport() {
             setShowWhyModal(true);
           }}
           onToggleWatchlist={handleToggleCandidateWatchlist}
+          lastExecutionTelemetry={lastDiscoveryTelemetry}
         />
       )}
 
