@@ -41,6 +41,14 @@ interface SourcingDiscoveryViewProps {
   onSendToImport: (candidate: SourcingProductCandidate) => void;
   onOpenWhyModal: (candidate: SourcingProductCandidate) => void;
   onToggleWatchlist: (candidate: SourcingProductCandidate) => void;
+  lastExecutionTelemetry?: {
+    input_tokens: number | null;
+    output_tokens: number | null;
+    total_tokens: number | null;
+    cost_usd: number | null;
+    cached: boolean;
+    calls: number;
+  } | null;
 }
 
 export const SourcingDiscoveryView: React.FC<SourcingDiscoveryViewProps> = ({
@@ -50,7 +58,8 @@ export const SourcingDiscoveryView: React.FC<SourcingDiscoveryViewProps> = ({
   isScanning,
   onSendToImport,
   onOpenWhyModal,
-  onToggleWatchlist
+  onToggleWatchlist,
+  lastExecutionTelemetry
 }) => {
   const [filterMode, setFilterMode] = useState<'all' | 'outside_watchlist' | 'preorders' | 'emerging'>('all');
 
@@ -107,6 +116,20 @@ export const SourcingDiscoveryView: React.FC<SourcingDiscoveryViewProps> = ({
               Candidatos: <strong>{candidates.length}</strong>
             </span>
           </div>
+
+          {lastExecutionTelemetry && (
+            <div className="flex flex-wrap items-center gap-2 pt-2 text-[11px]">
+              <span className="bg-white/10 px-2 py-1 rounded-lg border border-purple-500/30">
+                Último run: <strong>{lastExecutionTelemetry.calls} llamada{lastExecutionTelemetry.calls === 1 ? '' : 's'} IA</strong>
+              </span>
+              <span className="bg-white/10 px-2 py-1 rounded-lg border border-purple-500/30">
+                Tokens reales: <strong>{lastExecutionTelemetry.total_tokens == null ? 'UNKNOWN' : lastExecutionTelemetry.total_tokens.toLocaleString()}</strong>
+              </span>
+              <span className="bg-white/10 px-2 py-1 rounded-lg border border-purple-500/30">
+                Costo real: <strong>{lastExecutionTelemetry.cached ? 'USD $0.0000 (caché)' : (lastExecutionTelemetry.cost_usd == null ? 'UNKNOWN' : `USD ${lastExecutionTelemetry.cost_usd.toFixed(6)}`)}</strong>
+              </span>
+            </div>
+          )}
         </div>
 
         <button
