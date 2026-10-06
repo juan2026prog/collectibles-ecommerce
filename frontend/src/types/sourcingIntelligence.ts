@@ -224,6 +224,7 @@ export interface SourcingResearchQueryRequest {
 
 export interface SourcingResearchResponse {
   success: boolean;
+  sources?: SourcingResearchSource[];
   query: string;
   country: string;
   product_family?: string;
