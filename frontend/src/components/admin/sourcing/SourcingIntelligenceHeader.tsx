@@ -503,34 +503,38 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
             </div>
 
             {/* CACHE HIT BANNER & ACTIONS */}
-            {(preFlightEstimate.cache.status === 'HIT' || preFlightEstimate.cache.status === 'HIT_DISCOVERIES') && (
-              <div className="bg-emerald-950/70 border border-emerald-500/40 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2 text-emerald-300 font-semibold">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>
-                    ♻ Resultado reciente disponible en caché ({preFlightEstimate.cache.cached_items_count || 0} productos detectados hace {Math.round((preFlightEstimate.cache.age_seconds || 0) / 60)} min).
-                    {' '}Costo adicional: USD $0.0000.
-                    {preFlightEstimate.cache.cached_total_tokens != null || preFlightEstimate.cache.cached_cost_usd != null ? (
-                      <> Run original: {preFlightEstimate.cache.cached_total_tokens == null ? 'tokens UNKNOWN' : preFlightEstimate.cache.cached_total_tokens.toLocaleString() + ' tokens'} · {preFlightEstimate.cache.cached_cost_usd == null ? 'costo UNKNOWN' : 'USD 
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleRunSearch(false)}
-                    className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-lg transition cursor-pointer shadow-xs"
-                  >
-                    USAR RESULTADO RECIENTE ($0.000)
-                  </button>
-                  <button
-                    onClick={() => handleRunSearch(true)}
-                    className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-lg transition cursor-pointer border border-slate-700"
-                  >
-                    INVESTIGAR DE NUEVO
-                  </button>
-                </div>
-              </div>
-            )}
+        {(preFlightEstimate.cache.status === 'HIT' || preFlightEstimate.cache.status === 'HIT_DISCOVERIES') && (
+          <div className="bg-emerald-950/70 border border-emerald-500/40 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 text-emerald-300 font-semibold">
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>
+                ♻ Resultado reciente disponible en caché ({preFlightEstimate.cache.cached_items_count || 0} productos detectados hace {Math.round((preFlightEstimate.cache.age_seconds || 0) / 60)} min).
+                {' '}Costo adicional: USD $0.0000.
+                {preFlightEstimate.cache.cached_total_tokens != null || preFlightEstimate.cache.cached_cost_usd != null ? (
+                  <> Run original: {preFlightEstimate.cache.cached_total_tokens == null ? 'tokens UNKNOWN' : preFlightEstimate.cache.cached_total_tokens.toLocaleString() + ' tokens'} · {preFlightEstimate.cache.cached_cost_usd == null ? 'costo UNKNOWN' : 'USD $' + Number(preFlightEstimate.cache.cached_cost_usd).toFixed(6)}{preFlightEstimate.cache.cached_model ? ' · ' + preFlightEstimate.cache.cached_model : ''}.</>
+                ) : (
+                  <> Consumo original: no disponible.</>
+                )}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleRunSearch(false)}
+                className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-lg transition cursor-pointer shadow-xs"
+              >
+                USAR RESULTADO RECIENTE ($0.000)
+              </button>
+              <button
+                onClick={() => handleRunSearch(true)}
+                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-lg transition cursor-pointer border border-slate-700"
+              >
+                INVESTIGAR DE NUEVO
+              </button>
+            </div>
+          </div>
+        )}
 
-            {/* HIGH COST WARNING & DOWNSHIFT OPTION */}
+        {/* HIGH COST WARNING & DOWNSHIFT OPTION */}
             {showConfirmationWarning && preFlightEstimate.cache.status === 'MISS' && (
               <div className="bg-amber-950/80 border border-amber-500/50 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-2.5 text-amber-200">
