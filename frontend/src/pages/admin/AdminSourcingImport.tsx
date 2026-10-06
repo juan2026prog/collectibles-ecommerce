@@ -156,6 +156,10 @@ export default function AdminSourcingImport() {
     input_tokens?: number | null;
     output_tokens?: number | null;
     total_tokens?: number | null;
+    original_input_tokens?: number | null;
+    original_output_tokens?: number | null;
+    original_total_tokens?: number | null;
+    original_cost_usd?: number | null;
     cached?: boolean;
     research_depth?: string;
   } | null>(null);
@@ -219,6 +223,10 @@ export default function AdminSourcingImport() {
         input_tokens: res.input_tokens,
         output_tokens: res.output_tokens,
         total_tokens: res.total_tokens,
+        original_input_tokens: res.original_input_tokens,
+        original_output_tokens: res.original_output_tokens,
+        original_total_tokens: res.original_total_tokens,
+        original_cost_usd: res.original_cost_usd,
         cached: res.cached,
         research_depth: res.research_depth
       });
