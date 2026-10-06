@@ -195,7 +195,21 @@ export function deduplicateCanonicalCandidates(candidates) {
     if (!match) { result.push({ variant, candidate }); continue; }
     const allObservations = [...match.candidate.raw_evidence, ...candidate.raw_evidence];
     const unique = [...new Map(allObservations.map(e => [`${e.field}|${e.source_url}|${JSON.stringify(e.value)}`, e])).values()];
-    const mergedClaims = { ...match.candidate.claims, id: match.candidate.id };
+    // Preserve richer retailer fields while keeping the original candidate identity/id.
+    // Verified observations remain the source of truth for price/image/ASIN.
+    const baseClaims = match.candidate.claims || {};
+    const incomingClaims = candidate.claims || {};
+    const prefer = (a, b) => (a !== null && a !== undefined && a !== '' && a !== 'No verificado') ? a : b;
+    const mergedClaims = {
+      ...baseClaims,
+      brand: prefer(baseClaims.brand, incomingClaims.brand),
+      image_url: prefer(baseClaims.image_url || baseClaims.image, incomingClaims.image_url || incomingClaims.image),
+      asin: prefer(baseClaims.asin, incomingClaims.asin),
+      url: prefer(baseClaims.url || baseClaims.source_url || baseClaims.retailer_url, incomingClaims.url || incomingClaims.source_url || incomingClaims.retailer_url),
+      retailer: prefer(baseClaims.retailer || baseClaims.source_retailer, incomingClaims.retailer || incomingClaims.source_retailer),
+      origin_price_usd: prefer(baseClaims.origin_price_usd, incomingClaims.origin_price_usd ?? incomingClaims.price_usd ?? incomingClaims.price),
+      id: match.candidate.id
+    };
     match.candidate = validateCandidate(mergedClaims, { country: candidate.country_code, origin: match.candidate.discovered_from, observations: unique, economic: match.candidate.economic || candidate.economic,
       marketChecks: { tiendamia: match.candidate.market_presence.tiendamia.presence !== 'UNKNOWN' ? match.candidate.market_presence.tiendamia : candidate.market_presence.tiendamia,
         mercadolibre: match.candidate.market_presence.mercadolibre.presence !== 'UNKNOWN' ? match.candidate.market_presence.mercadolibre : candidate.market_presence.mercadolibre } });
