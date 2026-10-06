@@ -65,6 +65,9 @@ export class ResearchIntelligenceService {
     const multiSourcePromise = multiSourceDiscoveryService
       .discoverAllSources(query, { maxAmazon: 5, maxEbay: 0 })
       .catch((error: any) => ({ candidates: [], telemetry: {}, sourceStatus: {}, error }));
+    const amazonSoftDeadline = new Promise<any>((resolve) =>
+      setTimeout(() => resolve({ candidates: [], telemetry: {}, sourceStatus: {}, timedOut: true }), 8000)
+    );
 
     // 1. Ejecución vía AI Gateway Central
     let aiResult: any = null;
