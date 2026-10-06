@@ -186,6 +186,8 @@ export default function AdminSourcingImport() {
 
     const limitToUse = resultLimitOverride || selectedResultLimit;
 
+    // Hard guard against double taps / duplicate paid executions.
+    if (isSearching) return;
     setIsSearching(true);
     try {
       const res = await researchIntelligenceService.research({
@@ -208,7 +210,7 @@ export default function AdminSourcingImport() {
         success: res?.success
       });
 
-      setTrends(prev => [res.trends[0], ...prev.filter(t => t.topic !== q)]);
+      setTrends(prev => res.trends?.[0] ? [res.trends[0], ...prev.filter(t => t.topic !== q)] : prev);
       setCandidates(res.candidates);
       setZeroResultReason(res.zero_result_reason);
       setActiveTab('candidates');
