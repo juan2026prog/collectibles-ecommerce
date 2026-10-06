@@ -247,53 +247,18 @@ export class ResearchIntelligenceService {
       ? aiResult.canonical_candidates
       : manualCandidates(rawItems, country);
 
-    // 4b. Descubrimiento Multi-Fuente en Vivo (Amazon, eBay, Best Buy) para enriquecer candidatos
-    try {
-      const multiSourceRes: any = await multiSourcePromise;
-      if (multiSourceRes?.error) throw multiSourceRes.error;
-      const candidatesBeforeDedupe = candidates.length + multiSourceRes.candidates.length;
-
-      if (multiSourceRes.candidates.length > 0) {
-        const additionalRaw = multiSourceRes.candidates.map(c => ({
-          title: c.title,
-          brand: c.brand,
-          url: c.url,
-          retailer: c.retailer,
-          source_retailer: c.source_retailer || c.retailer,
-          origin_price_usd: c.origin_price_usd,
-          image_url: c.image_url,
-          asin: c.asin,
-          discovered_from: c.discovered_from || 'RETAILER_DISCOVERY'
-        }));
-        const additionalCandidates = manualCandidates(additionalRaw, country);
-        candidates = deduplicateCanonicalCandidates([...candidates, ...additionalCandidates]);
-      }
-
-      const multiSourceTelemetry = {
-        ...multiSourceRes.telemetry,
-        web: {
-          status: 'AVAILABLE' as const,
-          candidates_created: Array.isArray(aiResult?.canonical_candidates) ? aiResult.canonical_candidates.length : rawItems.length
-        },
-        official: {
-          candidates_created: 0
-        },
-        candidates_before_dedupe: candidatesBeforeDedupe,
-        candidates_after_dedupe: candidates.length
-      };
-
-      console.log('[MULTI_SOURCE_DISCOVERY_SOURCE_STATUS]', multiSourceTelemetry);
-
+    // Manual Research is intentionally non-blocking after the paid AI result.
+    // Amazon discovery may continue independently, but INVESTIGAR must return immediately
+    // with the canonical research candidates instead of waiting on retailer/provider latency.
+    void multiSourcePromise.then((multiSourceRes: any) => {
       console.log('[FRONTEND_RESEARCH_TRACE]', {
-        step: 'MULTI_SOURCE_DISCOVERY_COMPLETED',
-        additionalCandidatesCount: multiSourceRes.candidates.length,
-        totalCombinedCandidates: candidates.length,
-        sourceStatus: multiSourceRes.sourceStatus,
-        telemetry: multiSourceTelemetry
+        step: 'BACKGROUND_AMAZON_DISCOVERY_COMPLETED',
+        additionalCandidatesCount: Array.isArray(multiSourceRes?.candidates) ? multiSourceRes.candidates.length : 0,
+        sourceStatus: multiSourceRes?.sourceStatus
       });
-    } catch (multiSourceErr: any) {
-      console.warn('[FRONTEND_RESEARCH_WARN] MULTI_SOURCE_DISCOVERY_ERROR', multiSourceErr.message);
-    }
+    }).catch((err: any) => {
+      console.warn('[FRONTEND_RESEARCH_WARN] BACKGROUND_AMAZON_DISCOVERY_ERROR', err?.message);
+    });
 
     // Manual Research must finish when research results are ready.
     // Slow retailer/commercial enrichment is a separate concern and must not keep
