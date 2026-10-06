@@ -72,6 +72,10 @@ export class ResearchIntelligenceService {
     let inputTokens: number | null = null;
     let outputTokens: number | null = null;
     let totalTokens: number | null = null;
+    let originalInputTokens: number | null = null;
+    let originalOutputTokens: number | null = null;
+    let originalTotalTokens: number | null = null;
+    let originalCostUsd: number | null = null;
     let gatewayResponse: any = null;
 
     try {
@@ -135,6 +139,10 @@ export class ResearchIntelligenceService {
       inputTokens = gatewayResponse.usage?.inputTokens ?? gatewayResponse.usage?.input_tokens ?? null;
       outputTokens = gatewayResponse.usage?.outputTokens ?? gatewayResponse.usage?.output_tokens ?? null;
       totalTokens = gatewayResponse.usage?.totalTokens ?? gatewayResponse.usage?.total_tokens ?? null;
+      originalInputTokens = gatewayResponse.usage?.original_tokens?.input_tokens ?? null;
+      originalOutputTokens = gatewayResponse.usage?.original_tokens?.output_tokens ?? null;
+      originalTotalTokens = gatewayResponse.usage?.original_tokens?.total_tokens ?? null;
+      originalCostUsd = gatewayResponse.pricing?.original_cost_usd ?? null;
     } catch (err: any) {
       console.error('[ResearchIntelligence] Error en Gateway:', err);
       throw err;
@@ -357,6 +365,10 @@ export class ResearchIntelligenceService {
       input_tokens: inputTokens,
       output_tokens: outputTokens,
       total_tokens: totalTokens,
+      original_input_tokens: originalInputTokens,
+      original_output_tokens: originalOutputTokens,
+      original_total_tokens: originalTotalTokens,
+      original_cost_usd: originalCostUsd,
       zero_result_reason: zeroResultReason
     };
   }
