@@ -110,7 +110,12 @@ export class OpenAIProvider implements AIProviderAdapter {
         usage: data.usage,
         pricing: data.pricing,
         request_id: data.request_id,
-        response_id: data.response_id
+        response_id: data.response_id,
+        requested_model: data.requested_model,
+        actual_model: data.actual_model || data.model,
+        automatic_or_manual: data.automatic_or_manual,
+        research_depth: data.research_depth,
+        cached: Boolean(data.cached)
       };
 
     } catch (err: any) {
