@@ -307,8 +307,11 @@ export interface AIPreFlightEstimate {
     age_seconds: number | null;
     last_researched_at?: string | null;
     cached_items_count?: number;
-    cached_model?: string;
-    cached_cost_usd?: number;
+    cached_model?: string | null;
+    cached_input_tokens?: number | null;
+    cached_output_tokens?: number | null;
+    cached_total_tokens?: number | null;
+    cached_cost_usd?: number | null;
   };
   requires_confirmation: boolean;
   hard_limit_exceeded: boolean;
