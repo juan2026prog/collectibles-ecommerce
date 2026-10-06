@@ -301,5 +301,15 @@ export default async function handler(req, res) {
     signals_breakdown: { global_signals: observations.filter(s => s.country === 'GLOBAL').length, local_signals: local.length, total_signals: observations.length },
     trends_breakdown: { global_trends: 0, local_trends: 0 }, discoveries_created: created, candidates_generated: candidates.length, raw_counts: counters,
     candidates,
-    ai_calls: aiCalls, ai_cost_usd: aiCost, purchases_executed: 0, auto_publications: 0, completed_at: new Date().toISOString() });
+    ai_calls: aiCalls,
+    ai_cost_usd: aiCost,
+    ai_usage: {
+      input_tokens: health.openai_web_search?.tokens?.input_tokens ?? null,
+      output_tokens: health.openai_web_search?.tokens?.output_tokens ?? null,
+      total_tokens: health.openai_web_search?.tokens?.total_tokens ?? null,
+      cost_usd: aiCost,
+      cached: Boolean(health.openai_web_search?.cached),
+      calls: aiCalls
+    },
+    purchases_executed: 0, auto_publications: 0, completed_at: new Date().toISOString() });
 }
