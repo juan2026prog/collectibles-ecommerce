@@ -66,6 +66,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // Auth must never leave the whole application behind an infinite spinner.
+    // Supabase can occasionally leave getSession/profile requests pending on mobile/network recovery.
+    const authSafetyTimer = window.setTimeout(() => {
+      console.warn('[AuthContext] Auth initialization timed out; releasing loading state.');
+      setLoading(false);
+    }, 8000);
+
     // Listen for auth changes (handles initial session & updates)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session);
@@ -98,7 +105,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      window.clearTimeout(authSafetyTimer);
+      subscription.unsubscribe();
+    };
   }, []);
 
   async function fetchProfile(userId: string) {
