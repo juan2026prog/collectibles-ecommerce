@@ -583,9 +583,11 @@ async function executeHandler(req, res) {
               totalTokens: 0,
               cachedTokens: cachedEntry.total_tokens || 0,
               original_tokens: {
-                input_tokens: cachedEntry.input_tokens || null,
-                output_tokens: cachedEntry.output_tokens || null,
-                total_tokens: cachedEntry.total_tokens || null
+                input_tokens: cachedEntry.input_tokens ?? null,
+                output_tokens: cachedEntry.output_tokens ?? null,
+                total_tokens: (cachedEntry.input_tokens != null && cachedEntry.output_tokens != null)
+                  ? Number(cachedEntry.input_tokens) + Number(cachedEntry.output_tokens)
+                  : null
               }
             },
             pricing: {
@@ -596,6 +598,7 @@ async function executeHandler(req, res) {
               input_cost_usd: 0,
               output_cost_usd: 0,
               estimated_cost_usd: 0,
+              original_cost_usd: cachedEntry.cost_usd ?? null,
               pricing_status: 'PRICED',
               pricing_source: 'CACHE_HIT'
             },
@@ -1173,7 +1176,13 @@ async function executeHandler(req, res) {
             research_depth: modeConfig.key,
             batch_telemetry: batchExecutionTelemetry,
             items: Array.isArray(structuredData.items) ? structuredData.items : [],
-            sources: classifiedSources
+            sources: classifiedSources,
+            usage: {
+              input_tokens: totalUsage?.inputTokens ?? null,
+              output_tokens: totalUsage?.outputTokens ?? null,
+              total_tokens: totalUsage?.totalTokens ?? null,
+              cost_usd: totalPricing?.estimated_cost_usd ?? null
+            }
           }
         };
 
