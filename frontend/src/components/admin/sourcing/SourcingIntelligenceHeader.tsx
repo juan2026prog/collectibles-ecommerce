@@ -9,6 +9,7 @@ import { aiGateway } from '../../../services/ai/aiGateway';
 import { useAuth } from '../../../contexts/AuthContext';
 import type { AIPreFlightEstimate, ResearchDepthMode, AIModelCapabilityInfo } from '../../../services/ai/types';
 import { COLLECTIBLES_PRODUCT_FAMILIES } from '../../../types/sourcingIntelligence';
+import type { SourcingResearchSource } from '../../../types/sourcingIntelligence';
 
 interface SourcingIntelligenceHeaderProps {
   country: string;
@@ -23,7 +24,9 @@ interface SourcingIntelligenceHeaderProps {
   onResultLimitChange?: (limit: 'AUTO' | 10 | 25 | 50 | 100) => void;
   searchQuery: string;
   onSearchQueryChange: (q: string) => void;
-  onExecuteSearch: (mode?: ResearchDepthMode, requestedModel?: string, forceRefresh?: boolean, resultLimit?: 'AUTO' | 10 | 25 | 50 | 100) => void;
+  researchSources: SourcingResearchSource[];
+  onResearchSourcesChange: (sources: SourcingResearchSource[]) => void;
+  onExecuteSearch: (mode?: ResearchDepthMode, requestedModel?: string, forceRefresh?: boolean, resultLimit?: 'AUTO' | 10 | 25 | 50 | 100, sources?: SourcingResearchSource[]) => void;
   isSearching: boolean;
   activeCounts: {
     trending: number;
@@ -76,6 +79,8 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
   onResultLimitChange,
   searchQuery,
   onSearchQueryChange,
+  researchSources,
+  onResearchSourcesChange,
   onExecuteSearch,
   isSearching,
   activeCounts,
@@ -128,6 +133,13 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
 
   useEffect(() => {
     const clean = (searchQuery || '').trim();
+    if (!researchSources.includes('WEB')) {
+      setPreFlightEstimate(null);
+      setEstimateError(null);
+      setShowConfirmationWarning(false);
+      lastEstimateKeyRef.current = '';
+      return;
+    }
     if (!clean || clean.length < 3) {
       setPreFlightEstimate(null);
       setEstimateError(null);
@@ -136,7 +148,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
       return;
     }
 
-    const currentKey = `${clean}|${country}|${period}|${researchMode}|${selectedModel}|${effectiveFamily}|${localResultLimit}`;
+    const currentKey = `${clean}|${country}|${period}|${researchMode}|${selectedModel}|${effectiveFamily}|${localResultLimit}|${researchSources.join(',')}`;
     if (lastEstimateKeyRef.current === currentKey) {
       return; // Deduplicate identical params
     }
@@ -187,7 +199,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
       isMounted = false;
       clearTimeout(timer);
     };
-  }, [searchQuery, country, period, researchMode, selectedModel, effectiveFamily, localResultLimit]);
+  }, [searchQuery, country, period, researchMode, selectedModel, effectiveFamily, localResultLimit, researchSources]);
 
   const handleRunSearch = (forceRefresh = false) => {
     if (isSearching) return;
@@ -196,7 +208,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
       return;
     }
     setShowConfirmationWarning(false);
-    onExecuteSearch(researchMode, selectedModel, forceRefresh, localResultLimit);
+    onExecuteSearch(researchMode, selectedModel, forceRefresh, localResultLimit, researchSources);
   };
 
   return (
@@ -380,6 +392,46 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
           </div>
         </div>
 
+        {/* FUENTES DE INVESTIGACIÓN: fuentes externas, no Radar/Release/Watchlist */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-extrabold text-slate-700 mr-1">Dónde investigar:</span>
+          {([
+            { id: 'WEB', label: 'Toda la Web', available: true },
+            { id: 'AMAZON', label: 'Amazon', available: true },
+            { id: 'EBAY', label: 'eBay', available: false },
+            { id: 'BESTBUY', label: 'Best Buy', available: false }
+          ] as const).map(source => {
+            const checked = researchSources.includes(source.id as SourcingResearchSource);
+            return (
+              <label
+                key={source.id}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold ${
+                  source.available
+                    ? checked ? 'border-pink-300 bg-pink-50 text-slate-900 cursor-pointer' : 'border-slate-200 bg-white text-slate-600 cursor-pointer'
+                    : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
+                }`}
+                title={source.available ? `Investigar en ${source.label}` : 'Integración preservada pero todavía no certificada para producción'}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  disabled={!source.available}
+                  onChange={() => {
+                    if (!source.available) return;
+                    const next = checked
+                      ? researchSources.filter(s => s !== source.id)
+                      : [...researchSources, source.id as SourcingResearchSource];
+                    if (next.length > 0) onResearchSourcesChange(next);
+                  }}
+                  className="accent-[#f00856]"
+                />
+                <span>{source.label}</span>
+                {!source.available && <span className="text-[10px] font-black uppercase">No disponible</span>}
+              </label>
+            );
+          })}
+        </div>
+
         {/* INPUT DE BÚSQUEDA Y BOTÓN PRINCIPAL */}
         <div className="flex flex-col sm:flex-row gap-2.5">
           <div className="relative flex-1">
@@ -418,6 +470,13 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
           </button>
         </div>
 
+        {!researchSources.includes('WEB') && researchSources.includes('AMAZON') && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+            <span className="text-xs font-bold text-emerald-800">Amazon solamente · sin OpenAI Web Search</span>
+            <span className="text-sm font-black text-emerald-900">Costo IA estimado: USD $0.0000</span>
+          </div>
+        )}
+
         {/* PRE-FLIGHT SIMPLE: keep cache/telemetry internal, show only what the operator needs */}
         {preFlightEstimate && (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -425,7 +484,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
               <Zap className="w-4 h-4 text-amber-500" />
               <span>Modelo: <b className="text-slate-900">{preFlightEstimate.model}</b></span>
               <span className="text-slate-300">·</span>
-              <span>Web Search: <b className="text-emerald-700">activo</b></span>
+              <span>Fuentes: <b className="text-emerald-700">{researchSources.map(s => s === 'WEB' ? 'Web' : s === 'BESTBUY' ? 'Best Buy' : s).join(' + ')}</b></span>
             </div>
             <div className="text-sm font-black text-slate-900">
               Costo estimado:{' '}
@@ -454,7 +513,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
             <span><b>Confirmación de costo:</b> esta investigación puede costar hasta USD $${preFlightEstimate.estimated_total_max_usd.toFixed(4)}.</span>
             <div className="flex gap-2">
               <button onClick={() => setShowConfirmationWarning(false)} className="px-3 py-1.5 rounded-lg border border-amber-300 font-bold">CANCELAR</button>
-              <button onClick={() => { setShowConfirmationWarning(false); onExecuteSearch(researchMode, selectedModel, true, localResultLimit); }} className="px-3 py-1.5 rounded-lg bg-[#f00856] text-white font-black">EJECUTAR</button>
+              <button onClick={() => { setShowConfirmationWarning(false); onExecuteSearch(researchMode, selectedModel, true, localResultLimit, researchSources); }} className="px-3 py-1.5 rounded-lg bg-[#f00856] text-white font-black">EJECUTAR</button>
             </div>
           </div>
         )}
