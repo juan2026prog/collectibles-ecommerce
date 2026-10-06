@@ -285,6 +285,8 @@ export async function enrichSingleCandidateCommercialData(
 
   // E. OPPORTUNITY SCORE EVALUATION (Deterministic & Fail-Closed)
   // Regla: UNKNOWN nunca suma ni inventa evidencia.
+  // Pero las señales no comerciales observadas (Radar, preventa, novedad, demanda local o momentum)
+  // deben sumarse a su score en lugar de colapsar a 0 cuando falta margen comercial.
   try {
     const hasDemand = typeof candidate.trend_score === 'number' && candidate.trend_score > 0;
     const demandScore = hasDemand ? candidate.trend_score : 0;
@@ -302,17 +304,66 @@ export async function enrichSingleCandidateCommercialData(
     });
 
     if (oppResult && typeof oppResult.opportunityScore === 'number') {
-      clone.opportunity_score = oppResult.opportunityScore;
+      // Si el candidato ya tenía un score canónico calculado por señales de Radar/fuente (breakdown de shared/sourcingCandidateValidation.js),
+      // tomamos el máximo entre el score de oportunidad comercial y el score por evidencia/novedad existente,
+      // garantizando que un producto con fuerte señal de Radar o novedad no quede artificialmente en 0.
+      const initialCandidateScore = typeof candidate.opportunity_score === 'number' && Number.isFinite(candidate.opportunity_score)
+        ? candidate.opportunity_score
+        : 0;
+
+      clone.opportunity_score = Math.max(oppResult.opportunityScore, initialCandidateScore);
     }
   } catch {
     // Si falla el motor de scoring, preserva el determinístico previo sin romper el candidato
   }
 
-  // Asignar razones de bloqueo en metadata tipada del candidato
-  (clone.pricing as any).landed_cost_status = landedCostStatus;
-  (clone.pricing as any).margin_status = marginStatus;
-  (clone.pricing as any).tiendamia_status = tiendamiaStatus;
-  (clone.pricing as any).mercadolibre_status = mercadolibreStatus;
+  // F. DETERMINACIÓN DE COMMERCIAL READINESS
+  // - READY: origin price + weight + landed cost + margin calculados
+  // - PARTIAL: existen señales reales (Radar, novedad, precio observado) pero falta peso o listing comercial
+  // - BLOCKED: sin evidencia suficiente para comercializar
+  const hasOriginPrice = typeof clone.pricing.origin_price_usd === 'number' && clone.pricing.origin_price_usd > 0;
+  const hasLandedCost = typeof clone.pricing.landed_cost_estimated_usd === 'number' && clone.pricing.landed_cost_estimated_usd > 0;
+  const hasMargin = typeof clone.pricing.estimated_margin_percent === 'number';
+  const hasNoveltyOrSignals = (clone.status === 'PREORDER' || clone.status === 'NEW' || clone.opportunity_score > 0 || clone.trend_score > 0);
+
+  let commercialReadiness: 'READY' | 'PARTIAL' | 'BLOCKED';
+  const missingReasons: string[] = [];
+
+  if (hasOriginPrice && hasLandedCost && hasMargin) {
+    commercialReadiness = 'READY';
+  } else if (hasNoveltyOrSignals || hasOriginPrice) {
+    commercialReadiness = 'PARTIAL';
+    if (!hasOriginPrice) missingReasons.push('Sin precio de origen observado');
+    if (realWeightLbs === null) missingReasons.push('Sin peso verificado en fuente (peso requerido para flete/arancel)');
+    if (!hasLandedCost) missingReasons.push('Costo de importación pendiente');
+    if (!hasMargin) missingReasons.push('Margen comercial pendiente de referencia local');
+    if (!asin) missingReasons.push('Sin ASIN/listing verificado en Amazon');
+  } else {
+    commercialReadiness = 'BLOCKED';
+    missingReasons.push('Sin datos comerciales suficientes para trading');
+  }
+
+  clone.commercial_readiness = commercialReadiness;
+
+  // G. SEPARACIÓN EXPLÍCITA DE WHY EXPLANATION
+  // headline: por qué es una oportunidad detectada
+  // commercial_status: qué falta para comercializar
+  if (clone.why_explanation) {
+    clone.why_explanation.commercial_missing_reasons = missingReasons;
+    if (commercialReadiness === 'READY') {
+      clone.why_explanation.commercial_status = `Listo para importación con margen estimado de ${clone.pricing.estimated_margin_percent}%. Costo puesto $${clone.pricing.landed_cost_estimated_usd}.`;
+    } else if (commercialReadiness === 'PARTIAL') {
+      clone.why_explanation.commercial_status = `Oportunidad en seguimiento comercial. Pendiente: ${missingReasons.join('; ')}.`;
+    } else {
+      clone.why_explanation.commercial_status = 'Bloqueado para comercialización: datos comerciales insuficientes.';
+    }
+  }
+
+  // Asignar razones de bloqueo en metadata tipada del candidato (en raíz)
+  (clone as any).landed_cost_status = landedCostStatus;
+  (clone as any).margin_status = marginStatus;
+  (clone as any).tiendamia_status = tiendamiaStatus;
+  (clone as any).mercadolibre_status = mercadolibreStatus;
 
   return {
     candidate: clone,

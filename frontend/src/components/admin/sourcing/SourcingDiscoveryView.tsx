@@ -210,9 +210,20 @@ export const SourcingDiscoveryView: React.FC<SourcingDiscoveryViewProps> = ({
                   </div>
 
                   <div className="flex items-center justify-between text-xs bg-slate-50 p-2 rounded-xl">
-                    <span className="text-[11px] font-bold text-gray-600">Opportunity Score:</span>
-                    <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
-                      {cand.opportunity_score}/100
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-gray-600">Score:</span>
+                      <span className="text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                        {cand.opportunity_score}/100
+                      </span>
+                    </div>
+                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-md uppercase border ${
+                      cand.commercial_readiness === 'READY'
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                        : cand.commercial_readiness === 'PARTIAL'
+                          ? 'bg-amber-100 text-amber-800 border-amber-300'
+                          : 'bg-slate-200 text-slate-700 border-slate-300'
+                    }`}>
+                      {cand.commercial_readiness || 'PARTIAL'}
                     </span>
                   </div>
 

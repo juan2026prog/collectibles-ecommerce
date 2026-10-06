@@ -890,7 +890,28 @@ export async function resolveZincProductsForCandidates(
       const clone: SourcingProductCandidate = { ...candidate };
       (clone as any).commercial_resolution_status = searchRes.status;
       // Preservar honestamente que no se resolvió por error de provider/auth
-      if (!clone.image_url || clone.provenance?.image?.status === 'UNKNOWN') {
+      const hasSourceImage = typeof clone.image_url === 'string' && clone.image_url.startsWith('http') && !clone.image_url.includes('unsplash.com');
+      const provImage = clone.provenance?.image;
+      const isProvValid = provImage && (provImage.status === 'OBSERVED' || provImage.status === 'CORROBORATED') && typeof provImage.value === 'string' && (provImage.value as string).startsWith('http');
+
+      if (hasSourceImage && isProvValid) {
+        if (!clone.gallery_images || clone.gallery_images.length === 0) {
+          clone.gallery_images = [clone.image_url!];
+        }
+      } else if (hasSourceImage && (!provImage || provImage.status === 'UNKNOWN')) {
+        clone.gallery_images = clone.gallery_images && clone.gallery_images.length > 0 ? clone.gallery_images : [clone.image_url!];
+        clone.provenance = {
+          ...clone.provenance,
+          image: {
+            value: clone.image_url,
+            status: 'OBSERVED',
+            source: clone.retailer_source || 'Official Source / Radar',
+            source_url: clone.retailer_url || null,
+            observed_at: now,
+            verification: 'SOURCE_EXTRACTED'
+          }
+        };
+      } else {
         clone.image_url = null;
         clone.gallery_images = [];
       }
@@ -987,8 +1008,33 @@ export async function resolveZincProductsForCandidates(
       }
     } else {
       (clone as any).commercial_resolution_status = evaluation.level;
-      // In AMBIGUOUS or NO_MATCH, keep image null unless already corroborating from another trusted source
-      if (!clone.image_url || clone.provenance?.image?.status === 'UNKNOWN') {
+      // In AMBIGUOUS or NO_MATCH, do not use Zinc/Amazon image.
+      // If candidate already has an observed official/source image, preserve it honestly.
+      const hasSourceImage = typeof clone.image_url === 'string' && clone.image_url.startsWith('http') && !clone.image_url.includes('unsplash.com');
+      const provImage = clone.provenance?.image;
+      const isProvValid = provImage && (provImage.status === 'OBSERVED' || provImage.status === 'CORROBORATED') && typeof provImage.value === 'string' && (provImage.value as string).startsWith('http');
+
+      if (hasSourceImage && isProvValid) {
+        // Keep existing valid source image and gallery
+        if (!clone.gallery_images || clone.gallery_images.length === 0) {
+          clone.gallery_images = [clone.image_url!];
+        }
+      } else if (hasSourceImage && (!provImage || provImage.status === 'UNKNOWN')) {
+        // Source image was present on candidate (e.g. from Radar / Release Calendar / official site),
+        // upgrade provenance to OBSERVED / OFFICIAL_SOURCE
+        clone.gallery_images = clone.gallery_images && clone.gallery_images.length > 0 ? clone.gallery_images : [clone.image_url!];
+        clone.provenance = {
+          ...clone.provenance,
+          image: {
+            value: clone.image_url,
+            status: 'OBSERVED',
+            source: clone.retailer_source || 'Official Source / Radar',
+            source_url: clone.retailer_url || null,
+            observed_at: now,
+            verification: 'SOURCE_EXTRACTED'
+          }
+        };
+      } else {
         clone.image_url = null;
         clone.gallery_images = [];
       }

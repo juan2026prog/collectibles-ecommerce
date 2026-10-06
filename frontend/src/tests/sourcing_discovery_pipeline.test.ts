@@ -152,4 +152,96 @@ describe('Automatic Discovery Pipeline Unit Tests', () => {
       body: expect.stringContaining('persist_enriched_candidates')
     }));
   });
+
+  // CASO 6: ZINC_NO_MATCH preserves official source image without wiping to null
+  it('6. ZINC_NO_MATCH preserves candidate source image and upgrades provenance to OBSERVED', async () => {
+    const candidateWithOfficialImage: SourcingProductCandidate = {
+      ...mockCandidate,
+      id: 'radar-preorder-1',
+      title: 'Masters of the Universe Chronicles King Hiss',
+      brand: 'Mattel',
+      image_url: 'https://cdn.mattel.com/king-hiss-official.jpg',
+      status: 'PREORDER',
+      provenance: {
+        ...mockCandidate.provenance,
+        image: {
+          value: 'https://cdn.mattel.com/king-hiss-official.jpg',
+          status: 'OBSERVED',
+          source: 'Mattel Creations / Radar',
+          source_url: 'https://creations.mattel.com/king-hiss',
+          observed_at: new Date().toISOString()
+        }
+      }
+    };
+
+    const emptyZincSearch = vi.fn().mockResolvedValue({
+      success: true,
+      status: 'SUCCESS',
+      statusCode: 200,
+      products: [],
+      resolution_source: 'ZINC_LIVE',
+      total: 0
+    });
+
+    const { resolvedCandidates, telemetry } = await zincResolverModule.resolveZincProductsForCandidates(
+      [candidateWithOfficialImage],
+      { searchFn: emptyZincSearch }
+    );
+
+    expect(telemetry.no_matches).toBe(1);
+    expect(resolvedCandidates[0].image_url).toBe('https://cdn.mattel.com/king-hiss-official.jpg');
+    expect(resolvedCandidates[0].provenance?.image?.status).toBe('OBSERVED');
+  });
+
+  // CASO 7: Commercial readiness marks PARTIAL when real signals exist but weight is missing
+  it('7. Candidate with missing weight results in landed_cost = null and commercial_readiness = PARTIAL', async () => {
+    const candidateMissingWeight: SourcingProductCandidate = {
+      ...mockCandidate,
+      pricing: {
+        ...mockCandidate.pricing,
+        origin_price_usd: 49.99,
+        landed_cost_estimated_usd: null,
+        suggested_sale_price_usd: null,
+        estimated_margin_percent: null
+      },
+      status: 'PREORDER',
+      opportunity_score: 35
+    };
+
+    const enriched = await commercialEnrichmentModule.enrichSingleCandidateCommercialData(candidateMissingWeight, 'UY');
+    expect(enriched.candidate.pricing.landed_cost_estimated_usd).toBeNull();
+    expect(enriched.landedCostStatus).toBe('MISSING_WEIGHT');
+    expect(enriched.candidate.commercial_readiness).toBe('PARTIAL');
+    expect(enriched.candidate.opportunity_score).toBeGreaterThanOrEqual(35);
+    expect(enriched.candidate.why_explanation.commercial_missing_reasons).toContain('Sin peso verificado en fuente (peso requerido para flete/arancel)');
+  });
+
+  // CASO 8: ZINC_NO_MATCH without any source image resolves image_url to null honestly
+  it('8. ZINC_NO_MATCH without source image honestly sets image_url to null', async () => {
+    const candidateWithoutImage: SourcingProductCandidate = {
+      ...mockCandidate,
+      id: 'no-img-cand',
+      image_url: null,
+      provenance: {
+        ...mockCandidate.provenance,
+        image: { value: null, status: 'UNKNOWN', source: null, source_url: null, observed_at: null }
+      }
+    };
+
+    const emptyZincSearch = vi.fn().mockResolvedValue({
+      success: true,
+      status: 'SUCCESS',
+      statusCode: 200,
+      products: [],
+      resolution_source: 'ZINC_LIVE',
+      total: 0
+    });
+
+    const { resolvedCandidates } = await zincResolverModule.resolveZincProductsForCandidates(
+      [candidateWithoutImage],
+      { searchFn: emptyZincSearch }
+    );
+
+    expect(resolvedCandidates[0].image_url).toBeNull();
+  });
 });

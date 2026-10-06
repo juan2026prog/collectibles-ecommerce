@@ -109,12 +109,15 @@ export interface SourcingProductCandidate {
   asin?: string;
   upc?: string;
   sku?: string;
+  commercial_readiness?: 'READY' | 'PARTIAL' | 'BLOCKED';
   why_explanation: {
     opportunity_type?: string;
     confidence_reason?: string;
     local_supply_gap?: string;
     scoring_breakdown?: Record<string, { points: number; max: number; reason: string; confidence: string; evidence: SourcingDataProvenance[] }>;
     headline: string;
+    commercial_status?: string;
+    commercial_missing_reasons?: string[];
     local_demand_summary: string;
     market_differential: string;
     stock_verdict: string;

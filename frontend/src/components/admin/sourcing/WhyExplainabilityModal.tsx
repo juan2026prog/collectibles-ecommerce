@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  X, HelpCircle, CheckCircle2, ShieldAlert, Sparkles, 
+  X, HelpCircle, CheckCircle2, ShieldAlert, ShieldCheck, Sparkles, 
   ExternalLink, Layers, TrendingUp, DollarSign, Database, ImageOff, Globe, Target, BarChart2
 } from 'lucide-react';
 import type { SourcingProductCandidate } from '../../../types/sourcingIntelligence';
@@ -119,7 +119,44 @@ export const WhyExplainabilityModal: React.FC<WhyExplainabilityModalProps> = ({
             </div>
           </div>
 
-          {/* DESGLOSE DETERMINÍSTICO DE 6 FACTORES (SI EXISTE) */}
+          {/* ESTADO COMERCIAL & READINESS */}
+          <div className={`p-4 rounded-2xl border space-y-2 ${
+            candidate.commercial_readiness === 'READY'
+              ? 'bg-emerald-50/80 border-emerald-300 text-emerald-950'
+              : candidate.commercial_readiness === 'PARTIAL'
+                ? 'bg-amber-50/80 border-amber-300 text-amber-950'
+                : 'bg-slate-50 border-slate-300 text-slate-800'
+          }`}>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4" />
+                <span>Estado de Madurez Comercial:</span>
+              </span>
+              <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase border ${
+                candidate.commercial_readiness === 'READY'
+                  ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                  : candidate.commercial_readiness === 'PARTIAL'
+                    ? 'bg-amber-100 text-amber-800 border-amber-300'
+                    : 'bg-slate-200 text-slate-700 border-slate-300'
+              }`}>
+                {candidate.commercial_readiness || 'PARTIAL'}
+              </span>
+            </div>
+            {why.commercial_status && (
+              <p className="text-xs font-semibold leading-relaxed">
+                {why.commercial_status}
+              </p>
+            )}
+            {why.commercial_missing_reasons && why.commercial_missing_reasons.length > 0 && (
+              <ul className="text-[11px] space-y-0.5 list-disc list-inside text-gray-700 mt-1 font-medium">
+                {why.commercial_missing_reasons.map((reason: string, idx: number) => (
+                  <li key={idx}>{reason}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* DESGLOSE DETERMINÍSTICO DE FACTORES (SI EXISTE) */}
           {breakdown && (
             <div className="space-y-2">
               <h5 className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
