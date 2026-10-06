@@ -246,5 +246,9 @@ export interface SourcingResearchResponse {
   input_tokens?: number | null;
   output_tokens?: number | null;
   total_tokens?: number | null;
+  original_input_tokens?: number | null;
+  original_output_tokens?: number | null;
+  original_total_tokens?: number | null;
+  original_cost_usd?: number | null;
   zero_result_reason?: string;
 }
