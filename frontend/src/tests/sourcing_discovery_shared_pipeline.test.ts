@@ -18,7 +18,15 @@ import { researchViaGateway } from '../../../server/lib/sourcingGateway.js';
 import { validateCandidateBatch } from '../../../server/lib/sourcingSourceVerifier.js';
 
 const response = () => ({ statusCode: 0, payload: null as any, status(code: number) { this.statusCode = code; return this; }, json(payload: any) { this.payload = payload; return this; } });
-beforeEach(() => { state.tables = {}; state.writes = []; state.admin = true; state.errors.clear(); vi.clearAllMocks(); });
+
+beforeEach(() => {
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test_mock_service_role_key';
+  state.tables = {};
+  state.writes = [];
+  state.admin = true;
+  state.errors.clear();
+  vi.clearAllMocks();
+});
 
 describe('Automatic Discovery signal-led shared pipeline', () => {
   it('does not start paid research when run auditing cannot be persisted', async () => {
@@ -66,5 +74,42 @@ describe('Automatic Discovery signal-led shared pipeline', () => {
     state.errors.add('sourcing_discoveries'); const res = response(); await handler({ method: 'POST', headers: {}, body: {} }, res);
     expect(res.payload.discoveries_created).toBe(0); expect(res.payload.sources_failed).toContain('candidate_persistence');
     expect(res.payload.status).toBe('PARTIAL_SUCCESS');
+  });
+  it('fails closed when SUPABASE_SERVICE_ROLE_KEY is missing without using anon fallback', async () => {
+    const originalServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    try {
+      const res = response();
+      await handler({ method: 'POST', headers: {}, body: {} }, res);
+      expect(res.statusCode).toBe(500);
+      expect(res.payload.error).toBe('SERVER_CONFIGURATION_ERROR');
+      expect(res.payload.status).toBe('FAILED');
+      expect(state.writes).toHaveLength(0);
+      expect(JSON.stringify(res.payload)).not.toContain('sb_publishable');
+      expect(JSON.stringify(res.payload)).not.toContain('ey');
+    } finally {
+      if (originalServiceKey !== undefined) process.env.SUPABASE_SERVICE_ROLE_KEY = originalServiceKey;
+    }
+  });
+  it('blocks non-superadmin request before any database persistence attempt', async () => {
+    state.admin = false;
+    const res = response();
+    await handler({ method: 'POST', headers: {}, body: {} }, res);
+    expect(res.statusCode).toBe(403);
+    expect(res.payload.error).toBe('SUPERADMIN requerido');
+    expect(state.writes).toHaveLength(0);
+  });
+  it('never exposes service role keys or tokens in response payloads', async () => {
+    const testSecret = 'test_service_role_secret_abc123';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = testSecret;
+    try {
+      state.errors.add('sourcing_discovery_runs');
+      const res = response();
+      await handler({ method: 'POST', headers: {}, body: {} }, res);
+      expect(res.statusCode).toBe(502);
+      expect(JSON.stringify(res.payload)).not.toContain(testSecret);
+    } finally {
+      delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    }
   });
 });

@@ -5,8 +5,27 @@ import { researchViaGateway } from '../server/lib/sourcingGateway.js';
 import { validateCandidateBatch, verifyCandidateSources } from '../server/lib/sourcingSourceVerifier.js';
 import { canonicalCandidateKey, validateStoredCandidate, deduplicateCanonicalCandidates, SOURCING_PURCHASE_CAPABILITY, AUTO_PUBLISH } from '../shared/sourcingCandidateValidation.js';
 
-const supabase = createClient(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_f_7xF86CT0DFwT7YupNh_Q_TzmemHNf');
+function getServiceRoleClient() {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceKey) return null;
+  return createClient(url, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false }
+  });
+}
+
+function logDatabaseError(stage, table, operation, runId, error) {
+  console.error('[Discovery Persistence Error]', {
+    stage,
+    table,
+    operation,
+    run_id: runId || null,
+    code: error?.code || 'UNKNOWN_CODE',
+    message: error?.message || 'Unknown database error',
+    details: error?.details || null,
+    hint: error?.hint || null
+  });
+}
 
 export default async function handler(req, res) {
   if (typeof res?.setHeader === 'function') res.setHeader('Cache-Control', 'no-store');
@@ -32,6 +51,23 @@ export default async function handler(req, res) {
   }
   const runId = crypto.randomUUID();
   const trigger = auth.isCron ? 'CRON' : 'MANUAL';
+
+  const supabase = getServiceRoleClient();
+  if (!supabase) {
+    console.error('[Discovery] Server configuration error: SUPABASE_SERVICE_ROLE_KEY missing in runtime environment.', {
+      stage: 'service_role_init',
+      run_id: runId
+    });
+    return res.status(500).json({
+      success: false,
+      status: 'FAILED',
+      error: 'SERVER_CONFIGURATION_ERROR',
+      message: 'Configuración del servidor incompleta para persistencia de auditoría.',
+      purchases_executed: 0,
+      auto_publications: 0
+    });
+  }
+
   const health = {};
   const errors = [];
   const observations = [];
@@ -43,7 +79,10 @@ export default async function handler(req, res) {
   let candidates = [];
   const { error: runStartError } = await supabase.from('sourcing_discovery_runs').insert({ id: runId, status: 'RUNNING', trigger, countries: [country], started_at: new Date().toISOString(),
     sources_requested: ['radar', 'release_calendar', 'amazon', 'mercadolibre_uy', 'internal_signals', 'openai_web_search'], metadata: { purchase_capability: SOURCING_PURCHASE_CAPABILITY, auto_publish: AUTO_PUBLISH } });
-  if (runStartError) return res.status(502).json({ success: false, status: 'FAILED', error: 'run_persistence', purchases_executed: 0, auto_publications: 0 });
+  if (runStartError) {
+    logDatabaseError('run_start_insert', 'sourcing_discovery_runs', 'INSERT', runId, runStartError);
+    return res.status(502).json({ success: false, status: 'FAILED', error: 'run_persistence', purchases_executed: 0, auto_publications: 0 });
+  }
 
   const collect = async (name, table, columns, limit) => {
     try {
@@ -83,7 +122,10 @@ export default async function handler(req, res) {
   for (const s of observations) {
     const fingerprint = crypto.createHash('sha256').update([s.source_type, s.source_url, s.product_identity, s.signal_type].join('|')).digest('hex');
     const { error } = await supabase.from('sourcing_signals').upsert({ ...s, confidence: null, fingerprint, collected_at: new Date().toISOString() }, { onConflict: 'fingerprint' });
-    if (!error) signalsCreated++; else errors.push('signal_persistence');
+    if (!error) signalsCreated++; else {
+      errors.push('signal_persistence');
+      logDatabaseError('signal_persistence_upsert', 'sourcing_signals', 'UPSERT', runId, error);
+    }
   }
   // Signal-led research. An empty corpus does not manufacture a brand or a trending query.
   const hypotheses = [...new Set([...seeds.map(s => s.title), ...storedSignals.filter(s => s.product_identity || s.topic).map(s => s.product_identity || s.topic)])].slice(0, 12);
@@ -111,10 +153,18 @@ export default async function handler(req, res) {
     // Exact persisted identity reuses the row. Repeated runs do not multiply products.
     const canonicalProductId = crypto.createHash('sha256').update(canonicalCandidateKey(c)).digest('hex');
     let { data: existing, error: readError } = await supabase.from('sourcing_discoveries').select('*').eq('country', country).eq('canonical_product_id', canonicalProductId).limit(1).maybeSingle();
-    if (readError) { errors.push('candidate_persistence_read'); continue; }
+    if (readError) {
+      errors.push('candidate_persistence_read');
+      logDatabaseError('candidate_persistence_read', 'sourcing_discoveries', 'SELECT', runId, readError);
+      continue;
+    }
     if (!existing) {
       const legacy = await supabase.from('sourcing_discoveries').select('*').eq('country', country).eq('title', c.title).eq('source_retailer', c.retailer_source).limit(1).maybeSingle();
-      if (legacy.error) { errors.push('candidate_persistence_read'); continue; }
+      if (legacy.error) {
+        errors.push('candidate_persistence_read');
+        logDatabaseError('candidate_persistence_read_legacy', 'sourcing_discoveries', 'SELECT', runId, legacy.error);
+        continue;
+      }
       existing = legacy.data && canonicalCandidateKey(validateStoredCandidate(legacy.data)) === canonicalCandidateKey(c) ? legacy.data : null;
     }
     const merged = existing ? deduplicateCanonicalCandidates([c, validateStoredCandidate(existing)]) : [c];
@@ -128,7 +178,10 @@ export default async function handler(req, res) {
       evidence: { canonical_candidate: c, source_url: c.retailer_url, image_url: c.image_url, verification_version: c.validation_version },
       discovered_at: c.created_at, last_verified_at: c.provenance.identity.status === 'OBSERVED' ? new Date().toISOString() : null };
     const { error } = existing ? await supabase.from('sourcing_discoveries').update(row).eq('id', existing.id) : await supabase.from('sourcing_discoveries').insert(row);
-    if (error) { errors.push('candidate_persistence'); console.warn('[Discovery] Candidate persistence failed:', error.message); } else created++;
+    if (error) {
+      errors.push('candidate_persistence');
+      logDatabaseError('candidate_persistence_write', 'sourcing_discoveries', existing ? 'UPDATE' : 'INSERT', runId, error);
+    } else created++;
   }
   const failed = [...new Set(errors)];
   const successful = Object.keys(health).filter(k => health[k].status.startsWith('CONNECTED'));
@@ -136,7 +189,10 @@ export default async function handler(req, res) {
   const metadata = { source_health: health, candidates: candidates.length, purchase_capability: SOURCING_PURCHASE_CAPABILITY, auto_publish: AUTO_PUBLISH, purchases_executed: 0, auto_publications: 0 };
   const { error: runEndError } = await supabase.from('sourcing_discovery_runs').update({ completed_at: new Date().toISOString(), status, sources_successful: successful, sources_failed: failed,
     signals_created: signalsCreated, products_detected: seeds.length, discoveries_created: created, ai_calls: aiCalls, estimated_ai_cost_usd: aiCost, metadata }).eq('id', runId);
-  if (runEndError) return res.status(502).json({ success: false, status: 'FAILED', run_id: runId, error: 'run_persistence', discoveries_created: created, purchases_executed: 0, auto_publications: 0 });
+  if (runEndError) {
+    logDatabaseError('run_end_update', 'sourcing_discovery_runs', 'UPDATE', runId, runEndError);
+    return res.status(502).json({ success: false, status: 'FAILED', run_id: runId, error: 'run_persistence', discoveries_created: created, purchases_executed: 0, auto_publications: 0 });
+  }
   return res.status(status === 'FAILED' ? 502 : 200).json({ success: status !== 'FAILED', run_id: runId, status, trigger, target_market: country,
     duration_ms: Date.now() - started, sources_successful: successful, sources_failed: failed, source_health: health,
     signals_breakdown: { global_signals: observations.filter(s => s.country === 'GLOBAL').length, local_signals: local.length, total_signals: observations.length },
