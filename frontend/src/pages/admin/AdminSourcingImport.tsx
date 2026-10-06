@@ -151,11 +151,11 @@ export default function AdminSourcingImport() {
     requested_model?: string;
     actual_model?: string;
     automatic_or_manual?: 'AUTO' | 'MANUAL';
-    cost_usd: number;
+    cost_usd: number | null;
     latency_ms: number;
-    input_tokens?: number;
-    output_tokens?: number;
-    total_tokens?: number;
+    input_tokens?: number | null;
+    output_tokens?: number | null;
+    total_tokens?: number | null;
     cached?: boolean;
     research_depth?: string;
   } | null>(null);
@@ -216,7 +216,7 @@ export default function AdminSourcingImport() {
 
       addToast({
         title: res.cached ? 'Investigación Reutilizada (Caché)' : 'Investigación Completada',
-        message: `${res.candidates.length} productos identificados para ${selectedCountry} (${res.cached ? 'Caché $0.000' : `Costo: $${res.cost_usd.toFixed(4)}`}).`,
+        message: `${res.candidates.length} productos identificados para ${selectedCountry} (${res.cached ? 'Caché · costo adicional $0.0000' : (res.cost_usd == null ? 'Costo real: no disponible' : `Costo real: ${res.cost_usd.toFixed(6)}`)}).`,
         type: 'success'
       });
     } catch (err: any) {
