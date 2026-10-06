@@ -137,8 +137,13 @@ async function safeDbQuery(queryPromise, fallback = { data: null, error: null },
           age_seconds: Math.max(0, ageSec),
           last_researched_at: cachedRow.created_at,
           cached_items_count: Array.isArray(cachedRow.items) ? cachedRow.items.length : 0,
-          cached_model: cachedRow.model,
-          cached_cost_usd: cachedRow.cost_usd || 0
+          cached_model: cachedRow.model || null,
+          cached_input_tokens: cachedRow.input_tokens ?? null,
+          cached_output_tokens: cachedRow.output_tokens ?? null,
+          cached_total_tokens: (cachedRow.input_tokens != null && cachedRow.output_tokens != null)
+            ? Number(cachedRow.input_tokens) + Number(cachedRow.output_tokens)
+            : null,
+          cached_cost_usd: cachedRow.cost_usd ?? null
         };
       } else {
         // Check ai_intelligence_runs
@@ -160,8 +165,11 @@ async function safeDbQuery(queryPromise, fallback = { data: null, error: null },
             age_seconds: Math.max(0, ageSec),
             last_researched_at: cachedRun.created_at,
             cached_items_count: Array.isArray(cachedRun.metadata?.items) ? cachedRun.metadata.items.length : 5,
-            cached_model: cachedRun.model,
-            cached_cost_usd: 0
+            cached_model: cachedRun.model || null,
+            cached_input_tokens: cachedRun.metadata?.usage?.input_tokens ?? null,
+            cached_output_tokens: cachedRun.metadata?.usage?.output_tokens ?? null,
+            cached_total_tokens: cachedRun.metadata?.usage?.total_tokens ?? null,
+            cached_cost_usd: cachedRun.metadata?.usage?.cost_usd ?? null
           };
         } else {
           // Fallback check recent sourcing_discoveries
