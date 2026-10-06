@@ -1,25 +1,17 @@
 /**
- * COLLECTIBLES 2026 — MULTI-SOURCE DISCOVERY SERVICE
+ * COLLECTIBLES 2026 — MULTI-SOURCE DISCOVERY SERVICE (V1 AMAZON-FIRST)
  * 
- * Orquestador determinístico y compartido de descubrimiento multifuente.
- * Usado tanto por:
- * A) MANUAL RESEARCH ("INVESTIGAR" en researchIntelligenceService)
- * B) AUTOMATIC DISCOVERY ("EJECUTAR ESCANEO DISCOVERY" en sourcing-discovery.js)
- * 
- * Conecta los proveedores reales:
- * - Amazon: amazonZincSearchService / Zinc API y catálogo internacional
- * - eBay: Conexión honesta; si el provider/tabla no está disponible en producción,
- *         degrada transparentemente a NOT_CONFIGURED (0 llamadas rotas, 0 errores 404).
- *         Soporta normalización de query para no depender de texto literal.
- * - Best Buy: Degradación transparente y controlada a NOT_CONFIGURED sin emitir
- *             llamadas CORS directas desde el browser que fallen con error de red.
+ * Orquestador determinístico y compartido de descubrimiento multifuente:
+ * - Amazon: Único marketplace internacional activo (Discovery Search vía Zinc/Catálogo + Identity Resolution).
+ * - Web Search: Búsqueda web abierta activa para fabricantes, noticias, preorders y lanzamientos.
+ * - eBay: DISABLED en V1 (0 calls, 0 errors, status DISABLED, código y adaptadores preservados).
+ * - Best Buy: DISABLED en V1 (0 calls, 0 errors, status DISABLED, código y adaptadores preservados).
  * 
  * INVARIANTES:
  * 1. Cero mocks inventados. Cero precios, pesos o ASINs sintéticos.
- * 2. Preflight = $0.
+ * 2. Preflight = $0 (solo considera providers activos: Web Search + Amazon).
  * 3. Fail-soft real por proveedor:
- *    - NOT_CONFIGURED: zero network call, zero console errors, status honesto.
- *    - ERROR: aislado sin destruir el run ni los candidatos de otras fuentes.
+ *    - DISABLED: zero network calls, zero console errors/warnings, status DISABLED.
  *    - WORKING/AVAILABLE: ejecuta y aporta candidatos crudos.
  *    - NO_RESULTS: status disponible con 0 items.
  * 4. Preserva el pipeline canónico downstream intacto.
@@ -28,6 +20,12 @@
 import { amazonZincSearchService } from './amazonZincSearchService';
 import { supabase } from '../../lib/supabase';
 import { normalizeSearchText } from '../../../../shared/sourcingProductIdentity.js';
+
+export const SOURCING_V1_MODE = 'AMAZON_FIRST' as const;
+export const WEB_SEARCH_ENABLED = true;
+export const AMAZON_ENABLED = true;
+export const EBAY_ENABLED = false;
+export const BESTBUY_ENABLED = false;
 
 export interface DiscoveredRawCandidate {
   title: string;
@@ -44,7 +42,7 @@ export interface DiscoveredRawCandidate {
   metadata?: Record<string, any>;
 }
 
-export type ProviderStatusCode = 'WORKING' | 'AVAILABLE' | 'NOT_CONFIGURED' | 'ERROR' | 'NO_RESULTS' | 'UNAVAILABLE';
+export type ProviderStatusCode = 'ACTIVE' | 'WORKING' | 'AVAILABLE' | 'DISABLED' | 'NOT_CONFIGURED' | 'ERROR' | 'NO_RESULTS' | 'UNAVAILABLE';
 
 export interface ProviderTelemetry {
   status: ProviderStatusCode;
@@ -61,7 +59,7 @@ export interface MultiSourceTelemetry {
   amazon: ProviderTelemetry;
   ebay: ProviderTelemetry;
   bestbuy: ProviderTelemetry;
-  web: { status: ProviderStatusCode; candidates_created: number };
+  web: { status: ProviderStatusCode; candidates_created: number; errors?: number };
   official: { candidates_created: number };
   candidates_before_dedupe: number;
   candidates_after_dedupe: number;
@@ -81,7 +79,6 @@ export interface MultiSourceDiscoveryResult {
 
 /**
  * Normaliza y fragmenta una consulta compleja de usuario en subconsultas de búsqueda efectivas.
- * Ej: "Batman figuras de acción escala 1:12 coleccionables" -> ["Batman figuras de accion", "Batman 1 12"]
  */
 export function normalizeDiscoveryQuery(rawQuery: string): string[] {
   const clean = normalizeSearchText(rawQuery);
@@ -113,9 +110,9 @@ export function normalizeDiscoveryQuery(rawQuery: string): string[] {
 export class MultiSourceDiscoveryService {
   private static instance: MultiSourceDiscoveryService;
 
-  // Flag de disponibilidad runtime de tablas/providers opcionales
-  private ebayTableAvailable: boolean | null = null;
-  private bestBuyConfigured: boolean = false;
+  // Flags de gobernanza de proveedores
+  private ebayEnabled: boolean = EBAY_ENABLED;
+  private bestBuyEnabled: boolean = BESTBUY_ENABLED;
 
   public static getInstance(): MultiSourceDiscoveryService {
     if (!MultiSourceDiscoveryService.instance) {
@@ -131,6 +128,10 @@ export class MultiSourceDiscoveryService {
     query: string,
     maxResults: number = 10
   ): Promise<{ items: DiscoveredRawCandidate[]; status: ProviderStatusCode; error?: string; cache_hits?: number }> {
+    if (!AMAZON_ENABLED) {
+      return { items: [], status: 'DISABLED', cache_hits: 0 };
+    }
+
     if (!query || !query.trim()) {
       return { items: [], status: 'AVAILABLE', cache_hits: 0 };
     }
@@ -192,32 +193,30 @@ export class MultiSourceDiscoveryService {
   }
 
   /**
-   * Búsqueda en eBay con soporte para normalización de queries y detección honesta de NOT_CONFIGURED.
-   * Si la infraestructura/tabla no existe o el adapter no está activo, reporta NOT_CONFIGURED
-   * con 0 errores y 0 excepciones para no generar falsos verdes ni errores de consola.
+   * Búsqueda en eBay (DISABLED en V1 Amazon-First).
+   * 0 llamadas de red, 0 errores, 0 consumo de presupuesto.
+   * Código de adaptador preservado para futura activación.
    */
   public async discoverEbay(
     query: string,
     maxResults: number = 10
   ): Promise<{ items: DiscoveredRawCandidate[]; status: ProviderStatusCode; queriesCount: number; message?: string; error?: string }> {
-    if (!query || !query.trim()) {
-      return { items: [], status: 'AVAILABLE', queriesCount: 0 };
-    }
-
-    // Si ya detectamos que la tabla source_listings no existe en producción, fail-closed honesto sin network call
-    if (this.ebayTableAvailable === false) {
+    if (!this.ebayEnabled) {
       return {
         items: [],
-        status: 'NOT_CONFIGURED',
+        status: 'DISABLED',
         queriesCount: 0,
-        message: 'eBay Provider no configurado en producción (tabla source_listings / API no disponible).'
+        message: 'eBay deshabilitado en Sourcing V1 (Amazon-First).'
       };
+    }
+
+    if (!query || !query.trim()) {
+      return { items: [], status: 'AVAILABLE', queriesCount: 0 };
     }
 
     const queryVariants = normalizeDiscoveryQuery(query);
 
     try {
-      // Intentar primer query normalizado
       const targetQuery = queryVariants[0] || query.trim();
       const { data: dbOffers, error } = await supabase
         .from('source_listings')
@@ -227,21 +226,6 @@ export class MultiSourceDiscoveryService {
         .limit(maxResults);
 
       if (error) {
-        // Si PostgreSQL indica que la tabla no existe (404/PGRST205 o table not found)
-        const isTableMissing = error.code === 'PGRST205' || 
-          error.message?.includes('Could not find the table') || 
-          error.message?.includes('does not exist');
-
-        if (isTableMissing) {
-          this.ebayTableAvailable = false;
-          return {
-            items: [],
-            status: 'NOT_CONFIGURED',
-            queriesCount: 1,
-            message: 'eBay Provider no configurado en producción (source_listings pendiente de migración).'
-          };
-        }
-
         return {
           items: [],
           status: 'ERROR',
@@ -249,8 +233,6 @@ export class MultiSourceDiscoveryService {
           error: error.message
         };
       }
-
-      this.ebayTableAvailable = true;
 
       if (dbOffers && dbOffers.length > 0) {
         const items: DiscoveredRawCandidate[] = dbOffers.map(d => {
@@ -266,13 +248,7 @@ export class MultiSourceDiscoveryService {
             price: validPrice,
             image_url: d.raw_payload?.image_url || undefined,
             provider: 'EBAY',
-            discovered_from: 'RETAILER_DISCOVERY',
-            metadata: {
-              seller: d.raw_payload?.seller,
-              condition: d.raw_condition || 'used',
-              is_lot: Boolean(d.raw_payload?.is_lot),
-              is_auction: Boolean(d.raw_payload?.is_auction)
-            }
+            discovered_from: 'RETAILER_DISCOVERY'
           };
         });
 
@@ -299,49 +275,43 @@ export class MultiSourceDiscoveryService {
   }
 
   /**
-   * Búsqueda en Best Buy con degradación controlada y transparente.
-   * NO dispara llamadas directas desde el browser que fallen por CORS.
-   * Si BESTBUY_API_KEY no está configurada en backend, retorna NOT_CONFIGURED de inmediato
-   * sin llamadas de red ni errores rojos en consola.
+   * Búsqueda en Best Buy (DISABLED en V1 Amazon-First).
+   * 0 llamadas de red, 0 CORS, 0 consumo de presupuesto.
+   * Código de integración preservado para futura activación.
    */
   public async discoverBestBuy(
     query: string
   ): Promise<{ items: DiscoveredRawCandidate[]; status: ProviderStatusCode; queriesCount: number; message?: string }> {
-    // Si no está configurado explícitamente en el backend, no intentar fetch browser-side que produzca CORS
-    if (!this.bestBuyConfigured) {
+    if (!this.bestBuyEnabled) {
       return {
         items: [],
-        status: 'NOT_CONFIGURED',
+        status: 'DISABLED',
         queriesCount: 0,
-        message: 'Best Buy requiere API Key de desarrollador (BESTBUY_API_KEY) configurada en backend.'
+        message: 'Best Buy deshabilitado en Sourcing V1 (Amazon-First).'
       };
     }
 
-    // En caso de estar configurado en el futuro, se invocará a través del backend same-origin
     return {
       items: [],
-      status: 'NOT_CONFIGURED',
+      status: 'DISABLED',
       queriesCount: 0,
-      message: 'Best Buy Provider no activo.'
+      message: 'Best Buy deshabilitado en Sourcing V1.'
     };
   }
 
   /**
-   * Permite activar BestBuy para pruebas de integración controladas
+   * Métodos de gobernanza para toggling en tests
    */
-  public setBestBuyConfigured(configured: boolean): void {
-    this.bestBuyConfigured = configured;
+  public setEbayEnabled(enabled: boolean): void {
+    this.ebayEnabled = enabled;
+  }
+
+  public setBestBuyEnabled(enabled: boolean): void {
+    this.bestBuyEnabled = enabled;
   }
 
   /**
-   * Permite resetear la detección de tabla de eBay para pruebas unitarias
-   */
-  public setEbayTableAvailable(available: boolean | null): void {
-    this.ebayTableAvailable = available;
-  }
-
-  /**
-   * Descubrimiento Multi-Fuente completo para una consulta con telemetría inequívoca
+   * Descubrimiento Multi-Fuente completo para una consulta (V1 Amazon-First)
    */
   public async discoverAllSources(
     query: string,
@@ -354,13 +324,13 @@ export class MultiSourceDiscoveryService {
         candidates: [],
         sourceStatus: {
           amazon: { status: 'AVAILABLE', count: 0 },
-          ebay: { status: 'NOT_CONFIGURED', count: 0, message: 'Consulta vacía' },
-          bestbuy: { status: 'NOT_CONFIGURED', count: 0, message: 'Best Buy no configurado' }
+          ebay: { status: 'DISABLED', count: 0, message: 'eBay deshabilitado' },
+          bestbuy: { status: 'DISABLED', count: 0, message: 'Best Buy deshabilitado' }
         },
         telemetry: {
           amazon: { status: 'AVAILABLE', queries: 0, results: 0, candidates_created: 0, errors: 0 },
-          ebay: { status: 'NOT_CONFIGURED', queries: 0, results: 0, candidates_created: 0, errors: 0 },
-          bestbuy: { status: 'NOT_CONFIGURED', queries: 0, results: 0, candidates_created: 0, errors: 0 },
+          ebay: { status: 'DISABLED', queries: 0, results: 0, candidates_created: 0, errors: 0 },
+          bestbuy: { status: 'DISABLED', queries: 0, results: 0, candidates_created: 0, errors: 0 },
           web: { status: 'AVAILABLE', candidates_created: 0 },
           official: { candidates_created: 0 },
           candidates_before_dedupe: 0,
@@ -370,6 +340,7 @@ export class MultiSourceDiscoveryService {
       };
     }
 
+    // En V1 solo ejecutamos Amazon; eBay y Best Buy resuelven inmediatamente sin llamadas de red
     const [amazonRes, ebayRes, bestBuyRes] = await Promise.allSettled([
       this.discoverAmazon(cleanQuery, options.maxAmazon || 10),
       this.discoverEbay(cleanQuery, options.maxEbay || 10),
@@ -380,8 +351,8 @@ export class MultiSourceDiscoveryService {
 
     const telemetry: MultiSourceTelemetry = {
       amazon: { status: 'WORKING', queries: 1, results: 0, candidates_created: 0, errors: 0, cache_hits: 0 },
-      ebay: { status: 'NOT_CONFIGURED', queries: 0, results: 0, candidates_created: 0, errors: 0 },
-      bestbuy: { status: 'NOT_CONFIGURED', queries: 0, results: 0, candidates_created: 0, errors: 0 },
+      ebay: { status: 'DISABLED', queries: 0, results: 0, candidates_created: 0, errors: 0 },
+      bestbuy: { status: 'DISABLED', queries: 0, results: 0, candidates_created: 0, errors: 0 },
       web: { status: 'AVAILABLE', candidates_created: 0 },
       official: { candidates_created: 0 },
       candidates_before_dedupe: 0,
@@ -390,11 +361,11 @@ export class MultiSourceDiscoveryService {
 
     const sourceStatus: MultiSourceDiscoveryResult['sourceStatus'] = {
       amazon: { status: 'AVAILABLE', count: 0 },
-      ebay: { status: 'NOT_CONFIGURED', count: 0 },
-      bestbuy: { status: 'NOT_CONFIGURED', count: 0 }
+      ebay: { status: 'DISABLED', count: 0 },
+      bestbuy: { status: 'DISABLED', count: 0 }
     };
 
-    // 1. Telemetría y Candidatos de Amazon
+    // 1. Amazon (Activo)
     if (amazonRes.status === 'fulfilled') {
       const val = amazonRes.value;
       sourceStatus.amazon = { status: val.status, count: val.items.length, error: val.error };
@@ -420,7 +391,7 @@ export class MultiSourceDiscoveryService {
       };
     }
 
-    // 2. Telemetría y Candidatos de eBay
+    // 2. eBay (Disabled V1)
     if (ebayRes.status === 'fulfilled') {
       const val = ebayRes.value;
       sourceStatus.ebay = { status: val.status, count: val.items.length, message: val.message, error: val.error };
@@ -435,18 +406,17 @@ export class MultiSourceDiscoveryService {
       };
       candidates.push(...val.items);
     } else {
-      sourceStatus.ebay = { status: 'ERROR', count: 0, error: ebayRes.reason?.message };
+      sourceStatus.ebay = { status: 'DISABLED', count: 0, message: 'eBay deshabilitado' };
       telemetry.ebay = {
-        status: 'ERROR',
-        queries: 1,
+        status: 'DISABLED',
+        queries: 0,
         results: 0,
         candidates_created: 0,
-        errors: 1,
-        error: ebayRes.reason?.message
+        errors: 0
       };
     }
 
-    // 3. Telemetría y Candidatos de Best Buy
+    // 3. Best Buy (Disabled V1)
     if (bestBuyRes.status === 'fulfilled') {
       const val = bestBuyRes.value;
       sourceStatus.bestbuy = { status: val.status, count: val.items.length, message: val.message };
@@ -460,14 +430,13 @@ export class MultiSourceDiscoveryService {
       };
       candidates.push(...val.items);
     } else {
-      sourceStatus.bestbuy = { status: 'NOT_CONFIGURED', count: 0, message: 'Fallo al invocar Best Buy' };
+      sourceStatus.bestbuy = { status: 'DISABLED', count: 0, message: 'Best Buy deshabilitado' };
       telemetry.bestbuy = {
-        status: 'NOT_CONFIGURED',
+        status: 'DISABLED',
         queries: 0,
         results: 0,
         candidates_created: 0,
-        errors: 0,
-        message: 'Fallo al invocar Best Buy'
+        errors: 0
       };
     }
 
