@@ -60,6 +60,12 @@ export class ResearchIntelligenceService {
     const effectiveResultLimit = result_limit || resultLimit || 'AUTO';
     const effectiveFamily = product_family || category || 'ALL';
 
+    // Start Amazon discovery in parallel with the paid research call.
+    // Previously this began only after OpenAI finished, adding its full latency to the wait.
+    const multiSourcePromise = multiSourceDiscoveryService
+      .discoverAllSources(query, { maxAmazon: 5, maxEbay: 0 })
+      .catch((error: any) => ({ candidates: [], telemetry: {}, sourceStatus: {}, error }));
+
     // 1. Ejecución vía AI Gateway Central
     let aiResult: any = null;
     let providerName = 'OPENAI';
@@ -243,7 +249,8 @@ export class ResearchIntelligenceService {
 
     // 4b. Descubrimiento Multi-Fuente en Vivo (Amazon, eBay, Best Buy) para enriquecer candidatos
     try {
-      const multiSourceRes = await multiSourceDiscoveryService.discoverAllSources(query, { maxAmazon: 5, maxEbay: 5 });
+      const multiSourceRes: any = await multiSourcePromise;
+      if (multiSourceRes?.error) throw multiSourceRes.error;
       const candidatesBeforeDedupe = candidates.length + multiSourceRes.candidates.length;
 
       if (multiSourceRes.candidates.length > 0) {
