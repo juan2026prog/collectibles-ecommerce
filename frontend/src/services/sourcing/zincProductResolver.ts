@@ -898,6 +898,12 @@ export async function resolveZincProductsForCandidates(
         if (!clone.gallery_images || clone.gallery_images.length === 0) {
           clone.gallery_images = [clone.image_url!];
         }
+        if (clone.provenance?.image) {
+          clone.provenance.image = {
+            ...clone.provenance.image,
+            method: (clone.provenance.image as any).method || (clone.retailer_source?.toLowerCase().includes('radar') || clone.discovered_from === 'RADAR' ? 'OFFICIAL_SOURCE' : 'VERIFIED_SOURCE')
+          };
+        }
       } else if (hasSourceImage && (!provImage || provImage.status === 'UNKNOWN')) {
         clone.gallery_images = clone.gallery_images && clone.gallery_images.length > 0 ? clone.gallery_images : [clone.image_url!];
         clone.provenance = {
@@ -908,12 +914,25 @@ export async function resolveZincProductsForCandidates(
             source: clone.retailer_source || 'Official Source / Radar',
             source_url: clone.retailer_url || null,
             observed_at: now,
-            verification: 'SOURCE_EXTRACTED'
+            verification: 'SOURCE_EXTRACTED',
+            method: 'OFFICIAL_SOURCE'
           }
         };
       } else {
         clone.image_url = null;
         clone.gallery_images = [];
+        clone.provenance = {
+          ...clone.provenance,
+          image: {
+            value: null,
+            status: 'UNKNOWN',
+            source: null,
+            source_url: null,
+            observed_at: now,
+            verification: 'AI_DECLARED',
+            method: 'NONE'
+          }
+        };
       }
       return clone;
     }
@@ -946,7 +965,7 @@ export async function resolveZincProductsForCandidates(
         clone.gallery_images = [matched.image_url];
         telemetry.images_resolved++;
 
-        // Add or upgrade image provenance
+        // Add or upgrade image provenance with explicit verification
         clone.provenance = {
           ...clone.provenance,
           image: {
@@ -956,7 +975,8 @@ export async function resolveZincProductsForCandidates(
             source_url: matched.product_url || `https://www.amazon.com/dp/${matched.asin}`,
             observed_at: now,
             verification: 'SOURCE_CORROBORATED',
-            method: provenanceMethod
+            method: provenanceMethod,
+            image_provenance: 'ZINC_VERIFIED'
           }
         };
       }
@@ -1019,6 +1039,14 @@ export async function resolveZincProductsForCandidates(
         if (!clone.gallery_images || clone.gallery_images.length === 0) {
           clone.gallery_images = [clone.image_url!];
         }
+        if (clone.provenance?.image) {
+          const provSource = String(clone.provenance.image.source || clone.retailer_source || '').toLowerCase();
+          const isOfficial = provSource.includes('radar') || provSource.includes('official') || provSource.includes('creations') || clone.discovered_from === 'RADAR';
+          clone.provenance.image = {
+            ...clone.provenance.image,
+            method: (clone.provenance.image as any).method || (isOfficial ? 'OFFICIAL_SOURCE' : 'VERIFIED_SOURCE')
+          };
+        }
       } else if (hasSourceImage && (!provImage || provImage.status === 'UNKNOWN')) {
         // Source image was present on candidate (e.g. from Radar / Release Calendar / official site),
         // upgrade provenance to OBSERVED / OFFICIAL_SOURCE
@@ -1031,12 +1059,25 @@ export async function resolveZincProductsForCandidates(
             source: clone.retailer_source || 'Official Source / Radar',
             source_url: clone.retailer_url || null,
             observed_at: now,
-            verification: 'SOURCE_EXTRACTED'
+            verification: 'SOURCE_EXTRACTED',
+            method: 'OFFICIAL_SOURCE'
           }
         };
       } else {
         clone.image_url = null;
         clone.gallery_images = [];
+        clone.provenance = {
+          ...clone.provenance,
+          image: {
+            value: null,
+            status: 'UNKNOWN',
+            source: null,
+            source_url: null,
+            observed_at: now,
+            verification: 'AI_DECLARED',
+            method: 'NONE'
+          }
+        };
       }
     }
 

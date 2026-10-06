@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { sourcingDiscoveryEngine } from '../services/sourcing/sourcingDiscoveryEngine';
 import * as zincResolverModule from '../services/sourcing/zincProductResolver';
+import { normalizeAmazonZincProduct } from '../services/sourcing/amazonZincSearchService';
 import * as commercialEnrichmentModule from '../services/sourcing/candidateCommercialEnrichment';
 import type { SourcingProductCandidate } from '../types/sourcingIntelligence';
 
@@ -153,8 +154,8 @@ describe('Automatic Discovery Pipeline Unit Tests', () => {
     }));
   });
 
-  // CASO 6: ZINC_NO_MATCH preserves official source image without wiping to null
-  it('6. ZINC_NO_MATCH preserves candidate source image and upgrades provenance to OBSERVED', async () => {
+  // CASO 6: ZINC_NO_MATCH preserves official source image with OFFICIAL_SOURCE provenance
+  it('A. Zinc NO_MATCH + official exact image -> official image visible and provenance OFFICIAL_SOURCE', async () => {
     const candidateWithOfficialImage: SourcingProductCandidate = {
       ...mockCandidate,
       id: 'radar-preorder-1',
@@ -191,33 +192,11 @@ describe('Automatic Discovery Pipeline Unit Tests', () => {
     expect(telemetry.no_matches).toBe(1);
     expect(resolvedCandidates[0].image_url).toBe('https://cdn.mattel.com/king-hiss-official.jpg');
     expect(resolvedCandidates[0].provenance?.image?.status).toBe('OBSERVED');
+    expect((resolvedCandidates[0].provenance?.image as any)?.method).toBe('OFFICIAL_SOURCE');
   });
 
-  // CASO 7: Commercial readiness marks PARTIAL when real signals exist but weight is missing
-  it('7. Candidate with missing weight results in landed_cost = null and commercial_readiness = PARTIAL', async () => {
-    const candidateMissingWeight: SourcingProductCandidate = {
-      ...mockCandidate,
-      pricing: {
-        ...mockCandidate.pricing,
-        origin_price_usd: 49.99,
-        landed_cost_estimated_usd: null,
-        suggested_sale_price_usd: null,
-        estimated_margin_percent: null
-      },
-      status: 'PREORDER',
-      opportunity_score: 35
-    };
-
-    const enriched = await commercialEnrichmentModule.enrichSingleCandidateCommercialData(candidateMissingWeight, 'UY');
-    expect(enriched.candidate.pricing.landed_cost_estimated_usd).toBeNull();
-    expect(enriched.landedCostStatus).toBe('MISSING_WEIGHT');
-    expect(enriched.candidate.commercial_readiness).toBe('PARTIAL');
-    expect(enriched.candidate.opportunity_score).toBeGreaterThanOrEqual(35);
-    expect(enriched.candidate.why_explanation.commercial_missing_reasons).toContain('Sin peso verificado en fuente (peso requerido para flete/arancel)');
-  });
-
-  // CASO 8: ZINC_NO_MATCH without any source image resolves image_url to null honestly
-  it('8. ZINC_NO_MATCH without source image honestly sets image_url to null', async () => {
+  // CASO B: Zinc NO_MATCH + no safe source image -> Sin imagen, method NONE
+  it('B. Zinc NO_MATCH + no safe source image -> Sin imagen, provenance NONE', async () => {
     const candidateWithoutImage: SourcingProductCandidate = {
       ...mockCandidate,
       id: 'no-img-cand',
@@ -243,5 +222,177 @@ describe('Automatic Discovery Pipeline Unit Tests', () => {
     );
 
     expect(resolvedCandidates[0].image_url).toBeNull();
+    expect((resolvedCandidates[0].provenance?.image as any)?.method).toBe('NONE');
+  });
+
+  // CASO C: Zinc NO_MATCH + official preorder evidence -> opportunity score > 0
+  it('C. Zinc NO_MATCH + official preorder evidence -> opportunity score > 0', async () => {
+    const preorderCandidate: SourcingProductCandidate = {
+      ...mockCandidate,
+      status: 'PREORDER',
+      opportunity_score: 28,
+      trend_score: 20,
+      pricing: {
+        ...mockCandidate.pricing,
+        origin_price_usd: 55.00,
+        landed_cost_estimated_usd: null,
+        suggested_sale_price_usd: null,
+        estimated_margin_percent: null
+      }
+    };
+
+    const enriched = await commercialEnrichmentModule.enrichSingleCandidateCommercialData(preorderCandidate, 'UY');
+    expect(enriched.candidate.opportunity_score).toBe(28);
+    expect(enriched.candidate.opportunity_score).toBeGreaterThan(0);
+    expect(enriched.candidate.commercial_readiness).toBe('PARTIAL');
+  });
+
+  // CASO D: Zinc NO_MATCH solo, sin otras señales -> no puntos artificiales
+  it('D. Zinc NO_MATCH without independent signals -> score remains 0 without synthetic points', async () => {
+    const bareCandidate: SourcingProductCandidate = {
+      ...mockCandidate,
+      status: 'EMERGING',
+      opportunity_score: 0,
+      trend_score: 0,
+      pricing: {
+        ...mockCandidate.pricing,
+        origin_price_usd: null,
+        landed_cost_estimated_usd: null,
+        suggested_sale_price_usd: null,
+        estimated_margin_percent: null
+      }
+    };
+
+    const enriched = await commercialEnrichmentModule.enrichSingleCandidateCommercialData(bareCandidate, 'UY');
+    expect(enriched.candidate.opportunity_score).toBe(0);
+    expect(enriched.candidate.commercial_readiness).toBe('BLOCKED');
+  });
+
+  // CASO E: Opportunity score > 0 + missing weight/price -> commercial readiness PARTIAL / BLOCKED
+  it('E. Opportunity score > 0 with missing weight -> commercial readiness PARTIAL and landed cost UNKNOWN', async () => {
+    const candMissingWeight: SourcingProductCandidate = {
+      ...mockCandidate,
+      pricing: {
+        ...mockCandidate.pricing,
+        origin_price_usd: 39.99,
+        landed_cost_estimated_usd: null,
+        suggested_sale_price_usd: null,
+        estimated_margin_percent: null
+      },
+      status: 'PREORDER',
+      opportunity_score: 35
+    };
+
+    const enriched = await commercialEnrichmentModule.enrichSingleCandidateCommercialData(candMissingWeight, 'UY');
+    expect(enriched.candidate.pricing.landed_cost_estimated_usd).toBeNull();
+    expect(enriched.landedCostStatus).toBe('MISSING_WEIGHT');
+    expect(enriched.candidate.commercial_readiness).toBe('PARTIAL');
+    expect(enriched.candidate.why_explanation.commercial_missing_reasons).toContain('Sin peso verificado en fuente (peso requerido para flete/arancel)');
+  });
+
+  // CASO F & G: No synthetic price or weight
+  it('F/G. No synthetic price or weight is manufactured', async () => {
+    const candNoData: SourcingProductCandidate = {
+      ...mockCandidate,
+      pricing: {
+        origin_price_usd: null,
+        amazon_price_usd: null,
+        landed_cost_estimated_usd: null,
+        suggested_sale_price_usd: null,
+        estimated_margin_percent: null,
+        currency: 'USD'
+      }
+    };
+
+    const enriched = await commercialEnrichmentModule.enrichSingleCandidateCommercialData(candNoData, 'UY');
+    expect(enriched.candidate.pricing.origin_price_usd).toBeNull();
+    expect(enriched.candidate.pricing.landed_cost_estimated_usd).toBeNull();
+    expect(commercialEnrichmentModule.extractRealProductWeightLbs(candNoData)).toBeNull();
+  });
+
+  // CASO H: No cross-product image
+  it('H. Isolation: no cross-product image leaking between candidates', async () => {
+    const candidateA: SourcingProductCandidate = {
+      ...mockCandidate,
+      id: 'cand-A',
+      title: 'Batman Animated 6 inch',
+      image_url: 'https://cdn.dc.com/batman.jpg'
+    };
+    const candidateB: SourcingProductCandidate = {
+      ...mockCandidate,
+      id: 'cand-B',
+      title: 'Spawn Deluxe Series 12 inch',
+      image_url: null,
+      provenance: {
+        ...mockCandidate.provenance,
+        image: { value: null, status: 'UNKNOWN', source: null, source_url: null, observed_at: null }
+      }
+    };
+
+    const emptySearch = vi.fn().mockResolvedValue({
+      success: true,
+      status: 'SUCCESS',
+      statusCode: 200,
+      products: [],
+      resolution_source: 'ZINC_LIVE',
+      total: 0
+    });
+
+    const { resolvedCandidates } = await zincResolverModule.resolveZincProductsForCandidates(
+      [candidateA, candidateB],
+      { searchFn: emptySearch }
+    );
+
+    expect(resolvedCandidates[0].image_url).toBe('https://cdn.dc.com/batman.jpg');
+    expect(resolvedCandidates[1].image_url).toBeNull();
+  });
+
+  // CASO I: Zinc EXACT/STRONG sigue teniendo prioridad
+  it('I. Zinc EXACT/STRONG maintains priority over source image', async () => {
+    const candidateWithBoth: SourcingProductCandidate = {
+      ...mockCandidate,
+      id: 'cand-both',
+      brand: 'Steiff',
+      character: 'Batman',
+      title: 'Steiff Batman 85th Anniversary Plush Bear',
+      image_url: 'https://cdn.steiff.com/old-announcement.jpg',
+      asin: null,
+      provenance: {
+        ...mockCandidate.provenance,
+        asin: { value: null, status: 'UNKNOWN', source: null, source_url: null, observed_at: null },
+        image: {
+          value: 'https://cdn.steiff.com/old-announcement.jpg',
+          status: 'OBSERVED',
+          source: 'Steiff Official',
+          source_url: 'https://steiff.com',
+          observed_at: new Date().toISOString()
+        }
+      }
+    };
+
+    const strongZincSearch = vi.fn().mockResolvedValue({
+      success: true,
+      status: 'SUCCESS',
+      statusCode: 200,
+      products: [normalizeAmazonZincProduct({
+        external_product_id: 'B08STEIFF0',
+        title: 'Steiff Batman 85th Anniversary Plush Bear',
+        brand: 'Steiff',
+        main_image_url_external: 'https://m.media-amazon.com/zinc-verified-steiff.jpg',
+        price_usd: 129.99
+      }, 'ZINC_LIVE')],
+      resolution_source: 'ZINC_LIVE',
+      total: 1
+    });
+
+    const { resolvedCandidates, telemetry } = await zincResolverModule.resolveZincProductsForCandidates(
+      [candidateWithBoth],
+      { searchFn: strongZincSearch }
+    );
+
+    expect(telemetry.strong_matches + telemetry.exact_matches).toBe(1);
+    expect(resolvedCandidates[0].image_url).toBe('https://m.media-amazon.com/zinc-verified-steiff.jpg');
+    expect((resolvedCandidates[0].provenance?.image as any)?.image_provenance).toBe('ZINC_VERIFIED');
   });
 });
+
