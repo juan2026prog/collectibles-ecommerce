@@ -45,6 +45,10 @@ interface SourcingIntelligenceHeaderProps {
     input_tokens?: number | null;
     output_tokens?: number | null;
     total_tokens?: number | null;
+    original_input_tokens?: number | null;
+    original_output_tokens?: number | null;
+    original_total_tokens?: number | null;
+    original_cost_usd?: number | null;
     cached?: boolean;
     research_depth?: string;
   } | null;
@@ -488,10 +492,10 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
 
               {/* ESTIMATED COST BADGE */}
               <div className="flex items-center gap-2">
-                <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">Costo Estimado:</span>
+                <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">{preFlightEstimate.cache.status === 'HIT' || preFlightEstimate.cache.status === 'HIT_DISCOVERIES' ? 'Costo adicional:' : 'Costo estimado:'}</span>
                 <span className="text-base font-black px-3 py-1 rounded-xl bg-[#f00856] text-white shadow-xs">
                   {preFlightEstimate.cache.status === 'HIT' || preFlightEstimate.cache.status === 'HIT_DISCOVERIES' 
-                    ? 'USD $0.0000 (Caché)' 
+                    ? 'USD $0.0000 · Caché' 
                     : `USD $${preFlightEstimate.estimated_total_min_usd.toFixed(4)} - $${preFlightEstimate.estimated_total_max_usd.toFixed(4)}`
                   }
                 </span>
@@ -505,6 +509,229 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                   <span>
                     ♻ Resultado reciente disponible en caché ({preFlightEstimate.cache.cached_items_count || 0} productos detectados hace {Math.round((preFlightEstimate.cache.age_seconds || 0) / 60)} min).
+                    {' '}Costo adicional: USD $0.0000.
+                    {preFlightEstimate.cache.cached_total_tokens != null || preFlightEstimate.cache.cached_cost_usd != null ? (
+                      <> Run original: {preFlightEstimate.cache.cached_total_tokens == null ? 'tokens UNKNOWN' : preFlightEstimate.cache.cached_total_tokens.toLocaleString() + ' tokens'} · {preFlightEstimate.cache.cached_cost_usd == null ? 'costo UNKNOWN' : 'USD 
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleRunSearch(false)}
+                    className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-lg transition cursor-pointer shadow-xs"
+                  >
+                    USAR RESULTADO RECIENTE ($0.000)
+                  </button>
+                  <button
+                    onClick={() => handleRunSearch(true)}
+                    className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-lg transition cursor-pointer border border-slate-700"
+                  >
+                    INVESTIGAR DE NUEVO
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* HIGH COST WARNING & DOWNSHIFT OPTION */}
+            {showConfirmationWarning && preFlightEstimate.cache.status === 'MISS' && (
+              <div className="bg-amber-950/80 border border-amber-500/50 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2.5 text-amber-200">
+                  <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+                  <div>
+                    <span className="font-black text-white">Aviso de Presupuesto: </span>
+                    <span>
+                      {selectedModel !== 'AUTO' && preFlightEstimate.cheaper_alternative
+                        ? `El modelo manual '${preFlightEstimate.model}' (${preFlightEstimate.cheaper_alternative.cost_multiplier || 10}x más caro) incrementa el costo a ~$${preFlightEstimate.estimated_total_max_usd.toFixed(4)}. Usando Automático costaría ~$${preFlightEstimate.cheaper_alternative.estimated_max_cost_usd.toFixed(4)} (-${preFlightEstimate.cheaper_alternative.savings_percent}% ahorro).`
+                        : `Esta consulta en modo ${preFlightEstimate.research_depth_label} puede superar el límite sugerido de $${preFlightEstimate.warning_threshold_usd.toFixed(2)}.`
+                      }
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedModel('AUTO');
+                      setResearchMode('ECONOMICO');
+                      setShowConfirmationWarning(false);
+                    }}
+                    className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-lg transition cursor-pointer shadow-xs flex items-center gap-1.5"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>VOLVER A AUTOMÁTICO</span>
+                  </button>
+                  <button
+                    onClick={() => setShowConfirmationWarning(false)}
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-lg transition cursor-pointer"
+                  >
+                    CANCELAR
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowConfirmationWarning(false);
+                      onExecuteSearch(researchMode, selectedModel, false);
+                    }}
+                    className="px-3.5 py-1.5 bg-[#f00856] hover:bg-[#d0074a] text-white font-black rounded-lg transition cursor-pointer"
+                  >
+                    EJECUTAR IGUAL
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ESTIMATION ERROR NOTICE (FAIL-SAFE CONTROLLED NOTIFICATION) */}
+        {estimateError && !preFlightEstimate && !isEstimating && (
+          <div className="bg-amber-950/80 border border-amber-500/40 text-amber-200 rounded-2xl p-3.5 text-xs flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>
+                No se pudo calcular el costo previo automáticamente ({estimateError}). Podés ejecutar la investigación normalmente.
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                lastEstimateKeyRef.current = '';
+                setEstimateError(null);
+                setIsEstimating(true);
+                aiGateway.estimateCost({
+                  query: (searchQuery || '').trim(),
+                  country,
+                  research_depth: researchMode,
+                  requested_model: selectedModel,
+                  time_scope: period === 'all' ? 'ALL_TIME' : period,
+                  period: period === 'all' ? 'ALL_TIME' : period
+                }).then(est => {
+                  setPreFlightEstimate(est);
+                  setEstimateError(null);
+                }).catch(err => {
+                  setEstimateError(err?.message || 'Error de conexión');
+                }).finally(() => setIsEstimating(false));
+              }}
+              className="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold rounded-lg transition cursor-pointer shrink-0"
+            >
+              Reintentar
+            </button>
+          </div>
+        )}
+
+        {/* POST-EXECUTION COST & TELEMETRY BADGE */}
+        {lastExecutionTelemetry && (
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs font-semibold">
+            <div className="flex items-center gap-3 text-slate-700 flex-wrap">
+              <span className="font-extrabold text-slate-900 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                Última Ejecución:
+              </span>
+              <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-800">
+                Modo: <b>{lastExecutionTelemetry.research_depth || 'ECONOMICO'}</b>
+              </span>
+              <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-800">
+                Modelo Solicitado: <b>{lastExecutionTelemetry.requested_model || 'Automático'}</b>
+              </span>
+              <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-800">
+                Modelo Utilizado: <b>{lastExecutionTelemetry.actual_model || lastExecutionTelemetry.model}</b>
+              </span>
+              <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-800">
+                Latencia: <b>{lastExecutionTelemetry.latency_ms}ms</b>
+              </span>
+              <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-800">
+                Tokens: <b>{lastExecutionTelemetry.total_tokens == null ? 'UNKNOWN' : lastExecutionTelemetry.total_tokens.toLocaleString()}</b>
+                {lastExecutionTelemetry.total_tokens != null && (
+                  <span className="text-slate-500"> · entrada {lastExecutionTelemetry.input_tokens?.toLocaleString() ?? 'UNKNOWN'} · salida {lastExecutionTelemetry.output_tokens?.toLocaleString() ?? 'UNKNOWN'}</span>
+                )}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-slate-500 font-bold uppercase text-[11px]">{lastExecutionTelemetry.cached ? 'Costo adicional:' : 'Costo real incurrido:'}</span>
+              <span className={`px-2.5 py-1 rounded-lg font-black text-xs ${
+                lastExecutionTelemetry.cost_usd === 0 || lastExecutionTelemetry.cached
+                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  : 'bg-slate-900 text-white'
+              }`}>
+                {lastExecutionTelemetry.cached
+                  ? 'USD $0.0000 · caché'
+                  : lastExecutionTelemetry.cost_usd == null
+                    ? 'UNKNOWN'
+                    : `USD ${lastExecutionTelemetry.cost_usd.toFixed(6)}`
+                }
+              </span>
+              {lastExecutionTelemetry.cached && (
+                <span className="bg-white px-2.5 py-1 rounded-lg border border-slate-200 text-slate-700">
+                  Run original: <b>{lastExecutionTelemetry.original_total_tokens == null ? 'tokens UNKNOWN' : lastExecutionTelemetry.original_total_tokens.toLocaleString() + ' tokens'}</b>
+                  {' · '}
+                  <b>{lastExecutionTelemetry.original_cost_usd == null ? 'costo UNKNOWN' : `USD ${lastExecutionTelemetry.original_cost_usd.toFixed(6)}`}</b>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 flex-wrap text-xs text-gray-600 pt-1">
+          <span className="font-extrabold text-gray-800">Sugerencias:</span>
+          {['Pokémon TCG en UY', 'Nuevos preorders McFarlane', 'Figuras NECA Alien Romulus', 'Street Fighter Jada 1:12', 'Marvel Legends Spider-Man'].map((sug) => (
+            <button
+              key={sug}
+              onClick={() => {
+                onSearchQueryChange(sug);
+              }}
+              className="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-pink-100 hover:text-[#f00856] text-gray-700 font-semibold transition cursor-pointer border border-gray-200 hover:border-pink-200"
+            >
+              {sug}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* BLOQUE RESUMEN EJECUTIVO: 6 ESTADOS CLAVE */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {[
+          { key: 'TRENDING', label: 'TRENDING', icon: Flame, color: 'from-orange-500 to-amber-500', count: activeCounts.trending, desc: 'Alta tracción' },
+          { key: 'EMERGING', label: 'EMERGING', icon: Rocket, color: 'from-purple-600 to-indigo-600', count: activeCounts.emerging, desc: 'Detección temprana' },
+          { key: 'GROWING', label: 'GROWING', icon: TrendingUp, color: 'from-blue-600 to-cyan-500', count: activeCounts.growing, desc: 'Demanda ascendente' },
+          { key: 'NEW', label: 'NEW RELEASES', icon: Sparkle, color: 'from-emerald-500 to-teal-500', count: activeCounts.newReleases, desc: 'Recién anunciados' },
+          { key: 'PREORDER', label: 'PREORDERS', icon: Clock, color: 'from-pink-600 to-rose-500', count: activeCounts.preorders, desc: 'Ventana de reserva' },
+          { key: 'OPPORTUNITY', label: 'OPPORTUNITIES', icon: Gem, color: 'from-amber-500 to-yellow-400', count: activeCounts.opportunities, desc: 'Margen + Demanda' }
+        ].map(item => {
+          const Icon = item.icon;
+          const isSelected = activeFilterState === item.key;
+
+          return (
+            <button
+              key={item.key}
+              onClick={() => onSelectQuickFilter && onSelectQuickFilter(isSelected ? 'all' : item.key)}
+              className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden group ${
+                isSelected
+                  ? 'bg-slate-900 border-slate-900 text-white shadow-md ring-2 ring-[#f00856]'
+                  : 'bg-white border-gray-200 hover:border-gray-300 text-gray-900 shadow-2xs hover:shadow-xs'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className={`p-2 rounded-xl bg-gradient-to-r ${item.color} text-white shadow-2xs`}>
+                  <Icon className="w-4 h-4" />
+                </div>
+                <span className={`text-2xl font-black ${isSelected ? 'text-white' : 'text-gray-900'}`}>
+                  {item.count}
+                </span>
+              </div>
+              <div className={`text-xs font-black uppercase tracking-wider ${isSelected ? 'text-pink-400' : 'text-gray-800'}`}>
+                {item.label}
+              </div>
+              <div className={`text-[11px] truncate mt-0.5 ${isSelected ? 'text-slate-400' : 'text-gray-500 font-medium'}`}>
+                {item.desc}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+ + Number(preFlightEstimate.cache.cached_cost_usd).toFixed(6)}{preFlightEstimate.cache.cached_model ? ' · ' + preFlightEstimate.cache.cached_model : ''}.</>
+                    ) : (
+                      <> Consumo original: no disponible.</>
+                    )}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
