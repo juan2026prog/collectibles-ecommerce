@@ -295,33 +295,16 @@ export class ResearchIntelligenceService {
       console.warn('[FRONTEND_RESEARCH_WARN] MULTI_SOURCE_DISCOVERY_ERROR', multiSourceErr.message);
     }
 
-    // 5. Enriquecimiento Visual y Comercial Canónico vía Zinc Product Resolver
-    // Reutiliza la misma capacidad de búsqueda e imágenes de "Productos para Importar"
-    try {
-      if (candidates.length > 0) {
-        const { resolvedCandidates, telemetry } = await resolveZincProductsForCandidates(candidates);
-        candidates = resolvedCandidates;
-        console.log('[FRONTEND_RESEARCH_TRACE]', {
-          step: 'ZINC_RESOLUTION_COMPLETED',
-          candidatesCount: candidates.length,
-          telemetry
-        });
-
-        // 6. Enriquecimiento Comercial Post-Zinc Canónico
-        // Landed Cost, TiendaMía, Mercado Libre UY, Margen y Opportunity Score
-        try {
-          candidates = await enrichCandidatesCommercialData(candidates, country);
-          console.log('[FRONTEND_RESEARCH_TRACE]', {
-            step: 'COMMERCIAL_ENRICHMENT_COMPLETED',
-            candidatesCount: candidates.length
-          });
-        } catch (commErr: any) {
-          console.warn('[FRONTEND_RESEARCH_WARN] COMMERCIAL_ENRICHMENT_ERROR', commErr.message);
-        }
-      }
-    } catch (zincErr: any) {
-      console.warn('[FRONTEND_RESEARCH_WARN] ZINC_RESOLUTION_ERROR', zincErr.message);
-    }
+    // Manual Research must finish when research results are ready.
+    // Slow retailer/commercial enrichment is a separate concern and must not keep
+    // the primary INVESTIGAR action blocked indefinitely. Amazon data already
+    // gathered by MultiSourceDiscovery above remains part of the returned candidates.
+    // Full Zinc + landed-cost/local-market enrichment belongs to Productos para Importar.
+    console.log('[FRONTEND_RESEARCH_TRACE]', {
+      step: 'MANUAL_RESEARCH_READY',
+      candidatesCount: candidates.length,
+      deferredCommercialEnrichment: true
+    });
 
     // Query/citation counts do not establish product demand or momentum.
     mainTrendCard.market_trend_score = candidates.length ? Math.max(...candidates.map(c => c.trend_score)) : 0;
