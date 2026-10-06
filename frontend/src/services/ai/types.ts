@@ -35,9 +35,9 @@ export type AIExecutionStatus =
 
 export interface AIPricingInfo {
   model: string;
-  input_tokens: number;
-  output_tokens: number;
-  total_tokens: number;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  total_tokens: number | null;
   input_cost_usd: number | null;
   output_cost_usd: number | null;
   estimated_cost_usd: number | null;
@@ -46,9 +46,9 @@ export interface AIPricingInfo {
 }
 
 export interface AIUsageInfo {
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  totalTokens: number | null;
 }
 
 export interface AISystemConfig {
@@ -205,6 +205,11 @@ export interface AIExecuteResponse<T = any> {
   };
   request_id?: string;
   response_id?: string;
+  requested_model?: string;
+  actual_model?: string;
+  automatic_or_manual?: 'AUTO' | 'MANUAL';
+  research_depth?: string;
+  cached?: boolean;
 }
 
 export interface AITestResult {
