@@ -230,9 +230,19 @@ export default async function handler(req, res) {
       const research = await researchViaGateway(req, { query, country, signals: observations });
       candidates = research.data?.canonical_candidates || [];
       aiCalls = research.cached ? 0 : (research.batch_telemetry?.batches_executed || 1);
-      aiCost = research.pricing?.estimated_cost_usd || 0;
+      aiCost = research.pricing?.estimated_cost_usd !== undefined ? research.pricing.estimated_cost_usd : null;
       counters.web_search_sources = research.sources?.length || 0;
-      health.openai_web_search = { status: 'CONNECTED_WITH_DATA', count: candidates.length, cached: research.cached || false };
+      health.openai_web_search = {
+        status: 'CONNECTED_WITH_DATA',
+        count: candidates.length,
+        cached: research.cached || false,
+        tokens: {
+          input_tokens: research.usage?.inputTokens ?? research.usage?.input_tokens ?? null,
+          output_tokens: research.usage?.outputTokens ?? research.usage?.output_tokens ?? null,
+          total_tokens: research.usage?.totalTokens ?? research.usage?.total_tokens ?? null
+        },
+        cost_usd: aiCost
+      };
     } catch (e) { errors.push('openai_web_search'); health.openai_web_search = { status: 'UNKNOWN', error: e.message }; }
   } else health.openai_web_search = { status: 'UNKNOWN', message: 'Sin señales reales para investigar' };
   // Retailer/Radar hypotheses are candidates even when research cannot corroborate them.

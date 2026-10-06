@@ -228,7 +228,7 @@ export interface SourcingResearchResponse {
   summary: string;
   evidence_count: number;
   latency_ms: number;
-  cost_usd: number;
+  cost_usd: number | null;
   provider: string;
   model: string;
   requested_model?: string;
@@ -243,8 +243,8 @@ export interface SourcingResearchResponse {
     batches_executed: number;
     stop_reason: string;
   };
-  input_tokens?: number;
-  output_tokens?: number;
-  total_tokens?: number;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  total_tokens?: number | null;
   zero_result_reason?: string;
 }

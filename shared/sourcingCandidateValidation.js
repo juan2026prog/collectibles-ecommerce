@@ -19,6 +19,27 @@ export function publicUrl(value) {
   } catch { return null; }
 }
 
+export function isSafeImageUrl(value) {
+  const url = publicUrl(value);
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    const path = u.pathname.toLowerCase();
+    // Reject HTML product pages, detail pages or listing routes mistakenly passed as images
+    if (path.includes('/collectibles/') || path.includes('/dp/') || path.includes('/product/') || path.includes('/item/') || path.includes('/p/')) {
+      return false;
+    }
+    // Must either end with a common image extension or come from dedicated image CDN hosts
+    const hasImageExt = /\.(jpe?g|png|webp|avif|gif|svg)(\?.*)?$/i.test(url);
+    const isImageCdn = /(^|\.)(media-amazon\.com|ssl-images-amazon\.com|images-na\.ssl-images-amazon\.com|scene7\.com|cdn\.shopify\.com|cloudfront\.net|walmartimages\.com)$/i.test(u.hostname);
+    return hasImageExt || isImageCdn;
+  } catch {
+    return false;
+  }
+}
+
+
+
 export function extractAmazonAsin(value) {
   const url = publicUrl(value);
   if (!url) return null;
@@ -87,7 +108,11 @@ export function validateCandidate(raw, context = {}) {
   // 7. Commercial Signals & Evidence Scoring
   const demand = observed('local_demand');
   const momentum = observed('global_momentum');
-  const release = observed('release');
+  const observedRelease = observed('release');
+  const releaseValue = observedRelease.value || (raw.is_preorder ? 'PREORDER' : (raw.is_new ? 'NEW' : null));
+  const release = releaseValue
+    ? { ...observedRelease, value: releaseValue, status: observedRelease.status === 'UNKNOWN' ? 'OBSERVED' : observedRelease.status }
+    : observedRelease;
   const positiveDemand = finiteNumber(demand.value) > 0;
   const positiveMomentum = finiteNumber(momentum.value) > 0;
   const supplyGap = [tiendamia, mercadolibre].some(m => ['VERIFIED_ABSENT', 'VERIFIED_LOW_SUPPLY'].includes(m.presence));
@@ -110,7 +135,8 @@ export function validateCandidate(raw, context = {}) {
   const coverage = [identity.value !== null, image.value !== null, originPrice !== null, ['OBSERVED', 'CORROBORATED'].includes(demand.status), ['OBSERVED', 'CORROBORATED'].includes(momentum.status), tiendamia.presence !== 'UNKNOWN' || mercadolibre.presence !== 'UNKNOWN', validQuote].filter(Boolean).length;
   const confidence = coverage === 0 ? null : Math.round(coverage / 7 * 100);
   const confidenceLevel = confidence === null ? 'UNKNOWN' : confidence >= 70 ? 'HIGH' : confidence >= 40 ? 'MEDIUM' : 'LOW';
-  const imageUrl = publicUrl(image.value);
+  const rawImage = image.value || raw.image_url || raw.image || raw.imageUrl || raw.thumbnail_url;
+  const imageUrl = isSafeImageUrl(rawImage) ? publicUrl(rawImage) : null;
   const availability = observed('availability');
   const retailer = raw.retailer || raw.source_retailer || raw.retailer_source || 'No verificado';
   const sourcePrices = { amazon_price_usd: null, ebay_price_usd: null, bestbuy_price_usd: null };

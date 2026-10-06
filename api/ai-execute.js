@@ -547,6 +547,71 @@ async function executeHandler(req, res) {
       ? generateResearchCacheKey(cleanSearchQuery || resolvedInput, 'GLOBAL', modeConfig.key, isManualOverride ? selectedModel : 'AUTO', effectiveTimeScope, effectiveProductFamily, effectiveResultLimit) 
       : null;
 
+    if (isSourcingResearch && researchCacheKey && client && !context?.force_refresh) {
+      try {
+        const { data: cachedEntry } = await client
+          .from('sourcing_research_cache')
+          .select('*')
+          .eq('cache_key', researchCacheKey)
+          .gt('expires_at', new Date().toISOString())
+          .limit(1)
+          .maybeSingle();
+
+        if (cachedEntry && cachedEntry.data) {
+          const cachedData = typeof cachedEntry.data === 'string' ? JSON.parse(cachedEntry.data) : cachedEntry.data;
+          const cachedSources = Array.isArray(cachedEntry.sources) ? cachedEntry.sources : [];
+          const elapsed = Date.now() - startTime;
+          return res.status(200).json({
+            success: true,
+            status: 'SUCCESS',
+            cached: true,
+            provider: 'OPENAI',
+            model: cachedEntry.model || selectedModel,
+            requested_model: effectiveRequestedModel,
+            actual_model: cachedEntry.model || selectedModel,
+            automatic_or_manual: automaticOrManual,
+            research_depth: modeConfig.key,
+            text: JSON.stringify(cachedData),
+            data: cachedData,
+            sources: cachedSources,
+            response_id: null,
+            request_id: finalRequestId,
+            latency_ms: elapsed,
+            usage: {
+              inputTokens: 0,
+              outputTokens: 0,
+              totalTokens: 0,
+              cachedTokens: cachedEntry.total_tokens || 0,
+              original_tokens: {
+                input_tokens: cachedEntry.input_tokens || null,
+                output_tokens: cachedEntry.output_tokens || null,
+                total_tokens: cachedEntry.total_tokens || null
+              }
+            },
+            pricing: {
+              model: cachedEntry.model || selectedModel,
+              input_tokens: 0,
+              output_tokens: 0,
+              total_tokens: 0,
+              input_cost_usd: 0,
+              output_cost_usd: 0,
+              estimated_cost_usd: 0,
+              pricing_status: 'PRICED',
+              pricing_source: 'CACHE_HIT'
+            },
+            batch_telemetry: {
+              result_limit: effectiveResultLimit,
+              batches_planned: 1,
+              batches_executed: 0,
+              stop_reason: 'CACHE_HIT'
+            }
+          });
+        }
+      } catch (cacheLookupErr) {
+        console.warn('[AI Execute] Sourcing research cache lookup non-blocking error:', cacheLookupErr.message);
+      }
+    }
+
     // Tools & Responses API configuration
     const tools = isWebSearchNeeded ? [{ type: 'web_search' }] : undefined;
     const toolChoice = isWebSearchNeeded ? (modeConfig.key === 'PROFUNDO' ? 'required' : 'auto') : undefined;

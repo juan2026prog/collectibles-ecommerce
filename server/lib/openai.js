@@ -171,7 +171,7 @@ export async function callOpenAIResponses(options = {}) {
     textFormat
   } = options;
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = options.apiKey || process.env.OPENAI_API_KEY;
   if (!apiKey || apiKey.trim() === '') {
     throw new OpenAIError(
       'OpenAI API key is not configured on server.',
@@ -253,7 +253,8 @@ export async function callOpenAIResponses(options = {}) {
       requestBody.metadata = sanitizedMeta;
     }
 
-    const response = await fetch(OPENAI_RESPONSES_URL, {
+    const fetchFn = options.fetchImpl || fetch;
+    const response = await fetchFn(OPENAI_RESPONSES_URL, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey.trim()}`,
@@ -310,14 +311,27 @@ export async function callOpenAIResponses(options = {}) {
     const outputText = extractOutputText(responseData);
     const sources = extractSources(responseData);
 
-    // Usage tokens extraction
-    const usage = responseData.usage || {};
-    const inputTokens = usage.input_tokens || usage.prompt_tokens || 0;
-    const outputTokens = usage.output_tokens || usage.completion_tokens || 0;
-    const totalTokens = usage.total_tokens || (inputTokens + outputTokens);
+    // Usage tokens extraction — fail-closed: do not invent 0 when usage is missing from payload
+    const rawUsage = responseData.usage;
+    const hasUsage = Boolean(rawUsage && (rawUsage.input_tokens !== undefined || rawUsage.prompt_tokens !== undefined || rawUsage.total_tokens !== undefined));
+    const inputTokens = hasUsage ? (rawUsage.input_tokens ?? rawUsage.prompt_tokens ?? 0) : null;
+    const outputTokens = hasUsage ? (rawUsage.output_tokens ?? rawUsage.completion_tokens ?? 0) : null;
+    const totalTokens = hasUsage ? (rawUsage.total_tokens ?? ((inputTokens ?? 0) + (outputTokens ?? 0))) : null;
 
-    // Calculate cost
-    const pricing = calculateOpenAICost(responseData.model || selectedModel, inputTokens, outputTokens);
+    // Calculate cost — only if token usage is known
+    const pricing = hasUsage
+      ? calculateOpenAICost(responseData.model || selectedModel, inputTokens ?? 0, outputTokens ?? 0)
+      : {
+          model: responseData.model || selectedModel,
+          input_tokens: null,
+          output_tokens: null,
+          total_tokens: null,
+          input_cost_usd: null,
+          output_cost_usd: null,
+          estimated_cost_usd: null,
+          pricing_status: 'UNKNOWN_PRICING',
+          pricing_source: 'USAGE_MISSING'
+        };
 
     return {
       success: true,

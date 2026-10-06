@@ -67,11 +67,11 @@ export class ResearchIntelligenceService {
       ? requested_model 
       : (research_depth === 'ECONOMICO' ? 'gpt-4o-mini' : 'gpt-5.6-terra');
     let latencyMs = 0;
-    let costUsd = 0;
+    let costUsd: number | null = null;
     let isCached = false;
-    let inputTokens = 0;
-    let outputTokens = 0;
-    let totalTokens = 0;
+    let inputTokens: number | null = null;
+    let outputTokens: number | null = null;
+    let totalTokens: number | null = null;
     let gatewayResponse: any = null;
 
     try {
@@ -130,11 +130,11 @@ export class ResearchIntelligenceService {
       providerName = gatewayResponse.provider || 'OPENAI';
       modelName = gatewayResponse.model || modelName;
       latencyMs = gatewayResponse.latency_ms || Math.round(performance.now() - startTime);
-      costUsd = gatewayResponse.pricing?.estimated_cost_usd || 0;
+      costUsd = gatewayResponse.pricing?.estimated_cost_usd ?? null;
       isCached = Boolean(gatewayResponse.cached || (gatewayResponse.usage && gatewayResponse.usage.totalTokens === 0 && gatewayResponse.status === 'SUCCESS'));
-      inputTokens = gatewayResponse.usage?.inputTokens || 0;
-      outputTokens = gatewayResponse.usage?.outputTokens || 0;
-      totalTokens = gatewayResponse.usage?.totalTokens || 0;
+      inputTokens = gatewayResponse.usage?.inputTokens ?? gatewayResponse.usage?.input_tokens ?? null;
+      outputTokens = gatewayResponse.usage?.outputTokens ?? gatewayResponse.usage?.output_tokens ?? null;
+      totalTokens = gatewayResponse.usage?.totalTokens ?? gatewayResponse.usage?.total_tokens ?? null;
     } catch (err: any) {
       console.error('[ResearchIntelligence] Error en Gateway:', err);
       throw err;

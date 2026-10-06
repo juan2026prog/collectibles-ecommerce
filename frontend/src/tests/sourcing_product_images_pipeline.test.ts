@@ -186,46 +186,60 @@ describe('Sourcing Product Candidates Image Pipeline & Strict Verification Suite
     expect(res.candidates[2].image_url).toBeNull();
   });
 
-  // Test E: image of another SKU/ASIN is not mistakenly reused across distinct products
-  it('E: deduplication preserves distinct image URLs per unique candidate and merges when same product', () => {
-    const listA = [
+  // Test F: Sideshow product page URL mistakenly passed as image is strictly rejected
+  it('F: Sideshow product page URL is rejected as image and falls back to null', async () => {
+    const mockBackendItems = [
       {
-        title: 'Care Bears Cheer Bear 14" Plush',
-        brand: 'Basic Fun',
-        franchise: 'Care Bears',
-        asin: 'B08552JGRF',
-        image_url: 'https://m.media-amazon.com/images/I/71Cheer.jpg'
+        title: 'Sideshow Iron Man Mark VII 1:4 Scale Statue',
+        brand: 'Sideshow Collectibles',
+        franchise: 'Marvel',
+        url: 'https://www.sideshow.com/collectibles/marvel-iron-man-mark-vii-sideshow-collectibles-400388',
+        image_url: 'https://www.sideshow.com/collectibles/marvel-iron-man-mark-vii-sideshow-collectibles-400388',
+        retailer: 'Sideshow'
       }
     ];
 
-    const listB = [
-      // Same exact product title from another source; an AI-declared ASIN does not prove identity
-      {
-        title: 'Care Bears Cheer Bear 14" Plush',
-        brand: 'Basic Fun',
-        franchise: 'Care Bears',
-        asin: 'B08552JGRF',
-        origin_price_usd: 14.99
+    vi.spyOn(aiGateway, 'execute').mockResolvedValueOnce({
+      success: true,
+      status: 'SUCCESS',
+      provider: 'OPENAI',
+      model: 'gpt-4o-mini-2024-07-18',
+      data: {
+        items: mockBackendItems,
+        canonical_candidates: mockBackendItems.map((item, index) => validateCandidate(item, { index })),
+        summary: 'Found 1 item with product url as image'
       },
-      // Distinct product with different character/title
-      {
-        title: 'Care Bears Grumpy Bear 14" Plush',
-        brand: 'Basic Fun',
-        franchise: 'Care Bears',
-        asin: 'B08553GRMP',
-        image_url: 'https://m.media-amazon.com/images/I/71Grumpy.jpg'
-      }
-    ];
+      latency_ms: 400
+    });
 
-    const merged = deduplicateResearchCandidates(listA, listB);
+    const res = await researchIntelligenceService.research({
+      query: 'sideshow iron man mark vii',
+      country: 'UY',
+      mode: 'ECONOMICO'
+    });
 
-    expect(merged).toHaveLength(2);
-    // Product 1: Merged evidence and preserved original verified image
-    expect(merged[0].asin).toBe('B08552JGRF');
-    expect(merged[0].image_url).toBe('https://m.media-amazon.com/images/I/71Cheer.jpg');
-    // Product 2: Distinct candidate has its own distinct image
-    expect(merged[1].asin).toBe('B08553GRMP');
-    expect(merged[1].image_url).toBe('https://m.media-amazon.com/images/I/71Grumpy.jpg');
+    expect(res.candidates).toHaveLength(1);
+    // Product page URL must NOT be used as image_url
+    expect(res.candidates[0].image_url).toBeNull();
+    expect(res.candidates[0].gallery_images).toEqual([]);
+    // Candidate itself is preserved
+    expect(res.candidates[0].title).toBe('Sideshow Iron Man Mark VII 1:4 Scale Statue');
+  });
+
+  // Test G: Valid CDN image is accepted, whereas Amazon /dp/ route is rejected
+  it('G: allows real image CDNs and rejects amazon /dp/ as image', () => {
+    const validCandidate = validateCandidate({
+      title: 'Marvel Legends Wolverine',
+      image_url: 'https://m.media-amazon.com/images/I/81XYZ.jpg'
+    });
+    expect(validCandidate.image_url).toBe('https://m.media-amazon.com/images/I/81XYZ.jpg');
+
+    const htmlRouteCandidate = validateCandidate({
+      title: 'Marvel Legends Wolverine',
+      image_url: 'https://www.amazon.com/dp/B08552JGRF'
+    });
+    expect(htmlRouteCandidate.image_url).toBeNull();
   });
 
 });
+

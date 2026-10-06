@@ -1,4 +1,4 @@
-import { validateCandidate, deduplicateCanonicalCandidates, extractAmazonAsin, publicUrl, provenance, finiteNumber } from '../../shared/sourcingCandidateValidation.js';
+import { validateCandidate, deduplicateCanonicalCandidates, extractAmazonAsin, publicUrl, isSafeImageUrl, provenance, finiteNumber } from '../../shared/sourcingCandidateValidation.js';
 import { parseTiendamiaResponse } from '../../shared/sourcingMarketPresence.js';
 import { sameProductTitle, normalizeSearchText } from '../../shared/sourcingProductIdentity.js';
 export { sameProductTitle, normalizeSearchText } from '../../shared/sourcingProductIdentity.js';
@@ -10,9 +10,10 @@ export const PRODUCT_HOSTS = ['amazon.com', 'amazon.co.uk', 'amazon.ca', 'ebay.c
   'funko.com', 'youtooz.com', 'sanrio.com', 'basicfun.com', 'spinmaster.com', 'jazwares.com', 'tiendamia.com.uy',
   'steiff.com', 'shop.steiff.com', 'ty.com', 'squishmallows.com', 'jakks.com', 'kidrobot.com', 'gund.com'];
 export const IMAGE_HOSTS = [...PRODUCT_HOSTS, 'media-amazon.com', 'ssl-images-amazon.com', 'images-na.ssl-images-amazon.com', 'scene7.com', 'cdn.shopify.com', 'images.squarespace-cdn.com', 'shopify.com', 'cloudfront.net', 'walmartimages.com', 'necaonline.com'];
-export const allowed = (url, hosts) => {
+export const allowed = (url, hosts, { isImage = false } = {}) => {
   const clean = publicUrl(url);
   if (!clean) return false;
+  if (isImage && !isSafeImageUrl(clean)) return false;
   const u = new URL(clean);
   return u.protocol === 'https:' && (!u.port || u.port === '443') && hosts.some(h => u.hostname === h || u.hostname.endsWith(`.${h}`));
 };
@@ -55,12 +56,26 @@ export function productSignalContext(raw, country, signals = [], listings = []) 
   const title = raw.title || raw.name;
   const observations = [];
   for (const s of signals) {
-    if (!sameProductTitle(s.product_identity, title) || !s.observed_at || finiteNumber(s.value) === null || finiteNumber(s.value) < 0) continue;
+    if (!sameProductTitle(s.product_identity, title) || !s.observed_at) continue;
+    const isRadarRelease = s.source_type === 'RADAR' || s.signal_type === 'NEW_RELEASE' || s.signal_type === 'PREORDER_WINDOW';
+    if (!isRadarRelease && (finiteNumber(s.value) === null || finiteNumber(s.value) < 0)) continue;
     const internal = s.source_type === 'INTERNAL_DATA' && s.country === country && ['SEARCH_VOLUME', 'WISHLIST_ADD', 'ORDER_COUNT', 'PRODUCT_VIEW'].includes(s.signal_type);
-    const momentum = s.metadata?.status === 'OBSERVED' && s.metadata?.verification === 'SOURCE_VERIFIED' && s.signal_type === 'GLOBAL_MOMENTUM';
-    if (!internal && !momentum) continue;
-    observations.push({ field: internal ? 'local_demand' : 'global_momentum', ...provenance(Number(s.value), 'OBSERVED', s.source_name,
-      s.source_url || (internal ? 'https://collectibles.uy/admin/sourcing' : null), s.observed_at, { source_type: s.source_type, evidence_text: s.evidence_text, signal_id: s.id }) });
+    const momentum = (s.signal_type === 'GLOBAL_MOMENTUM') || (s.metadata?.status === 'OBSERVED' && s.metadata?.verification === 'SOURCE_VERIFIED');
+    if (!internal && !momentum && !isRadarRelease) continue;
+    if (isRadarRelease) {
+      observations.push({
+        field: 'release',
+        ...provenance(s.signal_type === 'PREORDER_WINDOW' ? 'PREORDER' : 'NEW', 'OBSERVED', s.source_name || 'Radar', s.source_url || 'https://collectibles.uy/admin/radar', s.observed_at, {
+          source_type: s.source_type,
+          signal_type: s.signal_type,
+          evidence_text: s.evidence_text,
+          signal_id: s.id
+        })
+      });
+    } else {
+      observations.push({ field: internal ? 'local_demand' : 'global_momentum', ...provenance(Number(s.value), 'OBSERVED', s.source_name,
+        s.source_url || (internal ? 'https://collectibles.uy/admin/sourcing' : null), s.observed_at, { source_type: s.source_type, evidence_text: s.evidence_text, signal_id: s.id }) });
+    }
   }
   const matching = listings.filter(m => sameProductTitle(m.title, title) && publicUrl(m.permalink));
   const first = matching.find(m => finiteNumber(m.price) > 0 && m.currency_id);
@@ -421,7 +436,7 @@ export function mergeCommercialEnrichment(candidates = [], enrichmentItems = [])
           if (srcAsin && !merged.asin) {
             merged.asin = srcAsin;
           }
-          if (entry.image_url && (!merged.image_url || !allowed(merged.image_url, IMAGE_HOSTS))) {
+          if (entry.image_url && allowed(entry.image_url, IMAGE_HOSTS, { isImage: true }) && (!merged.image_url || !allowed(merged.image_url, IMAGE_HOSTS, { isImage: true }))) {
             merged.image_url = entry.image_url;
           }
           if (entry.price !== null && !finiteNumber(merged.origin_price_usd)) {
@@ -515,10 +530,10 @@ export function corroborateCandidateEvidence(raw, { observations = [], rejectedF
   if (!hasField('image')) {
     const commWithImage = commercialCandidates.find(cs => {
       const img = publicUrl(cs.image_url || raw.image_url || raw.image || raw.imageUrl || raw.thumbnail_url);
-      return img && allowed(img, IMAGE_HOSTS) && !img.includes('unsplash.com');
+      return img && allowed(img, IMAGE_HOSTS, { isImage: true }) && !img.includes('unsplash.com');
     });
     const imgCandidate = publicUrl(commWithImage?.image_url || raw.image_url || raw.image || raw.imageUrl || raw.thumbnail_url);
-    if (imgCandidate && allowed(imgCandidate, IMAGE_HOSTS) && !imgCandidate.includes('unsplash.com')) {
+    if (imgCandidate && allowed(imgCandidate, IMAGE_HOSTS, { isImage: true }) && !imgCandidate.includes('unsplash.com')) {
       const iUrl = publicUrl(commWithImage?.product_url || commWithImage?.url || commUrl || imgCandidate);
       const iRetailer = commWithImage?.retailer || (iUrl ? new URL(iUrl).hostname.replace(/^www\./, '') : commRetailer) || new URL(imgCandidate).hostname;
       result.push({
