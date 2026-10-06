@@ -35,7 +35,8 @@ import { multiSourceSearchService } from '../../services/sourcing/multiSourceSea
 import type { 
   SourcingTrendCard, 
   SourcingProductCandidate, 
-  WatchlistExpandedItem 
+  WatchlistExpandedItem,
+  SourcingResearchSource 
 } from '../../types/sourcingIntelligence';
 import type { NormalizedProduct, ResearchPack } from '../../types/sourcing';
 
@@ -64,6 +65,7 @@ export default function AdminSourcingImport() {
   // Research Query state
   const [searchQuery, setSearchQuery] = useState<string>(urlQuery || '');
   const [selectedResultLimit, setSelectedResultLimit] = useState<'AUTO' | 10 | 25 | 50 | 100>('AUTO');
+  const [selectedResearchSources, setSelectedResearchSources] = useState<SourcingResearchSource[]>(['WEB', 'AMAZON']);
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [isDiscoveryScanning, setIsDiscoveryScanning] = useState<boolean>(false);
   const [quickFilterState, setQuickFilterState] = useState<string>('all');
@@ -179,7 +181,8 @@ export default function AdminSourcingImport() {
     modeOverride?: 'ECONOMICO' | 'ESTANDAR' | 'PROFUNDO', 
     requestedModel?: string,
     forceRefresh = false,
-    resultLimitOverride?: 'AUTO' | 10 | 25 | 50 | 100
+    resultLimitOverride?: 'AUTO' | 10 | 25 | 50 | 100,
+    sourcesOverride?: SourcingResearchSource[]
   ) => {
     const q = (queryOverride !== undefined ? queryOverride : searchQuery).trim();
     if (!q) return;
@@ -200,7 +203,8 @@ export default function AdminSourcingImport() {
         requested_model: requestedModel,
         result_limit: limitToUse,
         resultLimit: limitToUse,
-        force_refresh: forceRefresh
+        force_refresh: forceRefresh,
+        sources: sourcesOverride || selectedResearchSources
       });
 
       console.log('[FRONTEND_RESEARCH_TRACE]', {
@@ -409,7 +413,9 @@ export default function AdminSourcingImport() {
         onResultLimitChange={setSelectedResultLimit}
         searchQuery={searchQuery}
         onSearchQueryChange={setSearchQuery}
-        onExecuteSearch={(mode, requestedModel, forceRefresh, resultLimit) => handleExecuteSearch(undefined, mode, requestedModel, forceRefresh, resultLimit)}
+        researchSources={selectedResearchSources}
+        onResearchSourcesChange={setSelectedResearchSources}
+        onExecuteSearch={(mode, requestedModel, forceRefresh, resultLimit, sources) => handleExecuteSearch(undefined, mode, requestedModel, forceRefresh, resultLimit, sources)}
         isSearching={isSearching}
         activeCounts={activeCounts}
         activeFilterState={quickFilterState}
