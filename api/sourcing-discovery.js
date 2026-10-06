@@ -34,9 +34,90 @@ export default async function handler(req, res) {
   if (!auth.authenticated || !auth.isSuperAdmin) return res.status(403).json({ success: false, status: 'FORBIDDEN', error: 'SUPERADMIN requerido' });
   if (req.method !== 'POST' && !(req.method === 'GET' && auth.isCron)) return res.status(405).json({ success: false, error: 'POST requerido' });
 
-  // Consolidated Sourcing Action: on-demand market presence lookup / candidate source verification
-  const { action, asin, source_url, title, brand, id } = req.body || {};
+  // Consolidated Sourcing Action: on-demand market presence lookup / candidate source verification / post-enrichment persistence
+  const { action, asin, source_url, title, brand, id, candidates: candidatesToPersist } = req.body || {};
   const country = req.body?.country || req.query?.country || 'UY';
+
+  if (action === 'persist_enriched_candidates') {
+    const supabase = getServiceRoleClient();
+    if (!supabase) {
+      console.error('[Discovery Persistence Error] SUPABASE_SERVICE_ROLE_KEY missing for persist_enriched_candidates');
+      return res.status(500).json({ success: false, status: 'FAILED', error: 'SERVER_CONFIGURATION_ERROR', attempted: 0, succeeded: 0, failed: 0 });
+    }
+
+    const items = Array.isArray(candidatesToPersist) ? candidatesToPersist : [];
+    let succeeded = 0;
+    let failed = 0;
+    const errors = [];
+
+    for (const c of items) {
+      if (!c || !c.title) {
+        failed++;
+        continue;
+      }
+
+      const canonicalProductId = c.canonical_product_id || (c.title ? crypto.createHash('sha256').update(canonicalCandidateKey(c)).digest('hex') : null);
+      const row = {
+        country: c.country_code || country,
+        canonical_product_id: canonicalProductId,
+        title: c.title,
+        brand: c.brand || null,
+        franchise: c.franchise || null,
+        category: c.category || null,
+        status: c.status || 'NEW',
+        discovered_from: c.discovered_from || 'WATCHLIST',
+        trend_score: c.trend_score ?? 0,
+        opportunity_score: c.opportunity_score ?? 0,
+        confidence_score: c.confidence_score ?? null,
+        source_retailer: c.retailer_source || c.source_retailer || null,
+        source_url: c.retailer_url || c.source_url || null,
+        asin: c.asin || null,
+        price_usd: c.pricing?.origin_price_usd ?? null,
+        landed_cost_usd: c.pricing?.landed_cost_estimated_usd ?? null,
+        suggested_price_usd: c.pricing?.suggested_sale_price_usd ?? null,
+        margin_percent: c.pricing?.estimated_margin_percent ?? null,
+        why_explanation: c.why_explanation || {},
+        evidence: {
+          canonical_candidate: c,
+          source_url: c.retailer_url || c.source_url || null,
+          image_url: c.image_url || null,
+          verification_version: c.validation_version || 1
+        },
+        last_verified_at: new Date().toISOString()
+      };
+
+      try {
+        let updateQuery = supabase.from('sourcing_discoveries').update(row).eq('country', row.country);
+        if (canonicalProductId) {
+          updateQuery = updateQuery.eq('canonical_product_id', canonicalProductId);
+        } else {
+          updateQuery = updateQuery.eq('title', c.title);
+        }
+        const { error: updateError, count } = await updateQuery;
+        if (updateError) {
+          failed++;
+          errors.push({ title: c.title, error: updateError.message });
+          logDatabaseError('persist_enriched_update', 'sourcing_discoveries', 'UPDATE', null, updateError);
+        } else {
+          succeeded++;
+        }
+      } catch (err) {
+        failed++;
+        errors.push({ title: c.title, error: err.message });
+        logDatabaseError('persist_enriched_exception', 'sourcing_discoveries', 'UPDATE', null, err);
+      }
+    }
+
+    const runStatus = failed === 0 ? 'COMPLETED' : (succeeded > 0 ? 'PARTIAL' : 'FAILED');
+    return res.status(runStatus === 'FAILED' ? 502 : 200).json({
+      success: runStatus !== 'FAILED',
+      status: runStatus,
+      attempted: items.length,
+      succeeded,
+      failed,
+      errors: errors.slice(0, 5)
+    });
+  }
 
   if (action === 'market_presence' || action === 'validate_candidate' || (asin && source_url && title && action !== 'discovery_run')) {
     if (action === 'validate_candidate' && title && source_url) {

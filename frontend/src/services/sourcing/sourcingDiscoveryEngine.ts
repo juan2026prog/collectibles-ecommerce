@@ -169,47 +169,34 @@ export class SourcingDiscoveryEngine {
       console.warn('[DISCOVERY_PIPELINE_WARN] Commercial enrichment failed for discovery:', commErr.message);
     }
 
-    // 4. Persistir resultados enriquecidos en sourcing_discoveries
+    // 4. Persistir resultados enriquecidos en el backend usando service-role autorizado
     try {
-      for (const c of candidates) {
-        if (!c.id) continue;
-        const row = {
-          country,
-          title: c.title,
-          brand: c.brand,
-          franchise: c.franchise,
-          category: c.category,
-          status: c.status,
-          discovered_from: c.discovered_from,
-          trend_score: c.trend_score,
-          opportunity_score: c.opportunity_score,
-          confidence_score: c.confidence_score,
-          source_retailer: c.retailer_source,
-          source_url: c.retailer_url,
-          asin: c.asin || null,
-          price_usd: c.pricing.origin_price_usd,
-          landed_cost_usd: c.pricing.landed_cost_estimated_usd,
-          suggested_price_usd: c.pricing.suggested_sale_price_usd,
-          margin_percent: c.pricing.estimated_margin_percent,
-          why_explanation: c.why_explanation,
-          evidence: {
-            canonical_candidate: c,
-            source_url: c.retailer_url,
-            image_url: c.image_url,
-            verification_version: c.validation_version
-          },
-          last_verified_at: new Date().toISOString()
-        };
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
 
-        await supabase
-          .from('sourcing_discoveries')
-          .update(row)
-          .eq('country', country)
-          .eq('title', c.title);
+      const response = await fetch('/api/sourcing-discovery', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          action: 'persist_enriched_candidates',
+          country,
+          candidates
+        })
+      });
+
+      const result = await response.json().catch(() => null);
+      if (response.ok && result?.success && result?.failed === 0) {
+        console.log(`[DISCOVERY_PIPELINE_TRACE] Post-enrichment persistence completed for discovery candidates: ${result.succeeded}/${result.attempted} succeeded.`);
+      } else if (response.ok && result?.succeeded > 0) {
+        console.warn(`[DISCOVERY_PIPELINE_WARN] Post-enrichment persistence partial: ${result.succeeded} succeeded, ${result.failed} failed.`);
+      } else {
+        console.error(`[DISCOVERY_PIPELINE_ERROR] Post-enrichment persistence failed:`, result?.error || `HTTP ${response.status}`);
       }
-      console.log('[DISCOVERY_PIPELINE_TRACE] Post-enrichment persistence completed for discovery candidates.');
     } catch (persistErr: any) {
-      console.warn('[DISCOVERY_PIPELINE_WARN] Post-enrichment persistence error:', persistErr.message);
+      console.error('[DISCOVERY_PIPELINE_ERROR] Post-enrichment persistence network/client error:', persistErr.message);
     }
 
     return candidates;

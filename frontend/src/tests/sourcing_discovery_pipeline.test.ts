@@ -52,6 +52,10 @@ describe('Automatic Discovery Pipeline Unit Tests', () => {
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, status: 'COMPLETED', attempted: 1, succeeded: 1, failed: 0 })
+    } as any);
   });
 
   // CASO 1: Discovered candidate enters canonical Zinc resolver
@@ -131,5 +135,21 @@ describe('Automatic Discovery Pipeline Unit Tests', () => {
   it('4. AUTO_PURCHASE and AUTO_PUBLISH remain strictly disabled', () => {
     // SOURCING_PURCHASE_CAPABILITY and AUTO_PUBLISH checks
     expect(true).toBe(true);
+  });
+
+  // CASO 5: Post-enrichment persistence routes to server-side endpoint without direct client writes
+  it('5. Post-enrichment persistence delegates to /api/sourcing-discovery using server-side endpoint', async () => {
+    vi.spyOn(zincResolverModule, 'resolveZincProductsForCandidates').mockResolvedValue({
+      resolvedCandidates: [mockCandidate],
+      telemetry: {} as any
+    });
+    vi.spyOn(commercialEnrichmentModule, 'enrichCandidatesCommercialData').mockResolvedValue([mockCandidate]);
+
+    await sourcingDiscoveryEngine.processDiscoveredCandidates([mockCandidate], 'UY');
+
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/sourcing-discovery', expect.objectContaining({
+      method: 'POST',
+      body: expect.stringContaining('persist_enriched_candidates')
+    }));
   });
 });

@@ -112,4 +112,42 @@ describe('Automatic Discovery signal-led shared pipeline', () => {
       delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     }
   });
+  it('persist_enriched_candidates succeeds with COMPLETED when all items persist', async () => {
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test_mock_service_role_key';
+    const c1 = { title: 'Item 1', brand: 'Brand 1', pricing: { origin_price_usd: 10 } };
+    const c2 = { title: 'Item 2', brand: 'Brand 2', pricing: { origin_price_usd: 20 } };
+    const res = response();
+    await handler({ method: 'POST', headers: {}, body: { action: 'persist_enriched_candidates', country: 'UY', candidates: [c1, c2] } }, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.payload.success).toBe(true);
+    expect(res.payload.status).toBe('COMPLETED');
+    expect(res.payload.attempted).toBe(2);
+    expect(res.payload.succeeded).toBe(2);
+    expect(res.payload.failed).toBe(0);
+    expect(state.writes.filter(w => w.table === 'sourcing_discoveries')).toHaveLength(2);
+  });
+  it('persist_enriched_candidates reports PARTIAL when some items fail', async () => {
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test_mock_service_role_key';
+    const c1 = { title: 'Item 1', brand: 'Brand 1' };
+    const c2 = { title: '' };
+    const res = response();
+    await handler({ method: 'POST', headers: {}, body: { action: 'persist_enriched_candidates', country: 'UY', candidates: [c1, c2] } }, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.payload.success).toBe(true);
+    expect(res.payload.status).toBe('PARTIAL');
+    expect(res.payload.attempted).toBe(2);
+    expect(res.payload.succeeded).toBe(1);
+    expect(res.payload.failed).toBe(1);
+  });
+  it('persist_enriched_candidates fails closed when database write rejects all', async () => {
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test_mock_service_role_key';
+    state.errors.add('sourcing_discoveries');
+    const c1 = { title: 'Item 1', brand: 'Brand 1' };
+    const res = response();
+    await handler({ method: 'POST', headers: {}, body: { action: 'persist_enriched_candidates', country: 'UY', candidates: [c1] } }, res);
+    expect(res.statusCode).toBe(502);
+    expect(res.payload.success).toBe(false);
+    expect(res.payload.status).toBe('FAILED');
+    expect(res.payload.failed).toBe(1);
+  });
 });
