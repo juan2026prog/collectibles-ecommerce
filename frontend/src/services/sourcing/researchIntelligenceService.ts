@@ -54,19 +54,36 @@ export class ResearchIntelligenceService {
       requested_model = 'AUTO',
       result_limit,
       resultLimit,
-      force_refresh = false
+      force_refresh = false,
+      sources = ['WEB', 'AMAZON']
     } = request;
 
     const effectiveResultLimit = result_limit || resultLimit || 'AUTO';
     const effectiveFamily = product_family || category || 'ALL';
 
-    // Start Amazon discovery in parallel with the paid research call.
-    // Previously this began only after OpenAI finished, adding its full latency to the wait.
-    const multiSourcePromise = multiSourceDiscoveryService
-      .discoverAllSources(query, { maxAmazon: 5, maxEbay: 0 })
-      .catch((error: any) => ({ candidates: [], telemetry: {}, sourceStatus: {}, error }));
-    const amazonSoftDeadline = new Promise<any>((resolve) =>
-      setTimeout(() => resolve({ candidates: [], telemetry: {}, sourceStatus: {}, timedOut: true }), 8000)
+    const selectedSources = Array.from(new Set(sources.length ? sources : ['WEB', 'AMAZON']));
+    const useWeb = selectedSources.includes('WEB');
+    const requestedMarketplaceLimit = effectiveResultLimit === 'AUTO' ? 15 : Number(effectiveResultLimit);
+
+    // Retailer searches are independent from Web/AI research. A disabled source makes zero
+    // network calls inside its adapter. This also makes AMAZON-only a real zero-OpenAI path.
+    const retailerPromise = Promise.all([
+      selectedSources.includes('AMAZON')
+        ? multiSourceDiscoveryService.discoverAmazon(query, requestedMarketplaceLimit)
+        : Promise.resolve({ items: [], status: 'DISABLED' as const }),
+      selectedSources.includes('EBAY')
+        ? multiSourceDiscoveryService.discoverEbay(query, requestedMarketplaceLimit)
+        : Promise.resolve({ items: [], status: 'DISABLED' as const, queriesCount: 0 }),
+      selectedSources.includes('BESTBUY')
+        ? multiSourceDiscoveryService.discoverBestBuy(query)
+        : Promise.resolve({ items: [], status: 'DISABLED' as const, queriesCount: 0 })
+    ]).then(([amazon, ebay, bestbuy]) => ({
+      candidates: [...(amazon.items || []), ...(ebay.items || []), ...(bestbuy.items || [])],
+      sourceStatus: { amazon: amazon.status, ebay: ebay.status, bestbuy: bestbuy.status }
+    })).catch((error: any) => ({ candidates: [], sourceStatus: {}, error }));
+
+    const retailerSoftDeadline = new Promise<any>((resolve) =>
+      setTimeout(() => resolve({ candidates: [], sourceStatus: {}, timedOut: true }), 8000)
     );
 
     // 1. Ejecución vía AI Gateway Central
@@ -88,6 +105,7 @@ export class ResearchIntelligenceService {
     let gatewayResponse: any = null;
 
     try {
+      if (useWeb) {
       gatewayResponse = await aiGateway.execute({
         engine: 'RESEARCH_INTELLIGENCE',
         country: (country as any) || 'UY',
@@ -124,6 +142,11 @@ export class ResearchIntelligenceService {
           force_refresh
         }
       });
+
+      } else {
+        gatewayResponse = { success: true, provider: 'RETAILER_DIRECT', model: 'NONE', actual_model: 'NONE', requested_model: 'NONE', usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 }, pricing: { estimated_cost_usd: 0 }, sources: [] };
+        aiResult = { items: [], summary: `Investigación directa en ${selectedSources.join(', ')}.` };
+      }
 
       if (!gatewayResponse.success) {
         throw new Error(gatewayResponse.error || `Error en Gateway (${gatewayResponse.status || 'AI_ERROR'})`);
@@ -250,24 +273,16 @@ export class ResearchIntelligenceService {
       ? aiResult.canonical_candidates
       : manualCandidates(rawItems, country);
 
-    // Manual Research is intentionally non-blocking after the paid AI result.
-    // Amazon discovery may continue independently, but INVESTIGAR must return immediately
-    // with the canonical research candidates instead of waiting on retailer/provider latency.
-    void multiSourcePromise.then((multiSourceRes: any) => {
-      console.log('[FRONTEND_RESEARCH_TRACE]', {
-        step: 'BACKGROUND_AMAZON_DISCOVERY_COMPLETED',
-        additionalCandidatesCount: Array.isArray(multiSourceRes?.candidates) ? multiSourceRes.candidates.length : 0,
-        sourceStatus: multiSourceRes?.sourceStatus
-      });
-    }).catch((err: any) => {
-      console.warn('[FRONTEND_RESEARCH_WARN] BACKGROUND_AMAZON_DISCOVERY_ERROR', err?.message);
-    });
+    // Merge retailer candidates selected by the operator. Retailer lookup runs in parallel
+    // with Web research and has a hard soft-deadline so it cannot indefinitely block INVESTIGAR.
+    const retailerRes: any = await Promise.race([retailerPromise, retailerSoftDeadline]);
+    const retailerCandidates = manualCandidates(
+      Array.isArray(retailerRes?.candidates) ? retailerRes.candidates : [],
+      country
+    );
+    candidates = deduplicateCanonicalCandidates([...candidates, ...retailerCandidates]) as SourcingProductCandidate[];
 
-    // Manual Research must finish when research results are ready.
-    // Slow retailer/commercial enrichment is a separate concern and must not keep
-    // the primary INVESTIGAR action blocked indefinitely. Amazon data already
-    // gathered by MultiSourceDiscovery above remains part of the returned candidates.
-    // Full Zinc + landed-cost/local-market enrichment belongs to Productos para Importar.
+    // Full landed-cost/local-market enrichment still belongs to Productos para Importar.
     console.log('[FRONTEND_RESEARCH_TRACE]', {
       step: 'MANUAL_RESEARCH_READY',
       candidatesCount: candidates.length,
@@ -305,6 +320,7 @@ export class ResearchIntelligenceService {
       query,
       country,
       product_family: effectiveFamily,
+      sources: selectedSources,
       trends: [mainTrendCard],
       candidates,
       summary: aiResult?.summary || `Investigación completada para "${query}" en ${country}. ${candidates.length} candidatos detectados; consultar WHY para revisar evidencia y datos pendientes.`,
