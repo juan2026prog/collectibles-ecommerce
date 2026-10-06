@@ -190,6 +190,7 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
   }, [searchQuery, country, period, researchMode, selectedModel, effectiveFamily, localResultLimit]);
 
   const handleRunSearch = (forceRefresh = false) => {
+    if (isSearching) return;
     if (preFlightEstimate?.requires_confirmation && !showConfirmationWarning && !forceRefresh) {
       setShowConfirmationWarning(true);
       return;
@@ -417,169 +418,44 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
           </button>
         </div>
 
-        {/* BANNER PRE-FLIGHT DE ESTIMACIÓN DE COSTO Y CACHÉ (USD 0 OPENAI EXECUTED) */}
+        {/* PRE-FLIGHT SIMPLE: keep cache/telemetry internal, show only what the operator needs */}
         {preFlightEstimate && (
-          <div className="bg-slate-900 text-white rounded-2xl p-4 border border-slate-800 shadow-md space-y-2.5">
-            <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2 flex-wrap">
-                {/* MERCADO OBJETIVO */}
-                <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
-                  <span className="text-slate-400 font-medium">Mercado Objetivo:</span>
-                  <span className="text-white font-bold">
-                    {country === 'ALL' || country === 'GLOBAL' ? '🌎 Todos (Global)' : `${COUNTRIES.find(c => c.code === country)?.flag || '🇺🇾'} ${COUNTRIES.find(c => c.code === country)?.label || country}`}
-                  </span>
-                </div>
-
-                {/* ALCANCE DE BÚSQUEDA */}
-                <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
-                  <span className="text-slate-400 font-medium">Búsqueda:</span>
-                  <span className="text-sky-400 font-bold">🌎 Global</span>
-                </div>
-
-                {/* VENTANA TEMPORAL */}
-                <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
-                  <span className="text-slate-400 font-medium">Período:</span>
-                  <span className="text-amber-300 font-bold">
-                    {period === 'all' ? 'Sin límite' : (period === '24h' ? '24h' : (period === '7d' ? '7 días' : (period === '30d' ? '30 días' : '90 días')))}
-                  </span>
-                </div>
-
-                {/* TIPO DE PRODUCTO */}
-                <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
-                  <Package className="w-3.5 h-3.5 text-purple-400" />
-                  <span className="text-slate-400 font-medium">Tipo:</span>
-                  <span className="text-purple-300 font-bold">
-                    {COLLECTIBLES_PRODUCT_FAMILIES.find(f => f.id === effectiveFamily || f.label === effectiveFamily)?.label || effectiveFamily}
-                  </span>
-                </div>
-
-                {/* CANTIDAD OBJETIVO Y LOTES PLANIFICADOS */}
-                <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
-                  <span className="text-slate-400 font-medium">Objetivo:</span>
-                  <span className="text-pink-400 font-bold">
-                    {preFlightEstimate.max_candidates} productos
-                    {preFlightEstimate.batches_planned && preFlightEstimate.batches_planned > 1 ? ` (${preFlightEstimate.batches_planned} lotes)` : ''}
-                  </span>
-                </div>
-
-                {/* MODELO */}
-                <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
-                  <Zap className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="text-slate-400 font-medium">Modelo:</span>
-                  <span className="text-white font-bold">
-                    {preFlightEstimate.model}
-                    {preFlightEstimate.is_manual_override ? ' (Manual)' : ''}
-                  </span>
-                </div>
-
-                {/* TOKENS ESTIMADOS */}
-                <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700" title={preFlightEstimate.confidence_label || 'Estimación basada en telemetría de OpenAI Web Search'}>
-                  <span className="text-slate-400 font-medium">Tokens est.:</span>
-                  <span className="text-white font-bold">
-                    {preFlightEstimate.estimated_input_tokens_min && preFlightEstimate.estimated_input_tokens_max
-                      ? `~${(preFlightEstimate.estimated_input_tokens_min / 1000).toFixed(1)}K–${(preFlightEstimate.estimated_input_tokens_max / 1000).toFixed(1)}K (Esp. ~${Math.round(preFlightEstimate.estimated_input_tokens / 1000)}K)`
-                      : `~${preFlightEstimate.estimated_input_tokens + preFlightEstimate.max_output_tokens}`
-                    }
-                  </span>
-                </div>
-
-                {/* WEB SEARCH */}
-                <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
-                  <span className="text-slate-400 font-medium">Web Search:</span>
-                  <span className="text-emerald-400 font-bold">✓ Activado</span>
-                </div>
-              </div>
-
-              {/* ESTIMATED COST BADGE */}
-              <div className="flex items-center gap-2">
-                <span className="text-slate-400 font-bold text-xs uppercase tracking-wider">{preFlightEstimate.cache.status === 'HIT' || preFlightEstimate.cache.status === 'HIT_DISCOVERIES' ? 'Costo adicional:' : 'Costo estimado:'}</span>
-                <span className="text-base font-black px-3 py-1 rounded-xl bg-[#f00856] text-white shadow-xs">
-                  {preFlightEstimate.cache.status === 'HIT' || preFlightEstimate.cache.status === 'HIT_DISCOVERIES' 
-                    ? 'USD $0.0000 · Caché' 
-                    : `USD $${preFlightEstimate.estimated_total_min_usd.toFixed(4)} - $${preFlightEstimate.estimated_total_max_usd.toFixed(4)}`
-                  }
-                </span>
-              </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <div className="flex items-center gap-2 text-xs text-slate-600">
+              <Zap className="w-4 h-4 text-amber-500" />
+              <span>Modelo: <b className="text-slate-900">{preFlightEstimate.model}</b></span>
+              <span className="text-slate-300">·</span>
+              <span>Web Search: <b className="text-emerald-700">activo</b></span>
             </div>
-
-            {/* CACHE HIT BANNER & ACTIONS */}
-        {(preFlightEstimate.cache.status === 'HIT' || preFlightEstimate.cache.status === 'HIT_DISCOVERIES') && (
-          <div className="bg-emerald-950/70 border border-emerald-500/40 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2 text-emerald-300 font-semibold">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>
-                ♻ Resultado reciente disponible en caché ({preFlightEstimate.cache.cached_items_count || 0} productos detectados hace {Math.round((preFlightEstimate.cache.age_seconds || 0) / 60)} min).
-                {' '}Costo adicional: USD $0.0000.
-                {preFlightEstimate.cache.cached_total_tokens != null || preFlightEstimate.cache.cached_cost_usd != null ? (
-                  <> Run original: {preFlightEstimate.cache.cached_total_tokens == null ? 'tokens UNKNOWN' : preFlightEstimate.cache.cached_total_tokens.toLocaleString() + ' tokens'} · {preFlightEstimate.cache.cached_cost_usd == null ? 'costo UNKNOWN' : 'USD $' + Number(preFlightEstimate.cache.cached_cost_usd).toFixed(6)}{preFlightEstimate.cache.cached_model ? ' · ' + preFlightEstimate.cache.cached_model : ''}.</>
-                ) : (
-                  <> Consumo original: no disponible.</>
-                )}
+            <div className="text-sm font-black text-slate-900">
+              Costo estimado:{' '}
+              <span className="text-[#f00856]">
+                USD $${preFlightEstimate.estimated_total_min_usd.toFixed(4)}–$${preFlightEstimate.estimated_total_max_usd.toFixed(4)}
               </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleRunSearch(false)}
-                className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-lg transition cursor-pointer shadow-xs"
-              >
-                USAR RESULTADO RECIENTE ($0.000)
-              </button>
-              <button
-                onClick={() => handleRunSearch(true)}
-                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-lg transition cursor-pointer border border-slate-700"
-              >
-                INVESTIGAR DE NUEVO
-              </button>
             </div>
           </div>
         )}
 
-        {/* HIGH COST WARNING & DOWNSHIFT OPTION */}
-            {showConfirmationWarning && preFlightEstimate.cache.status === 'MISS' && (
-              <div className="bg-amber-950/80 border border-amber-500/50 rounded-xl p-3.5 flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2.5 text-amber-200">
-                  <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
-                  <div>
-                    <span className="font-black text-white">Aviso de Presupuesto: </span>
-                    <span>
-                      {selectedModel !== 'AUTO' && preFlightEstimate.cheaper_alternative
-                        ? `El modelo manual '${preFlightEstimate.model}' (${preFlightEstimate.cheaper_alternative.cost_multiplier || 10}x más caro) incrementa el costo a ~$${preFlightEstimate.estimated_total_max_usd.toFixed(4)}. Usando Automático costaría ~$${preFlightEstimate.cheaper_alternative.estimated_max_cost_usd.toFixed(4)} (-${preFlightEstimate.cheaper_alternative.savings_percent}% ahorro).`
-                        : `Esta consulta en modo ${preFlightEstimate.research_depth_label} puede superar el límite sugerido de $${preFlightEstimate.warning_threshold_usd.toFixed(2)}.`
-                      }
-                    </span>
-                  </div>
-                </div>
+        {lastExecutionTelemetry && !isSearching && (
+          <div className="flex flex-wrap items-center gap-2 px-1 text-xs text-slate-500">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            <span>
+              Última investigación: <b className="text-slate-700">{lastExecutionTelemetry.actual_model || lastExecutionTelemetry.model}</b>
+              {' · '}
+              <b className="text-slate-700">{lastExecutionTelemetry.total_tokens == null ? 'tokens no disponibles' : lastExecutionTelemetry.total_tokens.toLocaleString() + ' tokens'}</b>
+              {' · '}
+              <b className="text-slate-700">{lastExecutionTelemetry.cost_usd == null ? 'costo no disponible' : `USD $${lastExecutionTelemetry.cost_usd.toFixed(4)}`}</b>
+            </span>
+          </div>
+        )}
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      setSelectedModel('AUTO');
-                      setResearchMode('ECONOMICO');
-                      setShowConfirmationWarning(false);
-                    }}
-                    className="px-3.5 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-lg transition cursor-pointer shadow-xs flex items-center gap-1.5"
-                  >
-                    <Zap className="w-3.5 h-3.5" />
-                    <span>VOLVER A AUTOMÁTICO</span>
-                  </button>
-                  <button
-                    onClick={() => setShowConfirmationWarning(false)}
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-lg transition cursor-pointer"
-                  >
-                    CANCELAR
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowConfirmationWarning(false);
-                      onExecuteSearch(researchMode, selectedModel, false);
-                    }}
-                    className="px-3.5 py-1.5 bg-[#f00856] hover:bg-[#d0074a] text-white font-black rounded-lg transition cursor-pointer"
-                  >
-                    EJECUTAR IGUAL
-                  </button>
-                </div>
-              </div>
-            )}
+        {showConfirmationWarning && preFlightEstimate?.requires_confirmation && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-900">
+            <span><b>Confirmación de costo:</b> esta investigación puede costar hasta USD $${preFlightEstimate.estimated_total_max_usd.toFixed(4)}.</span>
+            <div className="flex gap-2">
+              <button onClick={() => setShowConfirmationWarning(false)} className="px-3 py-1.5 rounded-lg border border-amber-300 font-bold">CANCELAR</button>
+              <button onClick={() => { setShowConfirmationWarning(false); onExecuteSearch(researchMode, selectedModel, true, localResultLimit); }} className="px-3 py-1.5 rounded-lg bg-[#f00856] text-white font-black">EJECUTAR</button>
+            </div>
           </div>
         )}
 
