@@ -3,7 +3,7 @@ import {
   Sparkles, RefreshCw, Layers, Rocket, Flame, Clock, 
   CheckCircle2, ArrowRight, ShieldCheck, Eye, Bookmark, ExternalLink, Download, ImageOff, AlertCircle
 } from 'lucide-react';
-import type { SourcingProductCandidate } from '../../../types/sourcingIntelligence';
+import type { SourcingProductCandidate, SourcingResearchSource } from '../../../types/sourcingIntelligence';
 
 const ProductThumbnail: React.FC<{ src?: string | null; alt: string; isPreorder?: boolean }> = ({ src, alt, isPreorder }) => {
   const [hasError, setHasError] = useState(false);
@@ -38,6 +38,8 @@ interface SourcingDiscoveryViewProps {
   country: string;
   onRunDiscoveryScan: () => void;
   isScanning: boolean;
+  discoverySources: SourcingResearchSource[];
+  onDiscoverySourcesChange: (sources: SourcingResearchSource[]) => void;
   onSendToImport: (candidate: SourcingProductCandidate) => void;
   onOpenWhyModal: (candidate: SourcingProductCandidate) => void;
   onToggleWatchlist: (candidate: SourcingProductCandidate) => void;
@@ -56,6 +58,8 @@ export const SourcingDiscoveryView: React.FC<SourcingDiscoveryViewProps> = ({
   country,
   onRunDiscoveryScan,
   isScanning,
+  discoverySources,
+  onDiscoverySourcesChange,
   onSendToImport,
   onOpenWhyModal,
   onToggleWatchlist,
@@ -144,6 +148,37 @@ export const SourcingDiscoveryView: React.FC<SourcingDiscoveryViewProps> = ({
           )}
           <span>{isScanning ? 'Escaneando Mercados...' : 'Ejecutar Escaneo Discovery'}</span>
         </button>
+      </div>
+
+      {/* FUENTES DEL DESCUBRIMIENTO: Radar/Release/Watchlist son señales, no fuentes */}
+      <div className="bg-white border border-gray-200 rounded-2xl p-4 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-extrabold text-slate-700 mr-1">Dónde investigar automáticamente:</span>
+        {([
+          { id: 'WEB', label: 'Toda la Web', available: true },
+          { id: 'AMAZON', label: 'Amazon', available: true },
+          { id: 'EBAY', label: 'eBay', available: false },
+          { id: 'BESTBUY', label: 'Best Buy', available: false }
+        ] as const).map(source => {
+          const checked = discoverySources.includes(source.id as SourcingResearchSource);
+          return (
+            <label key={source.id} className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold ${source.available ? (checked ? 'border-purple-300 bg-purple-50 text-slate-900 cursor-pointer' : 'border-slate-200 bg-white text-slate-600 cursor-pointer') : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'}`}>
+              <input
+                type="checkbox"
+                checked={checked}
+                disabled={!source.available || isScanning}
+                onChange={() => {
+                  if (!source.available) return;
+                  const next = checked ? discoverySources.filter(s => s !== source.id) : [...discoverySources, source.id as SourcingResearchSource];
+                  if (next.length > 0) onDiscoverySourcesChange(next);
+                }}
+                className="accent-purple-600"
+              />
+              <span>{source.label}</span>
+              {!source.available && <span className="text-[10px] font-black uppercase">No disponible</span>}
+            </label>
+          );
+        })}
+        <span className="text-[11px] text-slate-500 ml-1">Radar, Release Calendar y Watchlist aportan señales; no son fuentes de búsqueda.</span>
       </div>
 
       {/* TABS DE FILTRO DISCOVERY */}
