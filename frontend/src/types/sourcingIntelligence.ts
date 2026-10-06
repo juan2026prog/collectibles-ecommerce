@@ -205,6 +205,8 @@ export const COLLECTIBLES_PRODUCT_FAMILIES: readonly CollectiblesProductFamilyOp
   { id: 'OTHER_COLLECTIBLES', label: 'Otros Coleccionables' }
 ] as const;
 
+export type SourcingResearchSource = 'WEB' | 'AMAZON' | 'EBAY' | 'BESTBUY';
+
 export interface SourcingResearchQueryRequest {
   query: string;
   country: string;
@@ -216,6 +218,8 @@ export interface SourcingResearchQueryRequest {
   result_limit?: 'AUTO' | 10 | 25 | 50 | 100;
   resultLimit?: 'AUTO' | 10 | 25 | 50 | 100;
   force_refresh?: boolean;
+  /** External product sources enabled for this manual research run. */
+  sources?: SourcingResearchSource[];
 }
 
 export interface SourcingResearchResponse {
