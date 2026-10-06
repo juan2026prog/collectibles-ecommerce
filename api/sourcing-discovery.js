@@ -37,6 +37,11 @@ export default async function handler(req, res) {
   // Consolidated Sourcing Action: on-demand market presence lookup / candidate source verification / post-enrichment persistence
   const { action, asin, source_url, title, brand, id, candidates: candidatesToPersist } = req.body || {};
   const country = req.body?.country || req.query?.country || 'UY';
+  const rawSources = Array.isArray(req.body?.sources) ? req.body.sources : ['WEB', 'AMAZON'];
+  const requestedSources = [...new Set(rawSources.map(s => String(s || '').toUpperCase()).filter(s => ['WEB', 'AMAZON', 'EBAY', 'BESTBUY'].includes(s)))];
+  const effectiveSources = requestedSources.length ? requestedSources : ['WEB', 'AMAZON'];
+  const useWeb = effectiveSources.includes('WEB');
+  const useAmazon = effectiveSources.includes('AMAZON');
 
   if (action === 'persist_enriched_candidates') {
     const supabase = getServiceRoleClient();
@@ -159,7 +164,7 @@ export default async function handler(req, res) {
   let aiCost = 0;
   let candidates = [];
   const { error: runStartError } = await supabase.from('sourcing_discovery_runs').insert({ id: runId, status: 'RUNNING', trigger, countries: [country], started_at: new Date().toISOString(),
-    sources_requested: ['radar', 'release_calendar', 'amazon', 'mercadolibre_uy', 'internal_signals', 'openai_web_search'], metadata: { purchase_capability: SOURCING_PURCHASE_CAPABILITY, auto_publish: AUTO_PUBLISH } });
+    sources_requested: effectiveSources.map(s => s.toLowerCase()), metadata: { purchase_capability: SOURCING_PURCHASE_CAPABILITY, auto_publish: AUTO_PUBLISH, signal_inputs: ['radar', 'release_calendar', 'watchlist', 'internal_signals'] } });
   if (runStartError) {
     logDatabaseError('run_start_insert', 'sourcing_discovery_runs', 'INSERT', runId, runStartError);
     return res.status(502).json({ success: false, status: 'FAILED', error: 'run_persistence', purchases_executed: 0, auto_publications: 0 });
@@ -186,7 +191,7 @@ export default async function handler(req, res) {
   };
   const [releases, products, local, watchlist, storedSignals] = await Promise.all([
     collect('radar', 'release_events', 'id,title,manufacturer,franchise,character,product_line,msrp,currency,source_name,source_url,radar_signal,official_image_url,image_source_url', 20),
-    collect('amazon', 'international_products', 'id,external_product_id,title,brand,base_price_usd,product_url_external,availability,source_retailer,image_url,main_image_url_external', 15),
+    useAmazon ? collect('amazon', 'international_products', 'id,external_product_id,title,brand,base_price_usd,product_url_external,availability,source_retailer,image_url,main_image_url_external', 15) : Promise.resolve([]),
     country === 'UY' ? collect('mercadolibre_uy', 'ml_raw_items', 'id,ml_item_id,title,price,currency_id,available_quantity,permalink,thumbnail', 20) : Promise.resolve([]),
     collect('watchlist', 'sourcing_watchlist', 'id,product_id,canonical_sku,title,brand,source_name', 15),
     collect('internal_signals', 'sourcing_signals', 'id,source_type,source_name,source_url,product_identity,topic,signal_type,value,country,observed_at,metadata', 30)
@@ -194,8 +199,9 @@ export default async function handler(req, res) {
   counters.radar_events = releases.length; counters.amazon_products = products.length; counters.mlu_items = local.length;
   counters.ebay_listings = 0;
   health.release_calendar = { ...health.radar, message: 'Release Calendar y Radar comparten release_events; no se cuentan dos veces' };
-  health.ebay = { status: 'DISABLED', count: 0, message: 'eBay deshabilitado en Sourcing V1 (Amazon-First)' };
-  health.bestbuy = { status: 'DISABLED', count: 0, message: 'Best Buy deshabilitado en Sourcing V1 (Amazon-First)' };
+  if (!useAmazon) health.amazon = { status: 'DISABLED', count: 0, message: 'Amazon no seleccionado para este run' };
+  health.ebay = { status: 'DISABLED', count: 0, message: effectiveSources.includes('EBAY') ? 'eBay solicitado pero aún no certificado para producción' : 'eBay no seleccionado' };
+  health.bestbuy = { status: 'DISABLED', count: 0, message: effectiveSources.includes('BESTBUY') ? 'Best Buy solicitado pero aún no certificado para producción' : 'Best Buy no seleccionado' };
   health.tiendamia_uy = { status: 'AVAILABLE', message: 'Verificación downstream por ASIN SOURCE_VERIFIED' };
 
   for (const r of releases) {
@@ -223,7 +229,7 @@ export default async function handler(req, res) {
   // Signal-led research. An empty corpus does not manufacture a brand or a trending query.
   const hypotheses = [...new Set([...seeds.map(s => s.title), ...storedSignals.filter(s => s.product_identity || s.topic).map(s => s.product_identity || s.topic)])].slice(0, 12);
   const priorities = watchlist.map(w => w.title || w.brand || w.canonical_sku || w.product_id).filter(Boolean);
-  if (hypotheses.length) {
+  if (hypotheses.length && useWeb) {
     try {
       const query = 'Investigar y corroborar globalmente productos concretos detectados por Radar, Release Calendar y retailers: ' + hypotheses.join('; ') +
         '. Priorizar cuando corresponda: ' + priorities.join('; ') + '. Incluir productos fuera de watchlist respaldados por estas señales. Mercado objetivo: ' + country + '. No inferir demanda de una preventa o listing.';
@@ -244,7 +250,7 @@ export default async function handler(req, res) {
         cost_usd: aiCost
       };
     } catch (e) { errors.push('openai_web_search'); health.openai_web_search = { status: 'UNKNOWN', error: e.message }; }
-  } else health.openai_web_search = { status: 'UNKNOWN', message: 'Sin señales reales para investigar' };
+  } else health.openai_web_search = useWeb ? { status: 'UNKNOWN', message: 'Sin señales reales para investigar' } : { status: 'DISABLED', message: 'Web no seleccionada para este run', count: 0, cost_usd: 0, tokens: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } };
   // Retailer/Radar hypotheses are candidates even when research cannot corroborate them.
   // A single shared verifier handles both entrances. No source is invented to fill a quota.
   const seedCandidates = await validateCandidateBatch(seeds, { country, origin: 'RETAILER_DISCOVERY', signalRows: storedSignals, marketRows: local, deadline: Math.min(started + 55000, Date.now() + 8000) });
