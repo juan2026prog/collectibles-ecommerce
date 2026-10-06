@@ -40,11 +40,11 @@ interface SourcingIntelligenceHeaderProps {
     requested_model?: string;
     actual_model?: string;
     automatic_or_manual?: 'AUTO' | 'MANUAL';
-    cost_usd: number;
+    cost_usd: number | null;
     latency_ms: number;
-    input_tokens?: number;
-    output_tokens?: number;
-    total_tokens?: number;
+    input_tokens?: number | null;
+    output_tokens?: number | null;
+    total_tokens?: number | null;
     cached?: boolean;
     research_depth?: string;
   } | null;
@@ -628,11 +628,12 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
               <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-800">
                 Latencia: <b>{lastExecutionTelemetry.latency_ms}ms</b>
               </span>
-              {lastExecutionTelemetry.total_tokens !== undefined && (
-                <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-800">
-                  Tokens: <b>{lastExecutionTelemetry.total_tokens}</b>
-                </span>
-              )}
+              <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200 text-slate-800">
+                Tokens: <b>{lastExecutionTelemetry.total_tokens == null ? 'UNKNOWN' : lastExecutionTelemetry.total_tokens.toLocaleString()}</b>
+                {lastExecutionTelemetry.total_tokens != null && (
+                  <span className="text-slate-500"> · entrada {lastExecutionTelemetry.input_tokens?.toLocaleString() ?? 'UNKNOWN'} · salida {lastExecutionTelemetry.output_tokens?.toLocaleString() ?? 'UNKNOWN'}</span>
+                )}
+              </span>
             </div>
 
             <div className="flex items-center gap-2">
@@ -642,9 +643,11 @@ export const SourcingIntelligenceHeader: React.FC<SourcingIntelligenceHeaderProp
                   ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
                   : 'bg-slate-900 text-white'
               }`}>
-                {lastExecutionTelemetry.cached 
-                  ? 'USD $0.0000 (Caché Reutilizado)' 
-                  : `USD $${Number(lastExecutionTelemetry.cost_usd || 0).toFixed(4)}`
+                {lastExecutionTelemetry.cached
+                  ? 'USD $0.0000 (costo adicional · caché)'
+                  : lastExecutionTelemetry.cost_usd == null
+                    ? 'UNKNOWN'
+                    : `USD ${lastExecutionTelemetry.cost_usd.toFixed(6)}`
                 }
               </span>
             </div>
