@@ -168,10 +168,21 @@ export default async function handler(req, res) {
   const collect = async (name, table, columns, limit) => {
     try {
       const { data, error } = await supabase.from(table).select(columns).limit(limit);
-      if (error) throw new Error(error.message);
+      if (error) {
+        const isMissingTable = error.code === 'PGRST205' || error.message?.includes('Could not find the table');
+        if (isMissingTable) {
+          health[name] = { status: 'NOT_CONFIGURED', count: 0, message: `Tabla ${table} pendiente de migración` };
+          return [];
+        }
+        throw new Error(error.message);
+      }
       health[name] = { status: data?.length ? 'CONNECTED_WITH_DATA' : 'CONNECTED_NO_DATA', count: data?.length || 0 };
       return data || [];
-    } catch (e) { health[name] = { status: 'UNKNOWN', error: e.message }; errors.push(name); return []; }
+    } catch (e) {
+      health[name] = { status: 'UNKNOWN', error: e.message };
+      errors.push(name);
+      return [];
+    }
   };
   const [releases, products, local, watchlist, storedSignals, ebayListings] = await Promise.all([
     collect('radar', 'release_events', 'id,title,manufacturer,franchise,character,product_line,msrp,currency,source_name,source_url,radar_signal,official_image_url,image_source_url', 20),

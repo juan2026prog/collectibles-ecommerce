@@ -236,25 +236,46 @@ export class ResearchIntelligenceService {
     // 4b. Descubrimiento Multi-Fuente en Vivo (Amazon, eBay, Best Buy) para enriquecer candidatos
     try {
       const multiSourceRes = await multiSourceDiscoveryService.discoverAllSources(query, { maxAmazon: 5, maxEbay: 5 });
+      const candidatesBeforeDedupe = candidates.length + multiSourceRes.candidates.length;
+
       if (multiSourceRes.candidates.length > 0) {
         const additionalRaw = multiSourceRes.candidates.map(c => ({
           title: c.title,
           brand: c.brand,
           url: c.url,
           retailer: c.retailer,
+          source_retailer: c.source_retailer || c.retailer,
           origin_price_usd: c.origin_price_usd,
           image_url: c.image_url,
-          asin: c.asin
+          asin: c.asin,
+          discovered_from: c.discovered_from || 'RETAILER_DISCOVERY'
         }));
         const additionalCandidates = manualCandidates(additionalRaw, country);
         candidates = deduplicateCanonicalCandidates([...candidates, ...additionalCandidates]);
-        console.log('[FRONTEND_RESEARCH_TRACE]', {
-          step: 'MULTI_SOURCE_DISCOVERY_COMPLETED',
-          additionalCandidatesCount: additionalCandidates.length,
-          totalCombinedCandidates: candidates.length,
-          sourceStatus: multiSourceRes.sourceStatus
-        });
       }
+
+      const multiSourceTelemetry = {
+        ...multiSourceRes.telemetry,
+        web: {
+          status: 'AVAILABLE' as const,
+          candidates_created: Array.isArray(aiResult?.canonical_candidates) ? aiResult.canonical_candidates.length : rawItems.length
+        },
+        official: {
+          candidates_created: 0
+        },
+        candidates_before_dedupe: candidatesBeforeDedupe,
+        candidates_after_dedupe: candidates.length
+      };
+
+      console.log('[MULTI_SOURCE_DISCOVERY_SOURCE_STATUS]', multiSourceTelemetry);
+
+      console.log('[FRONTEND_RESEARCH_TRACE]', {
+        step: 'MULTI_SOURCE_DISCOVERY_COMPLETED',
+        additionalCandidatesCount: multiSourceRes.candidates.length,
+        totalCombinedCandidates: candidates.length,
+        sourceStatus: multiSourceRes.sourceStatus,
+        telemetry: multiSourceTelemetry
+      });
     } catch (multiSourceErr: any) {
       console.warn('[FRONTEND_RESEARCH_WARN] MULTI_SOURCE_DISCOVERY_ERROR', multiSourceErr.message);
     }
