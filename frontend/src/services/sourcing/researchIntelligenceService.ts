@@ -18,6 +18,8 @@ import { calculateInternationalPricing } from '../../lib/internationalPricing';
 import { checkTiendamiaByAsin } from './tiendamiaMatchingService';
 import { resolveZincProductsForCandidates } from './zincProductResolver';
 import { enrichCandidatesCommercialData } from './candidateCommercialEnrichment';
+import { multiSourceDiscoveryService } from './multiSourceDiscoveryService';
+import { deduplicateCanonicalCandidates } from '../../../../shared/sourcingCandidateValidation.js';
 import type {
   SourcingResearchQueryRequest,
   SourcingResearchResponse,
@@ -230,6 +232,32 @@ export class ResearchIntelligenceService {
     let candidates: SourcingProductCandidate[] = Array.isArray(aiResult?.canonical_candidates)
       ? aiResult.canonical_candidates
       : manualCandidates(rawItems, country);
+
+    // 4b. Descubrimiento Multi-Fuente en Vivo (Amazon, eBay, Best Buy) para enriquecer candidatos
+    try {
+      const multiSourceRes = await multiSourceDiscoveryService.discoverAllSources(query, { maxAmazon: 5, maxEbay: 5 });
+      if (multiSourceRes.candidates.length > 0) {
+        const additionalRaw = multiSourceRes.candidates.map(c => ({
+          title: c.title,
+          brand: c.brand,
+          url: c.url,
+          retailer: c.retailer,
+          origin_price_usd: c.origin_price_usd,
+          image_url: c.image_url,
+          asin: c.asin
+        }));
+        const additionalCandidates = manualCandidates(additionalRaw, country);
+        candidates = deduplicateCanonicalCandidates([...candidates, ...additionalCandidates]);
+        console.log('[FRONTEND_RESEARCH_TRACE]', {
+          step: 'MULTI_SOURCE_DISCOVERY_COMPLETED',
+          additionalCandidatesCount: additionalCandidates.length,
+          totalCombinedCandidates: candidates.length,
+          sourceStatus: multiSourceRes.sourceStatus
+        });
+      }
+    } catch (multiSourceErr: any) {
+      console.warn('[FRONTEND_RESEARCH_WARN] MULTI_SOURCE_DISCOVERY_ERROR', multiSourceErr.message);
+    }
 
     // 5. Enriquecimiento Visual y Comercial Canónico vía Zinc Product Resolver
     // Reutiliza la misma capacidad de búsqueda e imágenes de "Productos para Importar"

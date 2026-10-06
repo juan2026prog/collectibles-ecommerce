@@ -173,18 +173,19 @@ export default async function handler(req, res) {
       return data || [];
     } catch (e) { health[name] = { status: 'UNKNOWN', error: e.message }; errors.push(name); return []; }
   };
-  const [releases, products, local, watchlist, storedSignals] = await Promise.all([
+  const [releases, products, local, watchlist, storedSignals, ebayListings] = await Promise.all([
     collect('radar', 'release_events', 'id,title,manufacturer,franchise,character,product_line,msrp,currency,source_name,source_url,radar_signal,official_image_url,image_source_url', 20),
     collect('amazon', 'international_products', 'id,external_product_id,title,brand,base_price_usd,product_url_external,availability,source_retailer,image_url,main_image_url_external', 15),
     country === 'UY' ? collect('mercadolibre_uy', 'ml_raw_items', 'id,ml_item_id,title,price,currency_id,available_quantity,permalink,thumbnail', 20) : Promise.resolve([]),
-    collect('watchlist', 'sourcing_watchlist', 'name,value,type,target_country,priority', 10),
-    collect('internal_signals', 'sourcing_signals', 'id,source_type,source_name,source_url,product_identity,topic,signal_type,value,country,observed_at,metadata', 30)
+    collect('watchlist', 'sourcing_watchlist', 'id,product_id,canonical_sku,title,brand,source_name', 15),
+    collect('internal_signals', 'sourcing_signals', 'id,source_type,source_name,source_url,product_identity,topic,signal_type,value,country,observed_at,metadata', 30),
+    collect('ebay', 'source_listings', 'id,source_url,raw_title,raw_price_cents,raw_brand,raw_condition,raw_payload', 15)
   ]);
   counters.radar_events = releases.length; counters.amazon_products = products.length; counters.mlu_items = local.length;
+  counters.ebay_listings = ebayListings.length;
   health.release_calendar = { ...health.radar, message: 'Release Calendar y Radar comparten release_events; no se cuentan dos veces' };
-  health.ebay = { status: 'UNKNOWN', message: 'Polling pasivo no implementado' };
-  health.bestbuy = { status: 'UNKNOWN', message: 'Solo evidencia de fichas cuando está disponible' };
-  health.tiendamia_uy = { status: 'UNKNOWN', message: 'Verificación por ASIN SOURCE_VERIFIED; fallo no demuestra ausencia' };
+  health.bestbuy = { status: 'NOT_CONFIGURED', message: 'Best Buy requiere API Key de desarrollador (BESTBUY_API_KEY) en el backend' };
+  health.tiendamia_uy = { status: 'AVAILABLE', message: 'Verificación downstream por ASIN SOURCE_VERIFIED' };
 
   for (const r of releases) {
     seeds.push({ id: 'radar-' + r.id, title: r.title, brand: r.manufacturer, franchise: r.franchise, character: r.character, line: r.product_line, url: r.source_url,
@@ -198,6 +199,14 @@ export default async function handler(req, res) {
     observations.push({ source_type: 'RETAILER', source_name: p.source_retailer || 'Catálogo internacional', source_url: p.product_url_external,
       product_identity: p.title, topic: p.brand || p.title, signal_type: 'RETAIL_OFFER', evidence_text: p.title, country: 'GLOBAL', observed_at: new Date().toISOString() });
   }
+  for (const e of ebayListings) {
+    const rawPrice = e.raw_price_cents ? e.raw_price_cents / 100 : (e.raw_payload?.price ?? null);
+    const validPrice = typeof rawPrice === 'number' && Number.isFinite(rawPrice) ? rawPrice : null;
+    seeds.push({ id: 'ebay-' + e.id, title: e.raw_title, brand: e.raw_brand, url: e.source_url, retailer: 'ebay',
+      origin_price_usd: validPrice, image_url: e.raw_payload?.image_url, discovered_from: 'RETAILER_DISCOVERY' });
+    observations.push({ source_type: 'MARKETPLACE', source_name: 'eBay', source_url: e.source_url,
+      product_identity: e.raw_title, topic: e.raw_brand || e.raw_title, signal_type: 'RETAIL_OFFER', value: validPrice, evidence_text: e.raw_title, country: 'GLOBAL', observed_at: new Date().toISOString() });
+  }
   for (const m of local) observations.push({ source_type: 'MARKETPLACE', source_name: 'Mercado Libre Uruguay', source_url: m.permalink, product_identity: m.title,
     topic: m.title, signal_type: 'LOCAL_SUPPLY', value: m.price, evidence_text: m.title, country: 'UY', observed_at: new Date().toISOString() });
   for (const s of observations) {
@@ -210,7 +219,7 @@ export default async function handler(req, res) {
   }
   // Signal-led research. An empty corpus does not manufacture a brand or a trending query.
   const hypotheses = [...new Set([...seeds.map(s => s.title), ...storedSignals.filter(s => s.product_identity || s.topic).map(s => s.product_identity || s.topic)])].slice(0, 12);
-  const priorities = watchlist.filter(w => !w.target_country || w.target_country === country).sort((a, b) => ['HIGH', 'MEDIUM', 'LOW'].indexOf(a.priority) - ['HIGH', 'MEDIUM', 'LOW'].indexOf(b.priority)).map(w => w.name || w.value);
+  const priorities = watchlist.map(w => w.title || w.brand || w.canonical_sku || w.product_id).filter(Boolean);
   if (hypotheses.length) {
     try {
       const query = 'Investigar y corroborar globalmente productos concretos detectados por Radar, Release Calendar y retailers: ' + hypotheses.join('; ') +

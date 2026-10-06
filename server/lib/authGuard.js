@@ -23,18 +23,20 @@ export async function authenticateRequest(req, options = {}) {
   const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
   const cronSecretHeader = req.headers['x-cron-secret'] || '';
   
-  // 1. Check Server-to-Server Vercel Cron Authentication
+  // 1. Check Server-to-Server Vercel Cron or Service Role Authentication
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const isVercelCron = (CRON_SECRET && cronSecretHeader === CRON_SECRET) ||
     (CRON_SECRET && authHeader === `Bearer ${CRON_SECRET}`);
+  const isServiceRole = Boolean(serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`);
 
-  if (isVercelCron && allowCron) {
+  if ((isVercelCron && allowCron) || isServiceRole) {
     return {
       authenticated: true,
-      isCron: true,
+      isCron: isVercelCron,
       isAdmin: true,
       isSuperAdmin: true,
-      user: { id: 'system-cron-worker', email: 'cron@system.local' },
-      role: 'cron'
+      user: { id: isServiceRole ? 'system-service-worker' : 'system-cron-worker', email: isServiceRole ? 'service_role@system.local' : 'cron@system.local' },
+      role: isServiceRole ? 'superadmin' : 'cron'
     };
   }
 
