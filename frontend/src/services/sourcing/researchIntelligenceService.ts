@@ -131,7 +131,7 @@ export class ResearchIntelligenceService {
       modelName = gatewayResponse.model || modelName;
       latencyMs = gatewayResponse.latency_ms || Math.round(performance.now() - startTime);
       costUsd = gatewayResponse.pricing?.estimated_cost_usd ?? null;
-      isCached = Boolean(gatewayResponse.cached || (gatewayResponse.usage && gatewayResponse.usage.totalTokens === 0 && gatewayResponse.status === 'SUCCESS'));
+      isCached = Boolean(gatewayResponse.cached);
       inputTokens = gatewayResponse.usage?.inputTokens ?? gatewayResponse.usage?.input_tokens ?? null;
       outputTokens = gatewayResponse.usage?.outputTokens ?? gatewayResponse.usage?.output_tokens ?? null;
       totalTokens = gatewayResponse.usage?.totalTokens ?? gatewayResponse.usage?.total_tokens ?? null;
