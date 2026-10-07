@@ -227,7 +227,8 @@ export default async function handler(req, res) {
     }
   }
   // Signal-led research. An empty corpus does not manufacture a brand or a trending query.
-  const hypotheses = [...new Set([...seeds.map(s => s.title), ...storedSignals.filter(s => s.product_identity || s.topic).map(s => s.product_identity || s.topic)])].slice(0, 12);
+  // Keep automatic discovery within the serverless request budget. Broader/deeper research belongs in Manual Research.
+  const hypotheses = [...new Set([...seeds.map(s => s.title), ...storedSignals.filter(s => s.product_identity || s.topic).map(s => s.product_identity || s.topic)])].slice(0, 6);
   const priorities = watchlist.map(w => w.title || w.brand || w.canonical_sku || w.product_id).filter(Boolean);
   if (hypotheses.length && useWeb) {
     try {
@@ -253,7 +254,10 @@ export default async function handler(req, res) {
   } else health.openai_web_search = useWeb ? { status: 'UNKNOWN', message: 'Sin señales reales para investigar' } : { status: 'DISABLED', message: 'Web no seleccionada para este run', count: 0, cost_usd: 0, tokens: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } };
   // Retailer/Radar hypotheses are candidates even when research cannot corroborate them.
   // A single shared verifier handles both entrances. No source is invented to fill a quota.
-  const seedCandidates = await validateCandidateBatch(seeds, { country, origin: 'RETAILER_DISCOVERY', signalRows: storedSignals, marketRows: local, deadline: Math.min(started + 55000, Date.now() + 8000) });
+  const remainingBudgetMs = Math.max(1000, 42000 - (Date.now() - started));
+  const seedCandidates = remainingBudgetMs > 1500
+    ? await validateCandidateBatch(seeds.slice(0, 20), { country, origin: 'RETAILER_DISCOVERY', signalRows: storedSignals, marketRows: local, deadline: Date.now() + Math.min(5000, remainingBudgetMs) })
+    : [];
   candidates = deduplicateCanonicalCandidates([...candidates, ...seedCandidates]);
   let created = 0;
   for (const c of candidates) {
