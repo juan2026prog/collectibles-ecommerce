@@ -78,14 +78,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
-        loginOneSignalUser(session.user.id);
+        // Push identity is non-critical. Never let OneSignal network latency block auth/admin rendering.
+        void loginOneSignalUser(session.user.id).catch((err) => {
+          console.warn('[AuthContext] OneSignal login failed (non-blocking):', err);
+        });
         // Only fetch profile if user changed or profile was not fetched yet
         if (fetchedUserIdRef.current !== session.user.id || event === 'USER_UPDATED' || event === 'SIGNED_IN') {
           fetchedUserIdRef.current = session.user.id;
           fetchProfile(session.user.id);
         }
       } else {
-        logoutOneSignalUser();
+        void logoutOneSignalUser().catch((err) => {
+          console.warn('[AuthContext] OneSignal logout failed (non-blocking):', err);
+        });
         fetchedUserIdRef.current = null;
         setProfile(null);
         setCachedProfile(null);
@@ -204,7 +209,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOutFn = useCallback(async () => {
-    await logoutOneSignalUser();
+    // Supabase sign-out is authoritative; push cleanup must not block it.
+    void logoutOneSignalUser().catch((err) => {
+      console.warn('[AuthContext] OneSignal logout failed (non-blocking):', err);
+    });
     await supabase.auth.signOut();
     setProfile(null);
     setCachedProfile(null);
