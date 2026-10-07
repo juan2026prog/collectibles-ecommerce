@@ -10,6 +10,10 @@
     {
       "path": "/api/sourcing-discovery",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/radar-news-refresh",
+      "schedule": "15 11 * * *"
     }
   ],
   "functions": {
@@ -17,6 +21,9 @@
       "maxDuration": 60
     },
     "api/sourcing-discovery.js": {
+      "maxDuration": 60
+    },
+    "api/radar-news-refresh.js": {
       "maxDuration": 60
     }
   },
