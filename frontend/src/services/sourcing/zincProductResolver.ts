@@ -959,6 +959,30 @@ export async function resolveZincProductsForCandidates(
 
       (clone as any).commercial_resolution_status = 'SUCCESS';
 
+      // Amazon/Zinc is authoritative for retailer metadata on an EXACT/STRONG identity match.
+      clone.retailer_source = 'amazon';
+      if (matched.brand) clone.brand = matched.brand;
+      clone.claims = {
+        ...(clone.claims || {}),
+        brand: matched.brand || clone.claims?.brand,
+        asin: matched.asin || clone.claims?.asin,
+        amazon_availability: matched.availability ?? null,
+        amazon_rating: matched.rating ?? null,
+        amazon_review_count: matched.review_count ?? 0,
+        amazon_seller: matched.seller || null,
+        amazon_prime: Boolean(matched.prime),
+        amazon_category: matched.category ?? null
+      };
+      (clone as any).amazon_metadata = {
+        availability: matched.availability ?? null,
+        rating: matched.rating ?? null,
+        review_count: matched.review_count ?? 0,
+        seller: matched.seller || null,
+        prime: Boolean(matched.prime),
+        category: matched.category ?? null,
+        resolution_source: matched.resolution_source
+      };
+
       // 1. Image Resolution (Zinc product image)
       if (matched.image_url) {
         clone.image_url = matched.image_url;
@@ -1001,11 +1025,11 @@ export async function resolveZincProductsForCandidates(
       }
 
       // 3. Retailer URL & Origin Price if missing
-      if (matched.product_url && (!clone.retailer_url || clone.retailer_url === '')) {
+      if (matched.product_url) {
         clone.retailer_url = matched.product_url;
       }
 
-      if (matched.price_usd && clone.pricing && (!clone.pricing.origin_price_usd || clone.pricing.origin_price_usd === null)) {
+      if (matched.price_usd && clone.pricing) {
         clone.pricing = {
           ...clone.pricing,
           origin_price_usd: matched.price_usd,
