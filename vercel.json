@@ -12,7 +12,7 @@
       "schedule": "0 7 * * *"
     },
     {
-      "path": "/api/radar-news-refresh",
+      "path": "/api/sourcing-discovery?task=radar-news",
       "schedule": "15 11 * * *"
     }
   ],
@@ -21,9 +21,6 @@
       "maxDuration": 60
     },
     "api/sourcing-discovery.js": {
-      "maxDuration": 60
-    },
-    "api/radar-news-refresh.js": {
       "maxDuration": 60
     }
   },
