@@ -4,9 +4,9 @@
 // Avoids false $0.00 reporting when pricing is unknown or stale.
 // ============================================================
 
-export const PRICING_SNAPSHOT_DATE = '2026-09-29';
+export const PRICING_SNAPSHOT_DATE = '2026-10-07';
 export const PRICING_OFFICIAL_SOURCE_URL = 'https://developers.openai.com/api/docs/pricing';
-export const PRICING_MAX_AGE_DAYS = Math.max(1, parseInt(process.env.OPENAI_PRICING_MAX_AGE_DAYS || '7', 10));
+export const PRICING_MAX_AGE_DAYS = Math.max(1, parseInt(process.env.OPENAI_PRICING_MAX_AGE_DAYS || '30', 10));
 
 export const DEFAULT_MODEL_PRICING = {
   // Flagship / Frontier models (Grounded on OpenAI official pricing for Standard API / Short-Context)

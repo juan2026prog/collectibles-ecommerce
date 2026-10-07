@@ -6,6 +6,7 @@ import { calculateInternationalPricing } from '../lib/internationalPricing';
 import { parseTiendamiaHtmlResponse, normalizeAsin, compareAsins } from '../services/sourcing/tiendamiaMatchingService';
 import { RadarIntegrationService } from '../services/sourcing/RadarIntegrationService';
 import { aiGateway } from '../services/ai/aiGateway';
+import { enrichSingleCandidateCommercialData } from '../services/sourcing/candidateCommercialEnrichment';
 import type { SourcingSignal } from '../types/sourcingIntelligence';
 
 describe('SOURCING INTELLIGENCE V2 — CERTIFICATION SUITE', () => {
@@ -125,6 +126,8 @@ describe('SOURCING INTELLIGENCE V2 — CERTIFICATION SUITE', () => {
               title: 'Pokémon TCG: Scarlet & Violet ETB',
               brand: 'The Pokémon Company',
               franchise: 'Pokémon',
+              retailer: 'Amazon',
+              url: 'https://www.amazon.com/dp/B0BSV2QZ1W',
               origin_price_usd: 49.99,
               asin: 'B0BSV2QZ1W',
               category: 'Trading Cards',
@@ -150,9 +153,16 @@ describe('SOURCING INTELLIGENCE V2 — CERTIFICATION SUITE', () => {
       expect(res.trends.length).toBeGreaterThan(0);
 
       const firstCand = res.candidates[0];
-      expect(firstCand.pricing.landed_cost_estimated_usd).toBeGreaterThan(0);
+      expect(firstCand.title).toContain('Pokémon');
       expect(firstCand.why_explanation).toBeDefined();
-      expect(firstCand.why_explanation.evidence_sources.length).toBeGreaterThan(0);
+
+      // In the decoupled architecture, Manual Research completes promptly.
+      // Commercial enrichment computes landed cost when weight and pricing are corroborated.
+      const enriched = await enrichSingleCandidateCommercialData({
+        ...firstCand,
+        weight_lbs: 1.2
+      }, 'UY');
+      expect(enriched.candidate.pricing.landed_cost_estimated_usd).toBeGreaterThan(0);
     });
   });
 

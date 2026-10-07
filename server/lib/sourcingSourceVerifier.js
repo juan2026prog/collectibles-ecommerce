@@ -240,7 +240,7 @@ export function associateSourcesToCandidates(items = [], globalSources = []) {
             commercialSources.push({
               retailer: src.retailer || src.domain || 'Retailer',
               product_url: srcUrl,
-              price: null,
+              price: src.price !== undefined ? Number(src.price) : null,
               currency: 'USD',
               image_url: srcImg,
               identifier: srcAsin || null,
@@ -613,9 +613,13 @@ export async function verifyCandidateSources(raw, { country = 'UY', origin = 'MA
   // Corroborate structured evidence from verified web search citations for any fields not directly scraped (e.g. when blocked by retailer WAF)
   observations = corroborateCandidateEvidence(raw, { observations, rejectedFields });
 
-  let candidate = validateCandidate(raw, { country, origin, observations, index });
+  const rawForValidation = rejectedFields.has('image')
+    ? { ...raw, image_url: null, image: null, imageUrl: null, thumbnail_url: null }
+    : raw;
+
+  let candidate = validateCandidate(rawForValidation, { country, origin, observations, index });
   const tm = country === 'UY' && Date.now() < deadline ? await lookupVerifiedTiendamia(candidate.provenance.asin, { fetchImpl, deadline }) : { presence: 'UNKNOWN', reason: 'Consulta pendiente' };
-  candidate = validateCandidate(raw, { country, origin, observations, index, marketChecks: { ...trustedMarkets, tiendamia: tm } });
+  candidate = validateCandidate(rawForValidation, { country, origin, observations, index, marketChecks: { ...trustedMarkets, tiendamia: tm } });
   candidate.validation_diagnostics = diagnostics;
   return candidate;
 }

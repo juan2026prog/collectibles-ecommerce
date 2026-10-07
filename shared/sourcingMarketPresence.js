@@ -8,7 +8,7 @@ export function parseTiendamiaResponse(html, asin, statusCode = 200) {
     status: 'NOT_CHECKED', presence: 'UNKNOWN', checkedAt: now, checked_at: now, source_url: sourceUrl,
     price: provenance(), method: 'EXACT_ASIN_MATCH', statusMessage: 'No verificado' };
 
-  if (statusCode === 404 || (typeof html === 'string' && (html.includes('error-404') || html.includes('¡Ups! No encontramos esta página')))) {
+  if (typeof html === 'string' && (html.includes('error-404') || html.includes('¡Ups! No encontramos esta página'))) {
     return { ...result, status: 'NOT_FOUND', presence: 'VERIFIED_ABSENT', productUrl: null, statusMessage: 'Ausencia comprobada en consulta exacta' };
   }
 

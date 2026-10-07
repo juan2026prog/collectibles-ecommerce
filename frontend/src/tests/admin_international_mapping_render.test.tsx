@@ -108,9 +108,10 @@ vi.mock('../lib/supabase', () => {
     const chainable: any = {
       order: () => chainable,
       limit: () => Promise.resolve({ data: dataToReturn, error: null }),
+      range: () => Promise.resolve({ data: dataToReturn, error: null, count: dataToReturn.length }),
       eq: () => chainable,
       single: () => Promise.resolve({ data: null, error: null }),
-      then: (resolve: any) => Promise.resolve({ data: dataToReturn, error: null }).then(resolve),
+      then: (resolve: any) => Promise.resolve({ data: dataToReturn, error: null, count: dataToReturn.length }).then(resolve),
     };
     return chainable;
   };

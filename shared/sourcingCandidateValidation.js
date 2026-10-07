@@ -26,7 +26,7 @@ export function isSafeImageUrl(value) {
     const u = new URL(url);
     const path = u.pathname.toLowerCase();
     // Reject HTML product pages, detail pages or listing routes mistakenly passed as images
-    if (path.includes('/collectibles/') || path.includes('/dp/') || path.includes('/product/') || path.includes('/item/') || path.includes('/p/')) {
+    if (path.includes('/collectibles/') || path.includes('/dp/') || path.includes('/product/') || path.includes('/item/')) {
       return false;
     }
     // Must either end with a common image extension or come from dedicated image CDN hosts

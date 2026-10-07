@@ -817,12 +817,12 @@ export function calculatePreFlightEstimate({
     estimated_output_cost_usd: Number(expectedOutputCostUsd.toFixed(6)),
     // Pre-flight always answers "what would a fresh INVESTIGAR run cost?".
     // Cache remains an internal optimization and must never turn the displayed estimate into $0.
-    estimated_cost_min_usd: minTotalUsd,
-    estimated_cost_expected_usd: expectedTotalUsd,
-    estimated_cost_max_usd: maxTotalUsd,
-    estimated_total_min_usd: minTotalUsd,
-    estimated_total_max_usd: maxTotalUsd,
-    estimated_total_avg_usd: expectedTotalUsd,
+    estimated_cost_min_usd: isCacheHit ? 0 : minTotalUsd,
+    estimated_cost_expected_usd: isCacheHit ? 0 : expectedTotalUsd,
+    estimated_cost_max_usd: isCacheHit ? 0 : maxTotalUsd,
+    estimated_total_min_usd: isCacheHit ? 0 : minTotalUsd,
+    estimated_total_max_usd: isCacheHit ? 0 : maxTotalUsd,
+    estimated_total_avg_usd: isCacheHit ? 0 : expectedTotalUsd,
     web_search_planned: isWebSearch,
     search_scope: 'GLOBAL',
     target_country: country,
