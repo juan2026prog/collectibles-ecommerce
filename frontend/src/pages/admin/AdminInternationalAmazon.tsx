@@ -59,9 +59,9 @@ export default function AdminInternationalAmazon() {
     min_reviews: '',
     sort_by: '',
     availability: '',
-    onlyRecognizedBrands: true,
-    includeGenerics: false,
-    max_results: '20',
+    onlyRecognizedBrands: false,
+    includeGenerics: true,
+    max_results: '100',
     page: '1'
   });
 
@@ -132,6 +132,7 @@ export default function AdminInternationalAmazon() {
   const [candidatePageSize, setCandidatePageSize] = useState(50);
   const [totalCandidates, setTotalCandidates] = useState(0);
   const [selectedCountry, setSelectedCountry] = useState<'ALL' | 'UY' | 'AR' | 'CL' | 'PE' | 'MX'>('ALL');
+  const [searchMeta, setSearchMeta] = useState<any>(null);
 
   useEffect(() => {
     fetchCandidates(candidatePage, candidatePageSize);
@@ -522,8 +523,12 @@ export default function AdminInternationalAmazon() {
           min_price: params.min_price ? Number(params.min_price) : undefined,
           max_price: params.max_price ? Number(params.max_price) : undefined,
           min_rating: params.min_rating ? Number(params.min_rating) : undefined,
-          max_results: Number(params.max_results || 20),
-          page: Number(params.page || 1),
+          min_reviews: params.min_reviews ? Number(params.min_reviews) : undefined,
+          availability: params.availability || undefined,
+          onlyRecognizedBrands: Boolean(params.onlyRecognizedBrands),
+          includeGenerics: Boolean(params.includeGenerics),
+          max_results: Math.min(1000, Number(params.max_results || 100)),
+          page: 1,
           sort_by: params.sort_by || undefined
         }
       });
@@ -531,8 +536,16 @@ export default function AdminInternationalAmazon() {
       if (error) throw error;
       if (data.error) throw new Error(data.error);
 
-      addToast({ title: 'Búsqueda completada', message: 'Se obtuvieron los resultados de Amazon.', type: 'success' });
-      fetchCandidates();
+      const resultItems = Array.isArray(data?.candidates) ? data.candidates : (Array.isArray(data?.results) ? data.results : []);
+      setCandidates(resultItems);
+      setTotalCandidates(Number(data?.meta?.total ?? resultItems.length));
+      setCandidatePage(1);
+      setSearchMeta(data?.meta || null);
+      addToast({
+        title: 'Búsqueda completada',
+        message: `${resultItems.length} productos Amazon únicos recuperados${data?.meta?.provider_limited ? ' (límite del proveedor alcanzado)' : ''}.`,
+        type: 'success'
+      });
     } catch (err: any) {
       console.error(err);
       addToast({ title: 'Error buscando', message: err.message || 'No se pudo consultar Amazon/Zinc', type: 'error' });
@@ -591,9 +604,9 @@ export default function AdminInternationalAmazon() {
       seller: c.seller || (c.raw_data?.first_party_seller === true ? 'Amazon.com' : 'Terceros'),
       source: 'amazon',
       data_origin: 'LIVE',
-      sourcing_score: c.mapping_confidence || 80,
-      ranking_score: c.mapping_confidence || 80,
-      opportunity_score: c.mapping_confidence || 80,
+      sourcing_score: c.raw_data?.sourcing_score ?? c.raw_data?.ai_scores?.sourcing_score,
+      ranking_score: c.raw_data?.ranking_score,
+      opportunity_score: c.raw_data?.opportunity_score ?? c.raw_data?.ai_scores?.opportunity_score,
       status: c.status,
       raw_data: c.raw_data
     }));
@@ -762,6 +775,25 @@ export default function AdminInternationalAmazon() {
               {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
               <span>{loading ? 'Buscando...' : 'Buscar en Amazon'}</span>
             </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            <label className="flex items-center gap-2 text-gray-600">
+              <span className="font-semibold">Resultados a investigar:</span>
+              <select
+                value={searchParams.max_results}
+                onChange={e => setSearchParams({ ...searchParams, max_results: e.target.value })}
+                className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold"
+              >
+                {[20, 50, 100, 250, 500, 1000].map(n => <option key={n} value={String(n)}>{n}</option>)}
+              </select>
+            </label>
+            {searchMeta && (
+              <span className="text-gray-500">
+                {searchMeta.total ?? 0} únicos · {searchMeta.pages_consulted ?? 0} páginas Amazon
+                {searchMeta.duplicate_count ? ` · ${searchMeta.duplicate_count} duplicados omitidos` : ''}
+              </span>
+            )}
           </div>
 
           {/* Accesos rápidos debajo del input */}

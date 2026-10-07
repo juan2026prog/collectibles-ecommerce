@@ -101,7 +101,7 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
   }, [selectedIds, onSelectionChange]);
 
   // 3. View mode & Quantity Control
-  const [pageSizeOption, setPageSizeOption] = useState<number | 'custom'>(25);
+  const [pageSizeOption, setPageSizeOption] = useState<number | 'custom'>(50);
   const [customPageSize, setCustomPageSize] = useState<number>(50);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [jumpPageInput, setJumpPageInput] = useState<string>('1');
@@ -227,6 +227,13 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
     return Math.min(100, Math.round(score));
   }, []);
 
+  // AI score is deliberately separate from local/commercial opportunity heuristics.
+  const getAiScore = useCallback((item: ImportCandidateItem): number | null => {
+    const explicit = item.opportunity_score ?? item.sourcing_score ?? item.raw_data?.ai_scores?.opportunity_score ?? item.raw_data?.ai_scores?.sourcing_score;
+    const numeric = Number(explicit);
+    return Number.isFinite(numeric) && numeric > 0 ? Math.round(numeric) : null;
+  }, []);
+
   // Helper for score opportunity level
   const getScoreLevel = useCallback((score: number) => {
     if (score >= 80) return { label: 'Alta oportunidad', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
@@ -298,10 +305,11 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
       const isImported = existingCatalogAsins.has(asin) || item.already_imported || item.status === 'imported';
       const hasImg = hasValidImage(item);
       const score = getItemScore(item);
+      const aiScore = getAiScore(item);
       const fin = getItemFinancials(item);
 
       // Quick Chips Filter
-      if (activeChip === 'ai_recommended' && score < 80) return false;
+      if (activeChip === 'ai_recommended' && (aiScore === null || aiScore < 80)) return false;
       if (activeChip === 'high_margin' && fin.marginPercent < 10 && fin.estimatedProfit < 8) return false;
       if (activeChip === 'high_demand' && !((item.review_count || 0) >= 40 || (item.rating || 0) >= 4.5)) return false;
       if (activeChip === 'new' && isImported) return false;
@@ -354,7 +362,7 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
   }, [
     candidates, activeChip, searchTerm, filterBrand, filterFranchise, filterCategory, 
     filterMinScore, filterMinPrice, filterMaxPrice, filterAvailability, 
-    existingCatalogAsins, hasValidImage, getItemScore, getItemFinancials
+    existingCatalogAsins, hasValidImage, getItemScore, getAiScore, getItemFinancials
   ]);
 
   // 2. SORTING ENGINE
@@ -763,7 +771,7 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
               }`}
             >
               <Sparkles className="w-3 h-3" />
-              Recomendados IA
+              <span title="Solo productos con evaluación IA real y score ≥ 80">Recomendados IA</span>
             </button>
 
             <button
