@@ -5,6 +5,36 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { resolveInternationalCategory } from "../_shared/categoryResolver.ts";
 import { getNormalizedBrand } from "../_shared/brandUtils.ts";
 
+const MAX_DEEP_RESULTS = 1000;
+const MAX_PROVIDER_PAGES = 100;
+const SEARCH_TIME_BUDGET_MS = 50_000;
+const GENERIC_BRANDS = new Set(["generic", "unbranded", "unknown", "no brand", "n/a", "na"]);
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+function normalizeAsin(value: unknown): string {
+  return String(value || "").trim().toUpperCase();
+}
+
+function isGenericBrand(brand: string | null | undefined): boolean {
+  const normalized = String(brand || "").trim().toLowerCase();
+  return !normalized || GENERIC_BRANDS.has(normalized);
+}
+
+function categoryText(p: any): string {
+  const categories = Array.isArray(p.categories) ? p.categories.join(" ") : String(p.categories || "");
+  return `${categories} ${p.category_path || ""} ${p.category || ""} ${p.title || ""}`.toLowerCase();
+}
+
+function matchesAvailability(p: any, availability?: string): boolean {
+  if (!availability) return true;
+  const raw = String(p.availability || "").toLowerCase();
+  if (availability === "in_stock") return raw.includes("in stock") || raw.includes("available");
+  if (availability === "preorder") return raw.includes("pre-order") || raw.includes("preorder") || raw.includes("preventa");
+  if (availability === "out_of_stock") return raw.includes("out of stock") || raw.includes("unavailable");
+  return true;
+}
+
 serve(async (req) => {
   const optionsResponse = handleOptions(req);
   if (optionsResponse) return optionsResponse;
@@ -25,34 +55,40 @@ serve(async (req) => {
       ZINC_API_KEY = await resolveZincApiKey(supabase, "sandbox");
     }
 
-    const { 
-      query, 
-      brand, 
-      category, 
-      min_price, 
-      max_price, 
-      min_rating, 
-      max_results = 20, 
+    const {
+      query,
+      brand,
+      category,
+      min_price,
+      max_price,
+      min_rating,
+      min_reviews,
+      availability,
+      onlyRecognizedBrands = false,
+      includeGenerics = true,
+      max_results = 100,
       page = 1,
       sort_by
     } = await req.json();
 
-    if (!query) {
+    if (!query || !String(query).trim()) {
       throw new Error("Falta el término de búsqueda (query)");
     }
 
-    // Save search history
+    const targetResults = Math.min(MAX_DEEP_RESULTS, Math.max(1, Number(max_results) || 100));
+    const startPage = Math.max(1, Number(page) || 1);
+
     const { data: searchRecord, error: searchError } = await supabase
-      .from('international_import_searches')
+      .from("international_import_searches")
       .insert({
-        query,
-        brand_filter: brand,
-        category_filter: category,
-        min_price,
-        max_price,
-        min_rating,
-        max_results,
-        page,
+        query: String(query).trim(),
+        brand_filter: brand || null,
+        category_filter: category || null,
+        min_price: min_price || null,
+        max_price: max_price || null,
+        min_rating: min_rating || null,
+        max_results: targetResults,
+        page: startPage,
         created_by: user.id
       })
       .select()
@@ -60,59 +96,156 @@ serve(async (req) => {
 
     if (searchError) throw searchError;
 
-    // Call Zinc API strictly via GET /products/search conforming to OpenAPI 3.1.0
-    const rawResponse = await searchZincProducts(ZINC_API_KEY, {
-      query,
-      retailer: 'amazon',
-      page: Number(page) || 1,
-    });
-    
-    // Update raw response in search
-    await supabase.from('international_import_searches').update({ raw_response: rawResponse }).eq('id', searchRecord.id);
-
-    // Fetch Mapping Rules for Centralized Resolver
     const [{ data: catMappings }, { data: brandMappings }, { data: keywordMappings }] = await Promise.all([
-      supabase.from('amazon_category_mapping').select('*'),
-      supabase.from('amazon_brand_mapping').select('*'),
-      supabase.from('keyword_mapping_rules').select('*').order('priority', { ascending: false })
+      supabase.from("amazon_category_mapping").select("*"),
+      supabase.from("amazon_brand_mapping").select("*"),
+      supabase.from("keyword_mapping_rules").select("*").order("priority", { ascending: false })
     ]);
 
-    const products = rawResponse.results || [];
-    const candidates = [];
+    const recognizedBrands = new Set(
+      (brandMappings || [])
+        .filter((r: any) => r.is_active !== false && r.brand_name)
+        .map((r: any) => String(r.brand_name).trim().toLowerCase())
+    );
 
-    for (const p of products) {
-      if (!p.title || !p.product_id) continue;
+    const startedAt = Date.now();
+    const uniqueProducts = new Map<string, any>();
+    const rawPageStats: any[] = [];
+    let providerPage = startPage;
+    let pagesConsulted = 0;
+    let duplicateCount = 0;
+    let filteredOutCount = 0;
+    let stopReason = "TARGET_REACHED";
+    let consecutiveNoNew = 0;
 
-      const price = p.price ? p.price / 100 : null;
-
-      if (min_price && price !== null && price < min_price) continue;
-      if (max_price && price !== null && price > max_price) continue;
-      if (min_rating && p.stars && p.stars < min_rating) continue;
-      
-      // Normalize Brand: strictly sanitized against book authors and invalid strings
-      const normalizedBrand = getNormalizedBrand({
-        brand: p.brand || p.raw_data?.brand,
-        manufacturer: p.manufacturer || p.raw_data?.manufacturer,
-        title: p.title
-      });
-
-      // Flexible brand filter: match against normalized brand, raw brand, manufacturer, or title
-      if (brand && String(brand).trim()) {
-        const bTarget = String(brand).toLowerCase().trim();
-        const brandMatch = (normalizedBrand && normalizedBrand.toLowerCase().includes(bTarget)) ||
-                           (p.brand && String(p.brand).toLowerCase().includes(bTarget)) ||
-                           (p.manufacturer && String(p.manufacturer).toLowerCase().includes(bTarget)) ||
-                           (p.title && String(p.title).toLowerCase().includes(bTarget));
-        if (!brandMatch) continue;
+    while (uniqueProducts.size < targetResults && pagesConsulted < MAX_PROVIDER_PAGES) {
+      if (Date.now() - startedAt > SEARCH_TIME_BUDGET_MS) {
+        stopReason = "TIME_BUDGET";
+        break;
       }
 
-      // Normalize Image: reject mock / placeholder / broken test URLs
+      let rawResponse: any = null;
+      let lastError: any = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          rawResponse = await searchZincProducts(ZINC_API_KEY, {
+            query: String(query).trim(),
+            retailer: "amazon",
+            page: providerPage,
+          });
+          lastError = null;
+          break;
+        } catch (err: any) {
+          lastError = err;
+          if (!String(err?.message || "").includes("HTTP 429") || attempt === 2) break;
+          await sleep(350 * Math.pow(2, attempt));
+        }
+      }
+      if (lastError) throw lastError;
+
+      pagesConsulted++;
+      const products = Array.isArray(rawResponse?.results) ? rawResponse.results : [];
+      rawPageStats.push({ page: providerPage, returned: products.length });
+
+      if (products.length === 0) {
+        stopReason = "PROVIDER_EXHAUSTED";
+        break;
+      }
+
+      let newOnPage = 0;
+
+      for (const p of products) {
+        if (!p?.title || !p?.product_id) continue;
+
+        const asin = normalizeAsin(p.product_id);
+        if (!asin) continue;
+        if (uniqueProducts.has(asin)) {
+          duplicateCount++;
+          continue;
+        }
+
+        const price = p.price != null ? Number(p.price) / 100 : null;
+
+        if (min_price && price !== null && price < Number(min_price)) { filteredOutCount++; continue; }
+        if (max_price && price !== null && price > Number(max_price)) { filteredOutCount++; continue; }
+        if (min_rating && Number(p.stars || 0) < Number(min_rating)) { filteredOutCount++; continue; }
+        if (min_reviews && Number(p.num_reviews || 0) < Number(min_reviews)) { filteredOutCount++; continue; }
+        if (!matchesAvailability(p, availability)) { filteredOutCount++; continue; }
+
+        const normalizedBrand = getNormalizedBrand({
+          brand: p.brand || p.raw_data?.brand,
+          manufacturer: p.manufacturer || p.raw_data?.manufacturer,
+          title: p.title
+        });
+
+        if (brand && String(brand).trim()) {
+          const target = String(brand).toLowerCase().trim();
+          const brandMatch =
+            (normalizedBrand && normalizedBrand.toLowerCase().includes(target)) ||
+            (p.brand && String(p.brand).toLowerCase().includes(target)) ||
+            (p.manufacturer && String(p.manufacturer).toLowerCase().includes(target)) ||
+            String(p.title).toLowerCase().includes(target);
+          if (!brandMatch) { filteredOutCount++; continue; }
+        }
+
+        if (category && String(category).trim()) {
+          const targetCategory = String(category).toLowerCase().trim();
+          if (!categoryText(p).includes(targetCategory)) { filteredOutCount++; continue; }
+        }
+
+        const generic = isGenericBrand(normalizedBrand);
+        const recognized = !generic && recognizedBrands.has(String(normalizedBrand).trim().toLowerCase());
+
+        if (onlyRecognizedBrands) {
+          if (!(recognized || (includeGenerics && generic))) { filteredOutCount++; continue; }
+        } else if (!includeGenerics && generic) {
+          filteredOutCount++;
+          continue;
+        }
+
+        uniqueProducts.set(asin, { ...p, __normalizedBrand: normalizedBrand });
+        newOnPage++;
+        if (uniqueProducts.size >= targetResults) break;
+      }
+
+      consecutiveNoNew = newOnPage === 0 ? consecutiveNoNew + 1 : 0;
+      if (consecutiveNoNew >= 3) {
+        stopReason = "NO_NEW_RESULTS";
+        break;
+      }
+
+      providerPage++;
+      if (uniqueProducts.size < targetResults) await sleep(100);
+    }
+
+    if (pagesConsulted >= MAX_PROVIDER_PAGES && uniqueProducts.size < targetResults) {
+      stopReason = "PAGE_LIMIT";
+    }
+
+    let selectedProducts = Array.from(uniqueProducts.values());
+
+    if (sort_by === "price_asc") {
+      selectedProducts.sort((a, b) => Number(a.price || 0) - Number(b.price || 0));
+    } else if (sort_by === "price_desc") {
+      selectedProducts.sort((a, b) => Number(b.price || 0) - Number(a.price || 0));
+    } else if (sort_by === "rating_desc") {
+      selectedProducts.sort((a, b) => Number(b.stars || 0) - Number(a.stars || 0));
+    } else if (sort_by === "reviews_desc") {
+      selectedProducts.sort((a, b) => Number(b.num_reviews || 0) - Number(a.num_reviews || 0));
+    }
+
+    selectedProducts = selectedProducts.slice(0, targetResults);
+    const candidates: any[] = [];
+
+    for (const p of selectedProducts) {
+      const normalizedBrand = p.__normalizedBrand || null;
+      const price = p.price != null ? Number(p.price) / 100 : null;
+
       let normalizedImageUrl = p.image_url || p.main_image_url_external || p.image || p.raw_data?.image || p.raw_data?.main_image || p.raw_data?.images?.[0] || null;
-      if (normalizedImageUrl && (normalizedImageUrl.includes('example.jpg') || normalizedImageUrl.includes('xyz.jpg') || normalizedImageUrl.includes('placeholder'))) {
+      if (normalizedImageUrl && (normalizedImageUrl.includes("example.jpg") || normalizedImageUrl.includes("xyz.jpg") || normalizedImageUrl.includes("placeholder"))) {
         normalizedImageUrl = null;
       }
 
-      // Centralized Category Resolution
       const resolution = resolveInternationalCategory({
         category_path: p.categories || p.category_path || null,
         brand: normalizedBrand,
@@ -122,39 +255,43 @@ serve(async (req) => {
         keyword_rules: keywordMappings || []
       });
 
-      // Delivery Information Parsing
-      let amazon_delivery_type = 'unknown';
-      let amazon_delivery_text = 'Tiempo de entrega no informado por Amazon';
+      let amazon_delivery_type = "unknown";
+      let amazon_delivery_text = "Plazo doméstico USA pendiente de confirmación";
+      const availLow = String(p.availability || "").toLowerCase();
 
-      const availLow = (p.availability || '').toLowerCase();
-      const delivLow = (p.delivery_message || '').toLowerCase();
-      
       if (p.prime) {
-        amazon_delivery_type = 'prime';
-        amazon_delivery_text = p.delivery_message || 'Envío Prime';
-      } else if (availLow.includes('pre-order') || availLow.includes('preorder')) {
-        amazon_delivery_type = 'preorder';
-        amazon_delivery_text = p.availability || 'Preventa';
-      } else if (availLow.includes('in stock') || availLow.includes('available')) {
-        amazon_delivery_type = 'in_stock';
-        amazon_delivery_text = p.delivery_message || 'En stock';
-      } else if (availLow.includes('backorder') || availLow.includes('out of stock')) {
-        amazon_delivery_type = 'backorder';
-        amazon_delivery_text = p.availability || 'Backorder / Sin stock';
+        amazon_delivery_type = "prime";
+        amazon_delivery_text = p.delivery_message || "Envío Prime";
+      } else if (availLow.includes("pre-order") || availLow.includes("preorder")) {
+        amazon_delivery_type = "preorder";
+        amazon_delivery_text = p.availability || "Preventa";
+      } else if (availLow.includes("in stock") || availLow.includes("available")) {
+        amazon_delivery_type = "in_stock";
+        amazon_delivery_text = p.delivery_message || "En stock";
+      } else if (availLow.includes("backorder") || availLow.includes("out of stock")) {
+        amazon_delivery_type = "backorder";
+        amazon_delivery_text = p.availability || "Backorder / Sin stock";
       } else if (p.delivery_message) {
         amazon_delivery_text = p.delivery_message;
-        amazon_delivery_type = 'unknown';
       }
 
-      // Populate _normalized
       const enrichedRawData = {
         ...p,
+        __normalizedBrand: undefined,
+        search_context: {
+          search_id: searchRecord.id,
+          query: String(query).trim(),
+          requested_results: targetResults,
+          provider_pages_consulted: pagesConsulted,
+          only_recognized_brands: Boolean(onlyRecognizedBrands),
+          include_generics: Boolean(includeGenerics)
+        },
         _normalized: {
           brand: normalizedBrand,
           manufacturer: p.manufacturer || p.raw_data?.manufacturer || null,
           imageUrl: normalizedImageUrl,
           category_detected: p.categories || null,
-          category_inferred: resolution.source !== 'unmapped',
+          category_inferred: resolution.source !== "unmapped",
           amazon_delivery_type,
           amazon_delivery_text
         }
@@ -162,47 +299,68 @@ serve(async (req) => {
 
       candidates.push({
         search_id: searchRecord.id,
-        external_product_id: p.product_id,
+        external_product_id: normalizeAsin(p.product_id),
         title: p.title,
         brand: normalizedBrand,
-        category: null, 
+        category: null,
         image_url: normalizedImageUrl,
         main_image_url_external: normalizedImageUrl,
         image_urls_external: normalizedImageUrl ? [normalizedImageUrl] : [],
-        product_url_external: `https://www.amazon.com/dp/${p.product_id}`,
+        product_url_external: `https://www.amazon.com/dp/${normalizeAsin(p.product_id)}`,
         price_usd: price,
-        currency: 'USD',
+        currency: "USD",
         rating: p.stars || null,
         review_count: p.num_reviews || 0,
-        availability: 'available',
+        availability: p.availability || "unknown",
         amazon_delivery_text,
         amazon_delivery_type,
         raw_data: enrichedRawData,
-        status: 'review',
+        status: "review",
         suggested_category_id: resolution.category_id,
         suggested_subcategory_id: resolution.subcategory_id,
         mapping_confidence: resolution.confidence,
         category_mapping_source: resolution.source
       });
-
-      if (candidates.length >= max_results) break;
     }
 
-    if (candidates.length > 0) {
-      const { error: insertError } = await supabase
-        .from('international_import_candidates')
-        .insert(candidates);
-
+    for (let i = 0; i < candidates.length; i += 200) {
+      const chunk = candidates.slice(i, i + 200);
+      if (!chunk.length) continue;
+      const { error: insertError } = await supabase.from("international_import_candidates").insert(chunk);
       if (insertError) throw insertError;
     }
 
+    const summary = {
+      pages_consulted: pagesConsulted,
+      page_stats: rawPageStats,
+      unique_results: candidates.length,
+      duplicate_count: duplicateCount,
+      filtered_out_count: filteredOutCount,
+      stop_reason: stopReason,
+      elapsed_ms: Date.now() - startedAt
+    };
+
+    await supabase
+      .from("international_import_searches")
+      .update({ raw_response: summary })
+      .eq("id", searchRecord.id);
+
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        source: 'amazon',
-        results: candidates, 
-        candidates, 
-        meta: { total: candidates.length, search_id: searchRecord?.id } 
+      JSON.stringify({
+        success: true,
+        source: "amazon",
+        results: candidates,
+        candidates,
+        meta: {
+          total: candidates.length,
+          search_id: searchRecord.id,
+          requested: targetResults,
+          pages_consulted: pagesConsulted,
+          duplicate_count: duplicateCount,
+          filtered_out_count: filteredOutCount,
+          stop_reason: stopReason,
+          provider_limited: candidates.length < targetResults && stopReason !== "TARGET_REACHED"
+        }
       }),
       { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
