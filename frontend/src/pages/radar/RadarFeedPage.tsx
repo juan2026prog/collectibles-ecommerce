@@ -10,6 +10,11 @@ import type { ReleaseEvent, RadarSignal, ReleaseStatus } from '../../plugins/col
 import { getRadarSignalConfig } from '../../plugins/collector-radar/core/releaseEngine';
 import SEO from '../../components/SEO';
 
+function safeRadarImage(url?: string | null) {
+  if (!url) return null;
+  return /unsplash\.com|mlstatic\.com/i.test(url) ? null : url;
+}
+
 // ---------------------------------------------------------------------------
 // Badge de señal editorial
 // ---------------------------------------------------------------------------
@@ -62,9 +67,9 @@ function HeroRadarCard({ item }: { item: ReleaseEvent }) {
       className="group flex flex-col h-full rounded-3xl overflow-hidden border border-white/10 hover:border-red-500/50 transition-all duration-300 shadow-2xl bg-zinc-950"
     >
       <div className="relative w-full aspect-[16/10] sm:aspect-[16/9] lg:aspect-auto lg:flex-1 min-h-[280px] bg-zinc-900 overflow-hidden">
-        {item.official_image_url && !imgError ? (
+        {safeRadarImage(item.official_image_url) && !imgError ? (
           <img
-            src={item.official_image_url}
+            src={safeRadarImage(item.official_image_url) || ''}
             alt={item.title}
             className="w-full h-full object-cover object-center group-hover:scale-105 transition duration-700"
             onError={() => setImgError(true)}
@@ -145,9 +150,9 @@ function MediumRadarCard({ item }: { item: ReleaseEvent }) {
       className="group flex flex-col sm:flex-row flex-1 rounded-2xl overflow-hidden border border-white/10 hover:border-white/25 transition-all duration-300 shadow-xl bg-zinc-950"
     >
       <div className="relative w-full sm:w-2/5 aspect-[16/10] sm:aspect-auto bg-zinc-900 overflow-hidden shrink-0 min-h-[160px]">
-        {item.official_image_url && !imgError ? (
+        {safeRadarImage(item.official_image_url) && !imgError ? (
           <img
-            src={item.official_image_url}
+            src={safeRadarImage(item.official_image_url) || ''}
             alt={item.title}
             className="w-full h-full object-cover object-center group-hover:scale-105 transition duration-500"
             onError={() => setImgError(true)}
@@ -210,9 +215,9 @@ function GridRadarCard({ item }: { item: ReleaseEvent }) {
     >
       <div>
         <div className="relative w-full aspect-[16/10] bg-zinc-950 overflow-hidden">
-          {item.official_image_url && !imgError ? (
+          {safeRadarImage(item.official_image_url) && !imgError ? (
             <img
-              src={item.official_image_url}
+              src={safeRadarImage(item.official_image_url) || ''}
               alt={item.title}
               className="w-full h-full object-cover object-center group-hover:scale-105 transition duration-500"
               onError={() => setImgError(true)}
