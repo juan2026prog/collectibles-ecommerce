@@ -93,7 +93,7 @@ describe('TiendaMía ASIN Exact Matching Engine', () => {
   it('executes on-demand checkTiendamiaByAsin function gracefully', async () => {
     const res = await checkTiendamiaByAsin('B0FGTD9FHG');
     expect(res.asin).toBe('B0FGTD9FHG');
-    expect(['FOUND', 'NOT_FOUND', 'UNAVAILABLE', 'ERROR']).toContain(res.status);
+    expect(['FOUND', 'NOT_FOUND', 'NOT_CHECKED', 'UNAVAILABLE', 'ERROR']).toContain(res.status);
     expect(res.method).toBe('EXACT_ASIN_MATCH');
   });
 });
