@@ -13,6 +13,7 @@ import { extractCandidateImages } from '../../../lib/imageUtils';
 import { calculateCandidateImportAnalysis } from '../../../services/sourcing/candidateImportAnalysis';
 import { sanitizeBrand } from '../../../lib/brandUtils';
 import { checkTiendamiaByAsin, type TiendamiaMatchResult } from '../../../services/sourcing/tiendamiaMatchingService';
+import { getStoredExchangeRate, convertUsdToDisplay, type ExchangeRateDetail } from '../../../services/currencyService';
 
 export interface ImportCandidateItem {
   id: string;
@@ -69,6 +70,7 @@ interface ImportWorkbenchProps {
   onSelectionChange?: (count: number) => void;
   onReviewModalToggle?: (isOpen: boolean) => void;
   onImportingStateChange?: (isImporting: boolean) => void;
+  targetCountry?: string;
 }
 
 export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
@@ -80,7 +82,8 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
   pricingSettings,
   onSelectionChange,
   onReviewModalToggle,
-  onImportingStateChange
+  onImportingStateChange,
+  targetCountry: propTargetCountry = 'UY'
 }) => {
   const { addToast } = useToast();
 
@@ -127,6 +130,16 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
   // 7. TiendaMía Matching Cache & Loading state per ASIN
   const [tiendamiaResults, setTiendamiaResults] = useState<Record<string, TiendamiaMatchResult>>({});
   const [loadingTiendamiaAsins, setLoadingTiendamiaAsins] = useState<Set<string>>(new Set());
+
+  // 8. Currency FX & Regional State
+  const [exchangeRateDetail, setExchangeRateDetail] = useState<ExchangeRateDetail>(() => getStoredExchangeRate('UYU'));
+  const [targetCountry, setTargetCountry] = useState<string>(propTargetCountry);
+
+  useEffect(() => {
+    if (propTargetCountry) {
+      setTargetCountry(propTargetCountry);
+    }
+  }, [propTargetCountry]);
 
   // Notify parent of modal & importing state
   useEffect(() => {
@@ -198,8 +211,8 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
   // Pricing helper for candidate items
   const getItemFinancials = useCallback((item: ImportCandidateItem, overrideMarkup?: number) => {
     const markup = overrideMarkup ?? pricingSettings?.target_margin_percent ?? 3;
-    return calculateCandidateImportAnalysis(item, pricingSettings, markup);
-  }, [pricingSettings]);
+    return calculateCandidateImportAnalysis(item, pricingSettings, markup, targetCountry);
+  }, [pricingSettings, targetCountry]);
 
   // Calculate score for candidate
   const getItemScore = useCallback((item: ImportCandidateItem) => {
@@ -527,7 +540,7 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
           usa_domestic_shipping_usd: item.raw_data?.import_quote?.shipping ?? 0,
           collectibles_fee_usd: fin.estimatedProfit,
           final_price_usd: fin.finalPrice,
-          final_price_uyu: Number((fin.finalPrice * 42.5).toFixed(2)),
+          final_price_uyu: fin.finalPrice ? convertUsdToDisplay(fin.finalPrice, 'UYU', exchangeRateDetail.rate) : null,
           currency: 'USD',
           expected_profit_usd: fin.estimatedProfit,
           real_cost_usd: fin.realCost,
@@ -537,7 +550,17 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
           collectibles_category_id: batchCategory || null,
           gallery_images: rawImgs,
           status: 'pending_review',
-          raw_data: item.raw_data || {}
+          raw_data: {
+            ...(item.raw_data || {}),
+            target_country: targetCountry,
+            quote_status: fin.quoteStatus,
+            quote_explanation: fin.statusExplanation,
+            fx_rate: exchangeRateDetail.rate,
+            fx_target: exchangeRateDetail.target,
+            fx_source: exchangeRateDetail.source_name,
+            fx_status: exchangeRateDetail.status,
+            fx_updated_at: exchangeRateDetail.effective_at
+          }
         };
       });
 

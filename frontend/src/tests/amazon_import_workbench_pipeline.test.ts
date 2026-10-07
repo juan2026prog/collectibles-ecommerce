@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { sanitizeBrand, isValidBrand, inferBrandFromTitle, getNormalizedBrand } from '../lib/brandUtils';
 import { extractCandidateImages, resolveImage, FALLBACK_IMAGE } from '../lib/imageUtils';
+import { amazonSourceAdapter } from '../services/sourcing/adapters/AmazonSourceAdapter';
+import { calculateCandidateImportAnalysis } from '../services/sourcing/candidateImportAnalysis';
 
 describe('Pipeline de Importación y Normalización Amazon / Zinc', () => {
 
@@ -108,14 +110,71 @@ describe('Pipeline de Importación y Normalización Amazon / Zinc', () => {
     expect(resolveImage(null)).toBe(FALLBACK_IMAGE);
   });
 
-  // TEST F: 0 resultados reales del proveedor → UI muestra 0. NO mock fallback.
-  it('TEST F: 0 resultados reales del proveedor → UI muestra 0. NO mock fallback', () => {
-    const rawProviderResults: any[] = [];
-    const candidates = rawProviderResults.map(p => ({
-      id: p.id,
-      title: p.title
-    }));
+  // TEST G: AmazonSourceAdapter elimina stock: 10 arbitrario y delivery fijo
+  it('TEST G: AmazonSourceAdapter asigna null a stock si no hay evidencia confirmada', () => {
+    const rawExtraction = {
+      source: 'amazon' as const,
+      source_product_id: 'B0TESTASIN1',
+      url: 'https://www.amazon.com/dp/B0TESTASIN1',
+      title: 'Action Figure Test',
+      price: 29.99,
+      domestic_shipping: 0,
+      seller: 'Amazon.com',
+      availability: 'in_stock' as any,
+      condition: 'new' as const,
+      image_url: 'https://m.media-amazon.com/images/I/test.jpg',
+      gallery_images: [],
+      estimated_delivery: 'Plazo doméstico USA pendiente de confirmación',
+      raw_metadata: {
+        prime: true,
+        delivery_message: 'Llega mañana con Prime'
+      }
+    };
 
-    expect(candidates.length).toBe(0);
+    const offer = amazonSourceAdapter.toSourceOffer(rawExtraction);
+    expect(offer.stock).toBeNull();
+    expect(offer.estimated_delivery).toBe('Llega mañana con Prime');
+    expect(offer.is_zinc_compatible).toBe(true);
+  });
+
+  // TEST H: candidateImportAnalysis reporta INCOMPLETE cuando falta cotización completa de flete
+  it('TEST H: candidateImportAnalysis reporta INCOMPLETE si el flete internacional no está confirmado', () => {
+    const itemWithoutQuote = {
+      id: 'cand-no-quote',
+      price_usd: 50.00,
+      title: 'Item sin quote'
+    };
+
+    const analysis = calculateCandidateImportAnalysis(itemWithoutQuote);
+    expect(analysis.quoteStatus).toBe('INCOMPLETE');
+    expect(analysis.shippingUsd).toBe(0);
+    expect(analysis.statusExplanation).toContain('flete');
+  });
+
+  // TEST I: candidateImportAnalysis reporta CONFIRMED o ESTIMATED si cuenta con import_quote
+  it('TEST I: candidateImportAnalysis reporta CONFIRMED cuando la cotización observada está completa', () => {
+    const itemWithQuote = {
+      id: 'cand-quote',
+      price_usd: 50.00,
+      title: 'Item con quote',
+      raw_data: {
+        validation_version: 2,
+        provenance: {
+          origin_price: { status: 'OBSERVED' }
+        },
+        import_quote: {
+          shipping: 12.50,
+          customs: 0,
+          fees: 2.50,
+          sale_price: 75.00
+        }
+      }
+    };
+
+    const analysis = calculateCandidateImportAnalysis(itemWithQuote);
+    expect(analysis.quoteStatus).toBe('CONFIRMED');
+    expect(analysis.shippingUsd).toBe(12.50);
+    expect(analysis.estimatedProfit).toBeDefined();
+    expect(analysis.finalPrice).toBe(75.00);
   });
 });

@@ -127,10 +127,16 @@ export default function AdminInternationalAmazon() {
     blocks: 'brand_mapping' as 'brand_mapping' | 'all'
   });
 
+  // Server-side pagination & Multi-country selection
+  const [candidatePage, setCandidatePage] = useState(1);
+  const [candidatePageSize, setCandidatePageSize] = useState(50);
+  const [totalCandidates, setTotalCandidates] = useState(0);
+  const [selectedCountry, setSelectedCountry] = useState<'ALL' | 'UY' | 'AR' | 'CL' | 'PE' | 'MX'>('ALL');
+
   useEffect(() => {
-    fetchCandidates();
+    fetchCandidates(candidatePage, candidatePageSize);
     fetchCategories();
-  }, []);
+  }, [candidatePage, candidatePageSize]);
 
   async function fetchCategories() {
     const { data, error } = await supabase.from('categories').select('*').order('name');
@@ -143,18 +149,22 @@ export default function AdminInternationalAmazon() {
     }
   }
 
-  async function fetchCandidates() {
+  async function fetchCandidates(page: number = candidatePage, pageSize: number = candidatePageSize) {
     setLoading(true);
-    const { data, error } = await supabase
+    const from = (page - 1) * pageSize;
+    const to = from + pageSize - 1;
+
+    const { data, error, count } = await supabase
       .from('international_import_candidates')
-      .select('*')
+      .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
-      .limit(100);
+      .range(from, to);
     
     if (error) {
       addToast({ title: 'Error', message: error.message, type: 'error' });
     } else {
       setCandidates(data || []);
+      if (count !== null) setTotalCandidates(count);
     }
     setLoading(false);
   }
@@ -609,7 +619,24 @@ export default function AdminInternationalAmazon() {
             Descubrí productos, analizá su rentabilidad y decidí qué incorporar al catálogo.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Selector de Mercado Objetivo Multipaís */}
+          <div className="flex items-center gap-1.5 bg-white border border-gray-200 px-3 py-1.5 rounded-xl shadow-xs text-xs">
+            <span className="text-gray-500 font-semibold">Mercado:</span>
+            <select
+              value={selectedCountry}
+              onChange={(e) => setSelectedCountry(e.target.value as any)}
+              className="bg-transparent border-0 text-xs font-bold text-gray-900 focus:ring-0 p-0 pr-6 cursor-pointer"
+            >
+              <option value="ALL">🌎 Todos / Global</option>
+              <option value="UY">🇺🇾 Uruguay (UY)</option>
+              <option value="AR">🇦🇷 Argentina (AR)</option>
+              <option value="CL">🇨🇱 Chile (CL)</option>
+              <option value="PE">🇵🇪 Perú (PE)</option>
+              <option value="MX">🇲🇽 México (MX)</option>
+            </select>
+          </div>
+
           <button
             onClick={() => {
               setShowRulesModal(true);
@@ -943,6 +970,7 @@ export default function AdminInternationalAmazon() {
         onSelectionChange={setSelectedCount}
         onReviewModalToggle={setIsReviewModalOpen}
         onImportingStateChange={setIsImportingInProgress}
+        targetCountry={selectedCountry === 'ALL' ? 'UY' : selectedCountry}
       />
 
       {/* 7. MODAL DE REGLAS DE MAPEO */}

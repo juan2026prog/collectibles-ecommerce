@@ -54,12 +54,22 @@ export class AmazonSourceAdapter implements ISourceAdapter {
       condition: 'new',
       image_url: input.raw?.image_url || input.raw?.images?.[0] || '',
       gallery_images: input.raw?.images || [],
-      estimated_delivery: '2-4 días (USA)',
+      estimated_delivery: input.raw?.delivery_message || input.raw?.delivery_text || (input.raw?.prime ? 'Envío Prime USA a Miami' : 'Plazo doméstico USA pendiente de confirmación'),
       raw_metadata: input.raw
     };
   }
 
   toSourceOffer(raw: RawProductExtraction): SourceOffer {
+    // Resolver stock confirmado o disponibilidad honesta sin inventar cantidades
+    let confirmedStock: number | null = null;
+    if (typeof raw.raw_metadata?.stock === 'number' && raw.raw_metadata.stock >= 0) {
+      confirmedStock = raw.raw_metadata.stock;
+    } else if (typeof raw.raw_metadata?.inventory_level === 'number' && raw.raw_metadata.inventory_level >= 0) {
+      confirmedStock = raw.raw_metadata.inventory_level;
+    }
+
+    const deliveryText = raw.raw_metadata?.delivery_message || raw.raw_metadata?.delivery_text || (raw.raw_metadata?.prime ? 'Envío Prime USA a Miami' : 'Plazo doméstico USA pendiente de confirmación');
+
     return {
       id: `offer-amazon-${raw.source_product_id}`,
       source: 'amazon',
@@ -70,10 +80,10 @@ export class AmazonSourceAdapter implements ISourceAdapter {
       currency: raw.currency || 'USD',
       domestic_shipping: raw.domestic_shipping,
       availability: raw.availability,
-      stock: 10,
+      stock: confirmedStock,
       condition: raw.condition,
       status: 'LIVE',
-      estimated_delivery: raw.estimated_delivery || '2-4 días (USA)',
+      estimated_delivery: deliveryText,
       is_zinc_compatible: true, // Native 100% Zinc compatibility
       reliability_score: 98,
       last_checked_at: new Date().toISOString(),
