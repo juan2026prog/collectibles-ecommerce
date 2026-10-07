@@ -174,8 +174,8 @@ export function validateAndScoreImage(
   // hacerse pasar por "oficial". Mejor no mostrar imagen que mostrar otro producto.
   if (imageSourceUrl) {
     try {
-      const imageHost = new URL(cleanUrl, window.location.origin).hostname.toLowerCase().replace(/^www\./, '');
-      const sourceHost = new URL(imageSourceUrl, window.location.origin).hostname.toLowerCase().replace(/^www\./, '');
+      const imageHost = new URL(cleanUrl, 'https://collectibles.uy').hostname.toLowerCase().replace(/^www\./, '');
+      const sourceHost = new URL(imageSourceUrl, 'https://collectibles.uy').hostname.toLowerCase().replace(/^www\./, '');
       const marketplaceImage = imageHost.includes('mlstatic.com') || imageHost.includes('amazon') || imageHost.includes('ebay');
       const sourceIsMarketplace = sourceHost.includes('mercadolibre') || sourceHost.includes('amazon') || sourceHost.includes('ebay');
       if (marketplaceImage && !sourceIsMarketplace) {
