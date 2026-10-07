@@ -37,6 +37,12 @@ export interface DiscoveredRawCandidate {
   price?: number | null;
   image_url?: string;
   asin?: string;
+  availability?: string | null;
+  rating?: number | null;
+  review_count?: number;
+  seller?: string;
+  prime?: boolean;
+  category?: string | null;
   provider: 'AMAZON' | 'EBAY' | 'BESTBUY' | 'WEB_SEARCH';
   discovered_from: 'RETAILER_DISCOVERY' | 'MANUAL_RESEARCH' | 'RADAR' | 'WATCHLIST';
   metadata?: Record<string, any>;
@@ -164,6 +170,12 @@ export class MultiSourceDiscoveryService {
         price: typeof p.price_usd === 'number' && Number.isFinite(p.price_usd) ? p.price_usd : null,
         image_url: p.image_url || undefined,
         asin: p.asin,
+        availability: p.availability,
+        rating: p.rating,
+        review_count: p.review_count,
+        seller: p.seller,
+        prime: p.prime,
+        category: p.category,
         provider: 'AMAZON',
         discovered_from: 'RETAILER_DISCOVERY',
         metadata: {
