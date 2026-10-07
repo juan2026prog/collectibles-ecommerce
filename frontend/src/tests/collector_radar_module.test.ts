@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { formatReleaseDatePrecision, getStatusBadgeConfig } from '../plugins/collector-radar/core/releaseEngine';
+import { validateAndScoreImage } from '../plugins/collector-radar/core/radarAIEngine';
 
 describe('Módulo 02: Collectibles Radar & Release Calendar Engine Tests', () => {
   it('formats precision QUARTER without inventing day or month', () => {
@@ -26,5 +27,25 @@ describe('Módulo 02: Collectibles Radar & Release Calendar Engine Tests', () =>
 
     const delayed = getStatusBadgeConfig('DELAYED');
     expect(delayed.label).toContain('Demorado');
+  });
+
+  it('rejects generic stock images for Radar', () => {
+    const result = validateAndScoreImage(
+      { title: 'Hot Toys Wolverine', manufacturer: 'Hot Toys', franchise: 'Marvel' },
+      'https://images.unsplash.com/photo-123?w=800',
+      'https://www.hottoys.com.hk/productDetail.php?id=1'
+    );
+    expect(result.isValid).toBe(false);
+    expect(result.finalImageUrl).toBeNull();
+  });
+
+  it('rejects marketplace art when the declared source is an official manufacturer', () => {
+    const result = validateAndScoreImage(
+      { title: 'NECA Ultimate Chucky', manufacturer: 'NECA', franchise: 'Chucky' },
+      'https://http2.mlstatic.com/D_example.jpg',
+      'https://necaonline.com/products/chucky'
+    );
+    expect(result.isValid).toBe(false);
+    expect(result.finalImageUrl).toBeNull();
   });
 });
