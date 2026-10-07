@@ -98,17 +98,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    // Fallback getSession check (only fetch if onAuthStateChange hasn't already initialized it)
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user && fetchedUserIdRef.current !== session.user.id) {
-        setSession(session);
-        setUser(session.user);
-        fetchedUserIdRef.current = session.user.id;
-        fetchProfile(session.user.id);
-      } else if (!session?.user && !fetchedUserIdRef.current) {
+    // Fallback getSession check. Never leave auth initialization waiting on an unbounded promise.
+    Promise.race([
+      supabase.auth.getSession(),
+      new Promise<null>(resolve => window.setTimeout(() => resolve(null), 4000))
+    ]).then((result: any) => {
+      if (!result) {
+        // Cached profile can render admin while Supabase's listener continues recovering the live session.
+        if (cachedProfile) setLoading(false);
+        return;
+      }
+      const currentSession = result?.data?.session || null;
+      if (currentSession?.user && fetchedUserIdRef.current !== currentSession.user.id) {
+        setSession(currentSession);
+        setUser(currentSession.user);
+        fetchedUserIdRef.current = currentSession.user.id;
+        void fetchProfile(currentSession.user.id);
+      } else if (!currentSession?.user && !fetchedUserIdRef.current) {
         setLoading(false);
       }
-    });
+    }).catch(() => setLoading(false));
 
     return () => {
       window.clearTimeout(authSafetyTimer);
