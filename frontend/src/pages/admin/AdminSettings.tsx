@@ -324,7 +324,6 @@ function HomeLayoutEditor({ title, description, initialJson, onSave }: any) {
 function AiUsageStats({ period }: { period: string }) {
   const [stats, setStats] = useState<{ tool_key: string; total_tokens: number; total_cost: number; count: number }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [radarRefreshing, setRadarRefreshing] = useState(false);
 
   useEffect(() => {
     fetchStats();
@@ -461,6 +460,7 @@ export default function AdminSettings() {
   const [handySecretInput, setHandySecretInput] = useState('');
   const [testingHandyConnection, setTestingHandyConnection] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [radarRefreshing, setRadarRefreshing] = useState(false);
   const [showMediaPicker, setShowMediaPicker] = useState<false | 'logo'>(false);
   const { toast } = useToast();
   const { user, isSuperAdmin } = useAuth();
