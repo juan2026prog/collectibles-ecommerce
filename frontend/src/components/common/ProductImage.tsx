@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { FALLBACK_IMAGE, resolveImage } from '../../lib/imageUtils';
+import { FALLBACK_IMAGE, resolveImage, markBrokenImageUrl, isBrokenImageUrl } from '../../lib/imageUtils';
 import { ImageOff } from 'lucide-react';
 
 export interface ProductImageProps {
@@ -35,6 +35,7 @@ export const ProductImage: React.FC<ProductImageProps> = ({
           trimmed && 
           !trimmed.includes('via.placeholder.com') && 
           !trimmed.startsWith('data:image/svg+xml') && 
+          !isBrokenImageUrl(trimmed) &&
           !list.includes(trimmed)
         ) {
           list.push(trimmed);
@@ -66,6 +67,12 @@ export const ProductImage: React.FC<ProductImageProps> = ({
   const currentUrl = candidateUrls[currentIndex] ? resolveImage(candidateUrls[currentIndex]) : null;
 
   const handleError = () => {
+    // Record current failing URL in cache to prevent repeated 404 network requests
+    const failingCandidate = candidateUrls[currentIndex];
+    if (failingCandidate) {
+      markBrokenImageUrl(failingCandidate);
+    }
+
     if (currentIndex + 1 < candidateUrls.length) {
       // Try next alternative URL
       setCurrentIndex(prev => prev + 1);

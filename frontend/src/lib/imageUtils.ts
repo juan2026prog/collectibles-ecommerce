@@ -31,6 +31,23 @@ function isInvalidImageUrl(url: string): boolean {
   return INVALID_IMAGE_PATTERNS.some(p => p.test(url));
 }
 
+// In-memory cache of known broken / 404 image URLs in the current session
+const brokenImageUrls = new Set<string>();
+
+export function markBrokenImageUrl(url: string | null | undefined): void {
+  if (url && typeof url === 'string') {
+    const trimmed = url.trim();
+    if (trimmed && !trimmed.startsWith('data:')) {
+      brokenImageUrls.add(trimmed);
+    }
+  }
+}
+
+export function isBrokenImageUrl(url: string | null | undefined): boolean {
+  if (!url || typeof url !== 'string') return false;
+  return brokenImageUrls.has(url.trim());
+}
+
 /**
  * Extracts all possible candidate image URLs from a raw or normalized product object in priority order.
  */
@@ -41,7 +58,13 @@ export function extractCandidateImages(product: any): string[] {
   const add = (u: any) => {
     if (typeof u === 'string') {
       const trimmed = u.trim();
-      if (trimmed && !isInvalidImageUrl(trimmed) && !trimmed.startsWith('data:image/svg+xml') && !urls.includes(trimmed)) {
+      if (
+        trimmed && 
+        !isInvalidImageUrl(trimmed) && 
+        !isBrokenImageUrl(trimmed) &&
+        !trimmed.startsWith('data:image/svg+xml') && 
+        !urls.includes(trimmed)
+      ) {
         urls.push(trimmed);
       }
     } else if (u && typeof u === 'object' && typeof u.url === 'string') {
@@ -100,7 +123,7 @@ function resolveImageUrl(url: string | null | undefined, variant: ImageSizeVaria
   let rawUrl = trimmed;
 
   // Block invalid / mock / placeholder image URLs in production
-  if (isInvalidImageUrl(rawUrl)) return FALLBACK_IMAGE;
+  if (isInvalidImageUrl(rawUrl) || isBrokenImageUrl(rawUrl)) return FALLBACK_IMAGE;
 
   // UUID-only pattern (e.g. "a1b2c3d4-e5f6-...")
   if (/^[a-f0-9-]{36}$/i.test(trimmed)) {

@@ -208,12 +208,14 @@ export default function AdminSourcingImport() {
         sources: sourcesOverride || selectedResearchSources
       });
 
-      console.log('[FRONTEND_RESEARCH_TRACE]', {
-        step: 'ADMIN_RECEIVED_ITEMS',
-        candidatesCount: res?.candidates?.length || 0,
-        trendsCount: res?.trends?.length || 0,
-        success: res?.success
-      });
+      if (import.meta.env.DEV) {
+        console.log('[FRONTEND_RESEARCH_TRACE]', {
+          step: 'ADMIN_RECEIVED_ITEMS',
+          candidatesCount: res?.candidates?.length || 0,
+          trendsCount: res?.trends?.length || 0,
+          success: res?.success
+        });
+      }
 
       setTrends(prev => res.trends?.[0] ? [res.trends[0], ...prev.filter(t => t.topic !== q)] : prev);
       setCandidates(res.candidates);

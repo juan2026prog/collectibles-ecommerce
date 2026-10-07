@@ -261,13 +261,15 @@ export class ResearchIntelligenceService {
       rawItems = aiResult;
     }
 
-    console.log('[FRONTEND_RESEARCH_TRACE]', {
-      step: 'SERVICE_INPUT_ITEMS',
-      rawItemsCount: rawItems.length,
-      gatewaySuccess: gatewayResponse?.success,
-      aiResultType: typeof aiResult,
-      isAiResultArray: Array.isArray(aiResult)
-    });
+    if (import.meta.env.DEV) {
+      console.log('[FRONTEND_RESEARCH_TRACE]', {
+        step: 'SERVICE_INPUT_ITEMS',
+        rawItemsCount: rawItems.length,
+        gatewaySuccess: gatewayResponse?.success,
+        aiResultType: typeof aiResult,
+        isAiResultArray: Array.isArray(aiResult)
+      });
+    }
 
     let candidates: SourcingProductCandidate[] = Array.isArray(aiResult?.canonical_candidates)
       ? aiResult.canonical_candidates
@@ -283,11 +285,13 @@ export class ResearchIntelligenceService {
     candidates = deduplicateCanonicalCandidates([...candidates, ...retailerCandidates]) as SourcingProductCandidate[];
 
     // Full landed-cost/local-market enrichment still belongs to Productos para Importar.
-    console.log('[FRONTEND_RESEARCH_TRACE]', {
-      step: 'MANUAL_RESEARCH_READY',
-      candidatesCount: candidates.length,
-      deferredCommercialEnrichment: true
-    });
+    if (import.meta.env.DEV) {
+      console.log('[FRONTEND_RESEARCH_TRACE]', {
+        step: 'MANUAL_RESEARCH_READY',
+        candidatesCount: candidates.length,
+        deferredCommercialEnrichment: true
+      });
+    }
 
     // Query/citation counts do not establish product demand or momentum.
     mainTrendCard.market_trend_score = candidates.length ? Math.max(...candidates.map(c => c.trend_score)) : 0;
@@ -297,10 +301,12 @@ export class ResearchIntelligenceService {
     mainTrendCard.drivers = ['Evaluación por evidencia de cada candidato; demanda interna no verificada'];
     mainTrendCard.why_summary = mainTrendCard.drivers[0];
 
-    console.log('[FRONTEND_RESEARCH_TRACE]', {
-      step: 'SERVICE_OUTPUT_ITEMS',
-      candidatesCount: candidates.length
-    });
+    if (import.meta.env.DEV) {
+      console.log('[FRONTEND_RESEARCH_TRACE]', {
+        step: 'SERVICE_OUTPUT_ITEMS',
+        candidatesCount: candidates.length
+      });
+    }
 
     let zeroResultReason: string | undefined = undefined;
     if (candidates.length === 0) {

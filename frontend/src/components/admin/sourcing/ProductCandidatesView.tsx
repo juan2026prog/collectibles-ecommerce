@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Sparkles, ExternalLink, Bookmark, HelpCircle, ArrowRight,
   CheckCircle2, AlertTriangle, Layers, Clock, ShieldCheck, Download, Search, ImageOff
 } from 'lucide-react';
 import type { SourcingProductCandidate } from '../../../types/sourcingIntelligence';
+import { isBrokenImageUrl, markBrokenImageUrl } from '../../../lib/imageUtils';
 
 export const ProductThumbnail: React.FC<{ src?: string | null; alt: string; isPreorder?: boolean }> = ({ src, alt, isPreorder }) => {
   const [hasError, setHasError] = useState(false);
   useEffect(() => { setHasError(false); }, [src]);
-  const isValid = Boolean(src && typeof src === 'string' && src.startsWith('http') && !src.includes('unsplash.com') && !hasError);
+  const isKnownBroken = src ? isBrokenImageUrl(src) : false;
+  const isValid = Boolean(src && typeof src === 'string' && src.startsWith('http') && !src.includes('unsplash.com') && !hasError && !isKnownBroken);
 
   return (
     <div className="w-20 h-20 rounded-2xl bg-gray-50 border border-gray-100 overflow-hidden shrink-0 flex items-center justify-center relative">
@@ -17,7 +19,10 @@ export const ProductThumbnail: React.FC<{ src?: string | null; alt: string; isPr
           src={src!}
           alt={alt}
           className="w-full h-full object-contain p-1"
-          onError={() => setHasError(true)}
+          onError={() => {
+            if (src) markBrokenImageUrl(src);
+            setHasError(true);
+          }}
         />
       ) : (
         <div className="w-full h-full flex flex-col items-center justify-center p-1 text-center bg-slate-50 text-slate-400 text-[9px] font-medium">
@@ -60,27 +65,33 @@ export const ProductCandidatesView: React.FC<ProductCandidatesViewProps> = ({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const pageSize = 25;
 
-  const filtered = candidates.filter(c => {
-    if (filterQuery) {
-      const q = filterQuery.toLowerCase();
-      const matchTitle = c.title.toLowerCase().includes(q);
-      const matchBrand = c.brand.toLowerCase().includes(q);
-      const matchFran = c.franchise.toLowerCase().includes(q);
-      if (!matchTitle && !matchBrand && !matchFran) return false;
-    }
-    if (statusFilter !== 'all' && c.status !== statusFilter) return false;
-    return true;
-  });
+  const filtered = useMemo(() => {
+    return candidates.filter(c => {
+      if (filterQuery) {
+        const q = filterQuery.toLowerCase();
+        const matchTitle = c.title.toLowerCase().includes(q);
+        const matchBrand = c.brand.toLowerCase().includes(q);
+        const matchFran = c.franchise.toLowerCase().includes(q);
+        if (!matchTitle && !matchBrand && !matchFran) return false;
+      }
+      if (statusFilter !== 'all' && c.status !== statusFilter) return false;
+      return true;
+    });
+  }, [candidates, filterQuery, statusFilter]);
 
   const totalPages = Math.ceil(filtered.length / pageSize) || 1;
-  const paginatedCandidates = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const paginatedCandidates = useMemo(() => {
+    return filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  }, [filtered, currentPage, pageSize]);
 
-  console.log('[FRONTEND_RESEARCH_TRACE]', {
-    step: 'VIEW_PROP_ITEMS',
-    candidatesReceived: candidates.length,
-    filteredCount: filtered.length,
-    paginatedCount: paginatedCandidates.length
-  });
+  if (import.meta.env.DEV) {
+    console.log('[FRONTEND_RESEARCH_TRACE]', {
+      step: 'VIEW_PROP_ITEMS',
+      candidatesReceived: candidates.length,
+      filteredCount: filtered.length,
+      paginatedCount: paginatedCandidates.length
+    });
+  }
 
   if (candidates.length === 0) {
     return (

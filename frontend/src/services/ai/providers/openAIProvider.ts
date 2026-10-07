@@ -90,13 +90,15 @@ export class OpenAIProvider implements AIProviderAdapter {
         ? (returnedData as any).items.length 
         : (Array.isArray(returnedData) ? (returnedData as any).length : 0);
 
-      console.log('[FRONTEND_RESEARCH_TRACE]', {
-        step: 'PROVIDER_ITEMS',
-        hasData: Boolean(returnedData),
-        itemsCount: parsedItemsCount,
-        status: data.status,
-        model: data.model
-      });
+      if (import.meta.env.DEV) {
+        console.log('[FRONTEND_RESEARCH_TRACE]', {
+          step: 'PROVIDER_ITEMS',
+          hasData: Boolean(returnedData),
+          itemsCount: parsedItemsCount,
+          status: data.status,
+          model: data.model
+        });
+      }
 
       return {
         success: true,

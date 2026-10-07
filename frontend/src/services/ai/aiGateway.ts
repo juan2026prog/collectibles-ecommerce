@@ -197,13 +197,15 @@ export class AIGateway {
         ? (result.data as any).items.length
         : (Array.isArray(result.data) ? (result.data as any).length : 0);
 
-      console.log('[FRONTEND_RESEARCH_TRACE]', {
-        step: 'GATEWAY_ITEMS',
-        engine,
-        success: result.success,
-        status: result.status,
-        itemsCount
-      });
+      if (import.meta.env.DEV) {
+        console.log('[FRONTEND_RESEARCH_TRACE]', {
+          step: 'GATEWAY_ITEMS',
+          engine,
+          success: result.success,
+          status: result.status,
+          itemsCount
+        });
+      }
 
       return {
         ...result,
