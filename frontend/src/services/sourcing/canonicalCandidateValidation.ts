@@ -30,6 +30,20 @@ function retailerObservations(item: any) {
     : null;
   if (stock) observations.push({ field: 'availability', ...provenance(stock, 'OBSERVED', sourceName, sourceUrl, observedAt), source_type: 'RETAILER' });
 
+  const observedFields = [
+    ['brand', item?.brand],
+    ['rating', item?.rating ?? item?.metadata?.rating],
+    ['review_count', item?.review_count ?? item?.metadata?.review_count],
+    ['seller', item?.seller ?? item?.metadata?.seller],
+    ['prime', item?.prime ?? item?.metadata?.prime],
+    ['category', item?.category ?? item?.metadata?.category]
+  ] as const;
+  for (const [field, value] of observedFields) {
+    if (value !== null && value !== undefined && value !== '') {
+      observations.push({ field, ...provenance(value, 'OBSERVED', sourceName, sourceUrl, observedAt), source_type: 'RETAILER' });
+    }
+  }
+
   return observations;
 }
 
