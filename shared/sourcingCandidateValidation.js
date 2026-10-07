@@ -32,7 +32,9 @@ export function isSafeImageUrl(value) {
     // Must either end with a common image extension or come from dedicated image CDN hosts
     const hasImageExt = /\.(jpe?g|png|webp|avif|gif|svg)(\?.*)?$/i.test(url);
     const isImageCdn = /(^|\.)(media-amazon\.com|ssl-images-amazon\.com|images-na\.ssl-images-amazon\.com|scene7\.com|cdn\.shopify\.com|cloudfront\.net|walmartimages\.com)$/i.test(u.hostname);
-    return hasImageExt || isImageCdn;
+    // FigureRealm and similar editorial hosts can expose image-looking URLs that hotlink-block with 403.
+    const hotlinkBlocked = /(^|\.)figurerealm\.com$/i.test(u.hostname);
+    return !hotlinkBlocked && (hasImageExt || isImageCdn);
   } catch {
     return false;
   }
