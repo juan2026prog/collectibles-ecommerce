@@ -157,7 +157,7 @@ export function validateAndScoreImage(
     lowerUrl.includes('placeholder.com') || 
     lowerUrl.includes('via.placeholder') ||
     lowerUrl.includes('picsum.photos') ||
-    (lowerUrl.includes('unsplash.com') && !cleanUrl.includes('collectibles-verified'));
+    lowerUrl.includes('unsplash.com');
 
   if (isGenericStock) {
     return {
@@ -168,7 +168,28 @@ export function validateAndScoreImage(
     };
   }
 
-  let score = 0.85;
+  let score = 0.65;
+
+  // Si se declara una página fuente, una imagen de un marketplace distinto no puede
+  // hacerse pasar por "oficial". Mejor no mostrar imagen que mostrar otro producto.
+  if (imageSourceUrl) {
+    try {
+      const imageHost = new URL(cleanUrl, 'https://collectibles.uy').hostname.toLowerCase().replace(/^www\./, '');
+      const sourceHost = new URL(imageSourceUrl, 'https://collectibles.uy').hostname.toLowerCase().replace(/^www\./, '');
+      const marketplaceImage = imageHost.includes('mlstatic.com') || imageHost.includes('amazon') || imageHost.includes('ebay');
+      const sourceIsMarketplace = sourceHost.includes('mercadolibre') || sourceHost.includes('amazon') || sourceHost.includes('ebay');
+      if (marketplaceImage && !sourceIsMarketplace) {
+        return {
+          isValid: false,
+          score: 0,
+          reason: 'La imagen pertenece a un marketplace distinto de la fuente declarada',
+          finalImageUrl: null
+        };
+      }
+    } catch {
+      // La validación básica de URL ya se ejecutó arriba.
+    }
+  }
 
   // Si proviene de un dominio oficial del fabricante (hasbropulse.com, necaonline.com, tamashiiweb.com, etc.)
   const isOfficialDomain = 
@@ -190,7 +211,13 @@ export function validateAndScoreImage(
   const titleWords = (releaseInfo.title || '').toLowerCase().split(/\s+/).filter(w => w.length > 3);
   const matchedWords = titleWords.filter(w => lowerUrl.includes(w));
   if (matchedWords.length > 0) {
-    score = Math.min(1.0, score + 0.1);
+    score = Math.min(1.0, score + 0.2);
+  }
+
+  // Una URL externa sin evidencia semántica ni dominio oficial queda por debajo
+  // del umbral. Evita scores altos automáticos para fotos genéricas.
+  if (!isOfficialDomain && matchedWords.length === 0) {
+    score = Math.min(score, 0.65);
   }
 
   return {

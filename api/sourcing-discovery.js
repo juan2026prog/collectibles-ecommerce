@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import crypto from 'node:crypto';
 import { authenticateRequest } from '../server/lib/authGuard.js';
 import { researchViaGateway } from '../server/lib/sourcingGateway.js';
+import { runRadarNewsRefresh } from '../server/lib/radarNewsRefresh.js';
 import { validateCandidateBatch, verifyCandidateSources } from '../server/lib/sourcingSourceVerifier.js';
 import { canonicalCandidateKey, validateStoredCandidate, deduplicateCanonicalCandidates, SOURCING_PURCHASE_CAPABILITY, AUTO_PUBLISH } from '../shared/sourcingCandidateValidation.js';
 
@@ -37,6 +38,18 @@ export default async function handler(req, res) {
   // Consolidated Sourcing Action: on-demand market presence lookup / candidate source verification / post-enrichment persistence
   const { action, asin, source_url, title, brand, id, candidates: candidatesToPersist } = req.body || {};
   const country = req.body?.country || req.query?.country || 'UY';
+
+  // Radar News shares this existing serverless endpoint to stay within the Vercel
+  // Hobby function limit. It is an independent action with its own due-check.
+  const radarNewsTask = req.query?.task === 'radar-news' || action === 'radar_news_refresh';
+  if (radarNewsTask) {
+    const result = await runRadarNewsRefresh(req, {
+      force: action === 'radar_news_refresh' && req.body?.force === true
+    });
+    const statusCode = result.httpStatus || (result.success ? 200 : 502);
+    const { httpStatus, ...body } = result;
+    return res.status(statusCode).json(body);
+  }
   const rawSources = Array.isArray(req.body?.sources) ? req.body.sources : ['WEB', 'AMAZON'];
   const requestedSources = [...new Set(rawSources.map(s => String(s || '').toUpperCase()).filter(s => ['WEB', 'AMAZON', 'EBAY', 'BESTBUY'].includes(s)))];
   const effectiveSources = requestedSources.length ? requestedSources : ['WEB', 'AMAZON'];

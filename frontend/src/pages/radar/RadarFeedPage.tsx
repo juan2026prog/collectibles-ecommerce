@@ -10,6 +10,11 @@ import type { ReleaseEvent, RadarSignal, ReleaseStatus } from '../../plugins/col
 import { getRadarSignalConfig } from '../../plugins/collector-radar/core/releaseEngine';
 import SEO from '../../components/SEO';
 
+function safeRadarImage(url?: string | null) {
+  if (!url) return null;
+  return /unsplash\.com|mlstatic\.com/i.test(url) ? null : url;
+}
+
 // ---------------------------------------------------------------------------
 // Badge de señal editorial
 // ---------------------------------------------------------------------------
@@ -62,9 +67,9 @@ function HeroRadarCard({ item }: { item: ReleaseEvent }) {
       className="group flex flex-col h-full rounded-3xl overflow-hidden border border-white/10 hover:border-red-500/50 transition-all duration-300 shadow-2xl bg-zinc-950"
     >
       <div className="relative w-full aspect-[16/10] sm:aspect-[16/9] lg:aspect-auto lg:flex-1 min-h-[280px] bg-zinc-900 overflow-hidden">
-        {item.official_image_url && !imgError ? (
+        {safeRadarImage(item.official_image_url) && !imgError ? (
           <img
-            src={item.official_image_url}
+            src={safeRadarImage(item.official_image_url) || ''}
             alt={item.title}
             className="w-full h-full object-cover object-center group-hover:scale-105 transition duration-700"
             onError={() => setImgError(true)}
@@ -122,7 +127,7 @@ function HeroRadarCard({ item }: { item: ReleaseEvent }) {
 
         <div className="shrink-0">
           <span className="px-5 py-3 rounded-2xl bg-red-500/15 border border-red-500/30 text-red-300 font-black text-xs tracking-wider uppercase flex items-center gap-2 group-hover:bg-red-500 group-hover:text-white transition-all shadow-lg">
-            <span>Ver Ficha Radar</span>
+            <span>Leer noticia</span>
             <ArrowRight size={14} />
           </span>
         </div>
@@ -145,9 +150,9 @@ function MediumRadarCard({ item }: { item: ReleaseEvent }) {
       className="group flex flex-col sm:flex-row flex-1 rounded-2xl overflow-hidden border border-white/10 hover:border-white/25 transition-all duration-300 shadow-xl bg-zinc-950"
     >
       <div className="relative w-full sm:w-2/5 aspect-[16/10] sm:aspect-auto bg-zinc-900 overflow-hidden shrink-0 min-h-[160px]">
-        {item.official_image_url && !imgError ? (
+        {safeRadarImage(item.official_image_url) && !imgError ? (
           <img
-            src={item.official_image_url}
+            src={safeRadarImage(item.official_image_url) || ''}
             alt={item.title}
             className="w-full h-full object-cover object-center group-hover:scale-105 transition duration-500"
             onError={() => setImgError(true)}
@@ -210,9 +215,9 @@ function GridRadarCard({ item }: { item: ReleaseEvent }) {
     >
       <div>
         <div className="relative w-full aspect-[16/10] bg-zinc-950 overflow-hidden">
-          {item.official_image_url && !imgError ? (
+          {safeRadarImage(item.official_image_url) && !imgError ? (
             <img
-              src={item.official_image_url}
+              src={safeRadarImage(item.official_image_url) || ''}
               alt={item.title}
               className="w-full h-full object-cover object-center group-hover:scale-105 transition duration-500"
               onError={() => setImgError(true)}
@@ -280,7 +285,7 @@ export default function RadarFeedPage() {
           license:licenses(id, name, slug)
         `)
         .eq('is_published', true)
-        .order('created_at', { ascending: false });
+        .order('updated_at', { ascending: false });
 
       if (!error && data) {
         setReleases(data as any);
@@ -329,8 +334,8 @@ export default function RadarFeedPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-10">
       <SEO
-        title="Collectibles Radar — Lanzamientos Mundiales y Descubrimiento en Tiempo Real"
-        description="Seguimiento en tiempo real de nuevos lanzamientos, preventas abiertas, figuras de colección y disponibilidad oficial."
+        title="Radar Collectibles — Noticias, tendencias y lanzamientos"
+        description="Noticias, tendencias, preventas, lanzamientos y productos relacionados del mundo del coleccionismo."
         url="https://collectibles.uy/radar"
       />
 
@@ -343,14 +348,14 @@ export default function RadarFeedPage() {
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
             </span>
             <span className="text-xs font-black uppercase tracking-widest text-red-400">
-              Live Radar Feeds
+              Radar · Noticias
             </span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-black text-white tracking-tight">
-            Collectibles Radar
+            Noticias & Radar
           </h1>
           <p className="text-sm text-zinc-400 mt-1.5 max-w-xl">
-            Descubrimiento continuo de lanzamientos reales con trazabilidad de fuentes oficiales, señales de mercado y fechas estimadas.
+            Noticias, tendencias y lanzamientos verificados del mundo coleccionable, con productos vinculados cuando existe una coincidencia real.
           </p>
         </div>
 
@@ -369,7 +374,7 @@ export default function RadarFeedPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
           {[
-            { id: 'ALL', label: 'Todos los Lanzamientos' },
+            { id: 'ALL', label: 'Todas las Noticias' },
             { id: 'PREORDER', label: 'Preventas' },
             { id: 'NEW', label: 'Novedades' },
             { id: 'DEMAND', label: 'Alta Demanda & Exclusivos' },

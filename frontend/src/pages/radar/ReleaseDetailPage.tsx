@@ -10,6 +10,11 @@ import { formatReleaseDatePrecision, getStatusBadgeConfig } from '../../plugins/
 import { RadarIntegrationService } from '../../services/sourcing/RadarIntegrationService';
 import SEO from '../../components/SEO';
 
+function safeRadarImage(url?: string | null) {
+  if (!url) return null;
+  return /unsplash\.com|mlstatic\.com/i.test(url) ? null : url;
+}
+
 export default function ReleaseDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const [release, setRelease] = useState<ReleaseEvent | null>(null);
@@ -71,12 +76,30 @@ export default function ReleaseDetailPage() {
           });
         }).catch(() => {});
 
-        // Fetch matching catalog products across local, international and canonical catalogs
-        const term = data.license?.name || data.character || data.brand?.name || data.product_line || data.title;
+        // Productos vinculados por la noticia: primero coincidencias exactas verificadas,
+        // después recomendaciones relacionadas del catálogo.
+        const exactLinks = Array.isArray(data.raw_source_data?.linked_products)
+          ? data.raw_source_data.linked_products.map((p: any) => ({
+              product: {
+                id: p.id || p.asin || p.url,
+                title: p.title,
+                slug: p.id || p.asin || '',
+                base_price: p.price_usd,
+                image_url: p.image_url,
+                external_url: p.url,
+                retailer: p.retailer,
+                asin: p.asin
+              },
+              type: p.role === 'PRIMARY' ? 'primary_external' : 'related_external',
+              reasons: [{ label: p.role === 'PRIMARY' ? `🛒 Producto protagonista · ${p.retailer || 'Amazon'}` : `🌎 Relacionado · ${p.retailer || 'Amazon'}` }]
+            }))
+          : [];
+
+        const term = data.license?.name || data.character || data.brand?.name || data.product_line || data.franchise || data.title;
         if (term) {
           const { localCatalog, internationalProducts, canonicalProducts } = await RadarIntegrationService.getAllRelatedProductsForRadar(term);
           
-          const combined = [
+          const related = [
             ...localCatalog.map(p => ({ product: p, type: 'local', reasons: [{ label: '🇺🇾 Catálogo Local' }] })),
             ...internationalProducts.map(p => ({ 
               product: { id: p.id, title: p.title, slug: p.id, base_price: p.final_price_usd, image_url: p.image_url, brand: { name: p.brand } }, 
@@ -90,7 +113,13 @@ export default function ReleaseDetailPage() {
             }))
           ];
 
-          setMatchingProducts(combined.slice(0, 6));
+          const seen = new Set(exactLinks.map((x: any) => String(x.product.id || x.product.title)));
+          setMatchingProducts([
+            ...exactLinks,
+            ...related.filter((x: any) => !seen.has(String(x.product.id || x.product.title)))
+          ].slice(0, 8));
+        } else if (exactLinks.length > 0) {
+          setMatchingProducts(exactLinks.slice(0, 8));
         }
 
         // Si tiene catalog_product_id, consultar el producto en tienda
@@ -117,7 +146,7 @@ export default function ReleaseDetailPage() {
     return (
       <div className="py-24 text-center">
         <div className="animate-spin w-8 h-8 border-4 border-red-500 border-t-transparent rounded-full mx-auto mb-3" />
-        <p className="text-xs font-mono text-zinc-500">Cargando ficha de lanzamiento...</p>
+        <p className="text-xs font-mono text-zinc-500">Cargando noticia de Radar...</p>
       </div>
     );
   }
@@ -126,8 +155,8 @@ export default function ReleaseDetailPage() {
     return (
       <div className="py-24 text-center max-w-md mx-auto">
         <Radio size={40} className="mx-auto mb-3 text-zinc-600" />
-        <h2 className="text-lg font-bold text-white mb-2">Lanzamiento no encontrado</h2>
-        <p className="text-xs text-zinc-400 mb-4">El evento solicitado no existe o fue despublicado.</p>
+        <h2 className="text-lg font-bold text-white mb-2">Noticia no encontrada</h2>
+        <p className="text-xs text-zinc-400 mb-4">La noticia o señal solicitada no existe o fue despublicada.</p>
         <Link to="/radar" className="inline-flex items-center gap-1.5 text-rose-400 text-xs font-bold hover:underline">
           <ArrowLeft size={14} />
           <span>Volver al Radar</span>
@@ -148,7 +177,7 @@ export default function ReleaseDetailPage() {
     <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
       <SEO
         title={`${release.title} | Radar Collectibles`}
-        description={release.summary || release.description || 'Seguimiento oficial de lanzamiento, especificaciones y pre-órdenes'}
+        description={release.summary || release.description || 'Noticias, tendencias, lanzamientos y productos vinculados'}
         url={`https://collectibles.uy/radar/${slug}`}
       />
 
@@ -178,9 +207,9 @@ export default function ReleaseDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
           {/* Image Block */}
           <div className="aspect-square bg-zinc-900 rounded-2xl p-4 flex items-center justify-center border border-white/5 overflow-hidden">
-            {release.official_image_url && !imgError ? (
+            {safeRadarImage(release.official_image_url) && !imgError ? (
               <img
-                src={release.official_image_url}
+                src={safeRadarImage(release.official_image_url) || ''}
                 alt={release.title}
                 className="max-h-full max-w-full object-contain"
                 onError={() => setImgError(true)}
@@ -294,7 +323,7 @@ export default function ReleaseDetailPage() {
               <span className="text-[10px] font-black uppercase tracking-widest text-[#f00856] flex items-center gap-1.5 mb-1">
                 <Sparkles size={14} /> Sourcing Intelligence · Personalizado
               </span>
-              <h3 className="text-xl font-black text-white uppercase tracking-tight">PRODUCTOS EN CATÁLOGO DE ESTE EVENTO</h3>
+              <h3 className="text-xl font-black text-white uppercase tracking-tight">PRODUCTOS VINCULADOS A ESTA NOTICIA</h3>
             </div>
             <Link
               to={`/shop?q=${encodeURIComponent(release.license?.name || release.character || release.brand?.name || '')}`}
@@ -319,12 +348,23 @@ export default function ReleaseDetailPage() {
                     USD ${product.base_price || 0}
                   </p>
                 </div>
-                <Link
-                  to={`/producto/${product.slug}`}
-                  className="w-full py-2 rounded-xl bg-white/5 hover:bg-[#f00856] text-white text-xs font-black uppercase tracking-wider text-center transition block"
-                >
-                  VER PRODUCTO
-                </Link>
+                {product.external_url ? (
+                  <a
+                    href={product.external_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="w-full py-2 rounded-xl bg-white/5 hover:bg-[#f00856] text-white text-xs font-black uppercase tracking-wider text-center transition block"
+                  >
+                    VER EN {product.retailer || 'TIENDA'}
+                  </a>
+                ) : (
+                  <Link
+                    to={`/producto/${product.slug}`}
+                    className="w-full py-2 rounded-xl bg-white/5 hover:bg-[#f00856] text-white text-xs font-black uppercase tracking-wider text-center transition block"
+                  >
+                    VER PRODUCTO
+                  </Link>
+                )}
               </div>
             ))}
           </div>

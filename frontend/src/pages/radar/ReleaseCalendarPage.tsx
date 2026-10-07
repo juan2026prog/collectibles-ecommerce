@@ -6,6 +6,11 @@ import type { ReleaseEvent } from '../../plugins/collector-radar/types';
 import { formatReleaseDatePrecision, getStatusBadgeConfig } from '../../plugins/collector-radar/core/releaseEngine';
 import SEO from '../../components/SEO';
 
+function safeRadarImage(url?: string | null) {
+  if (!url) return null;
+  return /unsplash\.com|mlstatic\.com/i.test(url) ? null : url;
+}
+
 export default function ReleaseCalendarPage() {
   const [releases, setReleases] = useState<ReleaseEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,7 +26,7 @@ export default function ReleaseCalendarPage() {
       const { data, error } = await supabase
         .from('release_events')
         .select(`
-          id, title, slug, image_url, status, release_date_start, release_date_end, release_precision, date_display_text, expected_price_usd, canonical_product_id, is_published,
+          id, title, slug, official_image_url, status, release_date_start, release_date_end, release_precision, date_display_text, expected_price_usd, canonical_product_id, is_published,
           brand:brands(id, name),
           license:licenses(id, name)
         `)
@@ -104,8 +109,8 @@ export default function ReleaseCalendarPage() {
               >
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-xl bg-zinc-950 border border-white/5 p-2 flex items-center justify-center flex-shrink-0">
-                    {release.official_image_url ? (
-                      <img src={release.official_image_url} alt={release.title} className="max-h-full object-contain" />
+                    {safeRadarImage(release.official_image_url) ? (
+                      <img src={safeRadarImage(release.official_image_url) || ''} alt={release.title} className="max-h-full object-contain" />
                     ) : (
                       <Radio size={20} className="text-zinc-600" />
                     )}
