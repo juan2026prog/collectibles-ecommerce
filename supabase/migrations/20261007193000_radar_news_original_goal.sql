@@ -13,6 +13,4 @@ values
   ('radar_auto_refresh_enabled', 'true', now()),
   ('radar_refresh_interval_days', '3', now()),
   ('radar_max_items_per_refresh', '8', now())
-on conflict (key) do update
-set value = excluded.value,
-    updated_at = excluded.updated_at;
+on conflict (key) do nothing;
