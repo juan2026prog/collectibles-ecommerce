@@ -21,7 +21,7 @@ export default function ReleaseCalendarPage() {
       const { data, error } = await supabase
         .from('release_events')
         .select(`
-          id, title, slug, image_url, status, release_date_start, release_date_end, release_precision, date_display_text, expected_price_usd, canonical_product_id, is_published,
+          id, title, slug, official_image_url, status, release_date_start, release_date_end, release_precision, date_display_text, expected_price_usd, canonical_product_id, is_published,
           brand:brands(id, name),
           license:licenses(id, name)
         `)
