@@ -74,19 +74,33 @@ export function normalizeAmazonZincProduct(
 ): CanonicalAmazonZincProduct {
   const asin = String(raw.external_product_id || raw.product_id || raw.asin || '').trim().toUpperCase();
   const title = String(raw.title || raw.name || '').trim();
-  const brand = raw.brand || raw._normalized?.brand || undefined;
+  const brand = raw.brand || raw.manufacturer || raw.byline || raw._normalized?.brand || undefined;
   
   // Resolution of canonical image URL (support both image_url and main_image_url_external)
-  const imageUrl = raw.image_url || raw.main_image_url_external || raw.image || null;
-  const mainImageExternal = raw.main_image_url_external || raw.image_url || null;
+  const imageCandidates = [
+    raw.image_url,
+    raw.main_image_url_external,
+    raw.image,
+    raw.main_image,
+    raw.images?.[0],
+    raw.image_urls?.[0],
+    raw.images?.primary,
+    raw.product?.image_url
+  ].filter((v: any) => typeof v === 'string' && v.startsWith('http'));
+  const imageUrl = imageCandidates[0] || null;
+  const mainImageExternal = raw.main_image_url_external || imageUrl;
 
   // Price resolution
   let priceUsd: number | null = null;
-  if (raw.price !== undefined && raw.price !== null) {
-    const num = Number(raw.price);
-    priceUsd = num > 1000 ? num / 100 : num;
-  } else if (raw.price_usd !== undefined && raw.price_usd !== null) {
-    priceUsd = Number(raw.price_usd);
+  const rawPrice = raw.price_usd ?? raw.price ?? raw.current_price ?? raw.buybox_price ?? raw.price_current ?? raw.product?.price;
+  if (rawPrice !== undefined && rawPrice !== null) {
+    const scalar = typeof rawPrice === 'object' ? (rawPrice.value ?? rawPrice.amount ?? rawPrice.price ?? rawPrice.current) : rawPrice;
+    const cleaned = typeof scalar === 'string' ? scalar.replace(/[^0-9.,-]/g, '').replace(/,/g, '') : scalar;
+    const num = Number(cleaned);
+    if (Number.isFinite(num) && num > 0) {
+      // Zinc legacy payloads may return integer cents under raw.price; explicit USD/value fields are already dollars.
+      priceUsd = raw.price_usd == null && raw.price === rawPrice && Number.isInteger(num) && num > 1000 ? num / 100 : num;
+    }
   }
 
   const productUrl = raw.product_url_external || raw.url || (asin ? `https://www.amazon.com/dp/${asin}` : null);
@@ -103,12 +117,12 @@ export function normalizeAmazonZincProduct(
     currency: 'USD',
     product_url: productUrl,
     product_url_external: productUrl,
-    availability: raw.availability || (raw.prime ? 'in_stock' : 'unknown'),
-    rating: raw.rating || raw.stars || null,
-    review_count: raw.review_count || raw.num_reviews || 0,
-    seller: raw.seller || (source === 'IMPORT_CANDIDATE_CACHE' ? 'Amazon.com (DB Cache)' : 'Amazon.com'),
-    prime: Boolean(raw.prime || raw.amazon_delivery_type === 'prime'),
-    category: raw.category || raw.category_path || null,
+    availability: raw.availability || raw.stock_status || raw.in_stock === true ? (raw.availability || raw.stock_status || 'in_stock') : (raw.in_stock === false ? 'out_of_stock' : (raw.prime ? 'in_stock' : 'unknown')),
+    rating: Number(raw.rating ?? raw.stars ?? raw.average_rating) || null,
+    review_count: Number(raw.review_count ?? raw.num_reviews ?? raw.ratings_total ?? raw.reviews_count) || 0,
+    seller: raw.seller?.name || raw.seller || raw.buybox_seller || (source === 'IMPORT_CANDIDATE_CACHE' ? 'Amazon.com (DB Cache)' : 'Amazon.com'),
+    prime: Boolean(raw.prime || raw.is_prime || raw.amazon_delivery_type === 'prime'),
+    category: raw.category || raw.category_name || raw.category_path || raw.categories?.[0] || null,
     resolution_source: source,
     raw_data: raw
   };
