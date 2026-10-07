@@ -10,6 +10,11 @@ import { formatReleaseDatePrecision, getStatusBadgeConfig } from '../../plugins/
 import { RadarIntegrationService } from '../../services/sourcing/RadarIntegrationService';
 import SEO from '../../components/SEO';
 
+function safeRadarImage(url?: string | null) {
+  if (!url) return null;
+  return /unsplash\.com|mlstatic\.com/i.test(url) ? null : url;
+}
+
 export default function ReleaseDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const [release, setRelease] = useState<ReleaseEvent | null>(null);
@@ -202,9 +207,9 @@ export default function ReleaseDetailPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
           {/* Image Block */}
           <div className="aspect-square bg-zinc-900 rounded-2xl p-4 flex items-center justify-center border border-white/5 overflow-hidden">
-            {release.official_image_url && !imgError ? (
+            {safeRadarImage(release.official_image_url) && !imgError ? (
               <img
-                src={release.official_image_url}
+                src={safeRadarImage(release.official_image_url) || ''}
                 alt={release.title}
                 className="max-h-full max-w-full object-contain"
                 onError={() => setImgError(true)}
