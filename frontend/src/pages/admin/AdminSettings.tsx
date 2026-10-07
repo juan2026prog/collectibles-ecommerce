@@ -814,13 +814,13 @@ export default function AdminSettings() {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData.session?.access_token;
-      const response = await fetch('/api/radar-news-refresh', {
+      const response = await fetch('/api/sourcing-discovery', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ force: true })
+        body: JSON.stringify({ action: 'radar_news_refresh', force: true })
       });
       const payload = await response.json();
       if (!response.ok || !payload?.success) throw new Error(payload?.error || 'No se pudo actualizar Radar');
