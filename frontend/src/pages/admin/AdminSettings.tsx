@@ -324,6 +324,7 @@ function HomeLayoutEditor({ title, description, initialJson, onSave }: any) {
 function AiUsageStats({ period }: { period: string }) {
   const [stats, setStats] = useState<{ tool_key: string; total_tokens: number; total_cost: number; count: number }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [radarRefreshing, setRadarRefreshing] = useState(false);
 
   useEffect(() => {
     fetchStats();
@@ -806,6 +807,30 @@ export default function AdminSettings() {
     }
     setSettings(prev => ({ ...prev, [key]: value }));
     toast.success('Configuración guardada');
+  }
+
+  async function runRadarRefreshNow() {
+    setRadarRefreshing(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch('/api/radar-news-refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ force: true })
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload?.success) throw new Error(payload?.error || 'No se pudo actualizar Radar');
+      await fetchData();
+      toast.success(`Radar actualizado: ${payload.created || 0} noticias nuevas, ${payload.updated || 0} actualizadas`);
+    } catch (error: any) {
+      toast.error(error?.message || 'Falló la actualización de Radar');
+    } finally {
+      setRadarRefreshing(false);
+    }
   }
 
   async function toggleModule(id: string, current: boolean) {
@@ -1875,6 +1900,7 @@ export default function AdminSettings() {
                 const isEnabled = currentRecord ? currentRecord.is_enabled : true;
                 const IconComponent = item.icon;
                 const isVault = item.id === 'vault';
+                const isRadar = item.id === 'radar';
                 const catalogRecord = isVault ? toggles.find(t => t.id === 'vault_catalog_search') : null;
                 const isCatalogEnabled = catalogRecord ? catalogRecord.is_enabled : true;
                 const userPhotosRecord = isVault ? toggles.find(t => t.id === 'vault_user_photos') : null;
@@ -1913,6 +1939,65 @@ export default function AdminSettings() {
                         }
                       </button>
                     </div>
+
+                    {/* Configuración simple de Noticias / Radar */}
+                    {isRadar && isEnabled && (
+                      <div className="ml-6 pl-4 border-l-2 border-rose-500/40 space-y-3 pt-1 pb-1">
+                        <div className="bg-rose-500/5 border border-rose-500/20 rounded-xl p-4 space-y-3">
+                          <div className="flex items-center justify-between gap-4">
+                            <div>
+                              <span className="text-xs font-bold text-gray-900 dark:text-white block">Actualización automática de Noticias</span>
+                              <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                                Radar investiga noticias, tendencias y lanzamientos reales y vincula productos de Amazon cuando encuentra una coincidencia verificable.
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => saveSetting('radar_auto_refresh_enabled', settings['radar_auto_refresh_enabled'] === 'false' ? 'true' : 'false')}
+                              className="p-1 cursor-pointer shrink-0"
+                              title="Activar o desactivar actualización automática de Radar"
+                            >
+                              {settings['radar_auto_refresh_enabled'] !== 'false'
+                                ? <ToggleRight className="w-10 h-10 text-rose-500" />
+                                : <ToggleLeft className="w-10 h-10 text-gray-300 dark:text-slate-600" />
+                              }
+                            </button>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+                            <label className="block">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-slate-400">Frecuencia</span>
+                              <select
+                                value={settings['radar_refresh_interval_days'] || '3'}
+                                onChange={(e) => saveSetting('radar_refresh_interval_days', e.target.value)}
+                                className="mt-1 w-full bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-gray-900 dark:text-white"
+                              >
+                                <option value="1">Todos los días</option>
+                                <option value="2">Cada 2 días</option>
+                                <option value="3">Cada 3 días (recomendado)</option>
+                                <option value="5">Cada 5 días</option>
+                                <option value="7">Cada 7 días</option>
+                              </select>
+                            </label>
+
+                            <button
+                              type="button"
+                              onClick={runRadarRefreshNow}
+                              disabled={radarRefreshing}
+                              className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white text-xs font-black flex items-center justify-center gap-2 min-h-[40px]"
+                            >
+                              <RefreshCw className={`w-4 h-4 ${radarRefreshing ? 'animate-spin' : ''}`} />
+                              {radarRefreshing ? 'Actualizando…' : 'Actualizar ahora'}
+                            </button>
+                          </div>
+
+                          <div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-gray-500 dark:text-slate-400">
+                            <span>Última actualización: <strong className="text-gray-700 dark:text-slate-200">{settings['radar_last_refresh_at'] ? new Date(settings['radar_last_refresh_at']).toLocaleString('es-UY') : 'Todavía no ejecutada'}</strong></span>
+                            <span>Objetivo: <strong className="text-gray-700 dark:text-slate-200">Noticias → productos → conversión</strong></span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Sub-opciones de My Vault */}
                     {isVault && isEnabled && (
