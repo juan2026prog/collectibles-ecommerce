@@ -62,16 +62,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(cachedProfile);
-  const [loading, setLoading] = useState(true);
+  // A cached profile is enough to paint the shell immediately; live auth reconciles in background.
+  const [loading, setLoading] = useState(!cachedProfile);
   const fetchedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Auth must never leave the whole application behind an infinite spinner.
     // Supabase can occasionally leave getSession/profile requests pending on mobile/network recovery.
     const authSafetyTimer = window.setTimeout(() => {
-      console.warn('[AuthContext] Auth initialization timed out; releasing loading state.');
+      // Safety release only. Do not emit a scary console warning for recoverable network latency.
       setLoading(false);
-    }, 8000);
+    }, 6000);
 
     // Listen for auth changes (handles initial session & updates)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -128,19 +129,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   async function fetchProfile(userId: string) {
     try {
       // 1. Fetch profile row
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-
+      const profileQuery = supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+      const rolesQuery = supabase.from('user_roles').select('role').eq('user_id', userId);
+      const [profileResult, rolesResult] = await Promise.all([profileQuery, rolesQuery]);
+      const { data: profileData, error: profileError } = profileResult;
       if (profileError) throw profileError;
-
-      // 2. Fetch user roles explicitly
-      const { data: rolesData } = await supabase
-        .from('user_roles')
-        .select('role')
-        .eq('user_id', userId);
+      const rolesData = rolesResult.data;
 
       const roles = Array.isArray(rolesData) ? rolesData.map((r: any) => r.role) : [];
       const userEmail = profileData?.email || user?.email || '';
