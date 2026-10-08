@@ -63,8 +63,10 @@ async function resolveSourceImage(sourceUrl, story = {}) {
 
     const deduped = [...new Set(candidates)].filter(url => {
       const lower = url.toLowerCase();
-      if (lower.includes('unsplash.com') || lower.includes('pexels.com')) return false;
-      if (/logo|avatar|icon|sprite|favicon|banner|header|masthead|hero|social|share|pulse-social/i.test(lower)) return false;
+      if (lower.includes('unsplash.com') || lower.includes('pexels.com') || lower.includes('placeholder')) return false;
+      if (/logo|avatar|icon|sprite|favicon|pulse-social|social-square|social-share/i.test(lower)) return false;
+      // Bloquear banners, headers y mastheads genéricos, pero NO rechazar imágenes solo por tener 'hero' (ej: product-hero, hero-product)
+      if (/banner|header|masthead|hero-banner|category-banner|collection-banner|site-header/i.test(lower)) return false;
       return /^https?:\/\//.test(url);
     });
 
@@ -86,33 +88,130 @@ async function resolveSourceImage(sourceUrl, story = {}) {
   }
 }
 
-async function repairExistingRadarImages(supabase, limit = 12) {
+export async function repairExistingRadarImages(supabase, limit = 50) {
+  // Obtener registros que no tienen imagen o cuya imagen proviene de stock prohibido
   const { data: rows } = await supabase
     .from('release_events')
-    .select('id,title,source_url,official_image_url,manufacturer,franchise,character,raw_source_data')
-    .is('official_image_url', null)
-    .not('source_url', 'is', null)
+    .select('id,title,source_url,official_image_url,manufacturer,franchise,character,approval_status,is_published,raw_source_data')
     .order('updated_at', { ascending: false })
     .limit(limit);
 
-  let repaired = 0;
+  const metrics = {
+    inspected: (rows || []).length,
+    already_valid: 0,
+    repaired_amazon: 0,
+    repaired_source_page: 0,
+    prohibited_cleared: 0,
+    unresolved: 0
+  };
+
   for (const row of rows || []) {
-    const img = await resolveSourceImage(row.source_url, row);
-    if (!img?.url) continue;
-    const { error } = await supabase.from('release_events').update({
-      official_image_url: img.url,
-      image_source_url: img.source_page,
-      image_match_score: img.score,
-      updated_at: new Date().toISOString(),
-      raw_source_data: {
-        ...(row.raw_source_data || {}),
-        image_provenance: 'SOURCE_PAGE',
-        image_repaired_without_ai: true
+    const raw = row.raw_source_data || {};
+    const currentImg = row.official_image_url;
+
+    // Detectar si la imagen actual es stock photo o prohibida
+    const isProhibited = currentImg && (/unsplash\.com|pexels\.com|picsum\.photos|placeholder|mlstatic\.com/i.test(currentImg) ||
+      /logo|avatar|icon|sprite|favicon|pulse-social|social-square|social-share|hero-banner|site-banner/i.test(currentImg));
+
+    if (isProhibited) {
+      metrics.prohibited_cleared++;
+      await supabase.from('release_events').update({
+        official_image_url: null,
+        image_match_score: 0,
+        is_published: false,
+        approval_status: 'DRAFT',
+        raw_source_data: {
+          ...raw,
+          image_provenance: 'NONE',
+          image_semantic_type: 'NONE',
+          image_prohibited_cleared: true
+        },
+        updated_at: new Date().toISOString()
+      }).eq('id', row.id);
+      row.official_image_url = null;
+    }
+
+    // 1. ¿Ya tiene imagen válida?
+    if (row.official_image_url) {
+      metrics.already_valid++;
+      continue;
+    }
+
+    // 2. ¿Tiene primary_product exacto en raw_source_data?
+    let targetImage = null;
+    let targetSource = null;
+    let targetScore = 0;
+    let targetProvenance = 'NONE';
+    let targetSemanticType = 'UNVERIFIED';
+
+    if (raw.primary_product?.image_url) {
+      targetImage = raw.primary_product.image_url;
+      targetSource = raw.primary_product.url || row.source_url;
+      targetScore = 0.95;
+      targetProvenance = 'AMAZON_PRODUCT';
+      targetSemanticType = 'PRODUCT_EXACT';
+      metrics.repaired_amazon++;
+    } else if (Array.isArray(raw.linked_products) && raw.linked_products.length > 0) {
+      // 3. ¿Tiene linked_products con rol PRIMARY o coincidencia fuerte?
+      const primaryLink = raw.linked_products.find(p => p.role === 'PRIMARY' && p.image_url);
+      if (primaryLink) {
+        targetImage = primaryLink.image_url;
+        targetSource = primaryLink.url || row.source_url;
+        targetScore = 0.92;
+        targetProvenance = 'AMAZON_PRODUCT';
+        targetSemanticType = 'PRODUCT_EXACT';
+        metrics.repaired_amazon++;
       }
-    }).eq('id', row.id);
-    if (!error) repaired++;
+    }
+
+    // 4. ¿Tiene fuente oficial / noticia válida? Intentar extraer imagen desde la fuente
+    if (!targetImage && row.source_url) {
+      const resolved = await resolveSourceImage(row.source_url, row);
+      if (resolved?.url) {
+        targetImage = resolved.url;
+        targetSource = resolved.source_page || row.source_url;
+        targetScore = resolved.score;
+        targetProvenance = 'SOURCE_PAGE';
+        targetSemanticType = 'PRODUCT_EXACT';
+        metrics.repaired_source_page++;
+      }
+    }
+
+    // 5. ¿Se pudo reparar?
+    if (targetImage) {
+      const relevanceScore = raw.editorial_relevance_score ?? 80;
+      const isRelevancePublishable = raw.editorial_relevance_type ? raw.editorial_relevance_score >= 80 : true;
+      const shouldPublish = isRelevancePublishable;
+      const approvalStatus = shouldPublish ? 'PUBLISHED' : 'DRAFT';
+
+      await supabase.from('release_events').update({
+        official_image_url: targetImage,
+        image_source_url: targetSource,
+        image_match_score: targetScore,
+        is_published: shouldPublish,
+        approval_status: approvalStatus,
+        updated_at: new Date().toISOString(),
+        raw_source_data: {
+          ...raw,
+          image_provenance: targetProvenance,
+          image_semantic_type: targetSemanticType,
+          image_repaired_at: new Date().toISOString()
+        }
+      }).eq('id', row.id);
+    } else {
+      // 5. Sigue sin imagen: asegurar que quede en DRAFT / sin publicar
+      metrics.unresolved++;
+      if (row.is_published) {
+        await supabase.from('release_events').update({
+          is_published: false,
+          approval_status: 'DRAFT',
+          updated_at: new Date().toISOString()
+        }).eq('id', row.id);
+      }
+    }
   }
-  return repaired;
+
+  return metrics;
 }
 
 const RADAR_MODELS = new Set(['gpt-5.6-luna','gpt-5.6-terra','gpt-5.6-sol']);
@@ -509,9 +608,9 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
     console.warn('[Radar Refresh] legacy image cleanup skipped', cleanupError?.message || cleanupError);
   }
 
-  let repairedExistingImages = 0;
+  let repairedExistingImages = { inspected: 0, already_valid: 0, repaired_amazon: 0, repaired_source_page: 0, prohibited_cleared: 0, unresolved: 0 };
   try {
-    repairedExistingImages = await repairExistingRadarImages(supabase, 12);
+    repairedExistingImages = await repairExistingRadarImages(supabase, 100);
   } catch (repairError) {
     console.warn('[Radar Refresh] existing image repair skipped', repairError?.message || repairError);
   }
@@ -783,6 +882,7 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
     created,
     updated,
     skipped,
+    image_repair: repairedExistingImages,
     cost_usd: aiCost,
     mode: radarMode,
     executed_at: now

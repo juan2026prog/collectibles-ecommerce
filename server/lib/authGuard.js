@@ -55,7 +55,24 @@ export async function authenticateRequest(req, options = {}) {
     };
   }
 
-  // 3. Reject unauthenticated requests immediately
+  // 3. Optional Public Customer Support Chatbot mode
+  if (options.allowPublicSupport && !authHeader) {
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown-ip';
+    const clientSessionId = req.headers['x-support-session-id'] || 'anon-session';
+    return {
+      authenticated: true,
+      isAnonymousSupport: true,
+      isCron: false,
+      isAdmin: false,
+      isSuperAdmin: false,
+      user: { id: `anon-${clientSessionId}`, email: null, isAnonymous: true },
+      role: 'anonymous_visitor',
+      ip: clientIp,
+      sessionId: clientSessionId
+    };
+  }
+
+  // 4. Reject unauthenticated requests immediately
   if (!authHeader.startsWith('Bearer ')) {
     return {
       authenticated: false,

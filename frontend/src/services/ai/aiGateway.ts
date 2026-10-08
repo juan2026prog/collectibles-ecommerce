@@ -120,7 +120,32 @@ export class AIGateway {
         .eq('engine_key', engine)
         .maybeSingle();
 
-      const engineConfig = engineData as AIEngineConfig | null;
+      let engineConfig = engineData as AIEngineConfig | null;
+
+      // Default fallback config for CUSTOMER_SUPPORT_AI if not yet inserted in ai_engine_config table
+      if (!engineConfig && engine === 'CUSTOMER_SUPPORT_AI') {
+        engineConfig = {
+          id: 'default-customer-support',
+          engine_key: 'CUSTOMER_SUPPORT_AI',
+          name: 'Collectibles AI Assistant',
+          description: 'Chatbot de atención al cliente y soporte para coleccionistas',
+          enabled: true,
+          provider: systemConfig.provider || 'OPENAI',
+          model: 'gpt-4o-mini',
+          temperature: 0.2,
+          max_input_tokens: 2048,
+          max_output_tokens: 1024,
+          daily_request_limit: 1000,
+          daily_budget_usd: 5.0,
+          monthly_budget_usd: 100.0,
+          timeout_ms: 15000,
+          fallback_enabled: true,
+          country_scope: ['ALL'],
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+      }
+
       if (!engineConfig || !engineConfig.enabled) {
         return await this.handleDisabledOrFallback(
           'ENGINE_DISABLED',

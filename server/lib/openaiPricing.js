@@ -221,7 +221,8 @@ export function validateRequestedModel(requestedModel, options = {}) {
     };
   }
 
-  if (!modelConfig.capabilities?.research_intelligence) {
+  const isResearchEngine = ['RESEARCH_INTELLIGENCE', 'SOURCING_WEB_RESEARCH', 'PRODUCT_DISCOVERY'].includes(engine);
+  if (isResearchEngine && !modelConfig.capabilities?.research_intelligence) {
     return {
       valid: false,
       isAuto: false,

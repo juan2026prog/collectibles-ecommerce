@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  MessageSquare, X, Send, Sparkles, User, Bot, 
-  ExternalLink, ChevronRight, AlertCircle, ShoppingBag, 
-  HelpCircle, RefreshCw, Headphones
+  X, Send, Bot, ChevronRight, Headphones
 } from 'lucide-react';
 import { AssistantService, type ChatMessage } from '../../services/support/assistantService';
 import { useAuth } from '../../contexts/AuthContext';
 import { useCurrency } from '../../contexts/CurrencyContext';
+import { useLocale } from '../../contexts/LocaleContext';
 import { Link } from 'react-router-dom';
 
 const INITIAL_PROMPT_SUGGESTIONS = [
@@ -17,10 +16,23 @@ const INITIAL_PROMPT_SUGGESTIONS = [
   '¿Dónde está mi pedido?'
 ];
 
+function getOrCreateSupportSessionId(): string {
+  let sid = localStorage.getItem('collectibles_support_sid');
+  if (!sid) {
+    sid = `sid_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    localStorage.setItem('collectibles_support_sid', sid);
+  }
+  return sid;
+}
+
 export const CollectiblesAIAssistant: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [humanSupportEnabled, setHumanSupportEnabled] = useState(false);
+  const [chatbotVisible, setChatbotVisible] = useState(true);
+
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -33,7 +45,40 @@ export const CollectiblesAIAssistant: React.FC = () => {
 
   const { user } = useAuth();
   const { formatCurrencyPrice } = useCurrency();
+  const { country } = useLocale();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const sessionId = getOrCreateSupportSessionId();
+
+  // Load Assistant Config (checks if human support is enabled or chatbot active)
+  useEffect(() => {
+    AssistantService.getSystemConfig().then(cfg => {
+      setHumanSupportEnabled(cfg.human_support_enabled);
+      setChatbotVisible(cfg.chatbot_enabled);
+    }).catch(() => {});
+  }, []);
+
+  // Initialize or restore conversation when widget is opened
+  useEffect(() => {
+    if (isOpen && !conversationId) {
+      AssistantService.ensureConversation({
+        sessionId,
+        userId: user?.id,
+        userEmail: user?.email,
+        userName: (user as any)?.user_metadata?.full_name,
+        countryCode: country || 'UY'
+      }).then(conv => {
+        if (conv?.id) {
+          setConversationId(conv.id);
+          AssistantService.loadMessages(conv.id).then(loadedMsgs => {
+            if (loadedMsgs.length > 0) {
+              setMessages(loadedMsgs);
+            }
+          });
+        }
+      });
+    }
+  }, [isOpen, conversationId, user, country, sessionId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -64,10 +109,17 @@ export const CollectiblesAIAssistant: React.FC = () => {
       const response = await AssistantService.processMessage({
         userMessage: messageText,
         conversationHistory: messages,
+        conversationId,
+        sessionId,
         userId: user?.id,
         userEmail: user?.email,
-        countryCode: 'UY'
+        userName: (user as any)?.user_metadata?.full_name,
+        countryCode: country || 'UY'
       });
+
+      if (response.conversationId && !conversationId) {
+        setConversationId(response.conversationId);
+      }
 
       const assistantMsg: ChatMessage = {
         id: `asst-${Date.now()}`,
@@ -84,10 +136,10 @@ export const CollectiblesAIAssistant: React.FC = () => {
       const errorMsg: ChatMessage = {
         id: `err-${Date.now()}`,
         sender: 'ASSISTANT',
-        text: 'Disculpas, ocurrió una intermitencia de conexión momentánea. Podés reintentar tu consulta o solicitar atención humana.',
+        text: 'Disculpas, ocurrió una intermitencia de conexión momentánea. Podés reintentar tu consulta.',
         timestamp: new Date().toISOString(),
         isError: true,
-        suggestedActions: ['Reintentar', 'Hablar con una persona']
+        suggestedActions: ['Reintentar', 'Consultar sobre un producto']
       };
       setMessages(prev => [...prev, errorMsg]);
     } finally {
@@ -98,6 +150,10 @@ export const CollectiblesAIAssistant: React.FC = () => {
   const handleEscalateHuman = () => {
     handleSend('Quiero hablar con una persona del equipo');
   };
+
+  if (!chatbotVisible) {
+    return null;
+  }
 
   return (
     <>
@@ -130,20 +186,23 @@ export const CollectiblesAIAssistant: React.FC = () => {
               <div>
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   Collectibles AI Assistant
-                  <span className="text-[10px] uppercase font-semibold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">En Línea</span>
+                  <span className="text-[10px] uppercase font-semibold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">100% IA</span>
                 </h3>
-                <p className="text-[11px] text-zinc-400">Búsqueda, importaciones y soporte oficial</p>
+                <p className="text-[11px] text-zinc-400">Búsqueda, importaciones y soporte oficial ({country || 'UY'})</p>
               </div>
             </div>
 
             <div className="flex items-center gap-1">
-              <button
-                onClick={handleEscalateHuman}
-                title="Hablar con una persona"
-                className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-white/5 transition"
-              >
-                <Headphones className="w-4 h-4" />
-              </button>
+              {/* Only show human escalation button if human_support_enabled is explicitly true in Superadmin */}
+              {humanSupportEnabled && (
+                <button
+                  onClick={handleEscalateHuman}
+                  title="Hablar con una persona"
+                  className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-white/5 transition"
+                >
+                  <Headphones className="w-4 h-4" />
+                </button>
+              )}
               <button
                 onClick={() => setIsOpen(false)}
                 className="p-1.5 text-zinc-400 hover:text-white rounded-lg hover:bg-white/5 transition"
@@ -172,7 +231,7 @@ export const CollectiblesAIAssistant: React.FC = () => {
                 >
                   <p className="whitespace-pre-wrap">{msg.text}</p>
 
-                  {/* Product Cards Carousel/Stack */}
+                  {/* Product Cards Stack */}
                   {msg.products && msg.products.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-white/10 space-y-2">
                       <p className="text-[11px] uppercase tracking-wider font-semibold text-zinc-400">Piezas recomendadas:</p>

@@ -215,8 +215,15 @@ async function executeHandler(req, res) {
     });
   }
 
+  const requestedEngine = req.body?.engine || 'AI_SEARCH';
+  const isCustomerSupport = requestedEngine === 'CUSTOMER_SUPPORT_AI';
+
   // 1. Authoritative Authentication & Security Check (Fail-closed)
-  const auth = await authenticateRequest(req, { allowCron: true });
+  const auth = await authenticateRequest(req, { 
+    allowCron: true,
+    allowPublicSupport: isCustomerSupport 
+  });
+
   if (!auth.authenticated) {
     return res.status(401).json({
       success: false,
@@ -226,8 +233,8 @@ async function executeHandler(req, res) {
     });
   }
 
-  // Must be at least Admin to trigger AI executions
-  if (!auth.isAdmin) {
+  // Must be at least Admin to trigger internal AI executions (CUSTOMER_SUPPORT_AI is public for store customers)
+  if (!auth.isAdmin && !isCustomerSupport) {
     return res.status(403).json({
       success: false,
       status: 'FORBIDDEN',
@@ -433,6 +440,18 @@ async function executeHandler(req, res) {
       );
 
       engData = fetchedEngData;
+
+      if (!engData && engine === 'CUSTOMER_SUPPORT_AI') {
+        engData = {
+          engine_key: 'CUSTOMER_SUPPORT_AI',
+          name: 'Collectibles AI Assistant',
+          enabled: true,
+          model: 'gpt-4o-mini',
+          timeout_ms: 15000,
+          daily_budget_usd: 5.0,
+          monthly_budget_usd: 100.0
+        };
+      }
 
       if (engData) {
         if (!engData.enabled) {

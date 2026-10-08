@@ -38,7 +38,8 @@ export class OpenAIProvider implements AIProviderAdapter {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(context?.sessionId ? { 'x-support-session-id': String(context.sessionId) } : {})
         },
         body: JSON.stringify({
           engine,
