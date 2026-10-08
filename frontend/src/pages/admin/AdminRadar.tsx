@@ -178,7 +178,7 @@ export default function AdminRadar() {
       if (!response.ok || !payload?.success) throw new Error(payload?.error || 'No se pudo actualizar Radar');
 
       toast.success(
-        `Radar actualizado: ${payload.created || 0} nuevas · ${payload.updated || 0} actualizadas · costo real USD ${payload.ai_cost_usd != null ? Number(payload.ai_cost_usd).toFixed(4) : 'N/D'}`
+        `Radar actualizado: ${payload.created || 0} nuevas · ${payload.updated || 0} actualizadas · ${payload.repaired_existing_images || 0} imágenes reparadas · costo real USD ${payload.ai_cost_usd != null ? Number(payload.ai_cost_usd).toFixed(4) : 'N/D'}`
       );
       await Promise.all([loadReleases(), loadRadarControl()]);
     } catch (err: any) {

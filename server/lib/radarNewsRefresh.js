@@ -64,7 +64,7 @@ async function resolveSourceImage(sourceUrl, story = {}) {
     const deduped = [...new Set(candidates)].filter(url => {
       const lower = url.toLowerCase();
       if (lower.includes('unsplash.com') || lower.includes('pexels.com')) return false;
-      if (/logo|avatar|icon|sprite|favicon|banner|header|masthead|hero|social|share|pulse-social/i.test(lower)) return false;
+      if (/logo|avatar|icon|sprite|favicon|masthead|social|share|pulse-social|hero-banner|site-banner|brand-banner/i.test(lower)) return false;
       return /^https?:\/\//.test(url);
     });
 
@@ -86,33 +86,79 @@ async function resolveSourceImage(sourceUrl, story = {}) {
   }
 }
 
-async function repairExistingRadarImages(supabase, limit = 12) {
+function isObviouslyBadRadarImage(url) {
+  const lower = String(url || '').toLowerCase();
+  if (!lower) return true;
+  return /unsplash\.com|pexels\.com|placeholder|via\.placeholder|picsum\.photos|mlstatic\.com|pulse-social|social-square|social-share|logo\.|brand-logo|hero-banner|site-banner|brand-banner/.test(lower);
+}
+
+async function repairExistingRadarImages(supabase, limit = 50) {
   const { data: rows } = await supabase
     .from('release_events')
-    .select('id,title,source_url,official_image_url,manufacturer,franchise,character,raw_source_data')
-    .is('official_image_url', null)
-    .not('source_url', 'is', null)
+    .select('id,title,source_url,official_image_url,image_source_url,manufacturer,franchise,character,raw_source_data,is_published,approval_status')
     .order('updated_at', { ascending: false })
     .limit(limit);
 
   let repaired = 0;
+  let inspected = 0;
+  let unresolved = 0;
+
   for (const row of rows || []) {
-    const img = await resolveSourceImage(row.source_url, row);
-    if (!img?.url) continue;
+    const needsRepair = !row.official_image_url || isObviouslyBadRadarImage(row.official_image_url);
+    if (!needsRepair) continue;
+    inspected++;
+
+    const raw = row.raw_source_data || {};
+    const primary = raw.primary_product || null;
+    const linked = Array.isArray(raw.linked_products) ? raw.linked_products : [];
+    const primaryLinked = linked.find(p => p?.role === 'PRIMARY' && p?.image_url && !isObviouslyBadRadarImage(p.image_url));
+    const amazonImage = primary?.image_url && !isObviouslyBadRadarImage(primary.image_url)
+      ? {
+          url: primary.image_url,
+          source_page: primary.url || row.source_url || null,
+          score: 0.98,
+          provenance: 'AMAZON_PRODUCT'
+        }
+      : (primaryLinked
+          ? {
+              url: primaryLinked.image_url,
+              source_page: primaryLinked.url || row.source_url || null,
+              score: 0.96,
+              provenance: 'AMAZON_PRODUCT'
+            }
+          : null);
+
+    const sourceImage = amazonImage ? null : await resolveSourceImage(row.source_url, {
+      ...row,
+      primary_product_name: primary?.title || primaryLinked?.title || null
+    });
+
+    const img = amazonImage || (sourceImage
+      ? { ...sourceImage, provenance: 'SOURCE_PAGE' }
+      : null);
+
+    if (!img?.url || isObviouslyBadRadarImage(img.url)) {
+      unresolved++;
+      continue;
+    }
+
     const { error } = await supabase.from('release_events').update({
       official_image_url: img.url,
-      image_source_url: img.source_page,
+      image_source_url: img.source_page || row.source_url || row.image_source_url || null,
       image_match_score: img.score,
       updated_at: new Date().toISOString(),
       raw_source_data: {
-        ...(row.raw_source_data || {}),
-        image_provenance: 'SOURCE_PAGE',
-        image_repaired_without_ai: true
+        ...raw,
+        image_provenance: img.provenance,
+        image_repaired_without_ai: true,
+        image_repaired_at: new Date().toISOString()
       }
     }).eq('id', row.id);
+
     if (!error) repaired++;
   }
-  return repaired;
+
+  return { repaired, inspected, unresolved };
 }
 
 const RADAR_MODELS = new Set(['gpt-5.6-luna','gpt-5.6-terra','gpt-5.6-sol']);
@@ -509,9 +555,9 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
     console.warn('[Radar Refresh] legacy image cleanup skipped', cleanupError?.message || cleanupError);
   }
 
-  let repairedExistingImages = 0;
+  let repairedExistingImages = { repaired: 0, inspected: 0, unresolved: 0 };
   try {
-    repairedExistingImages = await repairExistingRadarImages(supabase, 12);
+    repairedExistingImages = await repairExistingRadarImages(supabase, 50);
   } catch (repairError) {
     console.warn('[Radar Refresh] existing image repair skipped', repairError?.message || repairError);
   }
@@ -688,7 +734,7 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
     const provenance = primary?.image_url ? 'AMAZON_PRODUCT' : (sourceImage?.url ? 'SOURCE_PAGE' : 'NONE');
     const storyDate = safeDate(story.source_published_at) || new Date().toISOString();
     const releaseDate = story.release_date && /^\d{4}-\d{2}-\d{2}$/.test(story.release_date) ? story.release_date : null;
-    const isLogoOrBanner = selectedImageUrl && /logo|avatar|icon|sprite|favicon|banner|header|masthead|hero|social|share|pulse-social/i.test(selectedImageUrl);
+    const isLogoOrBanner = selectedImageUrl && /logo|avatar|icon|sprite|favicon|masthead|social|share|pulse-social|hero-banner|site-banner|brand-banner/i.test(selectedImageUrl);
     const semanticType = (selectedImageUrl && !isLogoOrBanner && selectedImageScore >= 0.7 && provenance !== 'NONE')
       ? 'PRODUCT_EXACT'
       : (isLogoOrBanner ? 'BRAND_LOGO' : 'UNVERIFIED');
@@ -831,7 +877,9 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
     created,
     updated,
     skipped,
-    repaired_existing_images: repairedExistingImages,
+    repaired_existing_images: repairedExistingImages.repaired,
+    image_repair_inspected: repairedExistingImages.inspected,
+    image_repair_unresolved: repairedExistingImages.unresolved,
     published,
     sources_checked: OFFICIAL_RADAR_SOURCES.length,
     candidates_found: officialCandidates.length,
