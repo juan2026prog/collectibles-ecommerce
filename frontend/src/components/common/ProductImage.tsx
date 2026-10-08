@@ -66,6 +66,25 @@ export const ProductImage: React.FC<ProductImageProps> = ({
 
   const currentUrl = candidateUrls[currentIndex] ? resolveImage(candidateUrls[currentIndex]) : null;
 
+  // Some remote Amazon image requests can remain pending for a long time instead
+  // of returning a clean error. Advance to the next candidate after a short timeout
+  // so visible rows never stay indefinitely on a spinner.
+  useEffect(() => {
+    if (!currentUrl || isLoaded || hasError) return;
+
+    const timer = window.setTimeout(() => {
+      if (currentIndex + 1 < candidateUrls.length) {
+        setCurrentIndex(prev => prev + 1);
+        setIsLoaded(false);
+      } else {
+        setHasError(true);
+        onStatusChange?.('error');
+      }
+    }, 6000);
+
+    return () => window.clearTimeout(timer);
+  }, [currentUrl, currentIndex, candidateUrls.length, isLoaded, hasError, onStatusChange]);
+
   const handleError = () => {
     // Record current failing URL in cache to prevent repeated 404 network requests
     const failingCandidate = candidateUrls[currentIndex];
