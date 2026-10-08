@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import crypto from 'node:crypto';
 import { authenticateRequest } from '../server/lib/authGuard.js';
 import { researchViaGateway } from '../server/lib/sourcingGateway.js';
-import { runRadarNewsRefresh, estimateRadarRefreshCost } from '../server/lib/radarNewsRefresh.js';
+import { runRadarNewsRefresh, estimateRadarRefreshCost, repairExistingRadarImages } from '../server/lib/radarNewsRefresh.js';
 import { validateCandidateBatch, verifyCandidateSources } from '../server/lib/sourcingSourceVerifier.js';
 import { canonicalCandidateKey, validateStoredCandidate, deduplicateCanonicalCandidates, SOURCING_PURCHASE_CAPABILITY, AUTO_PUBLISH } from '../shared/sourcingCandidateValidation.js';
 
@@ -105,6 +105,19 @@ export default async function handler(req, res) {
     const statusCode = result.httpStatus || (result.success ? 200 : 502);
     const { httpStatus, ...body } = result;
     return res.status(statusCode).json(body);
+  }
+
+  if (action === 'repair_radar_images') {
+    const supabase = getServiceRoleClient();
+    if (!supabase) return res.status(500).json({ success: false, error: 'SERVER_CONFIGURATION_ERROR' });
+    const limit = Math.max(10, Math.min(200, Number(req.body?.limit) || 100));
+    try {
+      const metrics = await repairExistingRadarImages(supabase, limit);
+      return res.status(200).json({ success: true, action: 'repair_radar_images', metrics });
+    } catch (err) {
+      console.error('[Radar Image Repair Error]', err);
+      return res.status(500).json({ success: false, error: err?.message || 'REPAIR_FAILED' });
+    }
   }
   const rawSources = Array.isArray(req.body?.sources) ? req.body.sources : ['WEB', 'AMAZON'];
   const requestedSources = [...new Set(rawSources.map(s => String(s || '').toUpperCase()).filter(s => ['WEB', 'AMAZON', 'EBAY', 'BESTBUY'].includes(s)))];

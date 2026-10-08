@@ -188,6 +188,36 @@ export default function AdminRadar() {
     }
   };
 
+  const [radarRepairing, setRadarRepairing] = useState(false);
+
+  const repairRadarImages = async () => {
+    setRadarRepairing(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch('/api/sourcing-discovery', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ action: 'repair_radar_images', limit: 100 })
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload?.success) throw new Error(payload?.error || 'No se pudo reparar las imágenes');
+
+      const m = payload.metrics || {};
+      toast.success(
+        `Imágenes reparadas: Revisados ${m.inspected || 0} · Ya válidas ${m.already_valid || 0} · Amazon +${m.repaired_amazon || 0} · Fuente +${m.repaired_source_page || 0} · Stock limpiado ${m.prohibited_cleared || 0} · Sin resolver ${m.unresolved || 0}`
+      );
+      await Promise.all([loadReleases(), loadRadarControl()]);
+    } catch (err: any) {
+      toast.error(err?.message || 'Falló la reparación de imágenes');
+    } finally {
+      setRadarRepairing(false);
+    }
+  };
+
   const loadRelations = async () => {
     try {
       const [brandsRes, licensesRes, productsRes] = await Promise.all([
@@ -569,6 +599,16 @@ export default function AdminRadar() {
             >
               <RefreshCw size={14} className={radarEstimating ? 'animate-spin' : ''} />
               Recalcular costo
+            </button>
+            <button
+              type="button"
+              onClick={repairRadarImages}
+              disabled={radarRepairing || radarRefreshing}
+              className="px-3 py-2 rounded-xl border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-60 text-indigo-700 text-xs font-bold flex items-center gap-2"
+              title="Audita registros existentes, recupera imágenes de productos exactos y fuentes oficiales, y oculta registros sin imagen válida"
+            >
+              <RefreshCw size={14} className={radarRepairing ? 'animate-spin' : ''} />
+              {radarRepairing ? 'Reparando…' : 'Reparar imágenes pendientes'}
             </button>
             <button
               type="button"

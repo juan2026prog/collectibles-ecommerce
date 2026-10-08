@@ -61,10 +61,21 @@ async function resolveSourceImage(sourceUrl, story = {}) {
       if (abs) candidates.push(abs);
     }
 
+    // NIVEL 4 — Buscar también dentro de <article>, <figure>, <img>, <picture> (src, data-src, srcset)
+    const imgTagMatches = html.match(/<(?:img|source)[^>]+(?:src|data-src|data-lazy-src|srcset)=["']([^"']+)["'][^>]*>/ig) || [];
+    for (const tag of imgTagMatches.slice(0, 20)) {
+      const srcMatch = tag.match(/(?:src|data-src|data-lazy-src)=["']([^"'\s]+)["']/i) || tag.match(/srcset=["']([^"'\s,]+)/i);
+      const val = srcMatch?.[1];
+      if (val && !/data:image|spacer|pixel|tracking|beacon|1x1/i.test(val)) {
+        const abs = absoluteUrl(response.url || sourceUrl, val);
+        if (abs) candidates.push(abs);
+      }
+    }
+
     const deduped = [...new Set(candidates)].filter(url => {
       const lower = url.toLowerCase();
-      if (lower.includes('unsplash.com') || lower.includes('pexels.com') || lower.includes('placeholder')) return false;
-      if (/logo|avatar|icon|sprite|favicon|pulse-social|social-square|social-share/i.test(lower)) return false;
+      if (lower.includes('unsplash.com') || lower.includes('pexels.com') || lower.includes('placeholder') || lower.includes('picsum.photos')) return false;
+      if (/logo|avatar|icon|sprite|favicon|pulse-social|social-square|social-share|newsletter|author|ad-|advertisement/i.test(lower)) return false;
       // Bloquear banners, headers y mastheads genéricos, pero NO rechazar imágenes solo por tener 'hero' (ej: product-hero, hero-product)
       if (/banner|header|masthead|hero-banner|category-banner|collection-banner|site-header/i.test(lower)) return false;
       return /^https?:\/\//.test(url);
@@ -77,9 +88,29 @@ async function resolveSourceImage(sourceUrl, story = {}) {
       const lower = url.toLowerCase();
       let score = 1;
       for (const w of titleWords) if (lower.includes(w)) score += 1;
-      if (/product|products|media|uploads|cdn|images/.test(lower)) score += 1;
+      if (/product|products|media|uploads|cdn|images|figure|figures|toys|collectibles/.test(lower)) score += 1;
       if (score > bestScore) { best = url; bestScore = score; }
     }
+
+    // FASE 8 — Verificar que la imagen seleccionada realmente cargue (HTTP 200 y content-type image)
+    if (best) {
+      try {
+        const headCheck = await fetch(best, {
+          method: 'HEAD',
+          headers: { 'User-Agent': 'CollectiblesRadarBot/1.0 (+https://collectibles.uy)' },
+          signal: AbortSignal.timeout(4000)
+        });
+        if (!headCheck.ok) {
+          best = null;
+        } else {
+          const ct = headCheck.headers.get('content-type') || '';
+          if (ct && !ct.startsWith('image/')) best = null;
+        }
+      } catch {
+        // En caso de que HEAD sea bloqueado por el servidor remoto, mantener best si la URL es bien formada
+      }
+    }
+
     return best ? { url: best, source_page: response.url || sourceUrl, score: Math.min(0.95, 0.72 + bestScore * 0.03) } : null;
   } catch {
     return null;
@@ -162,6 +193,29 @@ export async function repairExistingRadarImages(supabase, limit = 50) {
         targetSemanticType = 'PRODUCT_EXACT';
         metrics.repaired_amazon++;
       }
+    }
+
+    // 3b. ¿Podemos encontrar el producto exacto en international_products por ASIN o título?
+    if (!targetImage) {
+      try {
+        const exactAsin = raw.exact_product_asin || raw.asin || null;
+        if (exactAsin) {
+          const { data: asinProd } = await supabase
+            .from('international_products')
+            .select('product_url_external,main_image_url_external,image_url')
+            .eq('asin', exactAsin)
+            .maybeSingle();
+          const img = asinProd?.main_image_url_external || asinProd?.image_url;
+          if (img) {
+            targetImage = img;
+            targetSource = asinProd?.product_url_external || row.source_url;
+            targetScore = 0.95;
+            targetProvenance = 'AMAZON_PRODUCT';
+            targetSemanticType = 'PRODUCT_EXACT';
+            metrics.repaired_amazon++;
+          }
+        }
+      } catch {}
     }
 
     // 4. ¿Tiene fuente oficial / noticia válida? Intentar extraer imagen desde la fuente
