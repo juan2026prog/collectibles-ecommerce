@@ -227,18 +227,51 @@ export class AssistantService {
   }
 
   /**
-   * Loads or creates a persistent conversation session in Supabase
+   * Loads or creates a persistent conversation session securely via /api/support-chat
    */
   public static async ensureConversation(params: {
     conversationId?: string | null;
     sessionId: string;
+    sessionSecret?: string | null;
     userId?: string | null;
     userEmail?: string | null;
     userName?: string | null;
     countryCode?: string;
   }): Promise<{ id: string; sessionSecret?: string } | null> {
     try {
-      // 1. Try to fetch existing
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
+      const res = await fetch('/api/support-chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          action: 'ensure_conversation',
+          conversationId: params.conversationId,
+          sessionId: params.sessionId,
+          sessionSecret: params.sessionSecret,
+          countryCode: params.countryCode || 'UY',
+          userName: params.userName,
+          userEmail: params.userEmail
+        })
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.conversation) {
+          return {
+            id: json.conversation.id,
+            sessionSecret: json.sessionSecret
+          };
+        }
+      }
+    } catch (_) {}
+
+    // Graceful fallback for local development or direct DB if endpoint unavailable
+    try {
       if (params.conversationId) {
         const { data: existing } = await supabase
           .from('support_conversations')
@@ -248,42 +281,13 @@ export class AssistantService {
 
         if (existing) return existing;
       }
+    } catch (_) {}
 
-      // 2. Fetch by session_id
-      const { data: bySession } = await supabase
-        .from('support_conversations')
-        .select('id, session_secret')
-        .eq('session_id', params.sessionId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (bySession) return bySession;
-
-      // 3. Create new conversation
-      const { data: created, error } = await supabase
-        .from('support_conversations')
-        .insert({
-          session_id: params.sessionId,
-          user_id: params.userId || null,
-          user_email: params.userEmail || null,
-          user_name: params.userName || null,
-          country_code: params.countryCode || 'UY',
-          status: 'ACTIVE',
-          primary_intent: 'GENERAL_SUPPORT'
-        })
-        .select('id, session_secret')
-        .single();
-
-      if (error || !created) return null;
-      return created;
-    } catch (_) {
-      return null;
-    }
+    return null;
   }
 
   /**
-   * Persists message to database
+   * Persists message to database securely via /api/support-chat
    */
   public static async persistMessage(params: {
     conversationId: string;
@@ -292,52 +296,70 @@ export class AssistantService {
     senderName?: string;
     intentDetected?: string;
     products?: any[];
+    sessionId?: string;
+    sessionSecret?: string;
   }): Promise<void> {
     try {
-      await supabase.from('support_messages').insert({
-        conversation_id: params.conversationId,
-        sender_type: params.senderType,
-        sender_name: params.senderName || (params.senderType === 'USER' ? 'Usuario' : 'Collectibles AI'),
-        content: params.content,
-        intent_detected: params.intentDetected || null,
-        products_suggested: params.products || []
-      });
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
 
-      // Update conversation metadata
-      await supabase
-        .from('support_conversations')
-        .update({
-          last_message_at: new Date().toISOString(),
-          primary_intent: params.intentDetected || undefined
+      await fetch('/api/support-chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          action: 'persist_message',
+          conversationId: params.conversationId,
+          senderType: params.senderType,
+          content: params.content,
+          senderName: params.senderName,
+          intentDetected: params.intentDetected,
+          products: params.products,
+          sessionId: params.sessionId,
+          sessionSecret: params.sessionSecret
         })
-        .eq('id', params.conversationId);
+      });
     } catch (_) {}
   }
 
   /**
-   * Loads recent messages for a conversation
+   * Loads recent messages for a conversation securely via /api/support-chat
    */
-  public static async loadMessages(conversationId: string): Promise<ChatMessage[]> {
+  public static async loadMessages(
+    conversationId: string,
+    sessionAuth?: { sessionId?: string; sessionSecret?: string }
+  ): Promise<ChatMessage[]> {
     try {
-      const { data, error } = await supabase
-        .from('support_messages')
-        .select('*')
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true })
-        .limit(50);
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
 
-      if (error || !data) return [];
-      return data.map(item => ({
-        id: item.id,
-        sender: item.sender_type,
-        text: item.content,
-        timestamp: item.created_at,
-        intent: item.intent_detected as any,
-        products: item.products_suggested
-      }));
-    } catch {
-      return [];
-    }
+      const res = await fetch('/api/support-chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(sessionAuth?.sessionId ? { 'x-support-session-id': sessionAuth.sessionId } : {}),
+          ...(sessionAuth?.sessionSecret ? { 'x-support-session-secret': sessionAuth.sessionSecret } : {})
+        },
+        body: JSON.stringify({
+          action: 'load_messages',
+          conversationId,
+          sessionId: sessionAuth?.sessionId,
+          sessionSecret: sessionAuth?.sessionSecret
+        })
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.messages)) {
+          return json.messages;
+        }
+      }
+    } catch (_) {}
+
+    return [];
   }
 
   /**
@@ -390,12 +412,14 @@ export class AssistantService {
     const convRecord = await this.ensureConversation({
       conversationId: options.conversationId,
       sessionId: options.sessionId || 'session-default',
+      sessionSecret: (options as any).sessionSecret || null,
       userId,
       userEmail,
       userName,
       countryCode
     });
     const currentConvId = convRecord?.id;
+    const currentSecret = convRecord?.sessionSecret;
 
     // Persist incoming USER message
     if (currentConvId) {
@@ -404,7 +428,9 @@ export class AssistantService {
         senderType: 'USER',
         content: userMessage,
         senderName: userName || userEmail || 'Usuario',
-        intentDetected: intent
+        intentDetected: intent,
+        sessionId: options.sessionId,
+        sessionSecret: currentSecret
       });
     }
 

@@ -49,6 +49,7 @@ export const CollectiblesAIAssistant: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const sessionId = getOrCreateSupportSessionId();
+  const [sessionSecret, setSessionSecret] = useState<string | null>(() => localStorage.getItem('collectibles_support_secret'));
 
   // Load Assistant Config (checks if human support is enabled or chatbot active)
   useEffect(() => {
@@ -63,6 +64,7 @@ export const CollectiblesAIAssistant: React.FC = () => {
     if (isOpen && !conversationId) {
       AssistantService.ensureConversation({
         sessionId,
+        sessionSecret,
         userId: user?.id,
         userEmail: user?.email,
         userName: (user as any)?.user_metadata?.full_name,
@@ -70,7 +72,11 @@ export const CollectiblesAIAssistant: React.FC = () => {
       }).then(conv => {
         if (conv?.id) {
           setConversationId(conv.id);
-          AssistantService.loadMessages(conv.id).then(loadedMsgs => {
+          if (conv.sessionSecret) {
+            setSessionSecret(conv.sessionSecret);
+            localStorage.setItem('collectibles_support_secret', conv.sessionSecret);
+          }
+          AssistantService.loadMessages(conv.id, { sessionId, sessionSecret: conv.sessionSecret || sessionSecret || undefined }).then(loadedMsgs => {
             if (loadedMsgs.length > 0) {
               setMessages(loadedMsgs);
             }
@@ -78,7 +84,7 @@ export const CollectiblesAIAssistant: React.FC = () => {
         }
       });
     }
-  }, [isOpen, conversationId, user, country, sessionId]);
+  }, [isOpen, conversationId, user, country, sessionId, sessionSecret]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -111,11 +117,12 @@ export const CollectiblesAIAssistant: React.FC = () => {
         conversationHistory: messages,
         conversationId,
         sessionId,
+        sessionSecret: sessionSecret || undefined,
         userId: user?.id,
         userEmail: user?.email,
         userName: (user as any)?.user_metadata?.full_name,
         countryCode: country || 'UY'
-      });
+      } as any);
 
       if (response.conversationId && !conversationId) {
         setConversationId(response.conversationId);
