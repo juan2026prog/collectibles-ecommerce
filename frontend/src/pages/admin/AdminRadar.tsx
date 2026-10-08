@@ -91,7 +91,8 @@ export default function AdminRadar() {
           'radar_refresh_interval_days',
           'radar_max_items_per_refresh',
           'radar_ai_model',
-          'radar_last_refresh_at'
+          'radar_last_refresh_at',
+          'radar_cost_mode'
         ]);
       const map = Object.fromEntries((data || []).map((r: any) => [r.key, r.value]));
       setRadarSettings(map);
@@ -115,8 +116,9 @@ export default function AdminRadar() {
         },
         body: JSON.stringify({
           action: 'radar_news_estimate',
+          mode: cfg['radar_cost_mode'] || 'ECONOMICO',
           model: cfg['radar_ai_model'] || 'gpt-5.6-luna',
-          max_items: Number(cfg['radar_max_items_per_refresh'] || 5),
+          max_items: Number(cfg['radar_max_items_per_refresh'] || 3),
           interval_days: Number(cfg['radar_refresh_interval_days'] || 3)
         })
       });
@@ -154,7 +156,7 @@ export default function AdminRadar() {
     }
 
     const ok = window.confirm(
-      `Actualizar Radar ahora?\n\nModelo: ${estimate.model}\nMáximo de noticias: ${radarSettings['radar_max_items_per_refresh'] || '5'}\nCosto estimado: USD ${estimate.estimated_cost_expected_usd != null ? Number(estimate.estimated_cost_expected_usd).toFixed(4) : 'N/D'}\nTope estimado: USD ${estimate.estimated_cost_max_usd != null ? Number(estimate.estimated_cost_max_usd).toFixed(4) : 'N/D'}\n\nNo se hará ninguna llamada de IA hasta confirmar.`
+      `Actualizar Radar ahora?\n\nModelo: ${estimate.model}\nModo: ${radarSettings['radar_cost_mode'] || 'ECONOMICO'}\nMáximo de noticias: ${radarSettings['radar_max_items_per_refresh'] || '3'}\nCosto estimado: USD ${estimate.estimated_cost_expected_usd != null ? Number(estimate.estimated_cost_expected_usd).toFixed(4) : 'N/D'}\nTope estimado: USD ${estimate.estimated_cost_max_usd != null ? Number(estimate.estimated_cost_max_usd).toFixed(4) : 'N/D'}\n\nNo se hará ninguna llamada de IA hasta confirmar.`
     );
     if (!ok) return;
 
@@ -430,6 +432,37 @@ export default function AdminRadar() {
           </button>
         </div>
 
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+          {[
+            { id: 'ECONOMICO', title: 'Económico', text: '3 noticias · Luna · sin búsqueda web si las fuentes oficiales alcanzan' },
+            { id: 'NORMAL', title: 'Normal', text: '5 noticias · Luna · con búsqueda web' },
+            { id: 'PROFUNDO', title: 'Profundo', text: '8 noticias · Terra · para revisión manual ocasional' }
+          ].map(mode => (
+            <button
+              key={mode.id}
+              type="button"
+              onClick={async () => {
+                const preset = mode.id === 'ECONOMICO'
+                  ? { radar_cost_mode: 'ECONOMICO', radar_ai_model: 'gpt-5.6-luna', radar_max_items_per_refresh: '3', radar_refresh_interval_days: '3' }
+                  : mode.id === 'NORMAL'
+                    ? { radar_cost_mode: 'NORMAL', radar_ai_model: 'gpt-5.6-luna', radar_max_items_per_refresh: '5', radar_refresh_interval_days: '3' }
+                    : { radar_cost_mode: 'PROFUNDO', radar_ai_model: 'gpt-5.6-terra', radar_max_items_per_refresh: '8', radar_refresh_interval_days: '3' };
+                const next = { ...radarSettings, ...preset };
+                setRadarSettings(next);
+                await Promise.all(Object.entries(preset).map(([key, value]) =>
+                  supabase.from('site_settings').upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+                ));
+                await loadRadarEstimate(next);
+                toast.success(`Modo ${mode.title} aplicado`);
+              }}
+              className={`text-left rounded-xl border p-3 transition ${(radarSettings['radar_cost_mode'] || 'ECONOMICO') === mode.id ? 'border-rose-400 bg-rose-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+            >
+              <div className="text-xs font-black text-gray-900">{mode.title}{mode.id === 'ECONOMICO' ? ' · recomendado' : ''}</div>
+              <div className="text-[10px] text-gray-500 mt-1 leading-relaxed">{mode.text}</div>
+            </button>
+          ))}
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <label className="block">
             <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Frecuencia</span>
@@ -449,12 +482,12 @@ export default function AdminRadar() {
           <label className="block">
             <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Noticias por corrida</span>
             <select
-              value={radarSettings['radar_max_items_per_refresh'] || '5'}
+              value={radarSettings['radar_max_items_per_refresh'] || '3'}
               onChange={(e) => saveRadarSetting('radar_max_items_per_refresh', e.target.value)}
               className="mt-1 w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-900"
             >
-              <option value="3">Hasta 3</option>
-              <option value="5">Hasta 5 (recomendado)</option>
+              <option value="3">Hasta 3 (Económico)</option>
+              <option value="5">Hasta 5</option>
               <option value="8">Hasta 8</option>
               <option value="12">Hasta 12</option>
             </select>
