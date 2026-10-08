@@ -124,14 +124,157 @@ const RADAR_MODES = Object.freeze({
   PROFUNDO: { model: 'gpt-5.6-terra', maxItems: 8, intervalDays: 3, useWebSearch: true }
 });
 
-const OFFICIAL_RADAR_SOURCES = Object.freeze([
-  { name: 'Super7 (Official Feed)', url: 'https://super7.com/blogs/news.atom', feed_type: 'atom' },
-  { name: 'Toyark (Collector News)', url: 'https://news.toyark.com/feed', feed_type: 'rss' },
-  { name: 'Brickset (LEGO News)', url: 'https://brickset.com/feed', feed_type: 'rss' },
-  { name: 'Bleeding Cool (Collectibles)', url: 'https://bleedingcool.com/collectibles/feed/', feed_type: 'rss' },
-  { name: 'NECA Official', url: 'https://necaonline.com/category/blog/', feed_type: 'html' },
-  { name: 'Funko Blog', url: 'https://funko.com/funko-blog-home/', feed_type: 'html' }
+export const OFFICIAL_RADAR_SOURCES = Object.freeze([
+  { name: 'Super7 (Official Feed)', url: 'https://super7.com/blogs/news.atom', feed_type: 'atom', tier: 'TIER_1_OFFICIAL', is_official: true },
+  { name: 'Toyark (Collector News)', url: 'https://news.toyark.com/feed', feed_type: 'rss', tier: 'TIER_2_SPECIALIZED_MEDIA', is_official: false },
+  { name: 'Brickset (LEGO News)', url: 'https://brickset.com/feed', feed_type: 'rss', tier: 'TIER_2_SPECIALIZED_MEDIA', is_official: false },
+  { name: 'Bleeding Cool (Collectibles)', url: 'https://bleedingcool.com/collectibles/feed/', feed_type: 'rss', tier: 'TIER_2_SPECIALIZED_MEDIA', is_official: false },
+  { name: 'NECA Official', url: 'https://necaonline.com/category/blog/', feed_type: 'html', tier: 'TIER_1_OFFICIAL', is_official: true },
+  { name: 'Funko Blog', url: 'https://funko.com/funko-blog-home/', feed_type: 'html', tier: 'TIER_1_OFFICIAL', is_official: true }
 ]);
+
+export function classifyEditorialRelevance(title = '', summaryOrContent = '', sourceName = '') {
+  const combined = `${title} ${summaryOrContent} ${sourceName}`.toLowerCase();
+  const lowerTitle = title.toLowerCase();
+
+  // 1. RECHAZO INMEDIATO: Temas no aptos para Radar (música, empleo, corporativo, sorteos genéricos, ropa/lifestyle)
+  if (/\b(mixtape|playlist|album|tracklist|music\s*video|spotify|apple\s*music|bandcamp)\b/i.test(combined)) {
+    return {
+      type: 'MUSIC_CONTENT',
+      score: 15,
+      reason: 'Contenido musical o playlist sin figuras ni coleccionables',
+      isPublishable: false
+    };
+  }
+
+  if (/\b(hiring|we'?re\s*hiring|careers?|job\s*opening|empleo|vacante|puesto\s*abierto|join\s*our\s*team)\b/i.test(combined)) {
+    return {
+      type: 'JOB_POST',
+      score: 10,
+      reason: 'Búsqueda laboral o post de reclutamiento corporativo',
+      isPublishable: false
+    };
+  }
+
+  if (/\b(giveaway|sweepstakes|concurso|sorteo|win\s*a\s*free|participa\s*para\s*ganar)\b/i.test(combined)) {
+    return {
+      type: 'GIVEAWAY',
+      score: 35,
+      reason: 'Concurso o sorteo promocional genérico',
+      isPublishable: false
+    };
+  }
+
+  if (/\b(store\s*hours|holiday\s*hours|warehouse\s*moving|corporate\s*announcement|annual\s*report|investor\s*relations|financial\s*results)\b/i.test(combined)) {
+    return {
+      type: 'CORPORATE_CONTENT',
+      score: 25,
+      reason: 'Anuncio corporativo, horarios o logística institucional',
+      isPublishable: false
+    };
+  }
+
+  if (/\b(t-?shirt|hoodie|apparel|sneaker|shoes|socks|beverage|coffee|recipe|lifestyle)\b/i.test(lowerTitle) && !/\b(figure|figura|statue|estatua|toy|collectible|hasbro|neca|funko)\b/i.test(combined)) {
+    return {
+      type: 'LIFESTYLE_CONTENT',
+      score: 40,
+      reason: 'Contenido de indumentaria o lifestyle no relacionado con coleccionables',
+      isPublishable: false
+    };
+  }
+
+  // 2. DETECCIÓN ALTA RELEVANCIA EDITORIAL (Score >= 80)
+  if (/\b(new\s*licenses?|nuevas?\s*licencias?|licensing\s*agreement|rights\s*acquired)\b/i.test(combined)) {
+    return {
+      type: 'NEW_LICENSE',
+      score: 85,
+      reason: 'Anuncio de nueva licencia oficial para coleccionables',
+      isPublishable: true
+    };
+  }
+
+  if (/\b(pre-?order|preventa|preorder\s*open|reserva|up\s*for\s*pre-?order)\b/i.test(combined)) {
+    return {
+      type: 'PREORDER',
+      score: 95,
+      reason: 'Apertura o disponibilidad de preventa de coleccionable',
+      isPublishable: true
+    };
+  }
+
+  if (/\b(restock|re-?stock|reissue|re-?issue|reedici[oó]n|back\s*in\s*stock|vuelve\s*a\s*stock)\b/i.test(combined)) {
+    return {
+      type: 'RESTOCK',
+      score: 90,
+      reason: 'Restock o reedición oficial confirmada',
+      isPublishable: true
+    };
+  }
+
+  if (/\b(exclusive|exclusiv[ao]|sdcc|nycc|hasbro\s*pulsecon|convention\s*exclusive|retailer\s*exclusive|haslab)\b/i.test(combined)) {
+    return {
+      type: 'EXCLUSIVE',
+      score: 95,
+      reason: 'Ítem exclusivo de convención, retailer o crowdfunding',
+      isPublishable: true
+    };
+  }
+
+  if (/\b(wave\s*\d+|nueva\s*wave|new\s*line|nueva\s*l[ií]nea|action\s*figure\s*line|series\s*\d+)\b/i.test(combined)) {
+    return {
+      type: 'NEW_WAVE',
+      score: 90,
+      reason: 'Presentación de nueva wave o serie de figuras',
+      isPublishable: true
+    };
+  }
+
+  const hasProductKeywords = /\b(figure|figura|action\s*figure|statue|estatua|bust|busto|lego|set|funko|pop!|pop|hot\s*toys|ultimates|marvel\s*legends|transformers|g\.i\.\s*joe|mythic\s*legions|sh\s*figuarts|mafex|nendoroid|model\s*kit|gunpla|mecha|die-?cast|prop\s*replica)\b/i.test(combined);
+  const hasActionVerb = /\b(revealed|reveal|unveiled|announced|announcement|first\s*look|preview|teaser|launched|available\s*now|released|in-?hand|shipping)\b/i.test(combined);
+
+  if (hasProductKeywords && hasActionVerb) {
+    return {
+      type: 'PRODUCT_ANNOUNCEMENT',
+      score: 92,
+      reason: 'Anuncio o revelación formal de nuevo coleccionable',
+      isPublishable: true
+    };
+  }
+
+  if (hasProductKeywords) {
+    return {
+      type: 'PRODUCT_ANNOUNCEMENT',
+      score: 82,
+      reason: 'Coleccionable verificado en título o contenido',
+      isPublishable: true
+    };
+  }
+
+  if (/\b(collaboration|collab|crossover|x\s+super7|x\s+hasbro|x\s+neca)\b/i.test(combined)) {
+    return {
+      type: 'COLLABORATION',
+      score: 80,
+      reason: 'Colaboración o crossover oficial de marcas de coleccionables',
+      isPublishable: true
+    };
+  }
+
+  if (/\b(star\s*wars|marvel|dc\s*comics|batman|superman|transformers|tmnt|motu|dragon\s*ball|pokemon|one\s*piece|godzilla)\b/i.test(combined)) {
+    return {
+      type: 'FRANCHISE_NEWS',
+      score: 75,
+      reason: 'Noticia de franquicia coleccionable relevante (score medio, revisión recomendada)',
+      isPublishable: false
+    };
+  }
+
+  return {
+    type: 'UNKNOWN',
+    score: 50,
+    reason: 'Sin palabras clave concluyentes de coleccionismo',
+    isPublishable: false
+  };
+}
 
 function normalizeRadarMode(value) {
   const mode = String(value || '').trim().toUpperCase();
@@ -258,7 +401,7 @@ function extractOfficialLinks(source, html, baseUrl) {
   return [...new Map(found.map(x => [x.url, x])).values()].slice(0, 12);
 }
 
-async function hydrateOfficialCandidate(candidate) {
+async function hydrateOfficialCandidate(candidate, source) {
   const fetched = await fetchHtml(candidate.url, 5500);
   if (!fetched) return null;
   const html = fetched.html;
@@ -266,7 +409,16 @@ async function hydrateOfficialCandidate(candidate) {
   const description = extractMeta(html, ['og:description', 'description', 'twitter:description']) || '';
   const datePublished = extractMeta(html, ['article:published_time', 'date', 'datePublished']) || candidate.published_at || ((html.match(/"datePublished"\s*:\s*"([^"]+)"/i) || [])[1] || null);
   const image = extractMeta(html, ['og:image', 'twitter:image']);
-  return { source_name: candidate.source_name, source_url: fetched.finalUrl, title: title.slice(0, 220), description: description.slice(0, 700), source_published_at: safeDate(datePublished) || candidate.published_at || null, source_image_url: image ? absoluteUrl(fetched.finalUrl, image) : null };
+  return {
+    source_name: candidate.source_name,
+    source_url: fetched.finalUrl,
+    title: title.slice(0, 220),
+    description: description.slice(0, 700),
+    source_published_at: safeDate(datePublished) || candidate.published_at || null,
+    source_image_url: image ? absoluteUrl(fetched.finalUrl, image) : null,
+    source_tier: source?.tier || 'TIER_2_SPECIALIZED_MEDIA',
+    is_official: Boolean(source?.is_official)
+  };
 }
 
 async function collectFreshOfficialCandidates(supabase, limit = 8) {
@@ -277,16 +429,16 @@ async function collectFreshOfficialCandidates(supabase, limit = 8) {
     const fetched = await fetchHtml(source.url, 5500);
     if (!fetched) continue;
     for (const candidate of extractOfficialLinks(source, fetched.html, fetched.finalUrl)) {
-      if (!seen.has(candidate.url)) raw.push(candidate);
+      if (!seen.has(candidate.url)) raw.push({ candidate, source });
       if (raw.length >= limit * 3) break;
     }
     if (raw.length >= limit * 3) break;
   }
   const hydrated = [];
-  for (const candidate of raw.slice(0, limit * 2)) {
-    const item = await hydrateOfficialCandidate(candidate);
-    if (!item?.source_url || seen.has(item.source_url)) continue;
-    hydrated.push(item);
+  for (const item of raw.slice(0, limit * 2)) {
+    const hydratedItem = await hydrateOfficialCandidate(item.candidate, item.source);
+    if (!hydratedItem?.source_url || seen.has(hydratedItem.source_url)) continue;
+    hydrated.push(hydratedItem);
     if (hydrated.length >= limit) break;
   }
   return hydrated;
@@ -451,7 +603,29 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
 
   // Fallback determinístico sin costo (USD 0) cuando no hay OpenAI o falló en modo ECONÓMICO:
   if (!stories.length && !useWebSearch && officialCandidates.length > 0) {
-    stories = officialCandidates.slice(0, maxItems).map(cand => {
+    // 1. Clasificar y puntuar todos los candidatos
+    const scoredCandidates = officialCandidates.map(cand => {
+      const relevance = classifyEditorialRelevance(cand.title, cand.description, cand.source_name);
+      return { ...cand, relevance };
+    });
+
+    // 2. Ordenar por relevancia editorial descendente
+    scoredCandidates.sort((a, b) => b.relevance.score - a.relevance.score);
+
+    // 3. Diversidad de marcas/fuentes: no más de 2 de la misma marca/fuente a menos que no haya otras opciones
+    const brandCounts = new Map();
+    const selected = [];
+    for (const cand of scoredCandidates) {
+      const brandKey = (cand.source_name || 'other').toLowerCase();
+      const currentCount = brandCounts.get(brandKey) || 0;
+      if (currentCount < 2 || selected.length < maxItems) {
+        selected.push(cand);
+        brandCounts.set(brandKey, currentCount + 1);
+        if (selected.length >= maxItems) break;
+      }
+    }
+
+    stories = selected.map(cand => {
       const title = cand.title.replace(/\s*\|.*$|\s*-\s*The Toyark.*$|\s*-\s*Brickset.*$/i, '').trim();
       const detectedBrand = cand.title.includes('LEGO') ? 'LEGO' : (cand.title.includes('Marvel Legends') ? 'Hasbro' : (cand.title.includes('Transformers') ? 'Hasbro' : (cand.title.includes('Super7') ? 'Super7' : (cand.title.includes('NECA') ? 'NECA' : (cand.title.includes('Funko') ? 'Funko' : null)))));
       return {
@@ -462,6 +636,8 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
         source_name: cand.source_name,
         source_url: cand.source_url,
         source_published_at: cand.source_published_at,
+        source_tier: cand.source_tier || 'TIER_2_SPECIALIZED_MEDIA',
+        is_official: Boolean(cand.is_official),
         brand: detectedBrand,
         manufacturer: detectedBrand,
         franchise: cand.title.includes('Marvel') ? 'Marvel' : (cand.title.includes('Star Wars') ? 'Star Wars' : (cand.title.includes('Transformers') ? 'Transformers' : null)),
@@ -470,7 +646,8 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
         release_date: null,
         exact_product_asin: null,
         primary_product_name: title,
-        product_queries: [title]
+        product_queries: [title],
+        relevance: cand.relevance
       };
     });
   }
@@ -516,9 +693,17 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
       ? 'PRODUCT_EXACT'
       : (isLogoOrBanner ? 'BRAND_LOGO' : 'UNVERIFIED');
     const hasValidImage = semanticType === 'PRODUCT_EXACT' || semanticType === 'PRODUCT_VARIANT_VERIFIED';
-    const shouldPublish = hasValidImage;
+
+    const relevance = story.relevance || classifyEditorialRelevance(story.title, story.summary, story.source_name);
+    const hasValidRelevance = relevance.score >= 80 && relevance.isPublishable;
+
+    // Regla obligatoria: SIN IMAGEN VÁLIDA Y SIN RELEVANCIA EDITORIAL (>= 80), NO SE PUBLICA
+    const shouldPublish = hasValidImage && hasValidRelevance;
     const approvalStatus = shouldPublish ? 'PUBLISHED' : 'DRAFT';
     const slug = slugify(story.title.trim()) + '-' + crypto.randomBytes(3).toString('hex');
+
+    const sourceTier = story.source_tier || (OFFICIAL_RADAR_SOURCES.find(s => s.name === story.source_name)?.tier || 'TIER_2_SPECIALIZED_MEDIA');
+    const isOfficialSource = Boolean(story.is_official ?? OFFICIAL_RADAR_SOURCES.find(s => s.name === story.source_name)?.is_official);
 
     const row = {
       slug,
@@ -559,6 +744,11 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
         primary_product: primary,
         image_provenance: provenance,
         image_semantic_type: semanticType,
+        editorial_relevance_type: relevance.type,
+        editorial_relevance_score: relevance.score,
+        editorial_relevance_reason: relevance.reason,
+        source_tier: sourceTier,
+        is_official_source: isOfficialSource,
         product_queries: story.product_queries || [],
         refresh_interval_days: intervalDays
       },
@@ -573,7 +763,17 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
       continue;
     }
     existing?.id ? updated++ : created++;
-    published.push({ title: story.title, source: story.source_name, linked_products: linkedProducts.length, primary_product: primary?.title || null, published: shouldPublish, semanticType });
+    published.push({
+      title: story.title,
+      source: story.source_name,
+      linked_products: linkedProducts.length,
+      primary_product: primary?.title || null,
+      published: shouldPublish,
+      semanticType,
+      relevanceType: relevance.type,
+      relevanceScore: relevance.score,
+      sourceTier
+    });
   }
 
   const now = new Date().toISOString();

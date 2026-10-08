@@ -14,6 +14,32 @@ export type ReleaseStatus =
   | 'SOLD_OUT' 
   | 'RESTOCKED';
 
+export type EditorialRelevanceType =
+  | 'PRODUCT_ANNOUNCEMENT'
+  | 'PRODUCT_RELEASE'
+  | 'PREORDER'
+  | 'RESTOCK'
+  | 'REISSUE'
+  | 'EXCLUSIVE'
+  | 'NEW_LICENSE'
+  | 'NEW_LINE'
+  | 'NEW_WAVE'
+  | 'COLLABORATION'
+  | 'FRANCHISE_NEWS'
+  | 'COLLECTOR_TREND'
+  | 'HIGH_DEMAND'
+  | 'CONVENTION_NEWS'
+  | 'PRODUCT_UPDATE'
+  | 'IRRELEVANT_BRAND_CONTENT'
+  | 'CORPORATE_CONTENT'
+  | 'LIFESTYLE_CONTENT'
+  | 'MUSIC_CONTENT'
+  | 'GIVEAWAY'
+  | 'JOB_POST'
+  | 'UNKNOWN';
+
+export type SourceTier = 'TIER_1_OFFICIAL' | 'TIER_2_SPECIALIZED_MEDIA' | 'OTHER';
+
 export type ImageSemanticType =
   | 'PRODUCT_EXACT'
   | 'PRODUCT_VARIANT_VERIFIED'
@@ -101,6 +127,9 @@ export interface ReleaseEvent {
   approval_status?: 'DRAFT' | 'VERIFIED' | 'PUBLISHED' | 'ARCHIVED';
   estimated_release_date?: string | null;
   image_semantic_type?: ImageSemanticType | null;
+  editorial_relevance_type?: EditorialRelevanceType | null;
+  editorial_relevance_score?: number | null;
+  source_tier?: SourceTier | null;
   audit_corrections?: Array<{ field: string; original: any; corrected: any; date: string; by?: string }>;
   raw_source_data?: any;
 }

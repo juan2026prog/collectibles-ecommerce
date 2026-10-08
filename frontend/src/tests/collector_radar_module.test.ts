@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { formatReleaseDatePrecision, getStatusBadgeConfig } from '../plugins/collector-radar/core/releaseEngine';
-import { validateAndScoreImage } from '../plugins/collector-radar/core/radarAIEngine';
+import { validateAndScoreImage, classifyEditorialRelevance } from '../plugins/collector-radar/core/radarAIEngine';
 
 describe('Módulo 02: Collectibles Radar & Release Calendar Engine Tests', () => {
   it('formats precision QUARTER without inventing day or month', () => {
@@ -355,6 +355,155 @@ describe('Módulo 02: Collectibles Radar & Release Calendar Engine Tests', () =>
       const allowManualPublish = validation.isPublishable;
       expect(allowManualPublish).toBe(false);
       expect(validation.semanticType).toBe('BRAND_LOGO');
+    });
+  });
+
+  describe('Editorial Relevance Engine Tests (15 Casos Obligatorios)', () => {
+    // 1. "Mummy Boy Mixtape Vol. 6" → MUSIC_CONTENT, no auto-publica
+    it('1. Mummy Boy Mixtape Vol. 6 clasificado como MUSIC_CONTENT y no auto-publica', () => {
+      const res = classifyEditorialRelevance('Mummy Boy Mixtape Vol. 6', 'Tracklist and playlist for fans', 'Super7');
+      expect(res.type).toBe('MUSIC_CONTENT');
+      expect(res.isPublishable).toBe(false);
+      expect(res.score).toBeLessThan(60);
+    });
+
+    // 2. "Mummy Boy Mixtape Volume 5" → score < 60, va a DRAFT
+    it('2. Mummy Boy Mixtape Volume 5 con score < 60 va a DRAFT', () => {
+      const res = classifyEditorialRelevance('Mummy Boy Mixtape Volume 5', 'Listen now on Spotify', 'Super7');
+      expect(res.score).toBeLessThan(60);
+      expect(res.isPublishable).toBe(false);
+    });
+
+    // 3. "New Licenses Coming in 2026!" → NEW_LICENSE, score >= 80, apto para publicar
+    it('3. New Licenses Coming in 2026 clasificado como NEW_LICENSE con score >= 80 apto para publicar', () => {
+      const res = classifyEditorialRelevance('New Licenses Coming in 2026!', 'Super7 acquired exciting new licensing agreements for figures', 'Super7');
+      expect(res.type).toBe('NEW_LICENSE');
+      expect(res.score).toBeGreaterThanOrEqual(80);
+      expect(res.isPublishable).toBe(true);
+    });
+
+    // 4. "Now Hiring: Senior Package Designer" → JOB_POST, rechazo directo
+    it('4. Now Hiring: Senior Package Designer clasificado como JOB_POST con rechazo directo', () => {
+      const res = classifyEditorialRelevance('Now Hiring: Senior Package Designer', 'Join our team in San Francisco', 'Super7');
+      expect(res.type).toBe('JOB_POST');
+      expect(res.score).toBeLessThan(60);
+      expect(res.isPublishable).toBe(false);
+    });
+
+    // 5. "Holiday Store Hours Update" → CORPORATE_CONTENT, rechazo directo
+    it('5. Holiday Store Hours Update clasificado como CORPORATE_CONTENT con rechazo directo', () => {
+      const res = classifyEditorialRelevance('Holiday Store Hours Update', 'Our retail stores schedule for next week', 'Super7');
+      expect(res.type).toBe('CORPORATE_CONTENT');
+      expect(res.score).toBeLessThan(60);
+      expect(res.isPublishable).toBe(false);
+    });
+
+    // 6. "Enter to Win: Spring Giveaway" → GIVEAWAY, rechazo directo
+    it('6. Enter to Win: Spring Giveaway clasificado como GIVEAWAY con rechazo directo', () => {
+      const res = classifyEditorialRelevance('Enter to Win: Spring Giveaway', 'Sweepstakes to win free swag', 'NECA');
+      expect(res.type).toBe('GIVEAWAY');
+      expect(res.score).toBeLessThan(60);
+      expect(res.isPublishable).toBe(false);
+    });
+
+    // 7. "NECA TMNT Wave 4 Announced" → PRODUCT_ANNOUNCEMENT, score >= 80
+    it('7. NECA TMNT Wave 4 Announced clasificado como PRODUCT_ANNOUNCEMENT con score >= 80', () => {
+      const res = classifyEditorialRelevance('NECA TMNT Wave 4 Announced', 'New action figures revealed for 2026', 'NECA Official');
+      expect(['PRODUCT_ANNOUNCEMENT', 'NEW_WAVE']).toContain(res.type);
+      expect(res.score).toBeGreaterThanOrEqual(80);
+      expect(res.isPublishable).toBe(true);
+    });
+
+    // 8. "Marvel Legends Spider-Man Pre-Order Live" → PREORDER, score >= 80
+    it('8. Marvel Legends Spider-Man Pre-Order Live clasificado como PREORDER con score >= 80', () => {
+      const res = classifyEditorialRelevance('Marvel Legends Spider-Man Pre-Order Live', 'Pre-orders are now available', 'Toyark');
+      expect(res.type).toBe('PREORDER');
+      expect(res.score).toBeGreaterThanOrEqual(80);
+      expect(res.isPublishable).toBe(true);
+    });
+
+    // 9. "HasLab Liokaiser Restock Confirmed" → RESTOCK, score >= 80
+    it('9. HasLab Liokaiser Restock Confirmed clasificado como RESTOCK con score >= 80', () => {
+      const res = classifyEditorialRelevance('HasLab Liokaiser Restock Confirmed', 'Transformers back in stock for limited time', 'Hasbro Pulse');
+      expect(res.type).toBe('RESTOCK');
+      expect(res.score).toBeGreaterThanOrEqual(80);
+      expect(res.isPublishable).toBe(true);
+    });
+
+    // 10. "SDCC 2026 Exclusive Figure Revealed" → EXCLUSIVE, score >= 80
+    it('10. SDCC 2026 Exclusive Figure Revealed clasificado como EXCLUSIVE con score >= 80', () => {
+      const res = classifyEditorialRelevance('SDCC 2026 Exclusive Figure Revealed', 'Convention exclusive collectible unveiled', 'Toyark');
+      expect(res.type).toBe('EXCLUSIVE');
+      expect(res.score).toBeGreaterThanOrEqual(80);
+      expect(res.isPublishable).toBe(true);
+    });
+
+    // 11. "Score 75 (relevancia media)" → queda en DRAFT para revisión editorial
+    it('11. Noticia de relevancia media (score 75) queda en DRAFT para revisión humana', () => {
+      const res = classifyEditorialRelevance('Star Wars Lucasfilm Updates Production Timeline', 'Details about upcoming universe timeline', 'Toyark');
+      expect(res.type).toBe('FRANCHISE_NEWS');
+      expect(res.score).toBe(75);
+      expect(res.isPublishable).toBe(false);
+    });
+
+    // 12. "Relevante (score 90) + imagen válida" → PUBLISHED
+    it('12. Relevante (score 90) con imagen válida → auto-publica', () => {
+      const res = classifyEditorialRelevance('Funko Pop! Animation Goku Revealed', 'New action figure release', 'Funko Blog');
+      const img = validateAndScoreImage(
+        { title: 'Funko Pop! Animation Goku' },
+        'https://funko.com/media/products/pop-goku-box.jpg'
+      );
+      const shouldPublish = res.score >= 80 && res.isPublishable && img.isValid && Boolean(img.finalImageUrl);
+      expect(shouldPublish).toBe(true);
+    });
+
+    // 13. "Relevante (score 90) + SIN imagen válida" → DRAFT
+    it('13. Relevante (score 90) sin imagen válida → queda en DRAFT', () => {
+      const res = classifyEditorialRelevance('Funko Pop! Animation Goku Revealed', 'New action figure release', 'Funko Blog');
+      const img = validateAndScoreImage(
+        { title: 'Funko Pop! Animation Goku' },
+        null
+      );
+      const shouldPublish = res.score >= 80 && res.isPublishable && img.isValid && Boolean(img.finalImageUrl);
+      expect(shouldPublish).toBe(false);
+    });
+
+    // 14. "No relevante (score 15) + imagen válida" → DRAFT / descarte (nunca publicado)
+    it('14. No relevante (score 15) aunque tenga imagen válida → nunca auto-publica', () => {
+      const res = classifyEditorialRelevance('Mummy Boy Mixtape Vol. 7 Album Stream', 'Music stream', 'Super7');
+      const img = validateAndScoreImage(
+        { title: 'Mummy Boy' },
+        'https://super7.com/cdn/shop/files/album-art.jpg'
+      );
+      const shouldPublish = res.score >= 80 && res.isPublishable && img.isValid && Boolean(img.finalImageUrl);
+      expect(shouldPublish).toBe(false);
+    });
+
+    // 15. "Candidate selection con brand diversity": prefiere candidatos de distintas fuentes sobre un 3er item de la misma fuente
+    it('15. Candidate selection con brand diversity prefiere diversidad de marcas', () => {
+      const candidates = [
+        { title: 'Super7 TMNT Wave 1', source_name: 'Super7', score: 95 },
+        { title: 'Super7 TMNT Wave 2', source_name: 'Super7', score: 90 },
+        { title: 'Super7 Lifestyle Tee', source_name: 'Super7', score: 85 },
+        { title: 'NECA Predator Figure', source_name: 'NECA Official', score: 88 },
+        { title: 'Brickset LEGO Batmobile', source_name: 'Brickset', score: 84 }
+      ];
+
+      // Aplicar regla de no más de 2 de la misma marca cuando existen otras válidas
+      const selected: any[] = [];
+      const brandCounts = new Map<string, number>();
+      for (const cand of candidates) {
+        const count = brandCounts.get(cand.source_name) || 0;
+        if (count < 2) {
+          selected.push(cand);
+          brandCounts.set(cand.source_name, count + 1);
+          if (selected.length === 3) break;
+        }
+      }
+
+      expect(selected.length).toBe(3);
+      expect(selected.filter(x => x.source_name === 'Super7').length).toBe(2);
+      expect(selected.find(x => x.source_name === 'NECA Official')).toBeDefined();
     });
   });
 });

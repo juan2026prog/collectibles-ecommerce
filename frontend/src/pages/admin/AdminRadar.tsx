@@ -710,6 +710,34 @@ export default function AdminRadar() {
                                 return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">⚠ Sin verificar</span>;
                               })()}
 
+                              {/* Badge de Relevancia Editorial */}
+                              {(() => {
+                                const relType = (item as any).editorial_relevance_type || (item as any).raw_source_data?.editorial_relevance_type;
+                                const relScore = (item as any).editorial_relevance_score ?? (item as any).raw_source_data?.editorial_relevance_score;
+                                if (relScore != null) {
+                                  if (relScore >= 80) {
+                                    return (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200" title={`Relevancia Editorial: ${relScore}/100 - ${relType}`}>
+                                        ✓ Alta ({relScore}) · {String(relType || 'RELEVANTE').replace(/_/g, ' ')}
+                                      </span>
+                                    );
+                                  }
+                                  if (relScore >= 60) {
+                                    return (
+                                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200" title={`Relevancia Editorial Media: ${relScore}/100 - ${relType}`}>
+                                        ⚠ Media ({relScore}) · {String(relType || 'REVISIÓN').replace(/_/g, ' ')}
+                                      </span>
+                                    );
+                                  }
+                                  return (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-50 text-rose-800 border border-rose-200" title={`Relevancia Editorial Baja: ${relScore}/100 - ${relType}`}>
+                                      ✕ Baja ({relScore}) · {String(relType || 'NO RELEVANTE').replace(/_/g, ' ')}
+                                    </span>
+                                  );
+                                }
+                                return null;
+                              })()}
+
                               {/* Alerta si está en borrador con imagen no apta */}
                               {!item.is_published && item.official_image_url && (
                                 <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300">
@@ -761,9 +789,27 @@ export default function AdminRadar() {
                               <span>{item.source_name || 'Fuente Oficial'}</span>
                               <ExternalLink size={10} />
                             </a>
-                            <span className="text-[9px] text-gray-400 font-mono truncate max-w-[140px] block" title={item.source_url}>
-                              {item.source_url.replace(/^https?:\/\//, '').split('/')[0]}
-                            </span>
+                            <div className="mt-1 flex items-center gap-1 flex-wrap">
+                              {(() => {
+                                const tier = (item as any).source_tier || (item as any).raw_source_data?.source_tier;
+                                const isOfficial = (item as any).raw_source_data?.is_official_source ?? (!tier || tier === 'TIER_1_OFFICIAL');
+                                if (tier === 'TIER_1_OFFICIAL' || isOfficial) {
+                                  return (
+                                    <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                                      Oficial (Tier 1)
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <span className="text-[8px] font-bold px-1 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">
+                                    Medio esp. (Tier 2)
+                                  </span>
+                                );
+                              })()}
+                              <span className="text-[9px] text-gray-400 font-mono truncate max-w-[130px] inline-block" title={item.source_url}>
+                                {item.source_url.replace(/^https?:\/\//, '').split('/')[0]}
+                              </span>
+                            </div>
                           </div>
                         ) : (
                           <span className="text-gray-400 text-[11px]">Sin URL</span>
