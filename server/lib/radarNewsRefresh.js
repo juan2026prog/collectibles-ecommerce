@@ -235,10 +235,13 @@ function normalizeRadarModel(value) {
   return RADAR_MODELS.has(model) ? model : 'gpt-5.6-luna';
 }
 
-export function estimateRadarRefreshCost({ model = 'gpt-5.6-luna', maxItems = 5, intervalDays = 3 } = {}) {
-  const selectedModel = normalizeRadarModel(model);
-  const items = Math.max(3, Math.min(12, Number(maxItems) || 5));
-  const days = Math.max(1, Math.min(14, Number(intervalDays) || 3));
+export function estimateRadarRefreshCost({ model = 'gpt-5.6-luna', maxItems = 3, intervalDays = 3, mode = 'ECONOMICO' } = {}) {
+  const selectedMode = normalizeRadarMode(mode);
+  const defaults = RADAR_MODES[selectedMode];
+  const selectedModel = normalizeRadarModel(model || defaults.model);
+  const items = Math.max(3, Math.min(12, Number(maxItems) || defaults.maxItems));
+  const days = Math.max(1, Math.min(14, Number(intervalDays) || defaults.intervalDays));
+  const useWebSearch = selectedMode !== 'ECONOMICO';
 
   // Conservative local-only estimate. Web search result volume is variable, so expose a range.
   const inputMin = 6000 + items * 500;
@@ -252,14 +255,16 @@ export function estimateRadarRefreshCost({ model = 'gpt-5.6-luna', maxItems = 5,
   const tokenExpected = calculateOpenAICost(selectedModel, inputExpected, outputExpected);
   const tokenMax = calculateOpenAICost(selectedModel, inputMax, outputMax);
 
-  const addTool = (cost) => cost == null ? null : Number((cost + WEB_SEARCH_TOOL_COST_USD).toFixed(5));
+  const addTool = (cost) => cost == null ? null : Number((cost + (useWebSearch ? WEB_SEARCH_TOOL_COST_USD : 0)).toFixed(5));
   const expected = addTool(tokenExpected.estimated_cost_usd);
   const min = addTool(tokenMin.estimated_cost_usd);
   const max = addTool(tokenMax.estimated_cost_usd);
   const runsPer30Days = 30 / days;
 
   return {
+    mode: selectedMode,
     model: selectedModel,
+    web_search_planned: useWebSearch,
     max_items: items,
     interval_days: days,
     estimated_cost_min_usd: min,
@@ -267,10 +272,10 @@ export function estimateRadarRefreshCost({ model = 'gpt-5.6-luna', maxItems = 5,
     estimated_cost_max_usd: max,
     estimated_monthly_usd: expected == null ? null : Number((expected * runsPer30Days).toFixed(4)),
     estimated_monthly_max_usd: max == null ? null : Number((max * runsPer30Days).toFixed(4)),
-    web_search_tool_cost_usd: WEB_SEARCH_TOOL_COST_USD,
+    web_search_tool_cost_usd: useWebSearch ? WEB_SEARCH_TOOL_COST_USD : 0,
     pricing: getModelPricingRates(selectedModel),
     openai_calls_used: 0,
-    note: 'Estimación local previa. El costo real depende de los tokens recuperados por búsqueda web.'
+    note: useWebSearch ? 'Estimación local previa. Incluye búsqueda web.' : 'Modo Económico: primero usa fuentes oficiales directas, sin cargo de web_search.'
   };
 }
 
@@ -297,13 +302,16 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
     console.warn('[Radar Refresh] existing image repair skipped', repairError?.message || repairError);
   }
 
-  const {data:settingRows,error:settingsError}=await supabase.from('site_settings').select('key,value').in('key',['radar_auto_refresh_enabled','radar_refresh_interval_days','radar_last_refresh_at','radar_max_items_per_refresh','radar_ai_model']);
+  const {data:settingRows,error:settingsError}=await supabase.from('site_settings').select('key,value').in('key',['radar_auto_refresh_enabled','radar_refresh_interval_days','radar_last_refresh_at','radar_max_items_per_refresh','radar_ai_model','radar_cost_mode']);
   if(settingsError)return {httpStatus:500,success:false,status:'SETTINGS_ERROR',error:settingsError.message};
   const settings=Object.fromEntries((settingRows||[]).map(r=>[r.key,r.value]));
   const enabled=parseBool(settings.radar_auto_refresh_enabled,true);
-  const intervalDays=parseDays(settings.radar_refresh_interval_days,3);
-  const maxItems=Math.max(3,Math.min(12,Number(settings.radar_max_items_per_refresh)||5));
-  const radarModel=normalizeRadarModel(settings.radar_ai_model);
+  const radarMode=normalizeRadarMode(settings.radar_cost_mode);
+  const modeDefaults=RADAR_MODES[radarMode];
+  const intervalDays=parseDays(settings.radar_refresh_interval_days,modeDefaults.intervalDays);
+  const maxItems=Math.max(3,Math.min(12,Number(settings.radar_max_items_per_refresh)||modeDefaults.maxItems));
+  const radarModel=normalizeRadarModel(settings.radar_ai_model || modeDefaults.model);
+  const useWebSearch=radarMode !== 'ECONOMICO';
 
   if(!enabled&&!force)return {httpStatus:200,success:true,status:'DISABLED',interval_days:intervalDays};
   const last=settings.radar_last_refresh_at?new Date(settings.radar_last_refresh_at):null;
@@ -315,27 +323,62 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
     title:{type:'string'},summary:{type:'string'},why_it_matters:{type:'string'},news_type:{type:'string',enum:['NEWS','PREORDER','RELEASE','RESTOCK','HIGH_DEMAND','EXCLUSIVE']},source_name:{type:'string'},source_url:{type:'string'},source_published_at:{type:['string','null']},brand:{type:['string','null']},manufacturer:{type:['string','null']},franchise:{type:['string','null']},character:{type:['string','null']},product_line:{type:['string','null']},release_date:{type:['string','null']},exact_product_asin:{type:['string','null']},primary_product_name:{type:['string','null']},product_queries:{type:'array',items:{type:'string'},maxItems:6}
   },required:['title','summary','why_it_matters','news_type','source_name','source_url','source_published_at','brand','manufacturer','franchise','character','product_line','release_date','exact_product_asin','primary_product_name','product_queries']}}},required:['stories']};
 
+  let officialCandidates = [];
+  if (!useWebSearch) {
+    try {
+      officialCandidates = await collectFreshOfficialCandidates(supabase, Math.max(6, maxItems * 2));
+    } catch (sourceError) {
+      console.warn('[Radar Refresh] official source collection failed', sourceError?.message || sourceError);
+    }
+  }
+
+  if (!useWebSearch && officialCandidates.length === 0) {
+    const now = new Date().toISOString();
+    await supabase.from('site_settings').upsert([
+      {key:'radar_last_refresh_at',value:now,updated_at:now},
+      {key:'radar_auto_refresh_enabled',value:String(enabled),updated_at:now},
+      {key:'radar_refresh_interval_days',value:String(intervalDays),updated_at:now}
+    ],{onConflict:'key'});
+    return {
+      httpStatus:200, success:true, status:'NO_NEW_OFFICIAL_ITEMS',
+      mode:radarMode, web_search_used:false, interval_days:intervalDays, model:radarModel,
+      created:0, updated:0, skipped:0, repaired_existing_images:repairedExistingImages,
+      published:[], sources_checked:OFFICIAL_RADAR_SOURCES.length,
+      last_refresh_at:now, next_refresh_at:new Date(Date.now()+intervalDays*86400000).toISOString(),
+      ai_cost_usd:0
+    };
+  }
+
+  const aiInput = useWebSearch
+    ? [
+        'Busca noticias REALES y recientes del mundo de coleccionables, figuras de accion, estatuas, LEGO/building sets, anime, comics, TCG cuando sea realmente relevante, replicas y props.',
+        `Ventana prioritaria: ultimos ${lookbackDays} dias.`,
+        'Prioriza anuncios de fabricantes, aperturas de preventa, lanzamientos, restocks, exclusivas y tendencias verificables.',
+        'Cada historia debe tener una URL fuente concreta y verificable. No inventes datos.'
+      ].join('\n')
+    : [
+        'Analiza SOLO estos candidatos obtenidos directamente de fuentes oficiales.',
+        'Selecciona únicamente novedades útiles y devuelve como máximo ' + maxItems + '.',
+        'No inventes datos. Conserva exactamente source_url y source_name.',
+        JSON.stringify(officialCandidates)
+      ].join('\n');
+
   let ai;
   try{
     ai=await callOpenAIResponses({
       model:radarModel,
-      input:[
-        'Busca noticias REALES y recientes del mundo de coleccionables, figuras de accion, estatuas, LEGO/building sets, anime, comics, TCG cuando sea realmente relevante, replicas y props.',
-        `Ventana prioritaria: ultimos ${lookbackDays} dias.`,
-        'Prioriza anuncios de fabricantes, aperturas de preventa, lanzamientos, restocks, exclusivas y tendencias verificables que interesen a compradores de Uruguay y LATAM, sin limitar la investigacion al mercado local.',
-        'Marcas/fuentes prioritarias: Hasbro/Hasbro Pulse, NECA, McFarlane Toys, Mattel Creations, Bandai/Tamashii Nations, Hot Toys, Sideshow, Iron Studios, Funko, LEGO, Super7 y Mezco.',
-        'Cada historia debe tener una URL fuente concreta y verificable. No inventes fechas, precios, stock, ASIN ni disponibilidad.',
-        'Si conoces un ASIN exacto por evidencia incluyelo; si no, null. product_queries debe contener productos concretos que tengan sentido comercial debajo de la noticia.'
-      ].join('\n'),
-      instructions:'Actuas como editor de Radar de Collectibles 2026. Detecta hechos recientes verificables y conviertelos en noticias breves, utiles y comerciales. Una noticia puede existir aunque todavia no haya producto para comprar. Los productos se vinculan despues contra el catalogo real.',
-      tools:[{type:'web_search'}],toolChoice:'required',maxTokens:3000,timeoutMs:55000,
+      input:aiInput,
+      instructions:'Actuas como editor de Radar de Collectibles 2026. Detecta hechos verificables y conviertelos en noticias breves, utiles y comerciales. No inventes.',
+      ...(useWebSearch ? { tools:[{type:'web_search'}], toolChoice:'required' } : {}),
+      maxTokens: useWebSearch ? 3000 : 1800,
+      timeoutMs:55000,
       textFormat:{type:'json_schema',name:'radar_news_refresh',strict:true,schema},
-      metadata:{engine:'RADAR_NEWS_REFRESH',interval_days:String(intervalDays),trigger:force?'MANUAL':'CRON',max_items:String(maxItems)}
+      metadata:{engine:'RADAR_NEWS_REFRESH',mode:radarMode,interval_days:String(intervalDays),trigger:force?'MANUAL':'CRON',max_items:String(maxItems)}
     });
   }catch(e){return {httpStatus:e?.statusCode||502,success:false,status:'AI_FAILED',error:e?.message||'Fallo de investigacion Radar'};}
 
   let parsed;try{parsed=JSON.parse(ai.outputText||'{}');}catch{return {httpStatus:502,success:false,status:'INVALID_AI_OUTPUT',error:'La investigacion no devolvio JSON valido'};}
-  const cited=new Set((ai.sources||[]).map(s=>s.url).filter(Boolean));
+  const cited=useWebSearch ? new Set((ai.sources||[]).map(s=>s.url).filter(Boolean)) : new Set(officialCandidates.map(s=>s.source_url).filter(Boolean));
   const stories=Array.isArray(parsed.stories)?parsed.stories:[];
   const {data:amazonRows}=await supabase.from('international_products').select('id,title,brand,franchise,source_retailer,asin,product_url_external,main_image_url_external,image_url,base_price_usd,final_price_usd').ilike('source_retailer','%amazon%').limit(700);
   const catalog=amazonRows||[];
@@ -365,7 +408,7 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
 
   const now=new Date().toISOString();
   await supabase.from('site_settings').upsert([{key:'radar_last_refresh_at',value:now,updated_at:now},{key:'radar_auto_refresh_enabled',value:String(enabled),updated_at:now},{key:'radar_refresh_interval_days',value:String(intervalDays),updated_at:now}],{onConflict:'key'});
-  try{await supabase.from('ai_usage_events').insert({engine:'RADAR_INTELLIGENCE',country_code:'GLOBAL',provider:'OPENAI',model:ai.model,request_id:ai.requestId,input_tokens:ai.usage?.inputTokens??null,output_tokens:ai.usage?.outputTokens??null,total_tokens:ai.usage?.totalTokens??null,estimated_cost_usd:ai.pricing?.estimated_cost_usd??null,latency_ms:ai.latencyMs??null,status:'SUCCESS',fallback_used:false,metadata:{operation:'RADAR_NEWS_REFRESH',created,updated,skipped,interval_days:intervalDays}});}catch{}
+  try{await supabase.from('ai_usage_events').insert({engine:'RADAR_INTELLIGENCE',country_code:'GLOBAL',provider:'OPENAI',model:ai.model,request_id:ai.requestId,input_tokens:ai.usage?.inputTokens??null,output_tokens:ai.usage?.outputTokens??null,total_tokens:ai.usage?.totalTokens??null,estimated_cost_usd:ai.pricing?.estimated_cost_usd??null,latency_ms:ai.latencyMs??null,status:'SUCCESS',fallback_used:false,metadata:{operation:'RADAR_NEWS_REFRESH',mode:radarMode,web_search_used:useWebSearch,created,updated,skipped,interval_days:intervalDays}});}catch{}
 
-  return {httpStatus:200,success:true,status:'REFRESHED',interval_days:intervalDays,model:radarModel,created,updated,skipped,repaired_existing_images:repairedExistingImages,published,sources_checked:cited.size,last_refresh_at:now,next_refresh_at:new Date(Date.now()+intervalDays*86400000).toISOString(),ai_cost_usd:ai.pricing?.estimated_cost_usd??null};
+  return {httpStatus:200,success:true,status:'REFRESHED',mode:radarMode,web_search_used:useWebSearch,interval_days:intervalDays,model:radarModel,created,updated,skipped,repaired_existing_images:repairedExistingImages,published,sources_checked:cited.size,last_refresh_at:now,next_refresh_at:new Date(Date.now()+intervalDays*86400000).toISOString(),ai_cost_usd:ai.pricing?.estimated_cost_usd??null};
 }
