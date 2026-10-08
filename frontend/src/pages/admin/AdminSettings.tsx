@@ -461,6 +461,8 @@ export default function AdminSettings() {
   const [testingHandyConnection, setTestingHandyConnection] = useState(false);
   const [loading, setLoading] = useState(true);
   const [radarRefreshing, setRadarRefreshing] = useState(false);
+  const [radarEstimating, setRadarEstimating] = useState(false);
+  const [radarCostEstimate, setRadarCostEstimate] = useState<any>(null);
   const [showMediaPicker, setShowMediaPicker] = useState<false | 'logo'>(false);
   const { toast } = useToast();
   const { user, isSuperAdmin } = useAuth();
@@ -809,7 +811,49 @@ export default function AdminSettings() {
     toast.success('Configuración guardada');
   }
 
+  async function loadRadarCostEstimate() {
+    setRadarEstimating(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch('/api/sourcing-discovery', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          action: 'radar_news_estimate',
+          model: settings['radar_ai_model'] || 'gpt-5.6-terra',
+          max_items: Number(settings['radar_max_items_per_refresh'] || 8),
+          interval_days: Number(settings['radar_refresh_interval_days'] || 3)
+        })
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload?.success) throw new Error(payload?.error || 'No se pudo estimar el costo');
+      setRadarCostEstimate(payload);
+      return payload;
+    } catch (error: any) {
+      setRadarCostEstimate(null);
+      toast.error(error?.message || 'No se pudo calcular el costo de Radar');
+      return null;
+    } finally {
+      setRadarEstimating(false);
+    }
+  }
+
   async function runRadarRefreshNow() {
+    const estimate = await loadRadarCostEstimate();
+    if (!estimate) return;
+
+    const expected = estimate.estimated_cost_expected_usd;
+    const maximum = estimate.estimated_cost_max_usd;
+    const model = estimate.model || settings['radar_ai_model'] || 'gpt-5.6-terra';
+    const ok = window.confirm(
+      `Actualizar Radar ahora?\n\nModelo: ${model}\nNoticias máximas: ${settings['radar_max_items_per_refresh'] || '8'}\nCosto estimado: USD ${expected != null ? Number(expected).toFixed(4) : 'N/D'}\nMáximo estimado: USD ${maximum != null ? Number(maximum).toFixed(4) : 'N/D'}\n\nNo se ejecutará ninguna llamada de IA hasta que confirmes.`
+    );
+    if (!ok) return;
+
     setRadarRefreshing(true);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -825,13 +869,28 @@ export default function AdminSettings() {
       const payload = await response.json();
       if (!response.ok || !payload?.success) throw new Error(payload?.error || 'No se pudo actualizar Radar');
       await fetchData();
-      toast.success(`Radar actualizado: ${payload.created || 0} noticias nuevas, ${payload.updated || 0} actualizadas`);
+      await loadRadarCostEstimate();
+      toast.success(`Radar actualizado: ${payload.created || 0} noticias nuevas, ${payload.updated || 0} actualizadas · costo real USD ${payload.ai_cost_usd != null ? Number(payload.ai_cost_usd).toFixed(4) : 'N/D'}`);
     } catch (error: any) {
       toast.error(error?.message || 'Falló la actualización de Radar');
     } finally {
       setRadarRefreshing(false);
     }
   }
+
+  useEffect(() => {
+    if (currentTab !== 'modules' || loading) return;
+    const timer = window.setTimeout(() => {
+      loadRadarCostEstimate();
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [
+    currentTab,
+    loading,
+    settings['radar_ai_model'],
+    settings['radar_max_items_per_refresh'],
+    settings['radar_refresh_interval_days']
+  ]);
 
   async function toggleModule(id: string, current: boolean) {
     const nextVal = !current;
@@ -1964,7 +2023,7 @@ export default function AdminSettings() {
                             </button>
                           </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                             <label className="block">
                               <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-slate-400">Frecuencia</span>
                               <select
@@ -1980,20 +2039,99 @@ export default function AdminSettings() {
                               </select>
                             </label>
 
-                            <button
-                              type="button"
-                              onClick={runRadarRefreshNow}
-                              disabled={radarRefreshing}
-                              className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white text-xs font-black flex items-center justify-center gap-2 min-h-[40px]"
-                            >
-                              <RefreshCw className={`w-4 h-4 ${radarRefreshing ? 'animate-spin' : ''}`} />
-                              {radarRefreshing ? 'Actualizando…' : 'Actualizar ahora'}
-                            </button>
+                            <label className="block">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-slate-400">Noticias por actualización</span>
+                              <select
+                                value={settings['radar_max_items_per_refresh'] || '8'}
+                                onChange={(e) => saveSetting('radar_max_items_per_refresh', e.target.value)}
+                                className="mt-1 w-full bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-gray-900 dark:text-white"
+                              >
+                                <option value="3">Hasta 3</option>
+                                <option value="5">Hasta 5</option>
+                                <option value="8">Hasta 8 (recomendado)</option>
+                                <option value="12">Hasta 12</option>
+                              </select>
+                            </label>
+
+                            <label className="block">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-slate-400">Modelo de IA</span>
+                              <select
+                                value={settings['radar_ai_model'] || 'gpt-5.6-terra'}
+                                onChange={(e) => saveSetting('radar_ai_model', e.target.value)}
+                                className="mt-1 w-full bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-gray-900 dark:text-white"
+                              >
+                                <option value="gpt-5.6-luna">Luna · menor costo</option>
+                                <option value="gpt-5.6-terra">Terra · balanceado</option>
+                                <option value="gpt-5.6-sol">Sol · máxima capacidad</option>
+                              </select>
+                            </label>
                           </div>
 
-                          <div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-gray-500 dark:text-slate-400">
-                            <span>Última actualización: <strong className="text-gray-700 dark:text-slate-200">{settings['radar_last_refresh_at'] ? new Date(settings['radar_last_refresh_at']).toLocaleString('es-UY') : 'Todavía no ejecutada'}</strong></span>
-                            <span>Objetivo: <strong className="text-gray-700 dark:text-slate-200">Noticias → productos → conversión</strong></span>
+                          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                            <div className="rounded-xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-700 p-3">
+                              <span className="text-[9px] font-black uppercase tracking-wider text-gray-400">Próxima actualización</span>
+                              <div className="text-sm font-black text-gray-900 dark:text-white mt-1">
+                                {radarEstimating ? 'Calculando…' : radarCostEstimate?.estimated_cost_expected_usd != null ? `USD ${Number(radarCostEstimate.estimated_cost_expected_usd).toFixed(4)}` : 'N/D'}
+                              </div>
+                              <span className="text-[10px] text-gray-500">estimado</span>
+                            </div>
+                            <div className="rounded-xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-700 p-3">
+                              <span className="text-[9px] font-black uppercase tracking-wider text-gray-400">Tope estimado</span>
+                              <div className="text-sm font-black text-gray-900 dark:text-white mt-1">
+                                {radarCostEstimate?.estimated_cost_max_usd != null ? `USD ${Number(radarCostEstimate.estimated_cost_max_usd).toFixed(4)}` : 'N/D'}
+                              </div>
+                              <span className="text-[10px] text-gray-500">por corrida</span>
+                            </div>
+                            <div className="rounded-xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-700 p-3">
+                              <span className="text-[9px] font-black uppercase tracking-wider text-gray-400">Proyección 30 días</span>
+                              <div className="text-sm font-black text-gray-900 dark:text-white mt-1">
+                                {radarCostEstimate?.estimated_monthly_usd != null ? `USD ${Number(radarCostEstimate.estimated_monthly_usd).toFixed(3)}` : 'N/D'}
+                              </div>
+                              <span className="text-[10px] text-gray-500">según frecuencia</span>
+                            </div>
+                            <div className="rounded-xl bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-700 p-3">
+                              <span className="text-[9px] font-black uppercase tracking-wider text-gray-400">Gastado este mes</span>
+                              <div className="text-sm font-black text-emerald-600 dark:text-emerald-400 mt-1">
+                                {radarCostEstimate?.month_actual_usd != null ? `USD ${Number(radarCostEstimate.month_actual_usd).toFixed(4)}` : 'USD 0.0000'}
+                              </div>
+                              <span className="text-[10px] text-gray-500">{radarCostEstimate?.month_runs || 0} ejecuciones</span>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+                            <div className="text-[11px] text-gray-500 dark:text-slate-400 space-y-0.5">
+                              <div>Última actualización: <strong className="text-gray-700 dark:text-slate-200">{settings['radar_last_refresh_at'] ? new Date(settings['radar_last_refresh_at']).toLocaleString('es-UY') : 'Todavía no ejecutada'}</strong></div>
+                              <div>
+                                Último costo real: <strong className="text-gray-700 dark:text-slate-200">
+                                  {radarCostEstimate?.last_actual?.cost_usd != null ? `USD ${Number(radarCostEstimate.last_actual.cost_usd).toFixed(4)}` : 'Sin ejecuciones registradas'}
+                                </strong>
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={loadRadarCostEstimate}
+                                disabled={radarEstimating}
+                                className="px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-950 text-gray-700 dark:text-slate-200 text-xs font-black flex items-center gap-2"
+                              >
+                                <RefreshCw className={`w-4 h-4 ${radarEstimating ? 'animate-spin' : ''}`} />
+                                Recalcular costo
+                              </button>
+                              <button
+                                type="button"
+                                onClick={runRadarRefreshNow}
+                                disabled={radarRefreshing || radarEstimating}
+                                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white text-xs font-black flex items-center justify-center gap-2 min-h-[40px]"
+                              >
+                                <RefreshCw className={`w-4 h-4 ${radarRefreshing ? 'animate-spin' : ''}`} />
+                                {radarRefreshing ? 'Actualizando…' : 'Actualizar ahora'}
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="rounded-xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 px-3 py-2 text-[10px] text-amber-800 dark:text-amber-300">
+                            El cálculo previo usa 0 llamadas a OpenAI. Incluye una estimación de tokens + búsqueda web. El costo real puede variar según la cantidad de contenido recuperado y se registra después de cada ejecución.
                           </div>
                         </div>
                       </div>

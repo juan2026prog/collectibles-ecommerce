@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import crypto from 'node:crypto';
 import { callOpenAIResponses } from './openai.js';
+import { calculateOpenAICost, getModelPricingRates } from './openaiPricing.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
 
@@ -16,6 +17,53 @@ function scoreProduct(story,p){const set=new Set(words([p.title,p.brand,p.franch
 const signalFromType=t=>({PREORDER:'PREVENTA_ABIERTA',RESTOCK:'VUELVE_A_STOCK',RELEASE:'ACABA_DE_SALIR',HIGH_DEMAND:'ALTA_DEMANDA',EXCLUSIVE:'EXCLUSIVO'}[t]||'NUEVO_ANUNCIO');
 const statusFromType=t=>({PREORDER:'PREORDER_OPEN',RESTOCK:'RESTOCKED',RELEASE:'RELEASED'}[t]||'ANNOUNCED');
 function safeDate(v){if(!v)return null;const d=new Date(v);return Number.isNaN(d.getTime())?null:d.toISOString();}
+
+const RADAR_MODELS = new Set(['gpt-5.6-luna','gpt-5.6-terra','gpt-5.6-sol']);
+const WEB_SEARCH_TOOL_COST_USD = 0.01; // $10 / 1k calls (OpenAI official pricing snapshot)
+
+function normalizeRadarModel(value) {
+  const model = String(value || '').trim().toLowerCase();
+  return RADAR_MODELS.has(model) ? model : 'gpt-5.6-terra';
+}
+
+export function estimateRadarRefreshCost({ model = 'gpt-5.6-terra', maxItems = 8, intervalDays = 3 } = {}) {
+  const selectedModel = normalizeRadarModel(model);
+  const items = Math.max(3, Math.min(12, Number(maxItems) || 8));
+  const days = Math.max(1, Math.min(14, Number(intervalDays) || 3));
+
+  // Conservative local-only estimate. Web search result volume is variable, so expose a range.
+  const inputMin = 6000 + items * 500;
+  const inputExpected = 12000 + items * 1000;
+  const inputMax = 30000 + items * 2000;
+  const outputMin = 700;
+  const outputExpected = Math.min(2600, 700 + items * 180);
+  const outputMax = 3000;
+
+  const tokenMin = calculateOpenAICost(selectedModel, inputMin, outputMin);
+  const tokenExpected = calculateOpenAICost(selectedModel, inputExpected, outputExpected);
+  const tokenMax = calculateOpenAICost(selectedModel, inputMax, outputMax);
+
+  const addTool = (cost) => cost == null ? null : Number((cost + WEB_SEARCH_TOOL_COST_USD).toFixed(5));
+  const expected = addTool(tokenExpected.estimated_cost_usd);
+  const min = addTool(tokenMin.estimated_cost_usd);
+  const max = addTool(tokenMax.estimated_cost_usd);
+  const runsPer30Days = 30 / days;
+
+  return {
+    model: selectedModel,
+    max_items: items,
+    interval_days: days,
+    estimated_cost_min_usd: min,
+    estimated_cost_expected_usd: expected,
+    estimated_cost_max_usd: max,
+    estimated_monthly_usd: expected == null ? null : Number((expected * runsPer30Days).toFixed(4)),
+    estimated_monthly_max_usd: max == null ? null : Number((max * runsPer30Days).toFixed(4)),
+    web_search_tool_cost_usd: WEB_SEARCH_TOOL_COST_USD,
+    pricing: getModelPricingRates(selectedModel),
+    openai_calls_used: 0,
+    note: 'Estimación local previa. El costo real depende de los tokens recuperados por búsqueda web.'
+  };
+}
 
 export async function runRadarNewsRefresh(req,{force=false}={}) {
   const supabase=db();
@@ -33,12 +81,13 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
     console.warn('[Radar Refresh] legacy image cleanup skipped', cleanupError?.message || cleanupError);
   }
 
-  const {data:settingRows,error:settingsError}=await supabase.from('site_settings').select('key,value').in('key',['radar_auto_refresh_enabled','radar_refresh_interval_days','radar_last_refresh_at','radar_max_items_per_refresh']);
+  const {data:settingRows,error:settingsError}=await supabase.from('site_settings').select('key,value').in('key',['radar_auto_refresh_enabled','radar_refresh_interval_days','radar_last_refresh_at','radar_max_items_per_refresh','radar_ai_model']);
   if(settingsError)return {httpStatus:500,success:false,status:'SETTINGS_ERROR',error:settingsError.message};
   const settings=Object.fromEntries((settingRows||[]).map(r=>[r.key,r.value]));
   const enabled=parseBool(settings.radar_auto_refresh_enabled,true);
   const intervalDays=parseDays(settings.radar_refresh_interval_days,3);
   const maxItems=Math.max(3,Math.min(12,Number(settings.radar_max_items_per_refresh)||8));
+  const radarModel=normalizeRadarModel(settings.radar_ai_model);
 
   if(!enabled&&!force)return {httpStatus:200,success:true,status:'DISABLED',interval_days:intervalDays};
   const last=settings.radar_last_refresh_at?new Date(settings.radar_last_refresh_at):null;
@@ -53,7 +102,7 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
   let ai;
   try{
     ai=await callOpenAIResponses({
-      profile:'balanced',
+      model:radarModel,
       input:[
         'Busca noticias REALES y recientes del mundo de coleccionables, figuras de accion, estatuas, LEGO/building sets, anime, comics, TCG cuando sea realmente relevante, replicas y props.',
         `Ventana prioritaria: ultimos ${lookbackDays} dias.`,
@@ -65,7 +114,7 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
       instructions:'Actuas como editor de Radar de Collectibles 2026. Detecta hechos recientes verificables y conviertelos en noticias breves, utiles y comerciales. Una noticia puede existir aunque todavia no haya producto para comprar. Los productos se vinculan despues contra el catalogo real.',
       tools:[{type:'web_search'}],toolChoice:'required',maxTokens:3000,timeoutMs:55000,
       textFormat:{type:'json_schema',name:'radar_news_refresh',strict:true,schema},
-      metadata:{engine:'RADAR_NEWS_REFRESH',interval_days:String(intervalDays),trigger:force?'MANUAL':'CRON'}
+      metadata:{engine:'RADAR_NEWS_REFRESH',interval_days:String(intervalDays),trigger:force?'MANUAL':'CRON',max_items:String(maxItems)}
     });
   }catch(e){return {httpStatus:e?.statusCode||502,success:false,status:'AI_FAILED',error:e?.message||'Fallo de investigacion Radar'};}
 
@@ -96,5 +145,5 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
   await supabase.from('site_settings').upsert([{key:'radar_last_refresh_at',value:now,updated_at:now},{key:'radar_auto_refresh_enabled',value:String(enabled),updated_at:now},{key:'radar_refresh_interval_days',value:String(intervalDays),updated_at:now}],{onConflict:'key'});
   try{await supabase.from('ai_usage_events').insert({engine:'RADAR_INTELLIGENCE',country_code:'GLOBAL',provider:'OPENAI',model:ai.model,request_id:ai.requestId,input_tokens:ai.usage?.inputTokens??null,output_tokens:ai.usage?.outputTokens??null,total_tokens:ai.usage?.totalTokens??null,estimated_cost_usd:ai.pricing?.estimated_cost_usd??null,latency_ms:ai.latencyMs??null,status:'SUCCESS',fallback_used:false,metadata:{operation:'RADAR_NEWS_REFRESH',created,updated,skipped,interval_days:intervalDays}});}catch{}
 
-  return {httpStatus:200,success:true,status:'REFRESHED',interval_days:intervalDays,created,updated,skipped,published,sources_checked:cited.size,last_refresh_at:now,next_refresh_at:new Date(Date.now()+intervalDays*86400000).toISOString(),ai_cost_usd:ai.pricing?.estimated_cost_usd??null};
+  return {httpStatus:200,success:true,status:'REFRESHED',interval_days:intervalDays,model:radarModel,created,updated,skipped,published,sources_checked:cited.size,last_refresh_at:now,next_refresh_at:new Date(Date.now()+intervalDays*86400000).toISOString(),ai_cost_usd:ai.pricing?.estimated_cost_usd??null};
 }
