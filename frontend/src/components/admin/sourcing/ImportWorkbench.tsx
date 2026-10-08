@@ -65,7 +65,7 @@ interface ImportWorkbenchProps {
   searchQuery?: string;
   onRefresh?: () => void;
   isLoading?: boolean;
-  onImportSuccess?: () => void;
+  onImportSuccess?: (importedAsins?: string[]) => void;
   pricingSettings?: any;
   onSelectionChange?: (count: number) => void;
   onReviewModalToggle?: (isOpen: boolean) => void;
@@ -579,8 +579,10 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
 
       if (insertError) throw insertError;
 
-      // Update candidates status in DB if candidate_ids exist
-      const candidateDbIds = itemsToImport.map(i => i.id).filter(id => !id.startsWith('temp_'));
+      // Update candidates status in DB ONLY for persistent rows (not ephemeral session IDs)
+      const candidateDbIds = itemsToImport
+        .map(i => i.id)
+        .filter(id => !id.startsWith('temp_') && !id.startsWith('ephemeral_'));
       if (candidateDbIds.length > 0) {
         await supabase
           .from('international_import_candidates')
@@ -588,20 +590,114 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
           .in('id', candidateDbIds);
       }
 
+      const importedAsinList = itemsToImport.map(i => i.external_product_id);
+
       addToast({
-        title: 'Importación exitosa',
-        message: `Se importaron ${rowsToInsert.length} productos a PENDING_REVIEW listos para su revisión final.`,
+        title: 'Guardado en catálogo',
+        message: `Se agregaron ${rowsToInsert.length} productos al catálogo en estado PENDING_REVIEW listos para su revisión final.`,
         type: 'success'
       });
 
+      // Update in-memory candidates and catalog asins
+      setExistingCatalogAsins(prev => {
+        const next = new Set(prev);
+        importedAsinList.forEach(a => next.add(a));
+        return next;
+      });
+      setCandidates(prev => prev.filter(c => !importedAsinList.includes(c.external_product_id)));
       setSelectedIds(new Set());
       setShowBulkReviewModal(false);
       fetchAuxiliaryData();
-      onImportSuccess?.();
+      onImportSuccess?.(importedAsinList);
       onRefresh?.();
     } catch (err: any) {
       console.error('Error in handleExecuteImport:', err);
-      addToast({ title: 'Error al importar', message: err.message || 'Fallo en la base de datos', type: 'error' });
+      addToast({ title: 'Error al agregar al catálogo', message: err.message || 'Fallo en la base de datos', type: 'error' });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleSingleAddCatalog = async (item: ImportCandidateItem) => {
+    if (existingCatalogAsins.has(item.external_product_id)) {
+      addToast({ title: 'Ya existe', message: `El ASIN ${item.external_product_id} ya se encuentra en el catálogo.`, type: 'info' });
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const fin = getItemFinancials(item, batchMarkup);
+      const rawImgs = extractCandidateImages(item);
+      const row = {
+        source_provider: 'zinc',
+        source_retailer: item.source || 'amazon',
+        external_product_id: item.external_product_id,
+        title: item.title,
+        brand: item.brand,
+        category: item.category || item.amazon_category || 'Collectibles',
+        amazon_category: item.amazon_category || item.category,
+        amazon_subcategory: item.amazon_subcategory,
+        amazon_category_path: item.amazon_category_path,
+        category_mapping_source: 'import_workbench_manual',
+        category_mapping_confidence: 100,
+        image_url: rawImgs[0] || item.image_url || null,
+        product_url_external: item.product_url_external || null,
+        base_price_usd: fin.amazonPrice,
+        amazon_current_price_usd: fin.amazonPrice,
+        pricing_mode: pricingSettings?.pricing_mode || 'amazon_price_plus_fee',
+        usa_domestic_shipping_usd: item.raw_data?.import_quote?.shipping ?? 0,
+        collectibles_fee_usd: fin.estimatedProfit,
+        final_price_usd: fin.finalPrice,
+        final_price_uyu: fin.finalPrice ? convertUsdToDisplay(fin.finalPrice, 'UYU', exchangeRateDetail.rate) : null,
+        currency: 'USD',
+        expected_profit_usd: fin.estimatedProfit,
+        real_cost_usd: fin.realCost,
+        availability: item.availability || 'available',
+        rating: item.rating,
+        review_count: item.review_count || 0,
+        collectibles_category_id: null,
+        gallery_images: rawImgs,
+        status: 'pending_review',
+        raw_data: {
+          ...(item.raw_data || {}),
+          target_country: targetCountry,
+          quote_status: fin.quoteStatus,
+          quote_explanation: fin.statusExplanation,
+          fx_rate: exchangeRateDetail.rate,
+          fx_target: exchangeRateDetail.target,
+          fx_source: exchangeRateDetail.source_name,
+          fx_status: exchangeRateDetail.status,
+          fx_updated_at: exchangeRateDetail.effective_at
+        }
+      };
+
+      const { error } = await supabase.from('international_products').insert([row]);
+      if (error) throw error;
+
+      if (!item.id.startsWith('temp_') && !item.id.startsWith('ephemeral_')) {
+        await supabase.from('international_import_candidates').update({ status: 'imported' }).eq('id', item.id);
+      }
+
+      addToast({
+        title: 'Guardado en catálogo',
+        message: `"${item.title.slice(0, 35)}..." agregado a PENDING_REVIEW.`,
+        type: 'success'
+      });
+
+      setExistingCatalogAsins(prev => new Set(prev).add(item.external_product_id));
+      setCandidates(prev => prev.filter(c => c.external_product_id !== item.external_product_id));
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        next.delete(item.id);
+        return next;
+      });
+      if (detailItem?.external_product_id === item.external_product_id) {
+        setDetailItem(null);
+      }
+      onImportSuccess?.([item.external_product_id]);
+    } catch (err: any) {
+      console.error(err);
+      addToast({ title: 'Error al agregar', message: err.message, type: 'error' });
     } finally {
       setIsImporting(false);
     }
@@ -1158,12 +1254,24 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
 
                       {/* ACCIONES */}
                       <td className="py-3 px-3 text-center">
-                        <button
-                          onClick={() => setDetailItem(item)}
-                          className="px-2.5 py-1 text-xs font-semibold text-gray-700 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
-                        >
-                          Ver detalle
-                        </button>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            onClick={() => setDetailItem(item)}
+                            className="px-2.5 py-1 text-xs font-semibold text-gray-750 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 rounded-lg transition"
+                          >
+                            Ver detalle
+                          </button>
+                          {!item.already_imported && !existingCatalogAsins.has(item.external_product_id) && (
+                            <button
+                              onClick={() => handleSingleAddCatalog(item)}
+                              disabled={isImporting}
+                              title="Agregar directamente al catálogo en PENDING_REVIEW"
+                              className="px-2 py-1 text-[11px] font-bold text-white bg-[#f00856] hover:bg-[#d0074a] rounded-lg transition disabled:opacity-40"
+                            >
+                              + Catálogo
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -1646,13 +1754,23 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
               </div>
             </div>
 
-            <div className="p-5 border-t border-gray-200 bg-gray-50 flex items-center justify-end">
+            <div className="p-5 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
               <button
                 onClick={() => setDetailItem(null)}
-                className="px-4 py-2 bg-gray-900 text-white text-xs font-bold rounded-xl"
+                className="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-900"
               >
                 Cerrar
               </button>
+              {!detailItem.already_imported && !existingCatalogAsins.has(detailItem.external_product_id) && (
+                <button
+                  onClick={() => handleSingleAddCatalog(detailItem)}
+                  disabled={isImporting}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-[#f00856] hover:bg-[#d0074a] text-white text-xs font-bold rounded-xl shadow-xs transition disabled:opacity-50"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Agregar al catálogo (PENDING_REVIEW)</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

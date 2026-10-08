@@ -124,6 +124,8 @@ export default function AdminInternationalSync() {
         fixed_markup_usd: Number(settings.fixed_markup_usd),
         international_operating_limit_usd: Number(settings.international_operating_limit_usd),
         international_safety_reserve_usd: Number(settings.international_safety_reserve_usd),
+        auto_promote_external_interest: Boolean(settings.auto_promote_external_interest),
+        wishlist_promotion_threshold: Number(settings.wishlist_promotion_threshold || 10),
         auto_purchase_enabled: false, // strictly enforce OFF
         international_purchases_enabled: false, // strictly enforce OFF
         international_public_enabled: false, // strictly enforce OFF
@@ -700,6 +702,45 @@ export default function AdminInternationalSync() {
                         <div className="text-[11px] text-gray-500">Ejecución desatendida periódica en segundo plano.</div>
                       </div>
                       <span className="px-3 py-1 bg-gray-200 text-gray-700 text-xs font-bold rounded-lg">OFF (Bloqueado)</span>
+                    </div>
+
+                    {/* Promoción por Wishlist / Interés Popular */}
+                    <div className="p-3.5 bg-white border border-gray-200 rounded-xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-bold text-gray-900">Auto-Promoción a PENDING_REVIEW por Wishlist</div>
+                          <div className="text-[11px] text-gray-500">
+                            Promueve automáticamente productos externos a revisión cuando superan el umbral de favoritos de usuarios.
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSettings({ ...settings, auto_promote_external_interest: !settings.auto_promote_external_interest })}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                            settings.auto_promote_external_interest ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-700'
+                          }`}
+                        >
+                          {settings.auto_promote_external_interest ? 'ACTIVO' : 'INACTIVO'}
+                        </button>
+                      </div>
+
+                      {settings.auto_promote_external_interest && (
+                        <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                          <label className="text-xs font-semibold text-gray-700">
+                            Umbral de favoritos (Wishlist) para activar revisión
+                          </label>
+                          <select
+                            value={settings.wishlist_promotion_threshold || 10}
+                            onChange={e => setSettings({ ...settings, wishlist_promotion_threshold: Number(e.target.value) })}
+                            className="px-3 py-1 bg-gray-50 border border-gray-300 rounded-lg text-xs font-bold text-gray-900"
+                          >
+                            <option value={5}>5 favoritos</option>
+                            <option value={10}>10 favoritos (Recomendado)</option>
+                            <option value={20}>20 favoritos</option>
+                            <option value={50}>50 favoritos</option>
+                          </select>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

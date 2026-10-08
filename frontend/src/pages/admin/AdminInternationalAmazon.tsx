@@ -135,9 +135,8 @@ export default function AdminInternationalAmazon() {
   const [searchMeta, setSearchMeta] = useState<any>(null);
 
   useEffect(() => {
-    fetchCandidates(candidatePage, candidatePageSize);
     fetchCategories();
-  }, [candidatePage, candidatePageSize]);
+  }, []);
 
   async function fetchCategories() {
     const { data, error } = await supabase.from('categories').select('*').order('name');
@@ -150,24 +149,9 @@ export default function AdminInternationalAmazon() {
     }
   }
 
-  async function fetchCandidates(page: number = candidatePage, pageSize: number = candidatePageSize) {
-    setLoading(true);
-    const from = (page - 1) * pageSize;
-    const to = from + pageSize - 1;
-
-    const { data, error, count } = await supabase
-      .from('international_import_candidates')
-      .select('*', { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(from, to);
-    
-    if (error) {
-      addToast({ title: 'Error', message: error.message, type: 'error' });
-    } else {
-      setCandidates(data || []);
-      if (count !== null) setTotalCandidates(count);
-    }
-    setLoading(false);
+  // Fallback candidate refresher: retains current session candidates or clears them
+  function refreshSessionCandidates() {
+    // Preserves in-memory live search candidates without DB roundtrip
   }
 
   async function handleRecalculateSuggestions() {
@@ -536,14 +520,15 @@ export default function AdminInternationalAmazon() {
       if (error) throw error;
       if (data.error) throw new Error(data.error);
 
-      const resultItems = Array.isArray(data?.candidates) ? data.candidates : (Array.isArray(data?.results) ? data.results : []);
+      const resultItems = Array.isArray(data?.results) ? data.results : (Array.isArray(data?.candidates) ? data.candidates : []);
       setCandidates(resultItems);
       setTotalCandidates(Number(data?.meta?.total ?? resultItems.length));
       setCandidatePage(1);
+      setSelectedCount(0);
       setSearchMeta(data?.meta || null);
       addToast({
         title: 'Búsqueda completada',
-        message: `${resultItems.length} productos Amazon únicos recuperados${data?.meta?.provider_limited ? ' (límite del proveedor alcanzado)' : ''}.`,
+        message: `${resultItems.length} productos Amazon únicos obtenidos${data?.meta?.provider_limited ? ' (límite del proveedor alcanzado)' : ''}.`,
         type: 'success'
       });
     } catch (err: any) {
@@ -925,6 +910,22 @@ export default function AdminInternationalAmazon() {
                 />
               </div>
 
+              <div className="md:col-span-3">
+                <label className="block text-[11px] font-medium text-gray-600 mb-1">Profundidad de Búsqueda</label>
+                <select
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-900"
+                  value={searchParams.max_results}
+                  onChange={e => setSearchParams({ ...searchParams, max_results: e.target.value })}
+                >
+                  <option value="20">20 productos</option>
+                  <option value="50">50 productos</option>
+                  <option value="100">100 productos</option>
+                  <option value="250">250 productos</option>
+                  <option value="500">500 productos</option>
+                  <option value="1000">1.000 productos (Búsqueda profunda)</option>
+                </select>
+              </div>
+
               <div className="md:col-span-12 flex flex-wrap items-center gap-4 pt-2">
                 <label className="flex items-center space-x-2 text-xs text-gray-700 cursor-pointer">
                   <input
@@ -996,9 +997,13 @@ export default function AdminInternationalAmazon() {
       <ImportWorkbench
         initialItems={mappedWorkbenchItems}
         searchQuery={searchParams.query}
-        onRefresh={fetchCandidates}
+        onRefresh={() => {}}
         isLoading={loading}
-        onImportSuccess={fetchCandidates}
+        onImportSuccess={(importedAsins?: string[]) => {
+          if (importedAsins && importedAsins.length > 0) {
+            setCandidates(prev => prev.filter(c => !importedAsins.includes(c.external_product_id)));
+          }
+        }}
         onSelectionChange={setSelectedCount}
         onReviewModalToggle={setIsReviewModalOpen}
         onImportingStateChange={setIsImportingInProgress}
