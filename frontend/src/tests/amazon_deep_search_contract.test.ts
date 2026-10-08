@@ -17,8 +17,8 @@ describe('Amazon deep search contract', () => {
     expect(admin).toContain('[20, 50, 100, 250, 500, 1000]');
     expect(admin).toContain('onlyRecognizedBrands: Boolean(params.onlyRecognizedBrands)');
     expect(admin).toContain('includeGenerics: Boolean(params.includeGenerics)');
-    expect(admin).toContain('min_reviews: params.min_reviews ? Number(params.min_reviews) : undefined');
-    expect(admin).toContain('availability: params.availability || undefined');
+    expect(admin).toContain('min_reviews: params.min_reviews ? Number(params.min_reviews) : null');
+    expect(admin).toContain('availability: params.availability || null');
   });
 
   it('uses the exact current search batch instead of reloading unrelated recent candidates', () => {

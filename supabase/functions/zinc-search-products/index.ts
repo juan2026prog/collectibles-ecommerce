@@ -102,23 +102,33 @@ serve(async (req) => {
     const targetResults = Math.min(MAX_DEEP_RESULTS, Math.max(1, Number(max_results) || 100));
     const startPage = Math.max(1, Number(page) || 1);
 
-    const { data: searchRecord, error: searchError } = await supabase
-      .from("international_import_searches")
-      .insert({
-        query: String(query).trim(),
-        brand_filter: brand || null,
-        category_filter: category || null,
-        min_price: min_price || null,
-        max_price: max_price || null,
-        min_rating: min_rating || null,
-        max_results: targetResults,
-        page: startPage,
-        created_by: user.id
-      })
-      .select()
-      .single();
+    // Resilient search history persistence: must NEVER fail the search if DB insert errors
+    let searchId = crypto.randomUUID();
+    try {
+      const { data: searchRecord, error: searchError } = await supabase
+        .from("international_import_searches")
+        .insert({
+          query: String(query).trim(),
+          brand_filter: brand || null,
+          category_filter: category || null,
+          min_price: min_price || null,
+          max_price: max_price || null,
+          min_rating: min_rating || null,
+          max_results: targetResults,
+          page: startPage,
+          created_by: user.id
+        })
+        .select()
+        .single();
 
-    if (searchError) throw searchError;
+      if (searchError) {
+        console.warn("[Amazon Search] Error persisting search history record:", searchError);
+      } else if (searchRecord?.id) {
+        searchId = searchRecord.id;
+      }
+    } catch (insertErr) {
+      console.warn("[Amazon Search] Unexpected exception persisting search record:", insertErr);
+    }
 
     const [{ data: catMappings }, { data: brandMappings }, { data: keywordMappings }] = await Promise.all([
       supabase.from("amazon_category_mapping").select("*"),
@@ -162,12 +172,22 @@ serve(async (req) => {
           break;
         } catch (err: any) {
           lastError = err;
+          // Only back off if rate limited (429); do not blind retry 400s
           if (!String(err?.message || "").includes("HTTP 429") || attempt === 2) break;
           await sleep(350 * Math.pow(2, attempt));
         }
       }
 
-      if (lastError) throw lastError;
+      // If page error occurs:
+      // If we already collected products on previous pages, deliver partial results gracefully!
+      if (lastError) {
+        if (uniqueProducts.size > 0) {
+          console.warn(`[Amazon Search] Provider error on page ${providerPage}, returning partial results:`, lastError?.message);
+          stopReason = "PROVIDER_ERROR";
+          break;
+        }
+        throw lastError;
+      }
 
       pagesConsulted++;
       const products = Array.isArray(rawResponse?.results) ? rawResponse.results : [];
@@ -231,9 +251,15 @@ serve(async (req) => {
           continue;
         }
 
-        uniqueProducts.set(asin, { ...p, __normalizedBrand: normalizedBrand });
+        uniqueProducts.set(asin, { ...p, __asin: asin, __normalizedBrand: normalizedBrand });
         newOnPage++;
         if (uniqueProducts.size >= targetResults) break;
+      }
+
+      // Check if provider signals end of results
+      if (rawResponse.next_page === null || rawResponse.next_page === undefined) {
+        stopReason = "PROVIDER_EXHAUSTED";
+        break;
       }
 
       consecutiveNoNew = newOnPage === 0 ? consecutiveNoNew + 1 : 0;
@@ -246,7 +272,7 @@ serve(async (req) => {
       if (uniqueProducts.size < targetResults) await sleep(100);
     }
 
-    if (pagesConsulted >= MAX_PROVIDER_PAGES && uniqueProducts.size < targetResults) {
+    if (pagesConsulted >= MAX_PROVIDER_PAGES && uniqueProducts.size < targetResults && stopReason === "TARGET_REACHED") {
       stopReason = "PAGE_LIMIT";
     }
 
@@ -266,6 +292,7 @@ serve(async (req) => {
     const candidates: any[] = [];
 
     for (const p of selectedProducts) {
+      const asin = normalizeAsin(p.__asin || p.product_id);
       const normalizedBrand = p.__normalizedBrand || null;
       const price = p.price != null ? Number(p.price) / 100 : null;
       const imageUrls = collectImageUrls(p).filter(u =>
@@ -306,9 +333,10 @@ serve(async (req) => {
 
       const enrichedRawData = {
         ...p,
+        __asin: undefined,
         __normalizedBrand: undefined,
         search_context: {
-          search_id: searchRecord.id,
+          search_id: searchId,
           query: String(query).trim(),
           requested_results: targetResults,
           provider_pages_consulted: pagesConsulted,
@@ -329,7 +357,7 @@ serve(async (req) => {
 
       candidates.push({
         id: `ephemeral_${asin}`,
-        search_id: searchRecord.id,
+        search_id: searchId,
         external_product_id: asin,
         title: p.title,
         brand: normalizedBrand,
@@ -366,10 +394,15 @@ serve(async (req) => {
       elapsed_ms: Date.now() - startedAt
     };
 
-    await supabase
-      .from("international_import_searches")
-      .update({ raw_response: summary })
-      .eq("id", searchRecord.id);
+    // Update history record if one exists, silently warning on failure
+    try {
+      await supabase
+        .from("international_import_searches")
+        .update({ raw_response: summary })
+        .eq("id", searchId);
+    } catch (updateErr) {
+      console.warn("[Amazon Search] Non-critical error updating search summary:", updateErr);
+    }
 
     return new Response(
       JSON.stringify({
@@ -379,7 +412,7 @@ serve(async (req) => {
         candidates,
         meta: {
           total: candidates.length,
-          search_id: searchRecord.id,
+          search_id: searchId,
           requested: targetResults,
           pages_consulted: pagesConsulted,
           duplicate_count: duplicateCount,
@@ -392,8 +425,14 @@ serve(async (req) => {
     );
   } catch (error: any) {
     console.error("zinc-search-products error:", error);
+    const errorMessage = String(error?.message || error || "Error desconocido al buscar productos");
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({
+        success: false,
+        code: "ZINC_SEARCH_ERROR",
+        error: errorMessage,
+        message: errorMessage
+      }),
       { status: 400, headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
     );
   }

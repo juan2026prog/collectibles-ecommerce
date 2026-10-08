@@ -492,33 +492,60 @@ export default function AdminInternationalAmazon() {
     }
   }
 
+  function buildAmazonSearchPayload(params: typeof searchParams) {
+    return {
+      query: (params.query || '').trim(),
+      brand: params.brand?.trim() || null,
+      category: params.category?.trim() || null,
+      min_price: params.min_price ? Number(params.min_price) : null,
+      max_price: params.max_price ? Number(params.max_price) : null,
+      min_rating: params.min_rating ? Number(params.min_rating) : null,
+      min_reviews: params.min_reviews ? Number(params.min_reviews) : null,
+      availability: params.availability || null,
+      onlyRecognizedBrands: Boolean(params.onlyRecognizedBrands),
+      includeGenerics: Boolean(params.includeGenerics),
+      max_results: Math.min(1000, Math.max(1, Number(params.max_results || 100))),
+      page: 1,
+      sort_by: params.sort_by || null
+    };
+  }
+
+  async function getEdgeFunctionErrorMessage(error: any, data: any): Promise<string> {
+    if (data?.error && typeof data.error === 'string') return data.error;
+    if (data?.message && typeof data.message === 'string') return data.message;
+    if (error?.context && typeof error.context.json === 'function') {
+      try {
+        const body = await error.context.json();
+        if (body?.error) return body.error;
+        if (body?.message) return body.message;
+      } catch {
+        // pass
+      }
+    }
+    if (error?.message) return error.message;
+    return 'No se pudo consultar Amazon/Zinc';
+  }
+
   async function handleSearch(e?: React.FormEvent, overrideParams?: any) {
     if (e) e.preventDefault();
     const params = overrideParams || searchParams;
-    if (!params.query) return;
+    if (!params.query || !params.query.trim()) return;
     
     setLoading(true);
+    const payload = buildAmazonSearchPayload(params);
     try {
       const { data, error } = await supabase.functions.invoke('zinc-search-products', {
-        body: {
-          query: params.query,
-          brand: params.brand || undefined,
-          category: params.category || undefined,
-          min_price: params.min_price ? Number(params.min_price) : undefined,
-          max_price: params.max_price ? Number(params.max_price) : undefined,
-          min_rating: params.min_rating ? Number(params.min_rating) : undefined,
-          min_reviews: params.min_reviews ? Number(params.min_reviews) : undefined,
-          availability: params.availability || undefined,
-          onlyRecognizedBrands: Boolean(params.onlyRecognizedBrands),
-          includeGenerics: Boolean(params.includeGenerics),
-          max_results: Math.min(1000, Number(params.max_results || 100)),
-          page: 1,
-          sort_by: params.sort_by || undefined
-        }
+        body: payload
       });
 
-      if (error) throw error;
-      if (data.error) throw new Error(data.error);
+      if (error) {
+        const detailMsg = await getEdgeFunctionErrorMessage(error, data);
+        console.error('[Amazon/Zinc invoke error]', { error, data, payload });
+        throw new Error(detailMsg);
+      }
+      if (data?.error) {
+        throw new Error(data.error);
+      }
 
       const resultItems = Array.isArray(data?.results) ? data.results : (Array.isArray(data?.candidates) ? data.candidates : []);
       setCandidates(resultItems);
@@ -532,8 +559,8 @@ export default function AdminInternationalAmazon() {
         type: 'success'
       });
     } catch (err: any) {
-      console.error(err);
-      addToast({ title: 'Error buscando', message: err.message || 'No se pudo consultar Amazon/Zinc', type: 'error' });
+      console.error('[Amazon Search Error]', err);
+      addToast({ title: 'Amazon/Zinc', message: err.message || 'No se pudo consultar Amazon/Zinc', type: 'error' });
     } finally {
       setLoading(false);
     }
