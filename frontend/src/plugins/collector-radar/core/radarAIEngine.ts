@@ -1,4 +1,4 @@
-import type { ReleaseEvent, ReleaseStatus, ReleasePrecision, RadarSignal } from '../types';
+import type { ReleaseEvent, ReleaseStatus, ReleasePrecision, RadarSignal, ImageSemanticType } from '../types';
 import { supabase } from '../../../lib/supabase';
 import { radarIntelligence, releaseIntelligence, type IntelligenceEvidence } from '../../../services/intelligence/collectiblesIntelligence';
 
@@ -42,6 +42,7 @@ export interface RadarAIExtractedRelease {
   is_verified: boolean;
   is_published: boolean;
   is_featured: boolean;
+  image_semantic_type?: ImageSemanticType | null;
   raw_source_data?: any;
 }
 
@@ -51,6 +52,8 @@ export interface ImageValidationResult {
   reason: string;
   finalImageUrl: string | null;
   provenance?: 'OFFICIAL_MANUFACTURER' | 'OFFICIAL_RETAILER' | 'AMAZON_PRODUCT' | 'SOURCE_PAGE' | 'MARKETPLACE' | 'NONE';
+  semanticType: ImageSemanticType;
+  isPublishable: boolean;
 }
 
 const KNOWN_MANUFACTURERS = [
@@ -127,7 +130,7 @@ export function slugify(text: string): string {
  * Evita asignar fotos de otros personajes o marcas.
  */
 export function validateAndScoreImage(
-  releaseInfo: { title: string; manufacturer?: string; franchise?: string; character?: string },
+  releaseInfo: { title: string; manufacturer?: string; franchise?: string; character?: string; variant?: string },
   imageUrl?: string | null,
   imageSourceUrl?: string | null
 ): ImageValidationResult {
@@ -141,6 +144,7 @@ export function validateAndScoreImage(
   }
 
   const cleanUrl = imageUrl.trim();
+  const lowerUrl = cleanUrl.toLowerCase();
 
   // Validación básica de URL
   if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://') && !cleanUrl.startsWith('/')) {
@@ -152,8 +156,40 @@ export function validateAndScoreImage(
     };
   }
 
+  // Validación semántica estricta de imagen:
+  // Rechazo explícito de LOGOS, BANNERS, HEADERS, FAVICONS, SOCIAL SHARES y BRANDING.
+  const isLogoOrBranding =
+    /logo|brand-logo|site-logo|retailer-logo|icon|favicon|avatar|sprite/i.test(lowerUrl) ||
+    /pulse-social|social-square|social-share|og-default|default-og|share-image|share_image/i.test(lowerUrl);
+
+  const isBannerOrHero =
+    /banner|header|masthead|hero-banner|category-banner|collection-banner|site-header|newsletter/i.test(lowerUrl);
+
+  if (isLogoOrBranding) {
+    return {
+      isValid: false,
+      score: 0,
+      reason: 'La imagen es un logo o branding institucional, no el producto exacto',
+      finalImageUrl: null,
+      provenance: 'NONE',
+      semanticType: 'BRAND_LOGO',
+      isPublishable: false
+    };
+  }
+
+  if (isBannerOrHero) {
+    return {
+      isValid: false,
+      score: 0,
+      reason: 'La imagen es un banner o header del sitio, no el producto exacto',
+      finalImageUrl: null,
+      provenance: 'NONE',
+      semanticType: 'SITE_BANNER',
+      isPublishable: false
+    };
+  }
+
   // Filtrar placeholders genéricos no confiables o imágenes aleatorias de Unsplash/Pexels/LoremFlickr
-  const lowerUrl = cleanUrl.toLowerCase();
   const isGenericStock = 
     lowerUrl.includes('placeholder.com') || 
     lowerUrl.includes('via.placeholder') ||
@@ -167,7 +203,9 @@ export function validateAndScoreImage(
       score: 0.1,
       reason: 'Imagen genérica de stock no autorizada para Radar',
       finalImageUrl: null,
-      provenance: 'NONE'
+      provenance: 'NONE',
+      semanticType: 'FRANCHISE_GENERIC',
+      isPublishable: false
     };
   }
 
@@ -187,7 +225,9 @@ export function validateAndScoreImage(
           score: 0,
           reason: 'La imagen pertenece a un marketplace distinto de la fuente declarada',
           finalImageUrl: null,
-          provenance: 'MARKETPLACE'
+          provenance: 'MARKETPLACE',
+          semanticType: 'WRONG_PRODUCT',
+          isPublishable: false
         };
       }
     } catch {
@@ -237,12 +277,34 @@ export function validateAndScoreImage(
     else provenance = 'SOURCE_PAGE';
   }
 
+  const isValid = score >= 0.7;
+  let semanticType: ImageSemanticType = 'UNVERIFIED';
+
+  // Si se especifica una variante pero la imagen menciona explícitamente otra distinta o wave discordante:
+  const isDifferentWaveOrVariant = 
+    /different-wave|other-wave|wrong-variant|different-character/i.test(lowerUrl) ||
+    (releaseInfo.variant && /ultra-instinct|damage-ver|awakening/i.test(lowerUrl) && !releaseInfo.variant.toLowerCase().includes('ultra') && !releaseInfo.variant.toLowerCase().includes('awakening'));
+
+  if (isDifferentWaveOrVariant) {
+    semanticType = 'WRONG_VARIANT';
+  } else if (isValid) {
+    if (releaseInfo.variant && (lowerUrl.includes(releaseInfo.variant.toLowerCase().slice(0, 4)) || lowerUrl.includes('variant') || lowerUrl.includes('glow'))) {
+      semanticType = 'PRODUCT_VARIANT_VERIFIED';
+    } else {
+      semanticType = 'PRODUCT_EXACT';
+    }
+  }
+
+  const isPublishable = isValid && (semanticType === 'PRODUCT_EXACT' || semanticType === 'PRODUCT_VARIANT_VERIFIED');
+
   return {
-    isValid: score >= 0.7,
-    score,
-    reason: score >= 0.7 ? 'Imagen verificada' : 'Score insuficiente de coincidencia',
-    finalImageUrl: score >= 0.7 ? cleanUrl : null,
-    provenance
+    isValid: isPublishable,
+    score: isPublishable ? score : Math.min(score, 0.4),
+    reason: isPublishable ? 'Imagen verificada del producto' : (semanticType === 'WRONG_VARIANT' ? 'Variante incorrecta detectada en imagen' : 'Score insuficiente de coincidencia'),
+    finalImageUrl: isPublishable ? cleanUrl : null,
+    provenance: isPublishable ? provenance : 'NONE',
+    semanticType,
+    isPublishable
   };
 }
 
@@ -481,6 +543,12 @@ export async function persistRadarRelease(
       is_verified: release.is_verified ?? true,
       is_published: isPublished,
       is_featured: release.is_featured ?? false,
+      image_semantic_type: imageVal.semanticType,
+      raw_source_data: {
+        ...(release.raw_source_data || {}),
+        image_provenance: imageVal.provenance,
+        image_semantic_type: imageVal.semanticType
+      },
       audit_corrections: existingCorrections,
       updated_at: new Date().toISOString()
     };

@@ -256,14 +256,14 @@ export default function AdminRadar() {
   const handleTogglePublish = async (item: ReleaseEvent) => {
     const nextStatus = !item.is_published;
     if (nextStatus) {
-      // Regla editorial: SIN IMAGEN VÁLIDA, NO SE PUBLICA.
+      // Regla editorial: LA IMAGEN TIENE QUE MOSTRAR EL PRODUCTO EXACTO O VARIANTE VERIFICADA.
       const val = validateAndScoreImage(
         { title: item.title, manufacturer: item.manufacturer, franchise: item.franchise, character: item.character },
         item.official_image_url,
         item.image_source_url || item.source_url
       );
-      if (!val.isValid || !val.finalImageUrl) {
-        toast.error('Este registro no puede publicarse todavía porque no tiene una imagen válida y verificada.');
+      if (!val.isPublishable || !val.finalImageUrl) {
+        toast.error('Esta imagen no representa de forma verificada al producto exacto. Reemplázala antes de publicar.');
         return;
       }
     }
@@ -661,20 +661,37 @@ export default function AdminRadar() {
                                 </span>
                               )}
 
-                              {/* Badge de Imagen */}
+                              {/* Badge de Imagen y Tipo Semántico */}
                               {(() => {
-                                const prov = item.raw_source_data?.image_provenance;
-                                if (prov === 'OFFICIAL_MANUFACTURER') {
-                                  return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">✓ Oficial</span>;
+                                const semType = item.image_semantic_type || item.raw_source_data?.image_semantic_type;
+                                if (semType === 'PRODUCT_EXACT') {
+                                  return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">✓ Producto exacto</span>;
                                 }
-                                if (prov === 'AMAZON_PRODUCT' || item.official_image_url?.includes('amazon.com')) {
-                                  return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">✓ Amazon</span>;
+                                if (semType === 'PRODUCT_VARIANT_VERIFIED') {
+                                  return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200">✓ Variante verificada</span>;
                                 }
-                                if (prov === 'OFFICIAL_RETAILER' || item.official_image_url) {
-                                  return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200">✓ Retailer</span>;
+                                if (semType === 'BRAND_LOGO') {
+                                  return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200">⚠ Logo / branding</span>;
                                 }
-                                return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-50 text-rose-600 border border-rose-200">⚠ Pendiente de imagen</span>;
+                                if (semType === 'SITE_BANNER') {
+                                  return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">⚠ Banner</span>;
+                                }
+                                if (semType === 'FRANCHISE_GENERIC' || semType === 'CATEGORY_IMAGE') {
+                                  return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200">⚠ Imagen genérica</span>;
+                                }
+                                if (!item.official_image_url) {
+                                  return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">⚠ Pendiente de imagen</span>;
+                                }
+                                return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">⚠ Sin verificar</span>;
                               })()}
+
+                              {/* Alerta si está en borrador con imagen no apta */}
+                              {!item.is_published && item.official_image_url && (
+                                <span className="text-[8px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 border border-rose-300">
+                                  Imagen no apta para publicación
+                                </span>
+                              )}
+
                               {/* Badge de Auditoría si existe */}
                               {item.audit_corrections?.classification && (
                                 <span className="text-[8px] font-mono px-1 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">

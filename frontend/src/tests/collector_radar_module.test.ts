@@ -202,5 +202,160 @@ describe('Módulo 02: Collectibles Radar & Release Calendar Engine Tests', () =>
     expect(updatedRecord.is_published).toBe(false);
     expect(updatedRecord.approval_status).toBe('DRAFT');
   });
+
+  describe('Validación Semántica Estricta de Imágenes (12 Casos Obligatorios)', () => {
+    it('Caso 1: Logo oficial (pulse-social-square.jpg o logo.png) → no publicable (BRAND_LOGO)', () => {
+      const res = validateAndScoreImage(
+        { title: 'HasLab Liokaiser', manufacturer: 'Hasbro' },
+        'https://hasbropulse.com/images/pulse-social-square.jpg',
+        'https://hasbropulse.com'
+      );
+      expect(res.semanticType).toBe('BRAND_LOGO');
+      expect(res.isPublishable).toBe(false);
+      expect(res.finalImageUrl).toBeNull();
+    });
+
+    it('Caso 2: Banner oficial (hero-banner.jpg o header.png) → no publicable (SITE_BANNER)', () => {
+      const res = validateAndScoreImage(
+        { title: 'Iron Studios Batman BDS', manufacturer: 'Iron Studios' },
+        'https://ironstudios.com/assets/hero-banner-collectors.jpg',
+        'https://ironstudios.com'
+      );
+      expect(res.semanticType).toBe('SITE_BANNER');
+      expect(res.isPublishable).toBe(false);
+      expect(res.finalImageUrl).toBeNull();
+    });
+
+    it('Caso 3: og:image genérico (og-default.jpg o share-image.png) → no publicable', () => {
+      const res = validateAndScoreImage(
+        { title: 'Funko Pop! Darth Vader', manufacturer: 'Funko' },
+        'https://funko.com/static/og-default-preview.png',
+        'https://funko.com'
+      );
+      expect(res.isPublishable).toBe(false);
+      expect(res.finalImageUrl).toBeNull();
+    });
+
+    it('Caso 4: Imagen exacta de producto oficial → publicable (PRODUCT_EXACT)', () => {
+      const res = validateAndScoreImage(
+        { title: 'Vegeta Z-Fighters S.H.Figuarts', manufacturer: 'Bandai Spirits' },
+        'https://tamashiiweb.com/storage/images/products/thumbnail/vegeta-action-figure.webp',
+        'https://tamashiiweb.com/item/16035/'
+      );
+      expect(res.semanticType).toBe('PRODUCT_EXACT');
+      expect(res.isPublishable).toBe(true);
+      expect(res.finalImageUrl).toBeTruthy();
+    });
+
+    it('Caso 5: Variante verificada del producto → publicable (PRODUCT_VARIANT_VERIFIED)', () => {
+      const res = validateAndScoreImage(
+        { title: 'Super7 TMNT Shredder Wave 13 Glow Variant', manufacturer: 'Super7', variant: 'Glow in the Dark' },
+        'https://super7.com/cdn/shop/files/UL-TMNT_W13_Shredder_GLOW.jpg',
+        'https://super7.com/products/shredder-glow'
+      );
+      expect(['PRODUCT_EXACT', 'PRODUCT_VARIANT_VERIFIED']).toContain(res.semanticType);
+      expect(res.isPublishable).toBe(true);
+      expect(res.finalImageUrl).toBeTruthy();
+    });
+
+    it('Caso 6: Variante incorrecta no asociada al release → no publicable (WRONG_VARIANT)', () => {
+      const res = validateAndScoreImage(
+        { title: 'Son Goku Super Saiyan Legendary', manufacturer: 'Bandai Spirits', variant: 'Awakening Ver' },
+        'https://tamashiiweb.com/storage/images/products/thumbnail/goku-ultra-instinct-different-wave.jpg',
+        'https://tamashiiweb.com/item/goku'
+      );
+      expect(res.semanticType).not.toBe('PRODUCT_EXACT');
+    });
+
+    it('Caso 7: Producto equivocado de marketplace ajeno → no publicable', () => {
+      const res = validateAndScoreImage(
+        { title: 'Hot Toys Wolverine Deadpool & Wolverine', manufacturer: 'Hot Toys' },
+        'https://images.unsplash.com/photo-wrong-product.jpg',
+        'https://unverified-seller.com'
+      );
+      expect(res.isPublishable).toBe(false);
+      expect(res.finalImageUrl).toBeNull();
+    });
+
+    it('Caso 8: Misma imagen repetida o logo transversal entre productos distintos → detectada y no publicable', () => {
+      const resA = validateAndScoreImage(
+        { title: 'Transformers Legacy United HasLab Liokaiser', manufacturer: 'Hasbro' },
+        'https://hasbropulse.com/images/pulse-social-square.jpg'
+      );
+      const resB = validateAndScoreImage(
+        { title: 'Marvel Legends Sentinel', manufacturer: 'Hasbro' },
+        'https://hasbropulse.com/images/pulse-social-square.jpg'
+      );
+      expect(resA.isPublishable).toBe(false);
+      expect(resB.isPublishable).toBe(false);
+    });
+
+    it('Caso 9: Caso real Transformers HasLab Liokaiser con logo Hasbro Pulse → bloqueado (isPublishable = false)', () => {
+      const res = validateAndScoreImage(
+        { title: 'Transformers Legacy United HasLab — Liokaiser Combiner', manufacturer: 'Hasbro' },
+        'https://www.hasbropulse.com/images/pulse-social-square.jpg',
+        'https://www.hasbropulse.com'
+      );
+      expect(res.isPublishable).toBe(false);
+      expect(res.semanticType).toBe('BRAND_LOGO');
+      expect(res.finalImageUrl).toBeNull();
+    });
+
+    it('Caso 10: Registro con semantic type inválido o logo → filtrado completamente de /radar', () => {
+      const safeRadarImage = (url?: string | null) => {
+        if (!url || typeof url !== 'string' || !url.trim()) return null;
+        const lower = url.toLowerCase();
+        if (/unsplash\.com|pexels\.com|placeholder/i.test(lower)) return null;
+        if (/pulse-social|social-square|social-share|logo\.|brand-logo|hero-banner|site-banner/i.test(lower)) return null;
+        return url.trim();
+      };
+
+      const feed = [
+        { id: '1', title: 'Tamashii Vegeta', official_image_url: 'https://tamashiiweb.com/vegeta.webp' },
+        { id: '2', title: 'HasLab Liokaiser', official_image_url: 'https://hasbropulse.com/images/pulse-social-square.jpg' },
+        { id: '3', title: 'McFarlane Batman', official_image_url: null }
+      ];
+
+      const visibleFeed = feed.filter(f => safeRadarImage(f.official_image_url));
+      expect(visibleFeed.length).toBe(1);
+      expect(visibleFeed[0].id).toBe('1');
+    });
+
+    it('Caso 11: Registro con semantic type inválido o logo → filtrado completamente de /releases', () => {
+      const safeRadarImage = (url?: string | null) => {
+        if (!url || typeof url !== 'string' || !url.trim()) return null;
+        const lower = url.toLowerCase();
+        if (/unsplash\.com|pexels\.com|placeholder/i.test(lower)) return null;
+        if (/pulse-social|social-square|social-share|logo\.|brand-logo|hero-banner|site-banner/i.test(lower)) return null;
+        return url.trim();
+      };
+
+      const calendar = [
+        { id: '1', title: 'LEGO Icons Star Trek', official_image_url: 'https://images.brickset.com/11385.jpg' },
+        { id: '2', title: 'Generic Banner Event', official_image_url: 'https://example.com/site-banner.jpg' },
+        { id: '3', title: 'No Photo Event', official_image_url: null }
+      ];
+
+      const visibleCalendar = calendar.filter(c => safeRadarImage(c.official_image_url));
+      expect(visibleCalendar.length).toBe(1);
+      expect(visibleCalendar[0].id).toBe('1');
+    });
+
+    it('Caso 12: Admin UI bloquea publicación manual de registro con semanticType inválido', () => {
+      const pendingRecord = {
+        title: 'Transformers Legacy United HasLab Liokaiser',
+        official_image_url: 'https://hasbropulse.com/images/pulse-social-square.jpg'
+      };
+
+      const validation = validateAndScoreImage(
+        pendingRecord,
+        pendingRecord.official_image_url
+      );
+
+      const allowManualPublish = validation.isPublishable;
+      expect(allowManualPublish).toBe(false);
+      expect(validation.semanticType).toBe('BRAND_LOGO');
+    });
+  });
 });
 

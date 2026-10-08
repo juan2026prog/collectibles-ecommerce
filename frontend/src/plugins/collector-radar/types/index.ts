@@ -14,6 +14,18 @@ export type ReleaseStatus =
   | 'SOLD_OUT' 
   | 'RESTOCKED';
 
+export type ImageSemanticType =
+  | 'PRODUCT_EXACT'
+  | 'PRODUCT_VARIANT_VERIFIED'
+  | 'BRAND_LOGO'
+  | 'SITE_BANNER'
+  | 'CATEGORY_IMAGE'
+  | 'FRANCHISE_GENERIC'
+  | 'WRONG_PRODUCT'
+  | 'WRONG_VARIANT'
+  | 'UNVERIFIED'
+  | 'NONE';
+
 /**
  * Vocabulario fijo de señales editoriales del Radar.
  * Cada señal tiene una razón objetiva distinta de aparecer en Radar.
@@ -88,6 +100,7 @@ export interface ReleaseEvent {
   confidence_score?: number | null;
   approval_status?: 'DRAFT' | 'VERIFIED' | 'PUBLISHED' | 'ARCHIVED';
   estimated_release_date?: string | null;
+  image_semantic_type?: ImageSemanticType | null;
   audit_corrections?: Array<{ field: string; original: any; corrected: any; date: string; by?: string }>;
   raw_source_data?: any;
 }

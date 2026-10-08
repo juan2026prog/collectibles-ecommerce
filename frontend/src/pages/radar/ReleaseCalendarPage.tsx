@@ -8,7 +8,11 @@ import SEO from '../../components/SEO';
 
 function safeRadarImage(url?: string | null) {
   if (!url) return null;
-  return /unsplash\.com|mlstatic\.com/i.test(url) ? null : url;
+  const lower = url.toLowerCase();
+  if (/unsplash\.com|pexels\.com|placeholder/i.test(lower)) return null;
+  if (/logo|brand-logo|site-logo|retailer-logo|icon|favicon|avatar|sprite/i.test(lower)) return null;
+  if (/banner|header|masthead|hero-banner|category-banner|pulse-social|social-square|social-share/i.test(lower)) return null;
+  return url;
 }
 
 export default function ReleaseCalendarPage() {
