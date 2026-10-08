@@ -44,6 +44,12 @@ const RADAR_SIGNALS_LIST: { id: RadarSignal; label: string }[] = [
   { id: 'MERECE_ATENCION', label: '📡 Merece Atención' }
 ];
 
+function safeRadarImage(url?: string | null) {
+  if (!url) return null;
+  return /unsplash\.com|mlstatic\.com/i.test(url) ? null : url;
+}
+
+
 export default function AdminRadar() {
   const [releases, setReleases] = useState<ReleaseEvent[]>([]);
   const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
@@ -53,6 +59,10 @@ export default function AdminRadar() {
   const [editingRelease, setEditingRelease] = useState<Partial<ReleaseEvent> | null>(null);
   const [saving, setSaving] = useState(false);
   const [approvalFilter, setApprovalFilter] = useState<string>('ALL');
+  const [radarSettings, setRadarSettings] = useState<Record<string, string>>({});
+  const [radarCost, setRadarCost] = useState<any>(null);
+  const [radarEstimating, setRadarEstimating] = useState(false);
+  const [radarRefreshing, setRadarRefreshing] = useState(false);
 
   // AI Discovery Modal State
   const [isAIModalOpen, setIsAIModalOpen] = useState(false);
@@ -68,7 +78,111 @@ export default function AdminRadar() {
   useEffect(() => {
     loadReleases();
     loadRelations();
+    loadRadarControl();
   }, []);
+
+  const loadRadarControl = async () => {
+    try {
+      const { data } = await supabase
+        .from('site_settings')
+        .select('key,value')
+        .in('key', [
+          'radar_auto_refresh_enabled',
+          'radar_refresh_interval_days',
+          'radar_max_items_per_refresh',
+          'radar_ai_model',
+          'radar_last_refresh_at'
+        ]);
+      const map = Object.fromEntries((data || []).map((r: any) => [r.key, r.value]));
+      setRadarSettings(map);
+      await loadRadarEstimate(map);
+    } catch (err) {
+      console.error('Error loading Radar control settings', err);
+    }
+  };
+
+  const loadRadarEstimate = async (settingsOverride?: Record<string, string>) => {
+    const cfg = settingsOverride || radarSettings;
+    setRadarEstimating(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch('/api/sourcing-discovery', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          action: 'radar_news_estimate',
+          model: cfg['radar_ai_model'] || 'gpt-5.6-terra',
+          max_items: Number(cfg['radar_max_items_per_refresh'] || 8),
+          interval_days: Number(cfg['radar_refresh_interval_days'] || 3)
+        })
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload?.success) throw new Error(payload?.error || 'No se pudo estimar el costo');
+      setRadarCost(payload);
+      return payload;
+    } catch (err: any) {
+      console.error(err);
+      setRadarCost(null);
+      return null;
+    } finally {
+      setRadarEstimating(false);
+    }
+  };
+
+  const saveRadarSetting = async (key: string, value: string) => {
+    const next = { ...radarSettings, [key]: value };
+    setRadarSettings(next);
+    const { error } = await supabase
+      .from('site_settings')
+      .upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    if (error) {
+      toast.error('No se pudo guardar la configuración de Radar');
+      return;
+    }
+    await loadRadarEstimate(next);
+  };
+
+  const runRadarNow = async () => {
+    const estimate = await loadRadarEstimate();
+    if (!estimate) {
+      toast.error('No se pudo calcular el costo antes de ejecutar');
+      return;
+    }
+
+    const ok = window.confirm(
+      `Actualizar Radar ahora?\n\nModelo: ${estimate.model}\nMáximo de noticias: ${radarSettings['radar_max_items_per_refresh'] || '8'}\nCosto estimado: USD ${estimate.estimated_cost_expected_usd != null ? Number(estimate.estimated_cost_expected_usd).toFixed(4) : 'N/D'}\nTope estimado: USD ${estimate.estimated_cost_max_usd != null ? Number(estimate.estimated_cost_max_usd).toFixed(4) : 'N/D'}\n\nNo se hará ninguna llamada de IA hasta confirmar.`
+    );
+    if (!ok) return;
+
+    setRadarRefreshing(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch('/api/sourcing-discovery', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ action: 'radar_news_refresh', force: true })
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload?.success) throw new Error(payload?.error || 'No se pudo actualizar Radar');
+
+      toast.success(
+        `Radar actualizado: ${payload.created || 0} nuevas · ${payload.updated || 0} actualizadas · costo real USD ${payload.ai_cost_usd != null ? Number(payload.ai_cost_usd).toFixed(4) : 'N/D'}`
+      );
+      await Promise.all([loadReleases(), loadRadarControl()]);
+    } catch (err: any) {
+      toast.error(err?.message || 'Falló la actualización de Radar');
+    } finally {
+      setRadarRefreshing(false);
+    }
+  };
 
   const loadRelations = async () => {
     try {
@@ -262,11 +376,12 @@ export default function AdminRadar() {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setIsAIModalOpen(true)}
-            className="px-3.5 py-2 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white text-xs font-bold rounded-xl transition flex items-center gap-2 shadow"
+            onClick={runRadarNow}
+            disabled={radarRefreshing || radarEstimating}
+            className="px-3.5 py-2 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 disabled:opacity-60 text-white text-xs font-bold rounded-xl transition flex items-center gap-2 shadow"
           >
-            <Sparkles size={15} />
-            <span>Descubrir con IA</span>
+            <RefreshCw size={15} className={radarRefreshing ? 'animate-spin' : ''} />
+            <span>{radarRefreshing ? 'Actualizando Radar…' : 'Actualizar Radar ahora'}</span>
           </button>
           <button
             onClick={loadReleases}
@@ -289,6 +404,132 @@ export default function AdminRadar() {
             <Plus size={15} />
             <span>Nuevo Lanzamiento</span>
           </button>
+        </div>
+      </div>
+
+      {/* Centro de control de Radar */}
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-4 sm:p-5 space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-black text-gray-900">Control automático de Noticias & Radar</h2>
+            <p className="text-xs text-gray-500 mt-1">
+              Configurá desde acá frecuencia, volumen, modelo y gasto de IA. El cálculo previo usa 0 llamadas a OpenAI.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => saveRadarSetting('radar_auto_refresh_enabled', radarSettings['radar_auto_refresh_enabled'] === 'false' ? 'true' : 'false')}
+            className="flex items-center gap-2 text-xs font-bold text-gray-700"
+          >
+            {radarSettings['radar_auto_refresh_enabled'] !== 'false'
+              ? <ToggleRight size={34} className="text-emerald-500" />
+              : <ToggleLeft size={34} className="text-gray-300" />
+            }
+            Automático {radarSettings['radar_auto_refresh_enabled'] !== 'false' ? 'ACTIVO' : 'APAGADO'}
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <label className="block">
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Frecuencia</span>
+            <select
+              value={radarSettings['radar_refresh_interval_days'] || '3'}
+              onChange={(e) => saveRadarSetting('radar_refresh_interval_days', e.target.value)}
+              className="mt-1 w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-900"
+            >
+              <option value="1">Todos los días</option>
+              <option value="2">Cada 2 días</option>
+              <option value="3">Cada 3 días (recomendado)</option>
+              <option value="5">Cada 5 días</option>
+              <option value="7">Cada 7 días</option>
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Noticias por corrida</span>
+            <select
+              value={radarSettings['radar_max_items_per_refresh'] || '8'}
+              onChange={(e) => saveRadarSetting('radar_max_items_per_refresh', e.target.value)}
+              className="mt-1 w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-900"
+            >
+              <option value="3">Hasta 3</option>
+              <option value="5">Hasta 5</option>
+              <option value="8">Hasta 8 (recomendado)</option>
+              <option value="12">Hasta 12</option>
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Modelo IA</span>
+            <select
+              value={radarSettings['radar_ai_model'] || 'gpt-5.6-terra'}
+              onChange={(e) => saveRadarSetting('radar_ai_model', e.target.value)}
+              className="mt-1 w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-900"
+            >
+              <option value="gpt-5.6-luna">Luna · menor costo</option>
+              <option value="gpt-5.6-terra">Terra · balanceado</option>
+              <option value="gpt-5.6-sol">Sol · máxima capacidad</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-2">
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div className="text-[9px] uppercase font-black tracking-wider text-gray-400">Próxima corrida</div>
+            <div className="text-base font-black text-gray-900 mt-1">
+              {radarEstimating ? 'Calculando…' : radarCost?.estimated_cost_expected_usd != null ? `USD ${Number(radarCost.estimated_cost_expected_usd).toFixed(4)}` : 'N/D'}
+            </div>
+            <div className="text-[10px] text-gray-500">estimado</div>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div className="text-[9px] uppercase font-black tracking-wider text-gray-400">Tope por corrida</div>
+            <div className="text-base font-black text-gray-900 mt-1">
+              {radarCost?.estimated_cost_max_usd != null ? `USD ${Number(radarCost.estimated_cost_max_usd).toFixed(4)}` : 'N/D'}
+            </div>
+            <div className="text-[10px] text-gray-500">estimado</div>
+          </div>
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <div className="text-[9px] uppercase font-black tracking-wider text-gray-400">Proyección 30 días</div>
+            <div className="text-base font-black text-gray-900 mt-1">
+              {radarCost?.estimated_monthly_usd != null ? `USD ${Number(radarCost.estimated_monthly_usd).toFixed(3)}` : 'N/D'}
+            </div>
+            <div className="text-[10px] text-gray-500">según frecuencia</div>
+          </div>
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+            <div className="text-[9px] uppercase font-black tracking-wider text-emerald-600">Gastado este mes</div>
+            <div className="text-base font-black text-emerald-700 mt-1">
+              {radarCost?.month_actual_usd != null ? `USD ${Number(radarCost.month_actual_usd).toFixed(4)}` : 'USD 0.0000'}
+            </div>
+            <div className="text-[10px] text-emerald-700">{radarCost?.month_runs || 0} ejecuciones</div>
+          </div>
+        </div>
+
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 pt-1">
+          <div className="text-[11px] text-gray-500 space-y-0.5">
+            <div>Última actualización: <strong className="text-gray-800">{radarSettings['radar_last_refresh_at'] ? new Date(radarSettings['radar_last_refresh_at']).toLocaleString('es-UY') : 'Todavía no ejecutada'}</strong></div>
+            <div>Último costo real: <strong className="text-gray-800">{radarCost?.last_actual?.cost_usd != null ? `USD ${Number(radarCost.last_actual.cost_usd).toFixed(4)}` : 'Sin ejecuciones registradas'}</strong></div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => loadRadarEstimate()}
+              disabled={radarEstimating}
+              className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-gray-700 text-xs font-bold flex items-center gap-2"
+            >
+              <RefreshCw size={14} className={radarEstimating ? 'animate-spin' : ''} />
+              Recalcular costo
+            </button>
+            <button
+              type="button"
+              onClick={runRadarNow}
+              disabled={radarRefreshing || radarEstimating}
+              className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white text-xs font-black flex items-center gap-2"
+            >
+              <RefreshCw size={14} className={radarRefreshing ? 'animate-spin' : ''} />
+              {radarRefreshing ? 'Actualizando…' : 'Actualizar ahora'}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -349,8 +590,8 @@ export default function AdminRadar() {
                       <td className="p-4">
                         <div className="flex items-center gap-3">
                           <div className="w-12 h-12 rounded-lg bg-gray-100 border border-gray-200 p-1 flex items-center justify-center shrink-0 overflow-hidden">
-                            {item.official_image_url ? (
-                              <img src={item.official_image_url} alt={item.title} className="max-h-full max-w-full object-contain" />
+                            {safeRadarImage(item.official_image_url) ? (
+                              <img src={safeRadarImage(item.official_image_url) || ''} alt={item.title} className="max-h-full max-w-full object-contain" />
                             ) : (
                               <Radio size={18} className="text-gray-400" />
                             )}
