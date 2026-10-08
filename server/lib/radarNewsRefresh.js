@@ -21,6 +21,18 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
   const supabase=db();
   if(!supabase) return {httpStatus:500,success:false,status:'CONFIG_ERROR',error:'SUPABASE_SERVICE_ROLE_KEY no configurada'};
 
+  // Bootstrap cleanup: fail closed on legacy generic/mismatched artwork.
+  // This runs through the application connection, so it does not depend on the
+  // separate Supabase management SQL channel that may time out.
+  try {
+    await supabase
+      .from('release_events')
+      .update({ official_image_url: null, image_match_score: 0, updated_at: new Date().toISOString() })
+      .or('official_image_url.ilike.%unsplash.com%,official_image_url.ilike.%mlstatic.com%');
+  } catch (cleanupError) {
+    console.warn('[Radar Refresh] legacy image cleanup skipped', cleanupError?.message || cleanupError);
+  }
+
   const {data:settingRows,error:settingsError}=await supabase.from('site_settings').select('key,value').in('key',['radar_auto_refresh_enabled','radar_refresh_interval_days','radar_last_refresh_at','radar_max_items_per_refresh']);
   if(settingsError)return {httpStatus:500,success:false,status:'SETTINGS_ERROR',error:settingsError.message};
   const settings=Object.fromEntries((settingRows||[]).map(r=>[r.key,r.value]));
