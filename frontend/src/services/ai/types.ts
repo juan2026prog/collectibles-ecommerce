@@ -4,6 +4,7 @@
 
 export type AIEngineKey = 
   | 'AI_SEARCH'
+  | 'CUSTOMER_SUPPORT_AI'
   | 'PRODUCT_DISCOVERY'
   | 'TREND_ANALYSIS'
   | 'PRODUCT_CURATION'

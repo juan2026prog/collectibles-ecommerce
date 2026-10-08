@@ -29,6 +29,7 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABA
 
 const ENGINE_COUNTRY_FLAG = {
   AI_SEARCH: 'ai_search_enabled',
+  CUSTOMER_SUPPORT_AI: 'ai_search_enabled',
   PRODUCT_DISCOVERY: 'product_discovery_enabled',
   TREND_ANALYSIS: 'trend_analysis_enabled',
   PRODUCT_CURATION: 'product_curation_enabled',
@@ -104,6 +105,9 @@ function instructionsFor(engine, operation) {
   const common = 'You are the Collectibles 2026 AI engine. Never invent inventory, price, stock, release dates, retailer availability, shipping, customs or product facts. Treat supplied catalog/context data as authoritative. Reply in Spanish unless the user explicitly requests another language.';
   if (engine === 'AI_SEARCH') {
     return common + ' For AI Search, understand collector intent and improve the answer using only supplied products and context. Return ONLY valid JSON with keys headline (string), summary (string), breakdown (array of strings), nextHighlight (string or null), relatedQuestions (array of up to 4 strings).';
+  }
+  if (engine === 'CUSTOMER_SUPPORT_AI') {
+    return common + ' Eres el Asistente Experto de Atención al Cliente de Collectibles 2026. Ayuda a coleccionistas con calidez, precisión técnica y respuestas bien fundadas. NUNCA inventes stock, precios ni envíos. Responde en español (rioplatense o neutro cordial). Devuelve un JSON estructurado con: {"reply": string, "intent": string, "suggestedActions": string[], "productsToHighlight": string[]}.';
   }
   if (engine === 'SOURCING_WEB_RESEARCH' || engine === 'RESEARCH_INTELLIGENCE' || (operation && /^(sourcing_research|web_research|sourcing_market_research)$/i.test(operation))) {
     return common + ' Realiza investigación comercial de coleccionables mediante búsqueda web real. Identifica productos oficiales reales, novedades y preorders confirmados. NUNCA inventes precios, landed costs, stock comercial ni URLs de imagen. Devuelve image_url únicamente cuando corresponda de forma verificable al producto exacto encontrado en la fuente oficial/retailer; de lo contrario null. Devuelve ÚNICAMENTE un JSON válido con la siguiente estructura: {"summary": string, "confidence": number_0_to_1, "subtrends": string[], "items": [{"title": string, "brand": string, "franchise": string, "category": string, "origin_price_usd": number_or_null, "image_url": string_or_null, "asin": string_or_null, "url": string_or_null, "retailer": string, "is_preorder": boolean, "is_new": boolean, "release_date": string_or_null, "evidence_snippet": string}]}.';

@@ -7,12 +7,7 @@ import {
   HelpCircle, Globe, Calendar, Flame, Shield, ArrowUpRight, Plus,
   MessageCircle
 } from 'lucide-react';
-import { ProductGridCard } from '../components/ProductGridCard';
-import { 
-  interpretUserQuery, 
-  generateDirectEditorialAnswer, 
-  generateContextualQuestions 
-} from '../lib/search/aiQueryInterpreter';
+import { CollectiblesSearchService, type SearchProductResult, type RadarSearchResult } from '../services/search/collectiblesSearchService';
 import type { AISearchQueryInterpretation } from '../lib/search/aiQueryInterpreter';
 import { queryCollectorKnowledge } from '../plugins/collector-academy/core/draftGuard';
 import { useCurrency } from '../contexts/CurrencyContext';
@@ -22,7 +17,6 @@ import { resolveCartItemPrice } from '../lib/priceResolver';
 import SEO from '../components/SEO';
 import { captureDemandSignal } from '../services/sourcing/demandSignalEngine';
 import { processSignalIntoCatalogGap } from '../services/sourcing/catalogGapEngine';
-import { executeAI } from '../services/ai/aiGateway';
 
 const HERO_SUGGESTION_CHIPS = [
   'Dragon Ball',
@@ -276,190 +270,22 @@ export default function AISearchPage() {
     }).catch(() => {});
 
     try {
-      const searchTerm = interp.cleanedQuery || interp.detectedLicense || interp.detectedBrand || interp.detectedLine || queryText.trim();
-
-
-      // 1. Query Local Products with full relations
-      let localQuery = supabase
-        .from('products')
-        .select(`
-          id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, created_at,
-          category:categories(id, name, slug),
-          brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
-          images:product_images(id, url, alt_text, is_primary),
-          variants:product_variants(id, sku, price_adjustment, inventory_count),
-          vendor:vendors(id, store_name, slug, logo_url),
-          vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official)
-        `)
-        .eq('is_active', true)
-        .limit(36);
-
-      if (searchTerm) {
-        localQuery = localQuery.ilike('title', `%${searchTerm}%`);
-      }
-
-      if (interp.priceMax) {
-        localQuery = localQuery.lte('base_price', interp.priceMax);
-      }
-      if (interp.priceMin) {
-        localQuery = localQuery.gte('base_price', interp.priceMin);
-      }
-
-      const { data: localData, error: localErr } = await localQuery;
-      let directResults: any[] = (!localErr && localData) ? localData : [];
-
-      // 2. Query International Products
-      let intlQuery = supabase
-        .from('international_products')
-        .select('id, title, slug, final_price_usd, amazon_list_price_usd, image_url, brand, category, status')
-        .eq('status', 'published')
-        .limit(24);
-
-      if (searchTerm) {
-        intlQuery = intlQuery.ilike('title', `%${searchTerm}%`);
-      }
-
-      if (interp.priceMax) {
-        intlQuery = intlQuery.lte('final_price_usd', interp.priceMax);
-      }
-      if (interp.priceMin) {
-        intlQuery = intlQuery.gte('final_price_usd', interp.priceMin);
-      }
-
-      const { data: intlData } = await intlQuery;
-
-      if (intlData && intlData.length > 0) {
-        const mappedIntl = intlData.map(item => ({
-          id: item.id,
-          title: item.title,
-          slug: item.slug || `intl-${item.id}`,
-          base_price: Number(item.final_price_usd || item.amazon_list_price_usd || 0),
-          price: Number(item.final_price_usd || item.amazon_list_price_usd || 0),
-          compare_at_price: Number(item.amazon_list_price_usd || item.final_price_usd || 0),
-          images: [{ id: item.id, url: item.image_url, is_primary: true }],
-          image_url: item.image_url,
-          brand: { name: item.brand || 'Importado', slug: item.brand ? item.brand.toLowerCase() : 'importado' },
-          category: { name: item.category || 'Coleccionables', slug: 'coleccionables' },
-          source_provider: 'zinc',
-          is_international: true,
-          is_active: true,
-          status: item.status
-        }));
-        directResults = [...directResults, ...mappedIntl];
-      }
-
-      setProducts(directResults);
-
-      // 3. Radar Matches from Supabase release_events
-      try {
-        const { data: radarEvents } = await supabase
-          .from('release_events')
-          .select('id, slug, title, manufacturer, product_line, radar_signal, date_display_text, official_image_url, brand:brands(name)')
-          .eq('is_published', true)
-          .or(`title.ilike.%${searchTerm}%,manufacturer.ilike.%${searchTerm}%,franchise.ilike.%${searchTerm}%`)
-          .limit(6);
-
-        if (radarEvents && radarEvents.length > 0) {
-          const mappedDrops: RadarMatch[] = radarEvents.map((r: any) => ({
-            id: r.id,
-            slug: r.slug,
-            title: r.title,
-            brand: r.brand?.name || r.manufacturer || 'Oficial',
-            line: r.product_line || 'Línea Regular',
-            radar_signal: r.radar_signal || 'NUEVO_ANUNCIO',
-            date_label: r.date_display_text || 'Próximamente',
-            official_image_url: r.official_image_url || '/images/radar/placeholder.jpg'
-          }));
-          setRadarDrops(mappedDrops);
-        } else {
-          setRadarDrops([]);
-        }
-      } catch (radarErr) {
-        console.warn('Could not load radar events for AI search:', radarErr);
-        setRadarDrops([]);
-      }
-
-      // 4. Relaxed Fallback when 0 exact results: always provide top featured products
-      if (directResults.length === 0) {
-        const { data: fallbackLocal } = await supabase
-          .from('products')
-          .select(`
-            id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, created_at,
-            category:categories(id, name, slug),
-            brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
-            images:product_images(id, url, alt_text, is_primary),
-            variants:product_variants(id, sku, price_adjustment, inventory_count),
-            vendor:vendors(id, store_name, slug, logo_url),
-            vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official)
-          `)
-          .eq('is_active', true)
-          .limit(12);
-
-        setRelaxedProducts(fallbackLocal || []);
-      } else {
-        setRelaxedProducts([]);
-      }
-
-      // 5. AI-assisted editorial answer, always backed by deterministic fallback.
-      const fallbackAnswer = generateDirectEditorialAnswer(interp, directResults, radarDrops);
-      const fallbackQuestions = generateContextualQuestions(interp);
-
-      const aiResult = await executeAI<{
-        headline: string;
-        summary: string;
-        breakdown: string[];
-        nextHighlight?: string | null;
-        relatedQuestions?: string[];
-      }>({
-        engine: 'AI_SEARCH',
-        country: 'UY',
-        operation: 'editorial_search_answer',
-        payload: {
-          query: queryText,
-          interpretation: interp,
-          products: directResults.slice(0, 12).map((p: any) => ({
-            id: p.id,
-            title: p.title,
-            price: Number(p.base_price || p.price || 0),
-            brand: p.brand?.name || p.brand || null,
-            category: p.category?.name || p.category || null,
-            status: p.status || null,
-            international: Boolean(p.is_international || p.source_provider === 'zinc')
-          })),
-          radar: radarDrops.slice(0, 6).map((r) => ({
-            title: r.title,
-            brand: r.brand,
-            line: r.line,
-            signal: r.radar_signal,
-            date: r.date_label
-          }))
-        },
-        context: { locale: 'es-UY' },
-        fallbackHandler: async () => ({
-          ...fallbackAnswer,
-          relatedQuestions: fallbackQuestions
-        })
+      const searchResult = await CollectiblesSearchService.search({
+        query: queryText,
+        limitLocal: 36,
+        limitInternational: 24,
+        limitRadar: 6,
+        enableAIEditorial: true,
+        userLocale: 'es-UY'
       });
 
-      const aiAnswer = aiResult.data;
-      if (aiResult.success && aiAnswer?.headline && aiAnswer?.summary) {
-        setEditorialAnswer({
-          headline: aiAnswer.headline,
-          summary: aiAnswer.summary,
-          breakdown: Array.isArray(aiAnswer.breakdown) ? aiAnswer.breakdown : fallbackAnswer.breakdown,
-          nextHighlight: aiAnswer.nextHighlight || fallbackAnswer.nextHighlight
-        });
-        setRelatedQuestions(
-          Array.isArray(aiAnswer.relatedQuestions) && aiAnswer.relatedQuestions.length
-            ? aiAnswer.relatedQuestions.slice(0, 4)
-            : fallbackQuestions
-        );
-      } else {
-        setEditorialAnswer(fallbackAnswer);
-        setRelatedQuestions(fallbackQuestions);
-      }
+      setProducts(searchResult.products);
+      setRelaxedProducts(searchResult.relaxedProducts);
+      setRadarDrops(searchResult.radarDrops as any);
+      setEditorialAnswer(searchResult.editorialAnswer);
+      setRelatedQuestions(searchResult.relatedQuestions);
 
-      // 7. Academy Knowledge Grounding Link
+      // Academy Knowledge Grounding Link
       const groundedKnowledge = queryCollectorKnowledge(queryText);
       if (groundedKnowledge) {
         setAcademyMatch({
@@ -470,28 +296,10 @@ export default function AISearchPage() {
       } else {
         setAcademyMatch(null);
       }
-
-      // Log search for AI telemetry & Adaptive Sourcing Demand Signal Engine
-      try {
-        await supabase.from('ai_search_logs').insert({
-          query: queryText,
-          results_count: directResults.length,
-          filters_detected: {
-            brand: interp.detectedBrand,
-            license: interp.detectedLicense,
-            line: interp.detectedLine,
-            scale: interp.detectedScale,
-            priceRange: [interp.priceMin, interp.priceMax]
-          }
-        });
-      } catch (err) {
-        console.warn('Failed to log AI search:', err);
-      }
-
       // Dispatch to Adaptive Sourcing Demand Signal Engine
-      const signalType = directResults.length === 0 
+      const signalType = searchResult.products.length === 0 
         ? 'ZERO_RESULT_SEARCH' 
-        : (directResults.length < 3 ? 'LOW_RESULT_SEARCH' : 'HIGH_INTENT_SEARCH');
+        : (searchResult.products.length < 3 ? 'LOW_RESULT_SEARCH' : 'HIGH_INTENT_SEARCH');
 
       captureDemandSignal({
         signal_type: signalType,
@@ -505,7 +313,7 @@ export default function AISearchPage() {
           priceMin: interp.priceMin,
           priceMax: interp.priceMax
         },
-        results_count: directResults.length,
+        results_count: searchResult.products.length,
         source: 'ai_search'
       }).then(sig => {
         processSignalIntoCatalogGap(sig);

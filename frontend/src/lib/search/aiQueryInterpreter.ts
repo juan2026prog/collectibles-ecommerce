@@ -10,6 +10,7 @@ export interface AISearchQueryInterpretation {
   isPreorder: boolean;
   isAvailable: boolean;
   isInternational: boolean;
+  priceCurrency?: 'USD' | 'UYU';
   priceMin?: number;
   priceMax?: number;
   isQuestion: boolean;
@@ -126,16 +127,37 @@ export function interpretUserQuery(query: string): AISearchQueryInterpretation {
   const isAvailable = /(disponible|en stock|stock|entrega inmediata|comprar ya|ahora)/i.test(lower);
   const isInternational = /(traer|importar|miami|franquicia|internacional|usa|eeuu)/i.test(lower);
 
-  // 6. Detect Price Hints
+  // 6. Detect Price Hints & Currency
   let priceMax: number | undefined;
   let priceMin: number | undefined;
-  const maxPriceMatch = lower.match(/(menos de|hasta|menor a|bajo|under|máximo|maximo)\s*(?:usd|\$)?\s*(\d+)/i);
+  let priceCurrency: 'USD' | 'UYU' | undefined;
+
+  const hasUsd = /(usd|d[oó]lar|dolares|dólares|bucks|\$us)/i.test(lower);
+  const hasUyu = /(uyu|pesos|peso|\$uyu)/i.test(lower);
+
+  if (hasUsd) {
+    priceCurrency = 'USD';
+  } else if (hasUyu) {
+    priceCurrency = 'UYU';
+  }
+
+  const maxPriceMatch = lower.match(/(menos de|hasta|menor a|bajo|under|máximo|maximo)\s*(?:usd|\$|uyu|pesos)?\s*(\d+)/i);
   if (maxPriceMatch) {
     priceMax = parseInt(maxPriceMatch[2], 10);
   }
-  const minPriceMatch = lower.match(/(mas de|más de|desde|mayor a|sobre|above|mínimo|minimo)\s*(?:usd|\$)?\s*(\d+)/i);
+  const minPriceMatch = lower.match(/(mas de|más de|desde|mayor a|sobre|above|mínimo|minimo)\s*(?:usd|\$|uyu|pesos)?\s*(\d+)/i);
   if (minPriceMatch) {
     priceMin = parseInt(minPriceMatch[2], 10);
+  }
+
+  // If currency was not explicit, infer based on threshold (<= 350 is typically USD for figures, > 350 without USD is UYU)
+  if (!priceCurrency && (priceMax || priceMin)) {
+    const ref = priceMax || priceMin || 0;
+    if (ref <= 350) {
+      priceCurrency = 'USD';
+    } else {
+      priceCurrency = 'UYU';
+    }
   }
 
   const isQuestion = /^[¿\s]*(qu[eé]|c[oó]mo|cu[aá]l|d[oó]nde|por qu[eé]|existe|tienen|hay|recomiendas|vale la pena)/i.test(lower) || lower.endsWith('?') || lower.includes('?');
@@ -171,6 +193,7 @@ export function interpretUserQuery(query: string): AISearchQueryInterpretation {
     isPreorder,
     isAvailable,
     isInternational,
+    priceCurrency,
     priceMin,
     priceMax,
     isQuestion,

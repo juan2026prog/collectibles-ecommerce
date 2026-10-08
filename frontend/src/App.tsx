@@ -108,6 +108,7 @@ const AdminAISystemTest = lazy(() => import('./pages/superadmin/AdminAISystemTes
 // 01. AI Search
 const AISearchPage = lazy(() => import('./pages/AISearchPage'));
 const AdminAISearch = lazy(() => import('./pages/admin/AdminAISearch'));
+const AdminSupport = lazy(() => import('./pages/admin/AdminSupport'));
 
 // 02. Radar & Release Calendar
 const RadarFeedPage = lazy(() => import('./pages/radar/RadarFeedPage'));
@@ -342,6 +343,7 @@ function App() {
                   <Route index element={<AdminDashboard />} />
                   <Route path="compare" element={<ProtectedRoute requireSuperAdmin><AdminCompare /></ProtectedRoute>} />
                   <Route path="ai-search" element={<ProtectedRoute requireSuperAdmin><AdminAISearch /></ProtectedRoute>} />
+                  <Route path="support" element={<ProtectedRoute requireAdmin><AdminSupport /></ProtectedRoute>} />
                   <Route path="radar" element={<ProtectedRoute requireSuperAdmin><AdminRadar /></ProtectedRoute>} />
                   <Route path="vault" element={<ProtectedRoute requireSuperAdmin><AdminVault /></ProtectedRoute>} />
                   <Route path="academy" element={<ProtectedRoute requireSuperAdmin><AdminAcademy /></ProtectedRoute>} />

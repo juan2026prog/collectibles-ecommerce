@@ -20,6 +20,7 @@ import { supabase } from '../lib/supabase';
 import CookieConsent from '../components/CookieConsent';
 import CartDrawer from '../components/CartDrawer';
 import CompareTray from '../components/compare/CompareTray';
+import CollectiblesAIAssistant from '../components/support/CollectiblesAIAssistant';
 import { generateTailwindPalette } from '../lib/colorUtils';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { useInternationalSettings } from '../hooks/useInternationalSettings';
@@ -1115,6 +1116,7 @@ export default function StorefrontLayout() {
       <CookieConsent />
       <CartDrawer />
       {isModuleVisible('compare') && <CompareTray />}
+      <CollectiblesAIAssistant />
 
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes marquee-header {

@@ -52,6 +52,7 @@ export default function AdminLayout() {
     { name: 'Configuracion', path: '/admin/settings', icon: Settings },
     { name: 'Módulos & Plugins', path: '/admin/settings?tab=modules', icon: Sliders },
     { name: 'Clientes & CRM', path: '/admin/customers', icon: Users },
+    { name: 'Soporte & AI Chatbot', path: '/admin/support', icon: MessageSquare },
     { name: 'Preguntas / Q&A', path: '/admin/questions', icon: MessageSquare },
     { name: 'Mailing', path: '/admin/mailing', icon: Mail },
     { name: 'Finanzas & Facturas', path: '/admin/finances', icon: CreditCard },
