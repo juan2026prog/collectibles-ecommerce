@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import crypto from 'node:crypto';
 import { authenticateRequest } from '../server/lib/authGuard.js';
 import { researchViaGateway } from '../server/lib/sourcingGateway.js';
-import { runRadarNewsRefresh } from '../server/lib/radarNewsRefresh.js';
+import { runRadarNewsRefresh, estimateRadarRefreshCost } from '../server/lib/radarNewsRefresh.js';
 import { validateCandidateBatch, verifyCandidateSources } from '../server/lib/sourcingSourceVerifier.js';
 import { canonicalCandidateKey, validateStoredCandidate, deduplicateCanonicalCandidates, SOURCING_PURCHASE_CAPABILITY, AUTO_PUBLISH } from '../shared/sourcingCandidateValidation.js';
 
@@ -41,6 +41,58 @@ export default async function handler(req, res) {
 
   // Radar News shares this existing serverless endpoint to stay within the Vercel
   // Hobby function limit. It is an independent action with its own due-check.
+  if (action === 'radar_news_estimate') {
+    const supabase = getServiceRoleClient();
+    if (!supabase) return res.status(500).json({ success: false, error: 'SERVER_CONFIGURATION_ERROR' });
+
+    const { data: settingRows } = await supabase
+      .from('site_settings')
+      .select('key,value')
+      .in('key', ['radar_ai_model','radar_max_items_per_refresh','radar_refresh_interval_days']);
+    const cfg = Object.fromEntries((settingRows || []).map(r => [r.key, r.value]));
+
+    const model = req.body?.model || cfg.radar_ai_model || 'gpt-5.6-terra';
+    const maxItems = Number(req.body?.max_items || cfg.radar_max_items_per_refresh || 8);
+    const intervalDays = Number(req.body?.interval_days || cfg.radar_refresh_interval_days || 3);
+    const estimate = estimateRadarRefreshCost({ model, maxItems, intervalDays });
+
+    const monthStart = new Date();
+    monthStart.setUTCDate(1);
+    monthStart.setUTCHours(0,0,0,0);
+
+    const [{ data: lastRun }, { data: monthRuns }] = await Promise.all([
+      supabase
+        .from('ai_usage_events')
+        .select('estimated_cost_usd,total_tokens,model,created_at')
+        .eq('engine', 'RADAR_INTELLIGENCE')
+        .eq('status', 'SUCCESS')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from('ai_usage_events')
+        .select('estimated_cost_usd')
+        .eq('engine', 'RADAR_INTELLIGENCE')
+        .eq('status', 'SUCCESS')
+        .gte('created_at', monthStart.toISOString())
+    ]);
+
+    const actualMonthUsd = (monthRuns || []).reduce((sum, row) => sum + (Number(row.estimated_cost_usd) || 0), 0);
+
+    return res.status(200).json({
+      success: true,
+      ...estimate,
+      last_actual: lastRun ? {
+        cost_usd: Number(lastRun.estimated_cost_usd) || 0,
+        total_tokens: lastRun.total_tokens ?? null,
+        model: lastRun.model || null,
+        created_at: lastRun.created_at
+      } : null,
+      month_actual_usd: Number(actualMonthUsd.toFixed(5)),
+      month_runs: (monthRuns || []).length
+    });
+  }
+
   const cronSchedule = req.headers?.['x-vercel-cron-schedule'] || '';
   const radarNewsTask =
     action === 'radar_news_refresh' ||
