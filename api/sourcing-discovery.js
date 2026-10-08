@@ -48,13 +48,14 @@ export default async function handler(req, res) {
     const { data: settingRows } = await supabase
       .from('site_settings')
       .select('key,value')
-      .in('key', ['radar_ai_model','radar_max_items_per_refresh','radar_refresh_interval_days']);
+      .in('key', ['radar_ai_model','radar_max_items_per_refresh','radar_refresh_interval_days','radar_cost_mode']);
     const cfg = Object.fromEntries((settingRows || []).map(r => [r.key, r.value]));
 
     const model = req.body?.model || cfg.radar_ai_model || 'gpt-5.6-terra';
     const maxItems = Number(req.body?.max_items || cfg.radar_max_items_per_refresh || 8);
     const intervalDays = Number(req.body?.interval_days || cfg.radar_refresh_interval_days || 3);
-    const estimate = estimateRadarRefreshCost({ model, maxItems, intervalDays });
+    const mode = req.body?.mode || cfg.radar_cost_mode || 'ECONOMICO';
+    const estimate = estimateRadarRefreshCost({ model, maxItems, intervalDays, mode });
 
     const monthStart = new Date();
     monthStart.setUTCDate(1);
