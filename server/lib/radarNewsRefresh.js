@@ -89,7 +89,7 @@ async function resolveSourceImage(sourceUrl, story = {}) {
 async function repairExistingRadarImages(supabase, limit = 12) {
   const { data: rows } = await supabase
     .from('release_events')
-    .select('id,title,source_url,official_image_url,manufacturer,franchise,character')
+    .select('id,title,source_url,official_image_url,manufacturer,franchise,character,raw_source_data')
     .is('official_image_url', null)
     .not('source_url', 'is', null)
     .order('updated_at', { ascending: false })
@@ -105,6 +105,7 @@ async function repairExistingRadarImages(supabase, limit = 12) {
       image_match_score: img.score,
       updated_at: new Date().toISOString(),
       raw_source_data: {
+        ...(row.raw_source_data || {}),
         image_provenance: 'SOURCE_PAGE',
         image_repaired_without_ai: true
       }
