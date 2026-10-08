@@ -41,7 +41,10 @@ export default async function handler(req, res) {
 
   // Radar News shares this existing serverless endpoint to stay within the Vercel
   // Hobby function limit. It is an independent action with its own due-check.
-  const radarNewsTask = req.query?.task === 'radar-news' || action === 'radar_news_refresh';
+  const cronSchedule = req.headers?.['x-vercel-cron-schedule'] || '';
+  const radarNewsTask =
+    action === 'radar_news_refresh' ||
+    (auth.isCron && cronSchedule === '15 11 * * *');
   if (radarNewsTask) {
     const result = await runRadarNewsRefresh(req, {
       force: action === 'radar_news_refresh' && req.body?.force === true

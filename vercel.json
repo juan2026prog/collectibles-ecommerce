@@ -12,7 +12,7 @@
       "schedule": "0 7 * * *"
     },
     {
-      "path": "/api/sourcing-discovery?task=radar-news",
+      "path": "/api/sourcing-discovery",
       "schedule": "15 11 * * *"
     }
   ],
