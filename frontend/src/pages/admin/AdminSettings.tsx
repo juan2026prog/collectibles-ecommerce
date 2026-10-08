@@ -824,8 +824,8 @@ export default function AdminSettings() {
         },
         body: JSON.stringify({
           action: 'radar_news_estimate',
-          model: settings['radar_ai_model'] || 'gpt-5.6-terra',
-          max_items: Number(settings['radar_max_items_per_refresh'] || 8),
+          model: settings['radar_ai_model'] || 'gpt-5.6-luna',
+          max_items: Number(settings['radar_max_items_per_refresh'] || 5),
           interval_days: Number(settings['radar_refresh_interval_days'] || 3)
         })
       });
@@ -848,9 +848,9 @@ export default function AdminSettings() {
 
     const expected = estimate.estimated_cost_expected_usd;
     const maximum = estimate.estimated_cost_max_usd;
-    const model = estimate.model || settings['radar_ai_model'] || 'gpt-5.6-terra';
+    const model = estimate.model || settings['radar_ai_model'] || 'gpt-5.6-luna';
     const ok = window.confirm(
-      `Actualizar Radar ahora?\n\nModelo: ${model}\nNoticias máximas: ${settings['radar_max_items_per_refresh'] || '8'}\nCosto estimado: USD ${expected != null ? Number(expected).toFixed(4) : 'N/D'}\nMáximo estimado: USD ${maximum != null ? Number(maximum).toFixed(4) : 'N/D'}\n\nNo se ejecutará ninguna llamada de IA hasta que confirmes.`
+      `Actualizar Radar ahora?\n\nModelo: ${model}\nNoticias máximas: ${settings['radar_max_items_per_refresh'] || '5'}\nCosto estimado: USD ${expected != null ? Number(expected).toFixed(4) : 'N/D'}\nMáximo estimado: USD ${maximum != null ? Number(maximum).toFixed(4) : 'N/D'}\n\nNo se ejecutará ninguna llamada de IA hasta que confirmes.`
     );
     if (!ok) return;
 
@@ -2042,13 +2042,13 @@ export default function AdminSettings() {
                             <label className="block">
                               <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-slate-400">Noticias por actualización</span>
                               <select
-                                value={settings['radar_max_items_per_refresh'] || '8'}
+                                value={settings['radar_max_items_per_refresh'] || '5'}
                                 onChange={(e) => saveSetting('radar_max_items_per_refresh', e.target.value)}
                                 className="mt-1 w-full bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-gray-900 dark:text-white"
                               >
                                 <option value="3">Hasta 3</option>
-                                <option value="5">Hasta 5</option>
-                                <option value="8">Hasta 8 (recomendado)</option>
+                                <option value="5">Hasta 5 (recomendado)</option>
+                                <option value="8">Hasta 8</option>
                                 <option value="12">Hasta 12</option>
                               </select>
                             </label>
@@ -2056,12 +2056,12 @@ export default function AdminSettings() {
                             <label className="block">
                               <span className="text-[10px] font-black uppercase tracking-wider text-gray-500 dark:text-slate-400">Modelo de IA</span>
                               <select
-                                value={settings['radar_ai_model'] || 'gpt-5.6-terra'}
+                                value={settings['radar_ai_model'] || 'gpt-5.6-luna'}
                                 onChange={(e) => saveSetting('radar_ai_model', e.target.value)}
                                 className="mt-1 w-full bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-gray-900 dark:text-white"
                               >
-                                <option value="gpt-5.6-luna">Luna · menor costo</option>
-                                <option value="gpt-5.6-terra">Terra · balanceado</option>
+                                <option value="gpt-5.6-luna">Luna · menor costo (recomendado)</option>
+                                <option value="gpt-5.6-luna">Terra · balanceado</option>
                                 <option value="gpt-5.6-sol">Sol · máxima capacidad</option>
                               </select>
                             </label>
