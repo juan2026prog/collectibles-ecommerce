@@ -125,13 +125,12 @@ const RADAR_MODES = Object.freeze({
 });
 
 const OFFICIAL_RADAR_SOURCES = Object.freeze([
-  { name: 'Hasbro Pulse', url: 'https://www.hasbropulse.com/blogs/news' },
-  { name: 'NECA', url: 'https://necaonline.com/category/blog/' },
-  { name: 'McFarlane Toys', url: 'https://mcfarlane.com/news/' },
-  { name: 'Funko', url: 'https://funko.com/funko-blog-home/' },
-  { name: 'LEGO', url: 'https://www.lego.com/en-us/aboutus/news' },
-  { name: 'Sideshow', url: 'https://www.sideshow.com/blog' },
-  { name: 'Super7', url: 'https://super7.com/blogs/news' }
+  { name: 'Super7 (Official Feed)', url: 'https://super7.com/blogs/news.atom', feed_type: 'atom' },
+  { name: 'Toyark (Collector News)', url: 'https://news.toyark.com/feed', feed_type: 'rss' },
+  { name: 'Brickset (LEGO News)', url: 'https://brickset.com/feed', feed_type: 'rss' },
+  { name: 'Bleeding Cool (Collectibles)', url: 'https://bleedingcool.com/collectibles/feed/', feed_type: 'rss' },
+  { name: 'NECA Official', url: 'https://necaonline.com/category/blog/', feed_type: 'html' },
+  { name: 'Funko Blog', url: 'https://funko.com/funko-blog-home/', feed_type: 'html' }
 ]);
 
 function normalizeRadarMode(value) {
@@ -157,12 +156,12 @@ async function fetchHtml(url, timeoutMs = 6500) {
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, {
-      headers: { 'User-Agent': 'CollectiblesRadarBot/1.0 (+https://collectibles.uy)', 'Accept': 'text/html,application/xhtml+xml' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36', 'Accept': 'text/html,application/xhtml+xml,application/xml,text/xml;q=0.9' },
       redirect: 'follow',
       signal: controller.signal
     });
     if (!response.ok) return null;
-    return { html: (await response.text()).slice(0, 700000), finalUrl: response.url || url };
+    return { html: (await response.text()).slice(0, 800000), finalUrl: response.url || url };
   } catch { return null; } finally { clearTimeout(timeout); }
 }
 
@@ -177,9 +176,72 @@ function extractMeta(html, names = []) {
   return null;
 }
 
+function parseFeedCandidates(source, text) {
+  const items = [];
+  if (source.feed_type === 'atom') {
+    const entryRegex = /<entry\b[^>]*>([\s\S]*?)<\/entry>/gi;
+    let m;
+    while ((m = entryRegex.exec(text)) !== null && items.length < 15) {
+      const block = m[1];
+      const rawTitle = (block.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '';
+      const title = stripHtml(rawTitle.replace(/<!\[CDATA\[|\]\]>/g, ''));
+      const link = (block.match(/<link\b[^>]*href=["']([^"']+)["']/i) || [])[1] || '';
+      const published = (block.match(/<published\b[^>]*>([\s\S]*?)<\/published>/i) || [])[1] || '';
+      if (title.length > 5 && link) {
+        items.push({ source_name: source.name, url: link, title, published_at: safeDate(published) });
+      }
+    }
+  } else if (source.feed_type === 'rss') {
+    const itemRegex = /<item\b[^>]*>([\s\S]*?)<\/item>/gi;
+    let m;
+    while ((m = itemRegex.exec(text)) !== null && items.length < 15) {
+      const block = m[1];
+      const rawTitle = (block.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '';
+      const title = stripHtml(rawTitle.replace(/<!\[CDATA\[|\]\]>/g, ''));
+      const rawLink = (block.match(/<link\b[^>]*>([\s\S]*?)<\/link>/i) || [])[1] || '';
+      const link = rawLink.replace(/<!\[CDATA\[|\]\]>/g, '').trim();
+      const rawPubDate = (block.match(/<pubDate\b[^>]*>([\s\S]*?)<\/pubDate>/i) || [])[1] || '';
+      const pubDate = rawPubDate.replace(/<!\[CDATA\[|\]\]>/g, '').trim();
+      if (title.length > 5 && link) {
+        items.push({ source_name: source.name, url: link, title, published_at: safeDate(pubDate) });
+      }
+    }
+  }
+  return items;
+}
+
 function extractOfficialLinks(source, html, baseUrl) {
+  if (source.feed_type === 'atom' || source.feed_type === 'rss') {
+    return parseFeedCandidates(source, html);
+  }
+
   let host; try { host = new URL(baseUrl).hostname.replace(/^www\./, ''); } catch { return []; }
   const found = [];
+
+  // NECA blog specific parser
+  if (host.includes('necaonline')) {
+    const necaRegex = /<h2\b[^>]*class=["'][^"']*entry-title[^"']*["'][^>]*>\s*<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    let m;
+    while ((m = necaRegex.exec(html)) !== null && found.length < 15) {
+      const url = absoluteUrl(baseUrl, m[1]);
+      const title = stripHtml(m[2]);
+      if (url && title.length > 6) found.push({ source_name: source.name, url, title });
+    }
+    if (found.length) return found;
+  }
+
+  // Funko blog specific parser
+  if (host.includes('funko')) {
+    const funkoRegex = /<a\b[^>]*href=["'](\/funko-blog-home\/[^"'#?]+|\/blog-article-[^"'#?]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    let m;
+    while ((m = funkoRegex.exec(html)) !== null && found.length < 15) {
+      const url = absoluteUrl(baseUrl, m[1]);
+      const title = stripHtml(m[2]);
+      if (url && title.length > 6) found.push({ source_name: source.name, url, title });
+    }
+    if (found.length) return found;
+  }
+
   const regex = /<a\b[^>]*href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
   let match;
   while ((match = regex.exec(html)) && found.length < 100) {
@@ -202,9 +264,9 @@ async function hydrateOfficialCandidate(candidate) {
   const html = fetched.html;
   const title = extractMeta(html, ['og:title', 'twitter:title']) || stripHtml((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '') || candidate.title;
   const description = extractMeta(html, ['og:description', 'description', 'twitter:description']) || '';
-  const datePublished = extractMeta(html, ['article:published_time', 'date', 'datePublished']) || ((html.match(/"datePublished"\s*:\s*"([^"]+)"/i) || [])[1] || null);
+  const datePublished = extractMeta(html, ['article:published_time', 'date', 'datePublished']) || candidate.published_at || ((html.match(/"datePublished"\s*:\s*"([^"]+)"/i) || [])[1] || null);
   const image = extractMeta(html, ['og:image', 'twitter:image']);
-  return { source_name: candidate.source_name, source_url: fetched.finalUrl, title: title.slice(0, 220), description: description.slice(0, 700), source_published_at: safeDate(datePublished), source_image_url: image ? absoluteUrl(fetched.finalUrl, image) : null };
+  return { source_name: candidate.source_name, source_url: fetched.finalUrl, title: title.slice(0, 220), description: description.slice(0, 700), source_published_at: safeDate(datePublished) || candidate.published_at || null, source_image_url: image ? absoluteUrl(fetched.finalUrl, image) : null };
 }
 
 async function collectFreshOfficialCandidates(supabase, limit = 8) {
@@ -363,56 +425,92 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
         JSON.stringify(officialCandidates)
       ].join('\n');
 
-  let ai;
-  try{
-    ai=await callOpenAIResponses({
-      model:radarModel,
-      input:aiInput,
-      instructions:'Actuas como editor de Radar de Collectibles 2026. Detecta hechos verificables y conviertelos en noticias breves, utiles y comerciales. No inventes.',
-      ...(useWebSearch ? { tools:[{type:'web_search'}], toolChoice:'required' } : {}),
-      maxTokens: useWebSearch ? 3000 : 1800,
-      timeoutMs:55000,
-      textFormat:{type:'json_schema',name:'radar_news_refresh',strict:true,schema},
-      metadata:{engine:'RADAR_NEWS_REFRESH',mode:radarMode,interval_days:String(intervalDays),trigger:force?'MANUAL':'CRON',max_items:String(maxItems)}
+  let ai = null;
+  let stories = [];
+  let aiCost = 0;
+
+  if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY.trim()) {
+    try {
+      ai = await callOpenAIResponses({
+        model: radarModel,
+        input: aiInput,
+        instructions: 'Actuas como editor de Radar de Collectibles 2026. Detecta hechos verificables y conviertelos en noticias breves, utiles y comerciales. No inventes.',
+        ...(useWebSearch ? { tools: [{ type: 'web_search' }], toolChoice: 'required' } : {}),
+        maxTokens: useWebSearch ? 3000 : 1800,
+        timeoutMs: 55000,
+        textFormat: { type: 'json_schema', name: 'radar_news_refresh', strict: true, schema },
+        metadata: { engine: 'RADAR_NEWS_REFRESH', mode: radarMode, interval_days: String(intervalDays), trigger: force ? 'MANUAL' : 'CRON', max_items: String(maxItems) }
+      });
+      const parsed = JSON.parse(ai?.outputText || '{}');
+      stories = Array.isArray(parsed.stories) ? parsed.stories : [];
+      aiCost = ai?.pricing?.estimated_cost_usd || 0;
+    } catch (e) {
+      console.warn('[Radar Refresh] OpenAI call failed or key absent, falling back to deterministic extraction', e?.message || e);
+    }
+  }
+
+  // Fallback determinístico sin costo (USD 0) cuando no hay OpenAI o falló en modo ECONÓMICO:
+  if (!stories.length && !useWebSearch && officialCandidates.length > 0) {
+    stories = officialCandidates.slice(0, maxItems).map(cand => {
+      const title = cand.title.replace(/\s*\|.*$|\s*-\s*The Toyark.*$|\s*-\s*Brickset.*$/i, '').trim();
+      const detectedBrand = cand.title.includes('LEGO') ? 'LEGO' : (cand.title.includes('Marvel Legends') ? 'Hasbro' : (cand.title.includes('Transformers') ? 'Hasbro' : (cand.title.includes('Super7') ? 'Super7' : (cand.title.includes('NECA') ? 'NECA' : (cand.title.includes('Funko') ? 'Funko' : null)))));
+      return {
+        title,
+        summary: cand.description || `Novedad oficial reportada por ${cand.source_name}: ${title}.`,
+        why_it_matters: `Novedad confirmada de ${detectedBrand || cand.source_name} de alta relevancia para coleccionistas.`,
+        news_type: /pre-?order|preventa/i.test(title) ? 'PREORDER' : (/restock/i.test(title) ? 'RESTOCK' : 'NEWS'),
+        source_name: cand.source_name,
+        source_url: cand.source_url,
+        source_published_at: cand.source_published_at,
+        brand: detectedBrand,
+        manufacturer: detectedBrand,
+        franchise: cand.title.includes('Marvel') ? 'Marvel' : (cand.title.includes('Star Wars') ? 'Star Wars' : (cand.title.includes('Transformers') ? 'Transformers' : null)),
+        character: null,
+        product_line: cand.title.includes('Marvel Legends') ? 'Marvel Legends' : (cand.title.includes('Retro G1') ? 'Retro G1' : null),
+        release_date: null,
+        exact_product_asin: null,
+        primary_product_name: title,
+        product_queries: [title]
+      };
     });
-  }catch(e){return {httpStatus:e?.statusCode||502,success:false,status:'AI_FAILED',error:e?.message||'Fallo de investigacion Radar'};}
+  }
 
-  let parsed;try{parsed=JSON.parse(ai.outputText||'{}');}catch{return {httpStatus:502,success:false,status:'INVALID_AI_OUTPUT',error:'La investigacion no devolvio JSON valido'};}
-  const cited=useWebSearch ? new Set((ai.sources||[]).map(s=>s.url).filter(Boolean)) : new Set(officialCandidates.map(s=>s.source_url).filter(Boolean));
-  const stories=Array.isArray(parsed.stories)?parsed.stories:[];
-  const {data:amazonRows}=await supabase.from('international_products').select('id,title,brand,franchise,source_retailer,asin,product_url_external,main_image_url_external,image_url,base_price_usd,final_price_usd').ilike('source_retailer','%amazon%').limit(700);
-  const catalog=amazonRows||[];
-  let created=0,updated=0,skipped=0;const published=[];
+  const cited = useWebSearch ? new Set((ai?.sources || []).map(s => s.url).filter(Boolean)) : new Set(officialCandidates.map(s => s.source_url).filter(Boolean));
+  const { data: amazonRows } = await supabase.from('international_products').select('id,title,brand,franchise,source_retailer,asin,product_url_external,main_image_url_external,image_url,base_price_usd,final_price_usd').ilike('source_retailer', '%amazon%').limit(700);
+  const catalog = amazonRows || [];
+  let created = 0, updated = 0, skipped = 0; const published = [];
 
-  for(const story of stories.slice(0,maxItems)){
-    if(!story?.title||!story?.source_url||!cited.has(story.source_url)){skipped++;continue;}
-    const ranked=catalog.map(product=>({product,score:scoreProduct(story,product)})).filter(x=>x.score>=22).sort((a,b)=>b.score-a.score).slice(0,6);
-    const hasExactAsinMatch = story.exact_product_asin && ranked.some(r => r.product.asin && String(r.product.asin).toUpperCase() === String(story.exact_product_asin).toUpperCase());
-    const linkedProducts=ranked.map(({product,score},index)=>{
+  for (const story of stories.slice(0, maxItems)) {
+    if (!story?.title || !story?.source_url || (!useWebSearch && !cited.has(story.source_url))) {
+      skipped++;
+      continue;
+    }
+    const ranked = catalog.map(product => ({ product, score: scoreProduct(story, product) })).filter(x => x.score >= 22).sort((a, b) => b.score - a.score).slice(0, 6);
+    const linkedProducts = ranked.map(({ product, score }, index) => {
       const isExactAsin = story.exact_product_asin && product.asin && String(product.asin).toUpperCase() === String(story.exact_product_asin).toUpperCase();
       const isPrimary = isExactAsin || (index === 0 && score >= 85);
       return {
-        id:product.id,
-        title:product.title,
-        retailer:product.source_retailer||'Amazon',
-        asin:product.asin||null,
-        url:product.product_url_external||null,
-        image_url:product.main_image_url_external||product.image_url||null,
-        price_usd:product.final_price_usd??product.base_price_usd??null,
-        match_score:Math.round(score),
-        role:isPrimary ? 'PRIMARY' : 'RELATED'
+        id: product.id,
+        title: product.title,
+        retailer: product.source_retailer || 'Amazon',
+        asin: product.asin || null,
+        url: product.product_url_external || null,
+        image_url: product.main_image_url_external || product.image_url || null,
+        price_usd: product.final_price_usd ?? product.base_price_usd ?? null,
+        match_score: Math.round(score),
+        role: isPrimary ? 'PRIMARY' : 'RELATED'
       };
-    }).filter(p=>p.url);
-    const primary=linkedProducts.find(p=>p.role==='PRIMARY')||null;
+    }).filter(p => p.url);
+    const primary = linkedProducts.find(p => p.role === 'PRIMARY') || null;
     const sourceImage = primary?.image_url ? null : await resolveSourceImage(story.source_url, story);
     const selectedImageUrl = primary?.image_url || sourceImage?.url || null;
     const selectedImageSource = primary?.url || sourceImage?.source_page || story.source_url;
     const selectedImageScore = primary
-      ? Math.min(1,Math.max(.7,(primary.match_score||70)/100))
+      ? Math.min(1, Math.max(0.7, (primary.match_score || 70) / 100))
       : (sourceImage?.score || 0);
     const provenance = primary?.image_url ? 'AMAZON_PRODUCT' : (sourceImage?.url ? 'SOURCE_PAGE' : 'NONE');
-    const storyDate=safeDate(story.source_published_at);
-    const releaseDate=story.release_date&&/^\d{4}-\d{2}-\d{2}$/.test(story.release_date)?story.release_date:null;
+    const storyDate = safeDate(story.source_published_at) || new Date().toISOString();
+    const releaseDate = story.release_date && /^\d{4}-\d{2}-\d{2}$/.test(story.release_date) ? story.release_date : null;
     const isLogoOrBanner = selectedImageUrl && /logo|avatar|icon|sprite|favicon|banner|header|masthead|hero|social|share|pulse-social/i.test(selectedImageUrl);
     const semanticType = (selectedImageUrl && !isLogoOrBanner && selectedImageScore >= 0.7 && provenance !== 'NONE')
       ? 'PRODUCT_EXACT'
@@ -420,17 +518,127 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
     const hasValidImage = semanticType === 'PRODUCT_EXACT' || semanticType === 'PRODUCT_VARIANT_VERIFIED';
     const shouldPublish = hasValidImage;
     const approvalStatus = shouldPublish ? 'PUBLISHED' : 'DRAFT';
-    const row={slug,title:story.title.trim(),subtitle:story.news_type==='NEWS'?'Noticias Collectibles':null,summary:story.summary.trim(),description:story.summary.trim(),manufacturer:story.manufacturer||story.brand||null,franchise:story.franchise||null,character:story.character||null,product_line:story.product_line||null,status:statusFromType(story.news_type),currency:'USD',region:'GLOBAL',release_date_start:releaseDate,release_precision:releaseDate?'EXACT_DATE':'TBA',date_display_text:releaseDate||(storyDate?new Intl.DateTimeFormat('es-UY',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(storyDate)):'Noticia reciente'),source_name:story.source_name,source_url:story.source_url,official_image_url:shouldPublish?selectedImageUrl:null,image_source_url:selectedImageSource,image_match_score:shouldPublish?selectedImageScore:0,confidence_score:90,radar_signal:signalFromType(story.news_type),radar_why:story.why_it_matters,radar_context:`NOTICIA · ${story.source_name}`,approval_status:approvalStatus,is_verified:true,is_published:shouldPublish,is_featured:false,image_semantic_type:semanticType,raw_source_data:{content_kind:'NEWS',news_type:story.news_type,source_published_at:storyDate,source_verified_by_web_search:true,auto_generated:true,linked_products:linkedProducts,primary_product:primary,image_provenance:provenance,image_semantic_type:semanticType,product_queries:story.product_queries||[],refresh_interval_days:intervalDays},updated_at:new Date().toISOString()};
-    const {data:existing}=await supabase.from('release_events').select('id').eq('source_url',story.source_url).limit(1).maybeSingle();
-    const result=existing?.id?await supabase.from('release_events').update(row).eq('id',existing.id):await supabase.from('release_events').insert({...row,created_at:new Date().toISOString()});
-    if(result.error){console.error('[Radar Refresh] persistence error',{title:story.title,error:result.error.message});skipped++;continue;}
-    existing?.id?updated++:created++;
-    published.push({title:story.title,source:story.source_name,linked_products:linkedProducts.length,primary_product:primary?.title||null});
+    const slug = slugify(story.title.trim()) + '-' + crypto.randomBytes(3).toString('hex');
+
+    const row = {
+      slug,
+      title: story.title.trim(),
+      subtitle: story.news_type === 'NEWS' ? 'Noticias Collectibles' : null,
+      summary: story.summary.trim(),
+      description: story.summary.trim(),
+      manufacturer: story.manufacturer || story.brand || null,
+      franchise: story.franchise || null,
+      character: story.character || null,
+      product_line: story.product_line || null,
+      status: statusFromType(story.news_type),
+      currency: 'USD',
+      region: 'GLOBAL',
+      release_date_start: releaseDate,
+      release_precision: releaseDate ? 'EXACT_DATE' : 'TBA',
+      date_display_text: releaseDate || new Intl.DateTimeFormat('es-UY', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(storyDate)),
+      source_name: story.source_name,
+      source_url: story.source_url,
+      official_image_url: shouldPublish ? selectedImageUrl : null,
+      image_source_url: selectedImageSource,
+      image_match_score: shouldPublish ? selectedImageScore : 0,
+      confidence_score: 90,
+      radar_signal: signalFromType(story.news_type),
+      radar_why: story.why_it_matters,
+      radar_context: `NOTICIA · ${story.source_name}`,
+      approval_status: approvalStatus,
+      is_verified: true,
+      is_published: shouldPublish,
+      is_featured: false,
+      raw_source_data: {
+        content_kind: 'NEWS',
+        news_type: story.news_type,
+        source_published_at: storyDate,
+        source_verified_by_web_search: Boolean(useWebSearch),
+        auto_generated: true,
+        linked_products: linkedProducts,
+        primary_product: primary,
+        image_provenance: provenance,
+        image_semantic_type: semanticType,
+        product_queries: story.product_queries || [],
+        refresh_interval_days: intervalDays
+      },
+      updated_at: new Date().toISOString()
+    };
+
+    const { data: existing } = await supabase.from('release_events').select('id').eq('source_url', story.source_url).limit(1).maybeSingle();
+    const result = existing?.id ? await supabase.from('release_events').update(row).eq('id', existing.id) : await supabase.from('release_events').insert({ ...row, created_at: new Date().toISOString() });
+    if (result.error) {
+      console.error('[Radar Refresh] persistence error', { title: story.title, error: result.error.message });
+      skipped++;
+      continue;
+    }
+    existing?.id ? updated++ : created++;
+    published.push({ title: story.title, source: story.source_name, linked_products: linkedProducts.length, primary_product: primary?.title || null, published: shouldPublish, semanticType });
   }
 
-  const now=new Date().toISOString();
-  await supabase.from('site_settings').upsert([{key:'radar_last_refresh_at',value:now,updated_at:now},{key:'radar_auto_refresh_enabled',value:String(enabled),updated_at:now},{key:'radar_refresh_interval_days',value:String(intervalDays),updated_at:now}],{onConflict:'key'});
-  try{await supabase.from('ai_usage_events').insert({engine:'RADAR_INTELLIGENCE',country_code:'GLOBAL',provider:'OPENAI',model:ai.model,request_id:ai.requestId,input_tokens:ai.usage?.inputTokens??null,output_tokens:ai.usage?.outputTokens??null,total_tokens:ai.usage?.totalTokens??null,estimated_cost_usd:ai.pricing?.estimated_cost_usd??null,latency_ms:ai.latencyMs??null,status:'SUCCESS',fallback_used:false,metadata:{operation:'RADAR_NEWS_REFRESH',mode:radarMode,web_search_used:useWebSearch,created,updated,skipped,interval_days:intervalDays}});}catch{}
+  const now = new Date().toISOString();
+  const lastRunSummary = {
+    sources_checked: OFFICIAL_RADAR_SOURCES.length,
+    candidates_found: officialCandidates.length,
+    created,
+    updated,
+    skipped,
+    cost_usd: aiCost,
+    mode: radarMode,
+    executed_at: now
+  };
 
-  return {httpStatus:200,success:true,status:'REFRESHED',mode:radarMode,web_search_used:useWebSearch,interval_days:intervalDays,model:radarModel,created,updated,skipped,repaired_existing_images:repairedExistingImages,published,sources_checked:cited.size,last_refresh_at:now,next_refresh_at:new Date(Date.now()+intervalDays*86400000).toISOString(),ai_cost_usd:ai.pricing?.estimated_cost_usd??null};
+  const settingsUpdates = [
+    { key: 'radar_last_refresh_at', value: now, updated_at: now },
+    { key: 'radar_auto_refresh_enabled', value: String(enabled), updated_at: now },
+    { key: 'radar_refresh_interval_days', value: String(intervalDays), updated_at: now },
+    { key: 'radar_last_run_summary', value: JSON.stringify(lastRunSummary), updated_at: now }
+  ];
+  if (created > 0) {
+    settingsUpdates.push({ key: 'radar_last_new_story_at', value: now, updated_at: now });
+  }
+
+  await supabase.from('site_settings').upsert(settingsUpdates, { onConflict: 'key' });
+
+  if (ai) {
+    try {
+      await supabase.from('ai_usage_events').insert({
+        engine: 'RADAR_INTELLIGENCE',
+        country_code: 'GLOBAL',
+        provider: 'OPENAI',
+        model: ai.model,
+        request_id: ai.requestId,
+        input_tokens: ai.usage?.inputTokens ?? null,
+        output_tokens: ai.usage?.outputTokens ?? null,
+        total_tokens: ai.usage?.totalTokens ?? null,
+        estimated_cost_usd: ai.pricing?.estimated_cost_usd ?? null,
+        latency_ms: ai.latencyMs ?? null,
+        status: 'SUCCESS',
+        fallback_used: false,
+        metadata: { operation: 'RADAR_NEWS_REFRESH', mode: radarMode, web_search_used: useWebSearch, created, updated, skipped, interval_days: intervalDays }
+      });
+    } catch {}
+  }
+
+  return {
+    httpStatus: 200,
+    success: true,
+    status: created > 0 ? 'REFRESHED_WITH_NEW_STORIES' : 'REFRESHED_NO_NEW_STORIES',
+    mode: radarMode,
+    web_search_used: useWebSearch,
+    interval_days: intervalDays,
+    model: radarModel,
+    created,
+    updated,
+    skipped,
+    repaired_existing_images: repairedExistingImages,
+    published,
+    sources_checked: OFFICIAL_RADAR_SOURCES.length,
+    candidates_found: officialCandidates.length,
+    last_refresh_at: now,
+    last_new_story_at: created > 0 ? now : (settings.radar_last_new_story_at || null),
+    next_refresh_at: new Date(Date.now() + intervalDays * 86400000).toISOString(),
+    ai_cost_usd: aiCost,
+    last_run_summary: lastRunSummary
+  };
 }

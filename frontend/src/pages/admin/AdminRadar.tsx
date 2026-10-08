@@ -92,6 +92,8 @@ export default function AdminRadar() {
           'radar_max_items_per_refresh',
           'radar_ai_model',
           'radar_last_refresh_at',
+          'radar_last_new_story_at',
+          'radar_last_run_summary',
           'radar_cost_mode'
         ]);
       const map = Object.fromEntries((data || []).map((r: any) => [r.key, r.value]));
@@ -554,7 +556,8 @@ export default function AdminRadar() {
 
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 pt-1">
           <div className="text-[11px] text-gray-500 space-y-0.5">
-            <div>Última actualización: <strong className="text-gray-800">{radarSettings['radar_last_refresh_at'] ? new Date(radarSettings['radar_last_refresh_at']).toLocaleString('es-UY') : 'Todavía no ejecutada'}</strong></div>
+            <div>Última ejecución: <strong className="text-gray-800">{radarSettings['radar_last_refresh_at'] ? new Date(radarSettings['radar_last_refresh_at']).toLocaleString('es-UY') : 'Todavía no ejecutada'}</strong></div>
+            <div>Última noticia nueva: <strong className="text-gray-800">{radarSettings['radar_last_new_story_at'] ? new Date(radarSettings['radar_last_new_story_at']).toLocaleString('es-UY') : 'Sin novedades recientes'}</strong></div>
             <div>Último costo real: <strong className="text-gray-800">{radarCost?.last_actual?.cost_usd != null ? `USD ${Number(radarCost.last_actual.cost_usd).toFixed(4)}` : 'Sin ejecuciones registradas'}</strong></div>
           </div>
           <div className="flex gap-2">
@@ -578,6 +581,28 @@ export default function AdminRadar() {
             </button>
           </div>
         </div>
+
+        {/* Detalle Desglosado de Última Ejecución */}
+        {(() => {
+          let summary: any = null;
+          try {
+            if (radarSettings['radar_last_run_summary']) {
+              summary = JSON.parse(radarSettings['radar_last_run_summary']);
+            }
+          } catch {}
+          if (!summary) return null;
+          return (
+            <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs flex flex-wrap gap-x-6 gap-y-1.5 items-center justify-between text-gray-600">
+              <span className="font-bold text-gray-900 uppercase tracking-wider text-[10px]">Resultado Última Ejecución:</span>
+              <span>Fuentes revisadas: <strong className="text-gray-800">{summary.sources_checked ?? '-'}</strong></span>
+              <span>Candidatos detectados: <strong className="text-gray-800">{summary.candidates_found ?? '-'}</strong></span>
+              <span>Nuevas noticias: <strong className="text-emerald-700">+{summary.created ?? 0}</strong></span>
+              <span>Actualizadas / Repetidas: <strong className="text-gray-800">{summary.updated ?? 0}</strong></span>
+              <span>Descartadas: <strong className="text-gray-800">{summary.skipped ?? 0}</strong></span>
+              <span>Costo IA: <strong className="text-gray-800">USD {Number(summary.cost_usd || 0).toFixed(4)}</strong></span>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Filter Tabs */}
