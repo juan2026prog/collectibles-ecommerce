@@ -4,7 +4,7 @@ import {
   Radio, Plus, Edit2, Trash2, Calendar, Eye, EyeOff, 
   Save, CheckCircle2, AlertCircle, Sparkles, ExternalLink,
   Tag, Award, Package, RefreshCw, Bot, ShieldCheck, X,
-  ShoppingBag, Search, Layers, ChevronDown
+  ShoppingBag, Search, Layers, ChevronDown, ToggleLeft, ToggleRight
 } from 'lucide-react';
 import type { ReleaseEvent, ReleaseStatus, ReleasePrecision, RadarSignal } from '../../plugins/collector-radar/types';
 import { 
