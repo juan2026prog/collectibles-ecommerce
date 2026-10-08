@@ -18,17 +18,113 @@ const signalFromType=t=>({PREORDER:'PREVENTA_ABIERTA',RESTOCK:'VUELVE_A_STOCK',R
 const statusFromType=t=>({PREORDER:'PREORDER_OPEN',RESTOCK:'RESTOCKED',RELEASE:'RELEASED'}[t]||'ANNOUNCED');
 function safeDate(v){if(!v)return null;const d=new Date(v);return Number.isNaN(d.getTime())?null:d.toISOString();}
 
+function absoluteUrl(base, value) {
+  try { return new URL(value, base).toString(); } catch { return null; }
+}
+
+async function resolveSourceImage(sourceUrl, story = {}) {
+  if (!sourceUrl || !/^https?:\/\//i.test(sourceUrl)) return null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 7000);
+  try {
+    const response = await fetch(sourceUrl, {
+      headers: {
+        'User-Agent': 'CollectiblesRadarBot/1.0 (+https://collectibles.uy)',
+        'Accept': 'text/html,application/xhtml+xml'
+      },
+      redirect: 'follow',
+      signal: controller.signal
+    });
+    if (!response.ok) return null;
+    const html = (await response.text()).slice(0, 800000);
+
+    const candidates = [];
+    const metaPatterns = [
+      /<meta[^>]+property=["']og:image(?::secure_url)?["'][^>]+content=["']([^"']+)["'][^>]*>/ig,
+      /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image(?::secure_url)?["'][^>]*>/ig,
+      /<meta[^>]+name=["']twitter:image(?::src)?["'][^>]+content=["']([^"']+)["'][^>]*>/ig,
+      /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image(?::src)?["'][^>]*>/ig
+    ];
+    for (const pattern of metaPatterns) {
+      let match;
+      while ((match = pattern.exec(html)) && candidates.length < 8) {
+        const abs = absoluteUrl(response.url || sourceUrl, match[1]);
+        if (abs) candidates.push(abs);
+      }
+    }
+
+    const jsonImageMatches = html.match(/"image"\s*:\s*(?:"([^"]+)"|\[\s*"([^"]+)")/ig) || [];
+    for (const raw of jsonImageMatches.slice(0, 6)) {
+      const m = raw.match(/"image"\s*:\s*(?:"([^"]+)"|\[\s*"([^"]+)")/i);
+      const val = m?.[1] || m?.[2];
+      const abs = val ? absoluteUrl(response.url || sourceUrl, val.replace(/\\u002F/g, '/').replace(/\\\//g, '/')) : null;
+      if (abs) candidates.push(abs);
+    }
+
+    const deduped = [...new Set(candidates)].filter(url => {
+      const lower = url.toLowerCase();
+      if (lower.includes('unsplash.com') || lower.includes('pexels.com')) return false;
+      if (/logo|avatar|icon|sprite|favicon/.test(lower)) return false;
+      return /^https?:\/\//.test(url);
+    });
+
+    const titleWords = words([story.title, story.primary_product_name, story.brand, story.franchise, story.character].filter(Boolean).join(' '));
+    let best = null;
+    let bestScore = -1;
+    for (const url of deduped) {
+      const lower = url.toLowerCase();
+      let score = 1;
+      for (const w of titleWords) if (lower.includes(w)) score += 1;
+      if (/product|products|media|uploads|cdn|images/.test(lower)) score += 1;
+      if (score > bestScore) { best = url; bestScore = score; }
+    }
+    return best ? { url: best, source_page: response.url || sourceUrl, score: Math.min(0.95, 0.72 + bestScore * 0.03) } : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function repairExistingRadarImages(supabase, limit = 12) {
+  const { data: rows } = await supabase
+    .from('release_events')
+    .select('id,title,source_url,official_image_url,manufacturer,franchise,character')
+    .is('official_image_url', null)
+    .not('source_url', 'is', null)
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+
+  let repaired = 0;
+  for (const row of rows || []) {
+    const img = await resolveSourceImage(row.source_url, row);
+    if (!img?.url) continue;
+    const { error } = await supabase.from('release_events').update({
+      official_image_url: img.url,
+      image_source_url: img.source_page,
+      image_match_score: img.score,
+      updated_at: new Date().toISOString(),
+      raw_source_data: {
+        image_provenance: 'SOURCE_PAGE',
+        image_repaired_without_ai: true
+      }
+    }).eq('id', row.id);
+    if (!error) repaired++;
+  }
+  return repaired;
+}
+
 const RADAR_MODELS = new Set(['gpt-5.6-luna','gpt-5.6-terra','gpt-5.6-sol']);
 const WEB_SEARCH_TOOL_COST_USD = 0.01; // $10 / 1k calls (OpenAI official pricing snapshot)
 
 function normalizeRadarModel(value) {
   const model = String(value || '').trim().toLowerCase();
-  return RADAR_MODELS.has(model) ? model : 'gpt-5.6-terra';
+  return RADAR_MODELS.has(model) ? model : 'gpt-5.6-luna';
 }
 
-export function estimateRadarRefreshCost({ model = 'gpt-5.6-terra', maxItems = 8, intervalDays = 3 } = {}) {
+export function estimateRadarRefreshCost({ model = 'gpt-5.6-luna', maxItems = 5, intervalDays = 3 } = {}) {
   const selectedModel = normalizeRadarModel(model);
-  const items = Math.max(3, Math.min(12, Number(maxItems) || 8));
+  const items = Math.max(3, Math.min(12, Number(maxItems) || 5));
   const days = Math.max(1, Math.min(14, Number(intervalDays) || 3));
 
   // Conservative local-only estimate. Web search result volume is variable, so expose a range.
@@ -81,12 +177,19 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
     console.warn('[Radar Refresh] legacy image cleanup skipped', cleanupError?.message || cleanupError);
   }
 
+  let repairedExistingImages = 0;
+  try {
+    repairedExistingImages = await repairExistingRadarImages(supabase, 12);
+  } catch (repairError) {
+    console.warn('[Radar Refresh] existing image repair skipped', repairError?.message || repairError);
+  }
+
   const {data:settingRows,error:settingsError}=await supabase.from('site_settings').select('key,value').in('key',['radar_auto_refresh_enabled','radar_refresh_interval_days','radar_last_refresh_at','radar_max_items_per_refresh','radar_ai_model']);
   if(settingsError)return {httpStatus:500,success:false,status:'SETTINGS_ERROR',error:settingsError.message};
   const settings=Object.fromEntries((settingRows||[]).map(r=>[r.key,r.value]));
   const enabled=parseBool(settings.radar_auto_refresh_enabled,true);
   const intervalDays=parseDays(settings.radar_refresh_interval_days,3);
-  const maxItems=Math.max(3,Math.min(12,Number(settings.radar_max_items_per_refresh)||8));
+  const maxItems=Math.max(3,Math.min(12,Number(settings.radar_max_items_per_refresh)||5));
   const radarModel=normalizeRadarModel(settings.radar_ai_model);
 
   if(!enabled&&!force)return {httpStatus:200,success:true,status:'DISABLED',interval_days:intervalDays};
@@ -130,10 +233,16 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
     const ranked=catalog.map(product=>({product,score:scoreProduct(story,product)})).filter(x=>x.score>=22).sort((a,b)=>b.score-a.score).slice(0,6);
     const linkedProducts=ranked.map(({product,score},index)=>({id:product.id,title:product.title,retailer:product.source_retailer||'Amazon',asin:product.asin||null,url:product.product_url_external||null,image_url:product.main_image_url_external||product.image_url||null,price_usd:product.final_price_usd??product.base_price_usd??null,match_score:Math.round(score),role:index===0&&score>=45?'PRIMARY':'RELATED'})).filter(p=>p.url);
     const primary=linkedProducts.find(p=>p.role==='PRIMARY')||null;
+    const sourceImage = primary?.image_url ? null : await resolveSourceImage(story.source_url, story);
+    const selectedImageUrl = primary?.image_url || sourceImage?.url || null;
+    const selectedImageSource = primary?.url || sourceImage?.source_page || story.source_url;
+    const selectedImageScore = primary
+      ? Math.min(1,Math.max(.7,(primary.match_score||70)/100))
+      : (sourceImage?.score || 0);
     const storyDate=safeDate(story.source_published_at);
     const releaseDate=story.release_date&&/^\d{4}-\d{2}-\d{2}$/.test(story.release_date)?story.release_date:null;
     const slug=slugify(`${story.title}-${crypto.createHash('sha1').update(story.source_url).digest('hex').slice(0,10)}`);
-    const row={slug,title:story.title.trim(),subtitle:story.news_type==='NEWS'?'Noticias Collectibles':null,summary:story.summary.trim(),description:story.summary.trim(),manufacturer:story.manufacturer||story.brand||null,franchise:story.franchise||null,character:story.character||null,product_line:story.product_line||null,status:statusFromType(story.news_type),currency:'USD',region:'GLOBAL',release_date_start:releaseDate,release_precision:releaseDate?'EXACT_DATE':'TBA',date_display_text:releaseDate||(storyDate?new Intl.DateTimeFormat('es-UY',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(storyDate)):'Noticia reciente'),source_name:story.source_name,source_url:story.source_url,official_image_url:primary?.image_url||null,image_source_url:primary?.url||story.source_url,image_match_score:primary?Math.min(1,Math.max(.7,(primary.match_score||70)/100)):0,confidence_score:90,radar_signal:signalFromType(story.news_type),radar_why:story.why_it_matters,radar_context:`NOTICIA · ${story.source_name}`,approval_status:'PUBLISHED',is_verified:true,is_published:true,is_featured:false,raw_source_data:{content_kind:'NEWS',news_type:story.news_type,source_published_at:storyDate,source_verified_by_web_search:true,auto_generated:true,linked_products:linkedProducts,primary_product:primary,product_queries:story.product_queries||[],refresh_interval_days:intervalDays},updated_at:new Date().toISOString()};
+    const row={slug,title:story.title.trim(),subtitle:story.news_type==='NEWS'?'Noticias Collectibles':null,summary:story.summary.trim(),description:story.summary.trim(),manufacturer:story.manufacturer||story.brand||null,franchise:story.franchise||null,character:story.character||null,product_line:story.product_line||null,status:statusFromType(story.news_type),currency:'USD',region:'GLOBAL',release_date_start:releaseDate,release_precision:releaseDate?'EXACT_DATE':'TBA',date_display_text:releaseDate||(storyDate?new Intl.DateTimeFormat('es-UY',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(storyDate)):'Noticia reciente'),source_name:story.source_name,source_url:story.source_url,official_image_url:selectedImageUrl,image_source_url:selectedImageSource,image_match_score:selectedImageScore,confidence_score:90,radar_signal:signalFromType(story.news_type),radar_why:story.why_it_matters,radar_context:`NOTICIA · ${story.source_name}`,approval_status:'PUBLISHED',is_verified:true,is_published:true,is_featured:false,raw_source_data:{content_kind:'NEWS',news_type:story.news_type,source_published_at:storyDate,source_verified_by_web_search:true,auto_generated:true,linked_products:linkedProducts,primary_product:primary,image_provenance:primary?'PRIMARY_PRODUCT':(sourceImage?.url?'SOURCE_PAGE':'NONE'),product_queries:story.product_queries||[],refresh_interval_days:intervalDays},updated_at:new Date().toISOString()};
     const {data:existing}=await supabase.from('release_events').select('id').eq('source_url',story.source_url).limit(1).maybeSingle();
     const result=existing?.id?await supabase.from('release_events').update(row).eq('id',existing.id):await supabase.from('release_events').insert({...row,created_at:new Date().toISOString()});
     if(result.error){console.error('[Radar Refresh] persistence error',{title:story.title,error:result.error.message});skipped++;continue;}
@@ -145,5 +254,5 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
   await supabase.from('site_settings').upsert([{key:'radar_last_refresh_at',value:now,updated_at:now},{key:'radar_auto_refresh_enabled',value:String(enabled),updated_at:now},{key:'radar_refresh_interval_days',value:String(intervalDays),updated_at:now}],{onConflict:'key'});
   try{await supabase.from('ai_usage_events').insert({engine:'RADAR_INTELLIGENCE',country_code:'GLOBAL',provider:'OPENAI',model:ai.model,request_id:ai.requestId,input_tokens:ai.usage?.inputTokens??null,output_tokens:ai.usage?.outputTokens??null,total_tokens:ai.usage?.totalTokens??null,estimated_cost_usd:ai.pricing?.estimated_cost_usd??null,latency_ms:ai.latencyMs??null,status:'SUCCESS',fallback_used:false,metadata:{operation:'RADAR_NEWS_REFRESH',created,updated,skipped,interval_days:intervalDays}});}catch{}
 
-  return {httpStatus:200,success:true,status:'REFRESHED',interval_days:intervalDays,model:radarModel,created,updated,skipped,published,sources_checked:cited.size,last_refresh_at:now,next_refresh_at:new Date(Date.now()+intervalDays*86400000).toISOString(),ai_cost_usd:ai.pricing?.estimated_cost_usd??null};
+  return {httpStatus:200,success:true,status:'REFRESHED',interval_days:intervalDays,model:radarModel,created,updated,skipped,repaired_existing_images:repairedExistingImages,published,sources_checked:cited.size,last_refresh_at:now,next_refresh_at:new Date(Date.now()+intervalDays*86400000).toISOString(),ai_cost_usd:ai.pricing?.estimated_cost_usd??null};
 }
