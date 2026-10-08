@@ -34,7 +34,9 @@ export default function ReleaseCalendarPage() {
         .order('release_date_start', { ascending: true });
 
       if (!error && data) {
-        setReleases(data as any);
+        // Regla editorial pública estricta: SIN IMAGEN VÁLIDA → NO APARECE
+        const validWithImage = (data as any[]).filter(r => safeRadarImage(r.official_image_url));
+        setReleases(validWithImage);
       }
     } catch (err) {
       console.error(err);

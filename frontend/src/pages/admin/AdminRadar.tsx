@@ -253,18 +253,32 @@ export default function AdminRadar() {
     }
   };
 
-  const handleTogglePublish = async (id: string, currentStatus: boolean) => {
+  const handleTogglePublish = async (item: ReleaseEvent) => {
+    const nextStatus = !item.is_published;
+    if (nextStatus) {
+      // Regla editorial: SIN IMAGEN VÁLIDA, NO SE PUBLICA.
+      const val = validateAndScoreImage(
+        { title: item.title, manufacturer: item.manufacturer, franchise: item.franchise, character: item.character },
+        item.official_image_url,
+        item.image_source_url || item.source_url
+      );
+      if (!val.isValid || !val.finalImageUrl) {
+        toast.error('Este registro no puede publicarse todavía porque no tiene una imagen válida y verificada.');
+        return;
+      }
+    }
+
     try {
       const { error } = await supabase
         .from('release_events')
         .update({ 
-          is_published: !currentStatus,
-          approval_status: !currentStatus ? 'PUBLISHED' : 'DRAFT'
+          is_published: nextStatus,
+          approval_status: nextStatus ? 'PUBLISHED' : 'DRAFT'
         })
-        .eq('id', id);
+        .eq('id', item.id);
 
       if (error) throw error;
-      toast.success(currentStatus ? 'Lanzamiento ocultado' : 'Lanzamiento publicado en Radar');
+      toast.success(item.is_published ? 'Lanzamiento movido a borrador' : 'Lanzamiento publicado en Radar');
       loadReleases();
     } catch (err) {
       toast.error('Error al actualizar estado');
@@ -636,6 +650,17 @@ export default function AdminRadar() {
                             <p className="font-bold text-gray-900 text-sm line-clamp-1">{item.title}</p>
                             <p className="text-[11px] text-gray-500 font-mono">/{item.slug}</p>
                             <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                              {/* Badge de Publicación y Estado de Imagen */}
+                              {item.is_published ? (
+                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                  PUBLICADO
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300">
+                                  BORRADOR
+                                </span>
+                              )}
+
                               {/* Badge de Imagen */}
                               {(() => {
                                 const prov = item.raw_source_data?.image_provenance;
@@ -648,7 +673,7 @@ export default function AdminRadar() {
                                 if (prov === 'OFFICIAL_RETAILER' || item.official_image_url) {
                                   return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200">✓ Retailer</span>;
                                 }
-                                return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-50 text-rose-600 border border-rose-200">⚠ Sin imagen</span>;
+                                return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-50 text-rose-600 border border-rose-200">⚠ Pendiente de imagen</span>;
                               })()}
                               {/* Badge de Auditoría si existe */}
                               {item.audit_corrections?.classification && (
@@ -730,7 +755,7 @@ export default function AdminRadar() {
                       <td className="p-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => handleTogglePublish(item.id, item.is_published)}
+                            onClick={() => handleTogglePublish(item)}
                             className={`p-1.5 rounded-lg border transition ${
                               item.is_published
                                 ? 'text-emerald-700 hover:bg-emerald-50 border-emerald-200'
@@ -968,11 +993,28 @@ export default function AdminRadar() {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={editingRelease.is_published ?? true}
-                    onChange={(e) => setEditingRelease({ ...editingRelease, is_published: e.target.checked })}
+                    checked={editingRelease.is_published ?? false}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      if (checked) {
+                        const val = validateAndScoreImage(
+                          { title: editingRelease.title, manufacturer: editingRelease.manufacturer, franchise: editingRelease.franchise, character: editingRelease.character },
+                          editingRelease.official_image_url,
+                          editingRelease.image_source_url || editingRelease.source_url
+                        );
+                        if (!val.isValid || !val.finalImageUrl) {
+                          toast.error('Este registro no puede publicarse todavía porque no tiene una imagen válida y verificada. Se guardará como borrador.');
+                          return;
+                        }
+                      }
+                      setEditingRelease({ ...editingRelease, is_published: checked });
+                    }}
                     className="w-4 h-4 rounded text-gray-900 focus:ring-gray-900"
                   />
-                  <span className="font-bold text-gray-800">Publicado y visible al público</span>
+                  <div>
+                    <span className="font-bold text-gray-800 block">Publicado y visible al público</span>
+                    <span className="text-[10px] text-gray-400 block">Requiere fotografía oficial validada (sin imagen solo se guarda como borrador)</span>
+                  </div>
                 </label>
 
                 <div className="flex items-center gap-2">

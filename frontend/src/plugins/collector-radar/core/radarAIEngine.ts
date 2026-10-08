@@ -195,7 +195,8 @@ export function validateAndScoreImage(
     }
   }
 
-  // Si proviene de un dominio oficial del fabricante (hasbropulse.com, necaonline.com, tamashiiweb.com, super7.com, etc.)
+  // Si proviene de un dominio oficial del fabricante o CDN de producto oficial de Amazon
+  const isAmazonProduct = lowerUrl.includes('media-amazon.com') || lowerUrl.includes('ssl-images-amazon.com');
   const isOfficialDomain = 
     lowerUrl.includes('hasbro') || 
     lowerUrl.includes('neca') || 
@@ -211,6 +212,8 @@ export function validateAndScoreImage(
 
   if (isOfficialDomain) {
     score = 0.98;
+  } else if (isAmazonProduct && imageSourceUrl && imageSourceUrl.toLowerCase().includes('amazon')) {
+    score = 0.95;
   }
 
   // Coherencia semántica básica con el nombre o personaje
@@ -222,14 +225,14 @@ export function validateAndScoreImage(
 
   // Una URL externa sin evidencia semántica ni dominio oficial queda por debajo
   // del umbral. Evita scores altos automáticos para fotos genéricas.
-  if (!isOfficialDomain && matchedWords.length === 0) {
+  if (!isOfficialDomain && !isAmazonProduct && matchedWords.length === 0) {
     score = Math.min(score, 0.65);
   }
 
   let provenance: ImageValidationResult['provenance'] = 'NONE';
   if (score >= 0.7) {
     if (isOfficialDomain) provenance = 'OFFICIAL_MANUFACTURER';
-    else if (lowerUrl.includes('amazon.com')) provenance = 'AMAZON_PRODUCT';
+    else if (isAmazonProduct || lowerUrl.includes('amazon.com')) provenance = 'AMAZON_PRODUCT';
     else if (lowerUrl.includes('brickset.com') || lowerUrl.includes('bigbadtoystore.com')) provenance = 'OFFICIAL_RETAILER';
     else provenance = 'SOURCE_PAGE';
   }
@@ -423,6 +426,25 @@ export async function persistRadarRelease(
       });
     }
 
+    // Regla editorial obligatoria: SIN IMAGEN VÁLIDA, NO SE PUBLICA.
+    const imageVal = validateAndScoreImage(
+      { title: release.title, manufacturer: release.manufacturer, franchise: release.franchise, character: release.character },
+      release.official_image_url,
+      release.image_source_url || release.source_url
+    );
+    const hasValidImage = imageVal.isValid && Boolean(imageVal.finalImageUrl);
+
+    const wantsPublished = release.is_published === true || release.approval_status === 'PUBLISHED';
+    if (wantsPublished && !hasValidImage) {
+      return {
+        success: false,
+        error: 'Este registro no puede publicarse todavía porque no tiene una imagen válida y verificada.'
+      };
+    }
+
+    const isPublished = hasValidImage ? (release.is_published ?? true) : false;
+    const approvalStatus = hasValidImage ? (release.approval_status || 'PUBLISHED') : 'DRAFT';
+
     const payload: any = {
       title: release.title,
       slug,
@@ -448,16 +470,16 @@ export async function persistRadarRelease(
       catalog_product_id: release.catalog_product_id || null,
       source_name: release.source_name || 'Fuente Oficial',
       source_url: release.source_url || null,
-      official_image_url: release.official_image_url || null,
+      official_image_url: hasValidImage ? imageVal.finalImageUrl : null,
       image_source_url: release.image_source_url || null,
-      image_match_score: release.image_match_score ?? 1.0,
+      image_match_score: hasValidImage ? imageVal.score : 0,
       confidence_score: release.confidence_score ?? 90,
       radar_signal: release.radar_signal || 'NUEVO_ANUNCIO',
       radar_why: release.radar_why || null,
       radar_context: release.radar_context || null,
-      approval_status: release.approval_status || 'PUBLISHED',
+      approval_status: approvalStatus,
       is_verified: release.is_verified ?? true,
-      is_published: release.is_published ?? true,
+      is_published: isPublished,
       is_featured: release.is_featured ?? false,
       audit_corrections: existingCorrections,
       updated_at: new Date().toISOString()

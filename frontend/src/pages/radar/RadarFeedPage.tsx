@@ -299,6 +299,9 @@ export default function RadarFeedPage() {
 
   const filteredReleases = useMemo(() => {
     return releases.filter(item => {
+      // Regla editorial pública estricta: SIN IMAGEN VÁLIDA → NO APARECE
+      if (!safeRadarImage(item.official_image_url)) return false;
+
       // Filtro por Señal / Estado
       if (activeFilter !== 'ALL') {
         if (activeFilter === 'PREORDER' && item.status !== 'PREORDER_OPEN' && item.radar_signal !== 'PREVENTA_ABIERTA' && item.radar_signal !== 'PREVENTA_CERRANDO') return false;
