@@ -461,6 +461,8 @@ export default function AdminSettings() {
   const [testingHandyConnection, setTestingHandyConnection] = useState(false);
   const [loading, setLoading] = useState(true);
   const [radarRefreshing, setRadarRefreshing] = useState(false);
+  const [radarEstimating, setRadarEstimating] = useState(false);
+  const [radarCostEstimate, setRadarCostEstimate] = useState<any>(null);
   const [showMediaPicker, setShowMediaPicker] = useState<false | 'logo'>(false);
   const { toast } = useToast();
   const { user, isSuperAdmin } = useAuth();
@@ -809,7 +811,49 @@ export default function AdminSettings() {
     toast.success('Configuración guardada');
   }
 
+  async function loadRadarCostEstimate() {
+    setRadarEstimating(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      const response = await fetch('/api/sourcing-discovery', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          action: 'radar_news_estimate',
+          model: settings['radar_ai_model'] || 'gpt-5.6-terra',
+          max_items: Number(settings['radar_max_items_per_refresh'] || 8),
+          interval_days: Number(settings['radar_refresh_interval_days'] || 3)
+        })
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload?.success) throw new Error(payload?.error || 'No se pudo estimar el costo');
+      setRadarCostEstimate(payload);
+      return payload;
+    } catch (error: any) {
+      setRadarCostEstimate(null);
+      toast.error(error?.message || 'No se pudo calcular el costo de Radar');
+      return null;
+    } finally {
+      setRadarEstimating(false);
+    }
+  }
+
   async function runRadarRefreshNow() {
+    const estimate = await loadRadarCostEstimate();
+    if (!estimate) return;
+
+    const expected = estimate.estimated_cost_expected_usd;
+    const maximum = estimate.estimated_cost_max_usd;
+    const model = estimate.model || settings['radar_ai_model'] || 'gpt-5.6-terra';
+    const ok = window.confirm(
+      `Actualizar Radar ahora?\n\nModelo: ${model}\nNoticias máximas: ${settings['radar_max_items_per_refresh'] || '8'}\nCosto estimado: USD ${expected != null ? Number(expected).toFixed(4) : 'N/D'}\nMáximo estimado: USD ${maximum != null ? Number(maximum).toFixed(4) : 'N/D'}\n\nNo se ejecutará ninguna llamada de IA hasta que confirmes.`
+    );
+    if (!ok) return;
+
     setRadarRefreshing(true);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -825,13 +869,28 @@ export default function AdminSettings() {
       const payload = await response.json();
       if (!response.ok || !payload?.success) throw new Error(payload?.error || 'No se pudo actualizar Radar');
       await fetchData();
-      toast.success(`Radar actualizado: ${payload.created || 0} noticias nuevas, ${payload.updated || 0} actualizadas`);
+      await loadRadarCostEstimate();
+      toast.success(`Radar actualizado: ${payload.created || 0} noticias nuevas, ${payload.updated || 0} actualizadas · costo real USD ${payload.ai_cost_usd != null ? Number(payload.ai_cost_usd).toFixed(4) : 'N/D'}`);
     } catch (error: any) {
       toast.error(error?.message || 'Falló la actualización de Radar');
     } finally {
       setRadarRefreshing(false);
     }
   }
+
+  useEffect(() => {
+    if (currentTab !== 'modules' || loading) return;
+    const timer = window.setTimeout(() => {
+      loadRadarCostEstimate();
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [
+    currentTab,
+    loading,
+    settings['radar_ai_model'],
+    settings['radar_max_items_per_refresh'],
+    settings['radar_refresh_interval_days']
+  ]);
 
   async function toggleModule(id: string, current: boolean) {
     const nextVal = !current;
