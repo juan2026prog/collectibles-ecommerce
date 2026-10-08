@@ -468,7 +468,7 @@ export default function AdminRadar() {
               className="mt-1 w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-900"
             >
               <option value="gpt-5.6-luna">Luna · menor costo (recomendado)</option>
-              <option value="gpt-5.6-luna">Terra · balanceado</option>
+              <option value="gpt-5.6-terra">Terra · balanceado</option>
               <option value="gpt-5.6-sol">Sol · máxima capacidad</option>
             </select>
           </label>
