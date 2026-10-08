@@ -50,6 +50,7 @@ export interface ImageValidationResult {
   score: number;
   reason: string;
   finalImageUrl: string | null;
+  provenance?: 'OFFICIAL_MANUFACTURER' | 'OFFICIAL_RETAILER' | 'AMAZON_PRODUCT' | 'SOURCE_PAGE' | 'MARKETPLACE' | 'NONE';
 }
 
 const KNOWN_MANUFACTURERS = [
@@ -151,20 +152,22 @@ export function validateAndScoreImage(
     };
   }
 
-  // Filtrar placeholders genéricos no confiables o imágenes aleatorias de Unsplash/LoremFlickr
+  // Filtrar placeholders genéricos no confiables o imágenes aleatorias de Unsplash/Pexels/LoremFlickr
   const lowerUrl = cleanUrl.toLowerCase();
   const isGenericStock = 
     lowerUrl.includes('placeholder.com') || 
     lowerUrl.includes('via.placeholder') ||
     lowerUrl.includes('picsum.photos') ||
-    lowerUrl.includes('unsplash.com');
+    lowerUrl.includes('unsplash.com') ||
+    lowerUrl.includes('pexels.com');
 
   if (isGenericStock) {
     return {
       isValid: false,
       score: 0.1,
       reason: 'Imagen genérica de stock no autorizada para Radar',
-      finalImageUrl: null
+      finalImageUrl: null,
+      provenance: 'NONE'
     };
   }
 
@@ -183,7 +186,8 @@ export function validateAndScoreImage(
           isValid: false,
           score: 0,
           reason: 'La imagen pertenece a un marketplace distinto de la fuente declarada',
-          finalImageUrl: null
+          finalImageUrl: null,
+          provenance: 'MARKETPLACE'
         };
       }
     } catch {
@@ -191,7 +195,7 @@ export function validateAndScoreImage(
     }
   }
 
-  // Si proviene de un dominio oficial del fabricante (hasbropulse.com, necaonline.com, tamashiiweb.com, etc.)
+  // Si proviene de un dominio oficial del fabricante (hasbropulse.com, necaonline.com, tamashiiweb.com, super7.com, etc.)
   const isOfficialDomain = 
     lowerUrl.includes('hasbro') || 
     lowerUrl.includes('neca') || 
@@ -201,6 +205,8 @@ export function validateAndScoreImage(
     lowerUrl.includes('mattel') || 
     lowerUrl.includes('mcfarlane') || 
     lowerUrl.includes('sideshow') ||
+    lowerUrl.includes('super7') ||
+    lowerUrl.includes('lego') ||
     lowerUrl.includes('funko');
 
   if (isOfficialDomain) {
@@ -220,11 +226,20 @@ export function validateAndScoreImage(
     score = Math.min(score, 0.65);
   }
 
+  let provenance: ImageValidationResult['provenance'] = 'NONE';
+  if (score >= 0.7) {
+    if (isOfficialDomain) provenance = 'OFFICIAL_MANUFACTURER';
+    else if (lowerUrl.includes('amazon.com')) provenance = 'AMAZON_PRODUCT';
+    else if (lowerUrl.includes('brickset.com') || lowerUrl.includes('bigbadtoystore.com')) provenance = 'OFFICIAL_RETAILER';
+    else provenance = 'SOURCE_PAGE';
+  }
+
   return {
     isValid: score >= 0.7,
     score,
     reason: score >= 0.7 ? 'Imagen verificada' : 'Score insuficiente de coincidencia',
-    finalImageUrl: score >= 0.7 ? cleanUrl : null
+    finalImageUrl: score >= 0.7 ? cleanUrl : null,
+    provenance
   };
 }
 

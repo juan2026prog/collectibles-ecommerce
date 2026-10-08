@@ -39,13 +39,26 @@ describe('Módulo 02: Collectibles Radar & Release Calendar Engine Tests', () =>
     expect(result.finalImageUrl).toBeNull();
   });
 
-  it('rejects marketplace art when the declared source is an official manufacturer', () => {
+  it('rejects Pexels stock photos for Radar images', () => {
     const result = validateAndScoreImage(
-      { title: 'NECA Ultimate Chucky', manufacturer: 'NECA', franchise: 'Chucky' },
-      'https://http2.mlstatic.com/D_example.jpg',
-      'https://necaonline.com/products/chucky'
+      { title: 'LEGO Icons Star Trek', manufacturer: 'LEGO', franchise: 'Star Trek' },
+      'https://images.pexels.com/photos/123/pexels-photo-123.jpeg',
+      'https://www.lego.com/en-us/product/star-trek'
     );
     expect(result.isValid).toBe(false);
     expect(result.finalImageUrl).toBeNull();
   });
+
+  it('assigns high score to official domain media matching product keywords', () => {
+    const result = validateAndScoreImage(
+      { title: 'Super7 TMNT Shredder Wave 13', manufacturer: 'Super7', franchise: 'TMNT' },
+      'https://super7.com/cdn/shop/files/UL-TMNT_W13_Shredder_GRID.jpg',
+      'https://super7.com/products/teenage-mutant-ninja-turtles-ultimates-wave-13-shredder'
+    );
+    expect(result.isValid).toBe(true);
+    expect(result.finalImageUrl).toBe('https://super7.com/cdn/shop/files/UL-TMNT_W13_Shredder_GRID.jpg');
+    expect(result.score).toBeGreaterThanOrEqual(0.8);
+    expect(result.provenance).toBe('OFFICIAL_MANUFACTURER');
+  });
 });
+

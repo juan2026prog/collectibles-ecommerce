@@ -622,16 +622,41 @@ export default function AdminRadar() {
                     <tr key={item.id} className="hover:bg-gray-50/80 transition">
                       <td className="p-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 rounded-lg bg-gray-100 border border-gray-200 p-1 flex items-center justify-center shrink-0 overflow-hidden">
+                          <div className="relative w-14 h-14 rounded-lg bg-gray-100 border border-gray-200 p-1 flex items-center justify-center shrink-0 overflow-hidden">
                             {safeRadarImage(item.official_image_url) ? (
                               <img src={safeRadarImage(item.official_image_url) || ''} alt={item.title} className="max-h-full max-w-full object-contain" />
                             ) : (
-                              <Radio size={18} className="text-gray-400" />
+                              <div className="text-center">
+                                <Radio size={16} className="text-gray-400 mx-auto" />
+                                <span className="text-[8px] text-gray-400 block font-mono">Sin foto</span>
+                              </div>
                             )}
                           </div>
                           <div>
                             <p className="font-bold text-gray-900 text-sm line-clamp-1">{item.title}</p>
                             <p className="text-[11px] text-gray-500 font-mono">/{item.slug}</p>
+                            <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                              {/* Badge de Imagen */}
+                              {(() => {
+                                const prov = item.raw_source_data?.image_provenance;
+                                if (prov === 'OFFICIAL_MANUFACTURER') {
+                                  return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">✓ Oficial</span>;
+                                }
+                                if (prov === 'AMAZON_PRODUCT' || item.official_image_url?.includes('amazon.com')) {
+                                  return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">✓ Amazon</span>;
+                                }
+                                if (prov === 'OFFICIAL_RETAILER' || item.official_image_url) {
+                                  return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200">✓ Retailer</span>;
+                                }
+                                return <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-50 text-rose-600 border border-rose-200">⚠ Sin imagen</span>;
+                              })()}
+                              {/* Badge de Auditoría si existe */}
+                              {item.audit_corrections?.classification && (
+                                <span className="text-[8px] font-mono px-1 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">
+                                  {item.audit_corrections.classification}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -639,6 +664,7 @@ export default function AdminRadar() {
                       <td className="p-4">
                         <div className="font-bold text-gray-800">{item.brand?.name || item.manufacturer || '—'}</div>
                         <div className="text-[11px] text-gray-500">{item.product_line || item.franchise || 'Línea Regular'}</div>
+                        {item.scale && <div className="text-[10px] text-gray-400 font-mono">Escala: {item.scale}</div>}
                       </td>
 
                       <td className="p-4">
@@ -652,33 +678,53 @@ export default function AdminRadar() {
                           {statusInfo.label}
                         </span>
                         <div className="text-[11px] text-gray-500 font-mono">{item.date_display_text || 'TBA'}</div>
+                        {item.msrp ? <div className="text-[10px] text-emerald-600 font-bold font-mono">MSRP: ${item.msrp}</div> : null}
                       </td>
 
                       <td className="p-4">
                         {item.source_url ? (
-                          <a
-                            href={item.source_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-indigo-600 hover:underline flex items-center gap-1 text-[11px] font-bold"
-                          >
-                            <ShieldCheck size={13} className="text-emerald-500" />
-                            <span>{item.source_name || 'Fuente Oficial'}</span>
-                            <ExternalLink size={10} />
-                          </a>
+                          <div>
+                            <a
+                              href={item.source_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-indigo-600 hover:underline flex items-center gap-1 text-[11px] font-bold"
+                            >
+                              <ShieldCheck size={13} className="text-emerald-500" />
+                              <span>{item.source_name || 'Fuente Oficial'}</span>
+                              <ExternalLink size={10} />
+                            </a>
+                            <span className="text-[9px] text-gray-400 font-mono truncate max-w-[140px] block" title={item.source_url}>
+                              {item.source_url.replace(/^https?:\/\//, '').split('/')[0]}
+                            </span>
+                          </div>
                         ) : (
                           <span className="text-gray-400 text-[11px]">Sin URL</span>
                         )}
                       </td>
 
                       <td className="p-4">
-                        {item.catalog_product_id ? (
-                          <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-[10px] flex items-center gap-1 w-fit">
-                            <CheckCircle2 size={11} /> Vinculado
-                          </span>
-                        ) : (
-                          <span className="text-gray-400 text-[11px]">No vinculado</span>
-                        )}
+                        {(() => {
+                          const linked = item.raw_source_data?.linked_products;
+                          const primary = Array.isArray(linked) ? linked.find((p: any) => p.role === 'PRIMARY') : null;
+                          if (item.catalog_product_id) {
+                            return (
+                              <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-[10px] flex items-center gap-1 w-fit">
+                                <CheckCircle2 size={11} /> Tienda Local
+                              </span>
+                            );
+                          }
+                          if (primary) {
+                            return (
+                              <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-300 font-bold text-[10px] flex items-center gap-1 w-fit" title={primary.title}>
+                                <CheckCircle2 size={11} /> {primary.retailer || 'Amazon'} exacto
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="text-gray-400 text-[11px]">Sin vínculo exacto</span>
+                          );
+                        })()}
                       </td>
 
                       <td className="p-4 text-right">

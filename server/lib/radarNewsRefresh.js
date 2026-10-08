@@ -387,7 +387,22 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
   for(const story of stories.slice(0,maxItems)){
     if(!story?.title||!story?.source_url||!cited.has(story.source_url)){skipped++;continue;}
     const ranked=catalog.map(product=>({product,score:scoreProduct(story,product)})).filter(x=>x.score>=22).sort((a,b)=>b.score-a.score).slice(0,6);
-    const linkedProducts=ranked.map(({product,score},index)=>({id:product.id,title:product.title,retailer:product.source_retailer||'Amazon',asin:product.asin||null,url:product.product_url_external||null,image_url:product.main_image_url_external||product.image_url||null,price_usd:product.final_price_usd??product.base_price_usd??null,match_score:Math.round(score),role:index===0&&score>=45?'PRIMARY':'RELATED'})).filter(p=>p.url);
+    const hasExactAsinMatch = story.exact_product_asin && ranked.some(r => r.product.asin && String(r.product.asin).toUpperCase() === String(story.exact_product_asin).toUpperCase());
+    const linkedProducts=ranked.map(({product,score},index)=>{
+      const isExactAsin = story.exact_product_asin && product.asin && String(product.asin).toUpperCase() === String(story.exact_product_asin).toUpperCase();
+      const isPrimary = isExactAsin || (index === 0 && score >= 85);
+      return {
+        id:product.id,
+        title:product.title,
+        retailer:product.source_retailer||'Amazon',
+        asin:product.asin||null,
+        url:product.product_url_external||null,
+        image_url:product.main_image_url_external||product.image_url||null,
+        price_usd:product.final_price_usd??product.base_price_usd??null,
+        match_score:Math.round(score),
+        role:isPrimary ? 'PRIMARY' : 'RELATED'
+      };
+    }).filter(p=>p.url);
     const primary=linkedProducts.find(p=>p.role==='PRIMARY')||null;
     const sourceImage = primary?.image_url ? null : await resolveSourceImage(story.source_url, story);
     const selectedImageUrl = primary?.image_url || sourceImage?.url || null;
@@ -395,10 +410,11 @@ export async function runRadarNewsRefresh(req,{force=false}={}) {
     const selectedImageScore = primary
       ? Math.min(1,Math.max(.7,(primary.match_score||70)/100))
       : (sourceImage?.score || 0);
+    const provenance = primary?.image_url ? 'AMAZON_PRODUCT' : (sourceImage?.url ? 'SOURCE_PAGE' : 'NONE');
     const storyDate=safeDate(story.source_published_at);
     const releaseDate=story.release_date&&/^\d{4}-\d{2}-\d{2}$/.test(story.release_date)?story.release_date:null;
     const slug=slugify(`${story.title}-${crypto.createHash('sha1').update(story.source_url).digest('hex').slice(0,10)}`);
-    const row={slug,title:story.title.trim(),subtitle:story.news_type==='NEWS'?'Noticias Collectibles':null,summary:story.summary.trim(),description:story.summary.trim(),manufacturer:story.manufacturer||story.brand||null,franchise:story.franchise||null,character:story.character||null,product_line:story.product_line||null,status:statusFromType(story.news_type),currency:'USD',region:'GLOBAL',release_date_start:releaseDate,release_precision:releaseDate?'EXACT_DATE':'TBA',date_display_text:releaseDate||(storyDate?new Intl.DateTimeFormat('es-UY',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(storyDate)):'Noticia reciente'),source_name:story.source_name,source_url:story.source_url,official_image_url:selectedImageUrl,image_source_url:selectedImageSource,image_match_score:selectedImageScore,confidence_score:90,radar_signal:signalFromType(story.news_type),radar_why:story.why_it_matters,radar_context:`NOTICIA · ${story.source_name}`,approval_status:'PUBLISHED',is_verified:true,is_published:true,is_featured:false,raw_source_data:{content_kind:'NEWS',news_type:story.news_type,source_published_at:storyDate,source_verified_by_web_search:true,auto_generated:true,linked_products:linkedProducts,primary_product:primary,image_provenance:primary?'PRIMARY_PRODUCT':(sourceImage?.url?'SOURCE_PAGE':'NONE'),product_queries:story.product_queries||[],refresh_interval_days:intervalDays},updated_at:new Date().toISOString()};
+    const row={slug,title:story.title.trim(),subtitle:story.news_type==='NEWS'?'Noticias Collectibles':null,summary:story.summary.trim(),description:story.summary.trim(),manufacturer:story.manufacturer||story.brand||null,franchise:story.franchise||null,character:story.character||null,product_line:story.product_line||null,status:statusFromType(story.news_type),currency:'USD',region:'GLOBAL',release_date_start:releaseDate,release_precision:releaseDate?'EXACT_DATE':'TBA',date_display_text:releaseDate||(storyDate?new Intl.DateTimeFormat('es-UY',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'}).format(new Date(storyDate)):'Noticia reciente'),source_name:story.source_name,source_url:story.source_url,official_image_url:selectedImageUrl,image_source_url:selectedImageSource,image_match_score:selectedImageScore,confidence_score:90,radar_signal:signalFromType(story.news_type),radar_why:story.why_it_matters,radar_context:`NOTICIA · ${story.source_name}`,approval_status:'PUBLISHED',is_verified:true,is_published:true,is_featured:false,raw_source_data:{content_kind:'NEWS',news_type:story.news_type,source_published_at:storyDate,source_verified_by_web_search:true,auto_generated:true,linked_products:linkedProducts,primary_product:primary,image_provenance:provenance,product_queries:story.product_queries||[],refresh_interval_days:intervalDays},updated_at:new Date().toISOString()};
     const {data:existing}=await supabase.from('release_events').select('id').eq('source_url',story.source_url).limit(1).maybeSingle();
     const result=existing?.id?await supabase.from('release_events').update(row).eq('id',existing.id):await supabase.from('release_events').insert({...row,created_at:new Date().toISOString()});
     if(result.error){console.error('[Radar Refresh] persistence error',{title:story.title,error:result.error.message});skipped++;continue;}

@@ -315,61 +315,135 @@ export default function ReleaseDetailPage() {
         </div>
       )}
 
-      {/* SOURCING INTELLIGENCE — VER PRODUCTOS VINCULADOS */}
-      {matchingProducts.length > 0 && (
-        <div className="bg-zinc-900/80 border border-[#f00856]/30 rounded-3xl p-6 sm:p-8 space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-[#f00856] flex items-center gap-1.5 mb-1">
-                <Sparkles size={14} /> Sourcing Intelligence · Personalizado
-              </span>
-              <h3 className="text-xl font-black text-white uppercase tracking-tight">PRODUCTOS VINCULADOS A ESTA NOTICIA</h3>
-            </div>
-            <Link
-              to={`/shop?q=${encodeURIComponent(release.license?.name || release.character || release.brand?.name || '')}`}
-              className="px-4 py-2 rounded-xl bg-white/10 hover:bg-[#f00856] text-white text-xs font-black uppercase tracking-wider flex items-center gap-1 transition"
-            >
-              <span>Ver Todos</span>
-              <ArrowRight size={13} />
-            </Link>
-          </div>
+      {/* SOURCING INTELLIGENCE — PRODUCTO EXACTO VS RELACIONADOS */}
+      {(() => {
+        const primaryMatch = matchingProducts.find(m => m.type === 'primary_external');
+        const secondaryMatches = matchingProducts.filter(m => m.type !== 'primary_external');
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {matchingProducts.map(({ product, reasons }) => (
-              <div key={product.id} className="bg-zinc-950 border border-white/10 rounded-2xl p-4 flex flex-col justify-between space-y-3 hover:border-[#f00856]/40 transition">
-                <div>
-                  {reasons && reasons.length > 0 && (
-                    <span className="text-[9px] font-bold text-[#f00856] bg-[#f00856]/10 px-2 py-0.5 rounded-full inline-block mb-2">
-                      {reasons[0].label}
+        return (
+          <div className="space-y-6">
+            {/* 1. SECCIÓN: PRODUCTO EXACTO PROTAGONISTA */}
+            {primaryMatch ? (
+              <div className="bg-gradient-to-r from-amber-500/10 via-zinc-900 to-zinc-950 border border-amber-500/30 rounded-3xl p-6 sm:p-8 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-amber-400 flex items-center gap-1.5 mb-1">
+                      <Sparkles size={14} /> Producto Protagonista Verificado
                     </span>
-                  )}
-                  <h4 className="text-sm font-black text-white line-clamp-2">{product.title}</h4>
-                  <p className="text-xs font-mono font-bold text-emerald-400 mt-1">
-                    USD ${product.base_price || 0}
-                  </p>
+                    <h3 className="text-xl font-black text-white uppercase tracking-tight">PRODUCTO EXACTO DE ESTA NOTICIA</h3>
+                  </div>
+                  <span className="text-[10px] font-mono px-2.5 py-1 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30 font-bold">
+                    {primaryMatch.product.retailer || 'Amazon'} Oficial
+                  </span>
                 </div>
-                {product.external_url ? (
-                  <a
-                    href={product.external_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full py-2 rounded-xl bg-white/5 hover:bg-[#f00856] text-white text-xs font-black uppercase tracking-wider text-center transition block"
-                  >
-                    VER EN {product.retailer || 'TIENDA'}
-                  </a>
-                ) : (
-                  <Link
-                    to={`/producto/${product.slug}`}
-                    className="w-full py-2 rounded-xl bg-white/5 hover:bg-[#f00856] text-white text-xs font-black uppercase tracking-wider text-center transition block"
-                  >
-                    VER PRODUCTO
-                  </Link>
-                )}
+
+                <div className="bg-zinc-950 border border-white/10 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-5">
+                  <div className="flex items-center gap-4 w-full">
+                    {primaryMatch.product.image_url && (
+                      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-white/5 border border-white/10 p-1 flex items-center justify-center shrink-0 overflow-hidden">
+                        <img src={primaryMatch.product.image_url} alt={primaryMatch.product.title} className="max-h-full max-w-full object-contain" />
+                      </div>
+                    )}
+                    <div>
+                      <h4 className="text-base font-black text-white line-clamp-2">{primaryMatch.product.title}</h4>
+                      <div className="flex items-center gap-3 mt-1.5">
+                        <span className="text-sm font-mono font-bold text-emerald-400">
+                          USD ${primaryMatch.product.base_price || 0}
+                        </span>
+                        {primaryMatch.product.asin && (
+                          <span className="text-[10px] font-mono text-zinc-400 bg-white/5 px-2 py-0.5 rounded">
+                            ASIN: {primaryMatch.product.asin}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {primaryMatch.product.external_url && (
+                    <a
+                      href={primaryMatch.product.external_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full sm:w-auto px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-black font-black text-xs uppercase tracking-wider text-center transition shrink-0 shadow-lg shadow-amber-500/20"
+                    >
+                      Comprar en {primaryMatch.product.retailer || 'Amazon'}
+                    </a>
+                  )}
+                </div>
               </div>
-            ))}
+            ) : !linkedProduct && (
+              <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-zinc-400">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck size={18} className="text-zinc-500 shrink-0" />
+                  <span>Aún no encontramos el producto exacto con stock confirmado. Puedes suscribirte para que te avisemos cuando esté disponible.</span>
+                </div>
+                <button
+                  onClick={() => setAlertSubscribed(!alertSubscribed)}
+                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs uppercase tracking-wider shrink-0 transition"
+                >
+                  {alertSubscribed ? '✓ Alerta activada' : 'Avisarme'}
+                </button>
+              </div>
+            )}
+
+            {/* 2. SECCIÓN: TAMBIÉN TE PUEDE INTERESAR (PRODUCTOS RELACIONADOS) */}
+            {secondaryMatches.length > 0 && (
+              <div className="bg-zinc-900/80 border border-white/10 rounded-3xl p-6 sm:p-8 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-[#f00856] flex items-center gap-1.5 mb-1">
+                      <Sparkles size={14} /> Recomendaciones
+                    </span>
+                    <h3 className="text-xl font-black text-white uppercase tracking-tight">TAMBIÉN TE PUEDE INTERESAR</h3>
+                  </div>
+                  <Link
+                    to={`/shop?q=${encodeURIComponent(release.license?.name || release.character || release.brand?.name || '')}`}
+                    className="px-4 py-2 rounded-xl bg-white/10 hover:bg-[#f00856] text-white text-xs font-black uppercase tracking-wider flex items-center gap-1 transition"
+                  >
+                    <span>Ver Todos</span>
+                    <ArrowRight size={13} />
+                  </Link>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {secondaryMatches.map(({ product, reasons }) => (
+                    <div key={product.id} className="bg-zinc-950 border border-white/10 rounded-2xl p-4 flex flex-col justify-between space-y-3 hover:border-[#f00856]/40 transition">
+                      <div>
+                        {reasons && reasons.length > 0 && (
+                          <span className="text-[9px] font-bold text-zinc-400 bg-white/5 px-2 py-0.5 rounded-full inline-block mb-2">
+                            {reasons[0].label}
+                          </span>
+                        )}
+                        <h4 className="text-sm font-black text-white line-clamp-2">{product.title}</h4>
+                        <p className="text-xs font-mono font-bold text-emerald-400 mt-1">
+                          USD ${product.base_price || 0}
+                        </p>
+                      </div>
+                      {product.external_url ? (
+                        <a
+                          href={product.external_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="w-full py-2 rounded-xl bg-white/5 hover:bg-[#f00856] text-white text-xs font-black uppercase tracking-wider text-center transition block"
+                        >
+                          VER EN {product.retailer || 'TIENDA'}
+                        </a>
+                      ) : (
+                        <Link
+                          to={`/producto/${product.slug}`}
+                          className="w-full py-2 rounded-xl bg-white/5 hover:bg-[#f00856] text-white text-xs font-black uppercase tracking-wider text-center transition block"
+                        >
+                          VER PRODUCTO
+                        </Link>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Admin Action: Investigar en Sourcing */}
       <div className="flex items-center justify-between p-4 rounded-2xl bg-zinc-950 border border-white/10 text-xs text-zinc-400">
