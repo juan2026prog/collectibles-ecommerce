@@ -592,14 +592,27 @@ export default function AdminRadar() {
           } catch {}
           if (!summary) return null;
           return (
-            <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs flex flex-wrap gap-x-6 gap-y-1.5 items-center justify-between text-gray-600">
-              <span className="font-bold text-gray-900 uppercase tracking-wider text-[10px]">Resultado Última Ejecución:</span>
-              <span>Fuentes revisadas: <strong className="text-gray-800">{summary.sources_checked ?? '-'}</strong></span>
-              <span>Candidatos detectados: <strong className="text-gray-800">{summary.candidates_found ?? '-'}</strong></span>
-              <span>Nuevas noticias: <strong className="text-emerald-700">+{summary.created ?? 0}</strong></span>
-              <span>Actualizadas / Repetidas: <strong className="text-gray-800">{summary.updated ?? 0}</strong></span>
-              <span>Descartadas: <strong className="text-gray-800">{summary.skipped ?? 0}</strong></span>
-              <span>Costo IA: <strong className="text-gray-800">USD {Number(summary.cost_usd || 0).toFixed(4)}</strong></span>
+            <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs space-y-2 text-gray-600">
+              <div className="flex flex-wrap gap-x-6 gap-y-1.5 items-center justify-between">
+                <span className="font-bold text-gray-900 uppercase tracking-wider text-[10px]">Resultado Última Ejecución:</span>
+                <span>Fuentes revisadas: <strong className="text-gray-800">{summary.sources_checked ?? '-'}</strong></span>
+                <span>Candidatos detectados: <strong className="text-gray-800">{summary.candidates_found ?? '-'}</strong></span>
+                <span>Nuevas noticias: <strong className="text-emerald-700">+{summary.created ?? 0}</strong></span>
+                <span>Actualizadas / Repetidas: <strong className="text-gray-800">{summary.updated ?? 0}</strong></span>
+                <span>Descartadas: <strong className="text-gray-800">{summary.skipped ?? 0}</strong></span>
+                <span>Costo IA: <strong className="text-gray-800">USD {Number(summary.cost_usd || 0).toFixed(4)}</strong></span>
+              </div>
+              {summary.image_repair && (
+                <div className="pt-2 border-t border-gray-200 flex flex-wrap gap-x-6 gap-y-1 items-center justify-between text-[11px] bg-white p-2 rounded-lg border border-gray-100">
+                  <span className="font-bold text-gray-900 uppercase tracking-wider text-[9px]">Backfill de Imágenes:</span>
+                  <span>Inspeccionadas: <strong className="text-gray-800">{summary.image_repair.inspected ?? 0}</strong></span>
+                  <span>Válidas previas: <strong className="text-gray-800">{summary.image_repair.already_valid ?? 0}</strong></span>
+                  <span>Reparadas Amazon: <strong className="text-emerald-700">+{summary.image_repair.repaired_amazon ?? 0}</strong></span>
+                  <span>Reparadas Fuente: <strong className="text-sky-700">+{summary.image_repair.repaired_source_page ?? 0}</strong></span>
+                  <span>Stock Prohibido eliminado: <strong className="text-rose-700">{summary.image_repair.prohibited_cleared ?? 0}</strong></span>
+                  <span>Sin resolver: <strong className="text-amber-700">{summary.image_repair.unresolved ?? 0}</strong></span>
+                </div>
+              )}
             </div>
           );
         })()}

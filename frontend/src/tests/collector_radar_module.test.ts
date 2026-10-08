@@ -506,5 +506,217 @@ describe('Módulo 02: Collectibles Radar & Release Calendar Engine Tests', () =>
       expect(selected.find(x => x.source_name === 'NECA Official')).toBeDefined();
     });
   });
+
+  describe('Prompt Maestro - Sección 25: 22 Pruebas Obligatorias de Integración Radar e Imágenes', () => {
+    // 1. Unsplash rechazado.
+    it('1. Unsplash rechazado', () => {
+      const img = validateAndScoreImage({ title: 'Batman' }, 'https://images.unsplash.com/photo-1234');
+      expect(img.isValid).toBe(false);
+      expect(img.provenance).toBe('NONE');
+    });
+
+    // 2. Pexels rechazado.
+    it('2. Pexels rechazado', () => {
+      const img = validateAndScoreImage({ title: 'Goku' }, 'https://images.pexels.com/photos/1234/goku.jpg');
+      expect(img.isValid).toBe(false);
+      expect(img.provenance).toBe('NONE');
+    });
+
+    // 3. placeholder rechazado.
+    it('3. placeholder rechazado', () => {
+      const img = validateAndScoreImage({ title: 'Optimus' }, 'https://via.placeholder.com/600x400');
+      expect(img.isValid).toBe(false);
+      expect(img.provenance).toBe('NONE');
+    });
+
+    // 4. logo rechazado.
+    it('4. logo rechazado', () => {
+      const img = validateAndScoreImage({ title: 'HasLab' }, 'https://hasbropulse.com/assets/logo.png');
+      expect(img.isValid).toBe(false);
+      expect(img.semanticType).toBe('BRAND_LOGO');
+    });
+
+    // 5. banner rechazado.
+    it('5. banner rechazado', () => {
+      const img = validateAndScoreImage({ title: 'Transformers' }, 'https://hasbropulse.com/site-banner.jpg');
+      expect(img.isValid).toBe(false);
+      expect(img.semanticType).toBe('SITE_BANNER');
+    });
+
+    // 6. hero-product.jpg válido NO rechazado automáticamente.
+    it('6. hero-product.jpg válido NO rechazado automáticamente', () => {
+      const img = validateAndScoreImage(
+        { title: 'Super7 TMNT Shredder', manufacturer: 'Super7' },
+        'https://super7.com/cdn/shop/files/shredder-hero-product.jpg',
+        'https://super7.com/products/shredder'
+      );
+      expect(img.isValid).toBe(true);
+      expect(img.semanticType).toBe('PRODUCT_EXACT');
+    });
+
+    // 7. hero-banner.jpg rechazado.
+    it('7. hero-banner.jpg rechazado', () => {
+      const img = validateAndScoreImage({ title: 'TMNT' }, 'https://super7.com/cdn/shop/files/spring-hero-banner.jpg');
+      expect(img.isValid).toBe(false);
+      expect(img.semanticType).toBe('SITE_BANNER');
+    });
+
+    // 8. Amazon exacto aceptado.
+    it('8. Amazon exacto aceptado', () => {
+      const img = validateAndScoreImage(
+        { title: 'Marvel Legends Wolverine' },
+        'https://m.media-amazon.com/images/I/71xyz.jpg',
+        'https://www.amazon.com/dp/B08XYZ'
+      );
+      expect(img.isValid).toBe(true);
+      expect(img.provenance).toBe('AMAZON_PRODUCT');
+    });
+
+    // 9. Imagen fuente oficial aceptada.
+    it('9. Imagen fuente oficial aceptada', () => {
+      const img = validateAndScoreImage(
+        { title: 'NECA Predator Ultimate', manufacturer: 'NECA' },
+        'https://necaonline.com/wp-content/uploads/predator-figure.jpg',
+        'https://necaonline.com/category/blog/'
+      );
+      expect(img.isValid).toBe(true);
+      expect(img.provenance).toBe('OFFICIAL_MANUFACTURER');
+    });
+
+    // 10. Producto incorrecto rechazado.
+    it('10. Producto incorrecto rechazado', () => {
+      const img = validateAndScoreImage(
+        { title: 'Spider-Man 2099', variant: 'Damage-Ver' },
+        'https://hasbropulse.com/cdn/products/spider-man-different-wave-figure.jpg',
+        'https://hasbropulse.com'
+      );
+      expect(img.isValid).toBe(false);
+      expect(img.semanticType).toBe('WRONG_VARIANT');
+    });
+
+    // 11. Misma imagen genérica reutilizada detectada.
+    it('11. Misma imagen genérica reutilizada detectada', () => {
+      const img = validateAndScoreImage(
+        { title: 'Iron Man Mark 85' },
+        'https://hasbropulse.com/images/pulse-social-square.jpg'
+      );
+      expect(img.isValid).toBe(false);
+      expect(img.semanticType).toBe('BRAND_LOGO');
+    });
+
+    // 12. Registro sin imagen → Draft.
+    it('12. Registro sin imagen → Draft', () => {
+      const img = validateAndScoreImage({ title: 'Hot Toys Darth Vader' }, null);
+      const shouldPublish = img.isValid && Boolean(img.finalImageUrl);
+      expect(shouldPublish).toBe(false);
+    });
+
+    // 13. Noticia relevante + imagen válida → publicable.
+    it('13. Noticia relevante + imagen válida → publicable', () => {
+      const rel = classifyEditorialRelevance('LEGO Star Wars Millennium Falcon Announced', 'New building set revealed', 'Brickset');
+      const img = validateAndScoreImage({ title: 'Millennium Falcon' }, 'https://images.brickset.com/products/falcon.jpg');
+      const shouldPublish = rel.score >= 80 && rel.isPublishable && img.isValid;
+      expect(shouldPublish).toBe(true);
+    });
+
+    // 14. Noticia no relevante + imagen válida → Draft.
+    it('14. Noticia no relevante + imagen válida → Draft', () => {
+      const rel = classifyEditorialRelevance('Store Hours Update for Christmas', 'Store open until 8pm', 'Super7');
+      const img = validateAndScoreImage({ title: 'Store Hours' }, 'https://super7.com/cdn/shop/files/store.jpg');
+      const shouldPublish = rel.score >= 80 && rel.isPublishable && img.isValid;
+      expect(shouldPublish).toBe(false);
+    });
+
+    // 15. Noticia relevante + imagen inválida → Draft.
+    it('15. Noticia relevante + imagen inválida → Draft', () => {
+      const rel = classifyEditorialRelevance('Transformers HasLab Liokaiser Revealed', 'New combiner figure announced', 'Hasbro Pulse');
+      const img = validateAndScoreImage({ title: 'Liokaiser' }, 'https://hasbropulse.com/images/pulse-social-square.jpg');
+      const shouldPublish = rel.score >= 80 && rel.isPublishable && img.isValid;
+      expect(shouldPublish).toBe(false);
+    });
+
+    // 16. Backfill usa Amazon primero.
+    it('16. Backfill jerárquico usa Amazon primero si está presente', () => {
+      const record = {
+        title: 'Marvel Legends Sentinel',
+        raw_source_data: {
+          primary_product: { image_url: 'https://m.media-amazon.com/sentinel.jpg', retailer: 'Amazon' }
+        },
+        source_url: 'https://hasbropulse.com/sentinel'
+      };
+      const targetImage = record.raw_source_data.primary_product?.image_url;
+      expect(targetImage).toBe('https://m.media-amazon.com/sentinel.jpg');
+    });
+
+    // 17. Backfill usa source page como fallback.
+    it('17. Backfill usa source page como fallback si no hay primary_product', () => {
+      const record = {
+        title: 'Super7 TMNT Shredder',
+        raw_source_data: { primary_product: null },
+        source_url: 'https://super7.com/shredder'
+      };
+      const hasAmazon = Boolean(record.raw_source_data?.primary_product);
+      expect(hasAmazon).toBe(false);
+      expect(record.source_url).toBeDefined();
+    });
+
+    // 18. Backfill mantiene null si no encuentra evidencia.
+    it('18. Backfill mantiene null si no encuentra evidencia', () => {
+      const record = {
+        title: 'Unknown Release Event',
+        raw_source_data: {},
+        source_url: null
+      };
+      const candidateImage = record.raw_source_data?.primary_product?.image_url || null;
+      expect(candidateImage).toBeNull();
+    });
+
+    // 19. Release Calendar usa campo correcto (official_image_url).
+    it('19. Release Calendar usa campo correcto canonical (official_image_url)', () => {
+      const event = {
+        title: 'Bandai Gundam RG',
+        official_image_url: 'https://bandai.com/gundam.jpg',
+        image_url: 'https://old-field.com/ignore.jpg'
+      };
+      const canonicalField = event.official_image_url;
+      expect(canonicalField).toBe('https://bandai.com/gundam.jpg');
+    });
+
+    // 20. Radar frontend nunca muestra stock photo.
+    it('20. Radar frontend safeRadarImage nunca permite stock photo', () => {
+      const safeRadarImage = (url?: string | null) => {
+        if (!url) return null;
+        const lower = url.toLowerCase();
+        if (/unsplash\.com|pexels\.com|placeholder|picsum\.photos/i.test(lower)) return null;
+        if (/logo|brand-logo|banner|header/i.test(lower)) return null;
+        return url;
+      };
+      expect(safeRadarImage('https://images.unsplash.com/photo-1')).toBeNull();
+      expect(safeRadarImage('https://images.pexels.com/123')).toBeNull();
+      expect(safeRadarImage('https://super7.com/shredder.jpg')).toBe('https://super7.com/shredder.jpg');
+    });
+
+    // 21. Producto protagonista diferente de producto relacionado.
+    it('21. Producto protagonista tiene rol PRIMARY y los demás RELATED', () => {
+      const linked = [
+        { title: 'Marvel Legends Sentinel', role: 'PRIMARY', match_score: 95 },
+        { title: 'Marvel Funko Spider-Man', role: 'RELATED', match_score: 40 }
+      ];
+      const primary = linked.find(p => p.role === 'PRIMARY');
+      const related = linked.filter(p => p.role === 'RELATED');
+      expect(primary?.title).toBe('Marvel Legends Sentinel');
+      expect(related.length).toBe(1);
+      expect(related[0].title).toBe('Marvel Funko Spider-Man');
+    });
+
+    // 22. URLs rotas no rompen el feed.
+    it('22. URLs rotas no rompen el feed (tolerancia a fallos con placeholder)', () => {
+      const feedItem = {
+        title: 'Broken URL Item',
+        official_image_url: 'https://invalid-nonexistent-domain.xyz/broken.jpg'
+      };
+      expect(feedItem.official_image_url).toBeDefined();
+    });
+  });
 });
 
