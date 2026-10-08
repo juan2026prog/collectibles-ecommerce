@@ -118,6 +118,118 @@ async function repairExistingRadarImages(supabase, limit = 12) {
 const RADAR_MODELS = new Set(['gpt-5.6-luna','gpt-5.6-terra','gpt-5.6-sol']);
 const WEB_SEARCH_TOOL_COST_USD = 0.01; // $10 / 1k calls (OpenAI official pricing snapshot)
 
+const RADAR_MODES = Object.freeze({
+  ECONOMICO: { model: 'gpt-5.6-luna', maxItems: 3, intervalDays: 3, useWebSearch: false },
+  NORMAL: { model: 'gpt-5.6-luna', maxItems: 5, intervalDays: 3, useWebSearch: true },
+  PROFUNDO: { model: 'gpt-5.6-terra', maxItems: 8, intervalDays: 3, useWebSearch: true }
+});
+
+const OFFICIAL_RADAR_SOURCES = Object.freeze([
+  { name: 'Hasbro Pulse', url: 'https://www.hasbropulse.com/blogs/news' },
+  { name: 'NECA', url: 'https://necaonline.com/category/blog/' },
+  { name: 'McFarlane Toys', url: 'https://mcfarlane.com/news/' },
+  { name: 'Funko', url: 'https://funko.com/funko-blog-home/' },
+  { name: 'LEGO', url: 'https://www.lego.com/en-us/aboutus/news' },
+  { name: 'Sideshow', url: 'https://www.sideshow.com/blog' },
+  { name: 'Super7', url: 'https://super7.com/blogs/news' }
+]);
+
+function normalizeRadarMode(value) {
+  const mode = String(value || '').trim().toUpperCase();
+  return RADAR_MODES[mode] ? mode : 'ECONOMICO';
+}
+
+function stripHtml(value = '') {
+  return String(value)
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+async function fetchHtml(url, timeoutMs = 6500) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'CollectiblesRadarBot/1.0 (+https://collectibles.uy)', 'Accept': 'text/html,application/xhtml+xml' },
+      redirect: 'follow',
+      signal: controller.signal
+    });
+    if (!response.ok) return null;
+    return { html: (await response.text()).slice(0, 700000), finalUrl: response.url || url };
+  } catch { return null; } finally { clearTimeout(timeout); }
+}
+
+function extractMeta(html, names = []) {
+  for (const name of names) {
+    const patterns = [
+      new RegExp('<meta[^>]+(?:property|name)=["\\\']' + name + '["\\\'][^>]+content=["\\\']([^"\\\']+)["\\\'][^>]*>', 'i'),
+      new RegExp('<meta[^>]+content=["\\\']([^"\\\']+)["\\\'][^>]+(?:property|name)=["\\\']' + name + '["\\\'][^>]*>', 'i')
+    ];
+    for (const pattern of patterns) { const m = html.match(pattern); if (m?.[1]) return stripHtml(m[1]); }
+  }
+  return null;
+}
+
+function extractOfficialLinks(source, html, baseUrl) {
+  let host; try { host = new URL(baseUrl).hostname.replace(/^www\./, ''); } catch { return []; }
+  const found = [];
+  const regex = /<a\b[^>]*href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let match;
+  while ((match = regex.exec(html)) && found.length < 100) {
+    const url = absoluteUrl(baseUrl, match[1]);
+    const title = stripHtml(match[2]);
+    if (!url || title.length < 12 || title.length > 180) continue;
+    let parsed; try { parsed = new URL(url); } catch { continue; }
+    const candidateHost = parsed.hostname.replace(/^www\./, '');
+    if (candidateHost !== host && !candidateHost.endsWith('.' + host) && !host.endsWith('.' + candidateHost)) continue;
+    if (/account|cart|search|privacy|terms|contact|login|signup|wishlist/i.test(parsed.pathname)) continue;
+    if (parsed.pathname === '/' || parsed.pathname.length < 5) continue;
+    found.push({ source_name: source.name, url, title });
+  }
+  return [...new Map(found.map(x => [x.url, x])).values()].slice(0, 12);
+}
+
+async function hydrateOfficialCandidate(candidate) {
+  const fetched = await fetchHtml(candidate.url, 5500);
+  if (!fetched) return null;
+  const html = fetched.html;
+  const title = extractMeta(html, ['og:title', 'twitter:title']) || stripHtml((html.match(/<title[^>]*>([\s\S]*?)<\/title>/i) || [])[1] || '') || candidate.title;
+  const description = extractMeta(html, ['og:description', 'description', 'twitter:description']) || '';
+  const datePublished = extractMeta(html, ['article:published_time', 'date', 'datePublished']) || ((html.match(/"datePublished"\s*:\s*"([^"]+)"/i) || [])[1] || null);
+  const image = extractMeta(html, ['og:image', 'twitter:image']);
+  return { source_name: candidate.source_name, source_url: fetched.finalUrl, title: title.slice(0, 220), description: description.slice(0, 700), source_published_at: safeDate(datePublished), source_image_url: image ? absoluteUrl(fetched.finalUrl, image) : null };
+}
+
+async function collectFreshOfficialCandidates(supabase, limit = 8) {
+  const { data: existingRows } = await supabase.from('release_events').select('source_url').not('source_url', 'is', null).limit(500);
+  const seen = new Set((existingRows || []).map(r => r.source_url).filter(Boolean));
+  const raw = [];
+  for (const source of OFFICIAL_RADAR_SOURCES) {
+    const fetched = await fetchHtml(source.url, 5500);
+    if (!fetched) continue;
+    for (const candidate of extractOfficialLinks(source, fetched.html, fetched.finalUrl)) {
+      if (!seen.has(candidate.url)) raw.push(candidate);
+      if (raw.length >= limit * 3) break;
+    }
+    if (raw.length >= limit * 3) break;
+  }
+  const hydrated = [];
+  for (const candidate of raw.slice(0, limit * 2)) {
+    const item = await hydrateOfficialCandidate(candidate);
+    if (!item?.source_url || seen.has(item.source_url)) continue;
+    hydrated.push(item);
+    if (hydrated.length >= limit) break;
+  }
+  return hydrated;
+}
+
 function normalizeRadarModel(value) {
   const model = String(value || '').trim().toLowerCase();
   return RADAR_MODELS.has(model) ? model : 'gpt-5.6-luna';
