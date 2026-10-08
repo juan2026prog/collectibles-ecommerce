@@ -115,8 +115,8 @@ export default function AdminRadar() {
         },
         body: JSON.stringify({
           action: 'radar_news_estimate',
-          model: cfg['radar_ai_model'] || 'gpt-5.6-terra',
-          max_items: Number(cfg['radar_max_items_per_refresh'] || 8),
+          model: cfg['radar_ai_model'] || 'gpt-5.6-luna',
+          max_items: Number(cfg['radar_max_items_per_refresh'] || 5),
           interval_days: Number(cfg['radar_refresh_interval_days'] || 3)
         })
       });
@@ -154,7 +154,7 @@ export default function AdminRadar() {
     }
 
     const ok = window.confirm(
-      `Actualizar Radar ahora?\n\nModelo: ${estimate.model}\nMáximo de noticias: ${radarSettings['radar_max_items_per_refresh'] || '8'}\nCosto estimado: USD ${estimate.estimated_cost_expected_usd != null ? Number(estimate.estimated_cost_expected_usd).toFixed(4) : 'N/D'}\nTope estimado: USD ${estimate.estimated_cost_max_usd != null ? Number(estimate.estimated_cost_max_usd).toFixed(4) : 'N/D'}\n\nNo se hará ninguna llamada de IA hasta confirmar.`
+      `Actualizar Radar ahora?\n\nModelo: ${estimate.model}\nMáximo de noticias: ${radarSettings['radar_max_items_per_refresh'] || '5'}\nCosto estimado: USD ${estimate.estimated_cost_expected_usd != null ? Number(estimate.estimated_cost_expected_usd).toFixed(4) : 'N/D'}\nTope estimado: USD ${estimate.estimated_cost_max_usd != null ? Number(estimate.estimated_cost_max_usd).toFixed(4) : 'N/D'}\n\nNo se hará ninguna llamada de IA hasta confirmar.`
     );
     if (!ok) return;
 
@@ -449,13 +449,13 @@ export default function AdminRadar() {
           <label className="block">
             <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Noticias por corrida</span>
             <select
-              value={radarSettings['radar_max_items_per_refresh'] || '8'}
+              value={radarSettings['radar_max_items_per_refresh'] || '5'}
               onChange={(e) => saveRadarSetting('radar_max_items_per_refresh', e.target.value)}
               className="mt-1 w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-900"
             >
               <option value="3">Hasta 3</option>
-              <option value="5">Hasta 5</option>
-              <option value="8">Hasta 8 (recomendado)</option>
+              <option value="5">Hasta 5 (recomendado)</option>
+              <option value="8">Hasta 8</option>
               <option value="12">Hasta 12</option>
             </select>
           </label>
@@ -463,11 +463,11 @@ export default function AdminRadar() {
           <label className="block">
             <span className="text-[10px] font-black uppercase tracking-wider text-gray-500">Modelo IA</span>
             <select
-              value={radarSettings['radar_ai_model'] || 'gpt-5.6-terra'}
+              value={radarSettings['radar_ai_model'] || 'gpt-5.6-luna'}
               onChange={(e) => saveRadarSetting('radar_ai_model', e.target.value)}
               className="mt-1 w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-900"
             >
-              <option value="gpt-5.6-luna">Luna · menor costo</option>
+              <option value="gpt-5.6-luna">Luna · menor costo (recomendado)</option>
               <option value="gpt-5.6-terra">Terra · balanceado</option>
               <option value="gpt-5.6-sol">Sol · máxima capacidad</option>
             </select>
