@@ -763,16 +763,25 @@ export default function AdminInternationalAmazon() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-xs">
-            <label className="flex items-center gap-2 text-gray-600">
+            <div className="flex items-center gap-2 text-gray-600 flex-wrap">
               <span className="font-semibold">Resultados a investigar:</span>
-              <select
-                value={searchParams.max_results}
-                onChange={e => setSearchParams({ ...searchParams, max_results: e.target.value })}
-                className="px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs font-semibold"
-              >
-                {[20, 50, 100, 250, 500, 1000].map(n => <option key={n} value={String(n)}>{n}</option>)}
-              </select>
-            </label>
+              <div className="flex items-center gap-1 flex-wrap">
+                {[20, 50, 100, 250, 500, 1000].map(n => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setSearchParams({ ...searchParams, max_results: String(n) })}
+                    className={`px-2.5 py-1.5 rounded-lg text-xs font-bold border transition ${
+                      searchParams.max_results === String(n)
+                        ? 'bg-gray-900 text-white border-gray-900'
+                        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    {n === 1000 ? '1.000' : n}
+                  </button>
+                ))}
+              </div>
+            </div>
             {searchMeta && (
               <span className="text-gray-500">
                 {searchMeta.total ?? 0} únicos · {searchMeta.pages_consulted ?? 0} páginas Amazon

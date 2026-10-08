@@ -1007,7 +1007,7 @@ export const ImportWorkbench: React.FC<ImportWorkbenchProps> = ({
 
             {/* Quantity per page selector */}
             <div className="flex items-center gap-1 text-[11px] text-gray-500">
-              <span>Mostrar:</span>
+              <span>Filas por página:</span>
               {[25, 50, 100].map(qty => (
                 <button
                   key={qty}

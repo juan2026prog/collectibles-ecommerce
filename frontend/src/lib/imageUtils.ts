@@ -66,6 +66,21 @@ export function extractCandidateImages(product: any): string[] {
         !urls.includes(trimmed)
       ) {
         urls.push(trimmed);
+
+        // Amazon image CDN URLs often include transient resize directives such as
+        // ._AC_UL320_ that may 404 while the original asset remains available.
+        // Add the directive-free original as a fallback candidate.
+        if (/m\.media-amazon\.com\/images\/I\//i.test(trimmed)) {
+          const original = trimmed.replace(/\._[^.]+_\.(jpg|jpeg|png|webp)(\?.*)?$/i, '.$1$2');
+          if (
+            original !== trimmed &&
+            !isInvalidImageUrl(original) &&
+            !isBrokenImageUrl(original) &&
+            !urls.includes(original)
+          ) {
+            urls.push(original);
+          }
+        }
       }
     } else if (u && typeof u === 'object' && typeof u.url === 'string') {
       add(u.url);
