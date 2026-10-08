@@ -2061,7 +2061,7 @@ export default function AdminSettings() {
                                 className="mt-1 w-full bg-white dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm font-bold text-gray-900 dark:text-white"
                               >
                                 <option value="gpt-5.6-luna">Luna · menor costo (recomendado)</option>
-                                <option value="gpt-5.6-luna">Terra · balanceado</option>
+                                <option value="gpt-5.6-terra">Terra · balanceado</option>
                                 <option value="gpt-5.6-sol">Sol · máxima capacidad</option>
                               </select>
                             </label>
