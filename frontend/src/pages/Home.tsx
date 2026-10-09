@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Truck, Shield, Package, ShoppingCart, Sparkles, Radio, GraduationCap, Archive, Scale } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Shield, Package, ShoppingCart, Sparkles, Radio, GraduationCap, Archive, Scale, Boxes, Globe2, RefreshCw, BadgeCheck } from 'lucide-react';
 import { useState, useEffect, useMemo, lazy, Suspense, useRef } from 'react';
 import { useProducts, useProductCards, useCategories, useBrands, useBanners, useProductGroups } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
@@ -560,19 +560,18 @@ export default function Home() {
       case 'trust':
         return (
           <section className="max-w-[1500px] mx-auto px-4 md:px-6 my-4 md:my-6 relative z-20 space-y-3 md:space-y-4">
-            <div className="rounded-xl md:rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-sm p-3 md:p-8 flex md:grid overflow-x-auto md:overflow-visible grid-cols-1 md:grid-cols-3 gap-3 md:gap-6 no-scrollbar">
+            <div className="border-y border-white/10 bg-white/[0.02] px-2 md:px-4 py-3 md:py-4 grid grid-cols-2 md:grid-cols-4 gap-y-3">
               {[
-                { icon: Truck, title: 'Envíos a todo Uruguay', desc: 'Entregas rápidas y seguras' },
-                { icon: Package, title: 'Productos originales', desc: 'Licencias verificadas' },
-                { icon: Shield, title: 'Compra segura', desc: 'Pagos protegidos' },
-              ].map(({ icon: Icon, title, desc }) => (
-                <div key={title} className="flex items-center gap-2.5 shrink-0 md:shrink border-r border-white/10 md:border-r-0 last:border-r-0 pr-4 md:pr-0">
-                  <div className="w-7 h-7 md:w-12 md:h-12 rounded-lg md:rounded-xl bg-[#f00856]/10 border border-[#f00856]/20 flex items-center justify-center shrink-0">
-                    <Icon className="w-3.5 h-3.5 md:w-5 md:h-5 text-[#f00856]" />
-                  </div>
-                  <div>
-                    <h4 className="text-white font-black text-xs md:text-sm whitespace-nowrap">{title}</h4>
-                    <p className="text-slate-500 text-[10px] md:text-xs font-medium hidden sm:block">{desc}</p>
+                { icon: Boxes, title: 'MILES DE PRODUCTOS', desc: 'Un catálogo que crece todos los días' },
+                { icon: Globe2, title: 'STOCK USA', desc: 'Disponibilidad desde Estados Unidos' },
+                { icon: RefreshCw, title: 'ACTUALIZADO A DIARIO', desc: 'Novedades, lanzamientos y preventas' },
+                { icon: BadgeCheck, title: '100% COLECCIONABLES', desc: 'Marcas, licencias y productos originales' },
+              ].map(({ icon: Icon, title, desc }, index) => (
+                <div key={title} className={`flex items-center gap-2.5 md:gap-3 px-2 md:px-5 ${index % 2 === 0 ? 'border-r border-white/10 md:border-r-0' : ''} md:border-r md:last:border-r-0`}>
+                  <Icon className="w-4 h-4 md:w-5 md:h-5 text-[#f00856] shrink-0" />
+                  <div className="min-w-0">
+                    <h4 className="text-white font-black text-[10px] md:text-xs tracking-wide leading-tight">{title}</h4>
+                    <p className="text-slate-500 text-[9px] md:text-[10px] font-medium mt-0.5 leading-tight">{desc}</p>
                   </div>
                 </div>
               ))}
