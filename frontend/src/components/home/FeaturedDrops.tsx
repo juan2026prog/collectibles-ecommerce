@@ -1,4 +1,3 @@
-import { useRef, useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useImageProtection } from '../../hooks/useImageProtection';
@@ -71,45 +70,18 @@ export default function FeaturedDrops({ drops }: FeaturedDropsProps) {
           </h2>
         </div>
 
-        {/* Desktop Navigation Arrows */}
-        <div className="hidden md:flex gap-2">
-          <button
-            onClick={() => scroll('left')}
-            disabled={!showLeft}
-            className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all ${
-              showLeft
-                ? 'border-white/20 bg-white/5 text-white hover:bg-[#f00856] hover:border-[#f00856] cursor-pointer'
-                : 'border-white/5 text-white/20 cursor-not-allowed'
-            }`}
-            aria-label="Anterior drop"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => scroll('right')}
-            disabled={!showRight}
-            className={`w-10 h-10 rounded-full border flex items-center justify-center transition-all ${
-              showRight
-                ? 'border-white/20 bg-white/5 text-white hover:bg-[#f00856] hover:border-[#f00856] cursor-pointer'
-                : 'border-white/5 text-white/20 cursor-not-allowed'
-            }`}
-            aria-label="Siguiente drop"
-          >
-            <ArrowRight className="w-4 h-4" />
-          </button>
-        </div>
+        <Link to="/licencias" className="hidden md:inline-flex items-center gap-2 text-xs font-black text-slate-400 hover:text-white uppercase tracking-wider">
+          Ver todos <ArrowRight className="w-4 h-4" />
+        </Link>
       </div>
 
-      {/* Slider Container */}
-      <div
-        ref={containerRef}
-        className="flex gap-6 overflow-x-auto no-scrollbar pb-4 snap-x snap-mandatory scroll-smooth -mx-6 px-6 md:mx-0 md:px-0"
-      >
+      {/* Same visual footprint as Categorías destacadas: 2 columns mobile, 3 desktop. */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 md:gap-5">
         {activeDrops.map((drop, i) => (
           <Link
             key={i}
             to={drop.link_url || '/shop'}
-            className="relative flex flex-col justify-end aspect-[16/8] min-h-[220px] sm:min-h-0 w-[88vw] md:w-[600px] shrink-0 rounded-2xl overflow-hidden border border-white/10 bg-black/40 group hover:border-[#f00856]/40 transition-all duration-500 snap-start select-none shadow-[0_4px_30px_rgba(0,0,0,0.4)]"
+            className="relative flex flex-col justify-end min-h-[220px] md:min-h-[330px] overflow-hidden border border-white/10 bg-black/40 group hover:border-[#f00856]/40 transition-all duration-500 select-none shadow-[0_4px_30px_rgba(0,0,0,0.4)]"
           >
             {/* Background Image with mobile picture support */}
             <picture className="absolute inset-0 w-full h-full">
