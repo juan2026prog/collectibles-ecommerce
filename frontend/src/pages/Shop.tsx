@@ -1343,10 +1343,10 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                 <button
                   key={label}
                   type="button"
-                  className="group h-11 md:h-12 px-3 md:px-4 border border-white/10 bg-black/20 inline-flex items-center gap-2 text-[10px] md:text-xs font-black uppercase tracking-wide text-slate-300 hover:text-white hover:border-[#f00856]/70 hover:bg-[#f00856]/5 transition-all"
+                  className="group min-w-[58px] md:min-w-[64px] px-2 py-2 border border-white/10 bg-black/20 inline-flex flex-col items-center justify-center gap-1.5 text-center text-[8px] md:text-[9px] font-black uppercase tracking-wide text-slate-400 hover:text-white hover:border-[#f00856]/70 hover:bg-[#f00856]/5 transition-all"
                 >
-                  <Icon className="w-4 h-4 text-[#f00856]" />
-                  <span>{label}</span>
+                  <Icon className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#f00856]" />
+                  <span className="leading-tight whitespace-nowrap">{label}</span>
                 </button>
               ))}
             </div>
