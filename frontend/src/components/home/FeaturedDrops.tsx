@@ -22,9 +22,16 @@ interface FeaturedDropsProps {
 export default function FeaturedDrops({ drops }: FeaturedDropsProps) {
   const { getImageProps } = useImageProtection({ isProduct: false });
 
-  const activeDrops = drops
-    .filter(d => d.enabled !== false)
+  const configuredDrops = drops
+    .filter(d => d.enabled !== false && d.image_url)
     .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+
+  // Preview: keep the section visually balanced at 6 cards (3x2).
+  // Until two additional universes are configured in the CMS, reuse existing
+  // editorial cards as visual-only fallbacks instead of inventing external assets.
+  const activeDrops = configuredDrops.length > 0
+    ? Array.from({ length: 6 }, (_, index) => configuredDrops[index % configuredDrops.length])
+    : [];
 
   if (!activeDrops.length) return null;
 
