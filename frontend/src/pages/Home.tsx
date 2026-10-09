@@ -271,6 +271,33 @@ export default function Home() {
     [settings['home_categories_config_json'], categories]
   );
 
+  // Preview branch: six commercial categories requested for the new Home.
+  // Reuses the real category records/images already configured in Collectibles.
+  const featuredCommercialCategories = useMemo(() => {
+    const wanted = [
+      ['figuras de accion', 'figuras'],
+      ['home', 'hogar', 'lifestyle'],
+      ['estatuas', 'bustos'],
+      ['peluches'],
+      ['building sets', 'lego', 'construccion'],
+      ['trading cards', 'sports cards', 'cartas coleccionables'],
+    ];
+    const normalize = (value = '') => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const active = categories.filter((cat: any) => cat.is_active !== false);
+    const selected: any[] = [];
+    wanted.forEach((aliases) => {
+      const found = active.find((cat: any) => {
+        const haystack = normalize(`${cat.name || ''} ${cat.slug || ''}`);
+        return aliases.some(alias => haystack.includes(alias));
+      });
+      if (found && !selected.some(cat => cat.id === found.id)) selected.push(found);
+    });
+    active.forEach((cat: any) => {
+      if (selected.length < 6 && !selected.some(item => item.id === cat.id)) selected.push(cat);
+    });
+    return selected.slice(0, 6);
+  }, [categories]);
+
   const categoriesContainerRef = useRef<HTMLDivElement>(null);
   const [showLeftCats, setShowLeftCats] = useState(false);
   const [showRightCats, setShowRightCats] = useState(true);
@@ -1139,6 +1166,72 @@ export default function Home() {
       {layoutBlocks.filter((b: any) => b.visible !== false).map((b: any) => (
         <div key={b.id}>
           {renderBlock(b.id)}
+
+          {/* Preview-only redesign: four clear commercial entrances directly after the current official hero. */}
+          {b.id === 'hero' && (
+            <section className="max-w-[1500px] mx-auto px-4 md:px-6 -mt-3 md:-mt-10 relative z-20">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
+                {[
+                  { eyebrow: 'DESCUBRÍ', title: 'Universos', desc: 'Pokémon, Marvel, Star Wars, Dragon Ball y más.', to: '/licencias', cta: 'Explorar universos' },
+                  { eyebrow: 'LO ÚLTIMO', title: 'Novedades', desc: 'Recién llegados, lanzamientos y preventas.', to: '/shop?badge=new', cta: 'Ver novedades' },
+                  { eyebrow: 'FABRICANTES', title: 'Marcas', desc: 'NECA, Funko, Hasbro, McFarlane, Bandai y más.', to: '/shop', cta: 'Explorar marcas' },
+                  { eyebrow: 'ENCONTRÁ', title: 'Categorías', desc: 'Figuras, Home, estatuas, peluches, sets y cards.', to: '/shop', cta: 'Ver categorías' },
+                ].map((item) => (
+                  <Link
+                    key={item.title}
+                    to={item.to}
+                    className="group min-h-[150px] md:min-h-[190px] bg-[#0b0e15]/95 backdrop-blur-xl border border-white/10 hover:border-[#f00856]/60 p-4 md:p-6 flex flex-col justify-between transition-all duration-300 hover:-translate-y-1 shadow-2xl"
+                  >
+                    <div>
+                      <span className="text-[8px] md:text-[9px] text-[#f00856] font-black tracking-[0.22em]">{item.eyebrow}</span>
+                      <h2 className="text-xl md:text-3xl font-black text-white uppercase tracking-tight mt-1">{item.title}</h2>
+                      <p className="text-[10px] md:text-xs text-slate-400 font-medium mt-2 leading-relaxed">{item.desc}</p>
+                    </div>
+                    <span className="text-[9px] md:text-[10px] text-white font-black uppercase tracking-wider group-hover:text-[#f00856] transition-colors inline-flex items-center gap-1">
+                      {item.cta} <ArrowRight className="w-3 h-3" />
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Preview-only category merchandising: real DB categories + their current images, no horizontal carousel. */}
+          {b.id === 'banners' && featuredCommercialCategories.length > 0 && (
+            <section className="max-w-[1500px] mx-auto px-4 md:px-6 py-12 md:py-20">
+              <div className="flex items-end justify-between gap-4 mb-7 md:mb-10">
+                <div>
+                  <div className="text-[9px] md:text-[10px] text-[#f00856] font-black tracking-[0.28em] uppercase mb-2">Explorá por tipo de colección</div>
+                  <h2 className="text-2xl md:text-4xl font-black text-white uppercase tracking-tight">Categorías destacadas</h2>
+                </div>
+                <Link to="/shop" className="text-[10px] md:text-xs font-black text-slate-400 hover:text-white uppercase tracking-wider inline-flex items-center gap-1">
+                  Ver todas <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 md:gap-5">
+                {featuredCommercialCategories.map((cat: any) => (
+                  <Link
+                    key={cat.id}
+                    to={`/categoria/${cat.slug}`}
+                    className="group relative min-h-[220px] md:min-h-[330px] overflow-hidden border border-white/10 hover:border-[#f00856]/50 bg-[#0a0d14] transition-all"
+                  >
+                    {cat.image_url && (
+                      <img src={cat.image_url} alt={cat.name} loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.035] transition-transform duration-700" />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-[#05070f] via-black/30 to-transparent" />
+                    <div className="absolute inset-x-0 bottom-0 p-4 md:p-6">
+                      <span className="text-[8px] text-[#f00856] font-black tracking-[0.2em] uppercase">Categoría</span>
+                      <h3 className="text-lg md:text-2xl font-black text-white uppercase tracking-tight mt-1">{cat.name}</h3>
+                      {cat.metadata?.subtitle && <p className="hidden md:block text-xs text-slate-300 mt-1 max-w-md">{cat.metadata.subtitle}</p>}
+                      <span className="inline-flex items-center gap-1 mt-3 text-[9px] md:text-[10px] font-black uppercase tracking-wider text-white group-hover:text-[#f00856]">
+                        Explorar <ArrowRight className="w-3 h-3" />
+                      </span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       ))}
 
