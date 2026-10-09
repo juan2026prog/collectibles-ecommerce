@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Shield, Package, ShoppingCart, Sparkles, Radio, GraduationCap, Archive, Scale, Boxes, Globe2, RefreshCw, BadgeCheck, Orbit, Tag, Grid2X2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Shield, Package, ShoppingCart, Sparkles, Radio, GraduationCap, Archive, Scale, Boxes, Globe2, RefreshCw, BadgeCheck, Clock3, Gift, BadgeDollarSign, Star } from 'lucide-react';
 import { useState, useEffect, useMemo, lazy, Suspense, useRef } from 'react';
 import { useProducts, useProductCards, useCategories, useBrands, useBanners, useProductGroups } from '../hooks/useData';
 import { useCartContext } from '../contexts/CartContext';
@@ -1234,30 +1234,31 @@ export default function Home() {
         <div key={b.id}>
           {renderBlock(b.id)}
 
-          {/* Preview-only redesign: compact commercial navigation directly after the current official hero. */}
+          {/* Preview-only redesign: intent-based shopping shortcuts, avoiding taxonomy duplication. */}
           {b.id === 'hero' && (
             <section className="max-w-[1500px] mx-auto px-4 md:px-6 mt-3 md:mt-4 mb-4 md:mb-6 relative z-20">
-              <div className="grid grid-cols-2 lg:grid-cols-4 border border-white/10 bg-[#090c13]">
+              <div className="grid grid-cols-2 lg:grid-cols-5 border border-white/10 bg-[#090c13]">
                 {[
-                  { icon: Orbit, title: 'Universos', desc: 'Pokémon, Marvel, Star Wars y más', to: '/licencias' },
-                  { icon: Sparkles, title: 'Novedades', desc: 'Lo último agregado al catálogo', to: '/shop?badge=new' },
-                  { icon: Tag, title: 'Marcas', desc: 'Funko, NECA, Hasbro, Bandai y más', to: '/shop' },
-                  { icon: Grid2X2, title: 'Categorías', desc: 'Figuras, vinyl, cards, sets y más', to: '/shop' },
+                  { icon: Clock3, title: 'Preventas', desc: 'Reservá antes del lanzamiento', to: '/shop?badge=preorder' },
+                  { icon: Sparkles, title: 'Recién llegados', desc: 'Lo último agregado al catálogo', to: '/shop?badge=new' },
+                  { icon: BadgeDollarSign, title: 'Hasta USD 50', desc: 'Coleccionables para todos los presupuestos', to: '/shop?maxPrice=50' },
+                  { icon: Gift, title: 'Ideas para regalar', desc: 'Encontrá algo para sorprender', to: '/shop?gift=1' },
+                  { icon: Star, title: 'Ediciones especiales', desc: 'Piezas destacadas y difíciles de encontrar', to: '/shop?special=1' },
                 ].map((item, index) => {
                   const Icon = item.icon;
                   return (
                     <Link
                       key={item.title}
                       to={item.to}
-                      className={`group min-h-[92px] md:min-h-[108px] px-3.5 md:px-5 py-3.5 md:py-4 flex items-center gap-3 md:gap-4 transition-all duration-300 hover:bg-white/[0.025] ${index % 2 === 0 ? 'border-r border-white/10 lg:border-r' : 'lg:border-r'} ${index < 2 ? 'border-b border-white/10 lg:border-b-0' : ''} lg:last:border-r-0`}
+                      className={`group min-h-[92px] md:min-h-[104px] px-3.5 md:px-4 py-3.5 md:py-4 flex items-center gap-3 transition-all duration-300 hover:bg-white/[0.025] ${index % 2 === 0 ? 'border-r border-white/10 lg:border-r' : 'lg:border-r'} ${index < 4 ? 'border-b border-white/10 lg:border-b-0' : ''} lg:last:border-r-0`}
                     >
-                      <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 border border-[#f00856]/30 bg-[#f00856]/[0.06] flex items-center justify-center">
-                        <Icon className="w-4 h-4 md:w-[18px] md:h-[18px] text-[#f00856]" />
+                      <div className="w-8 h-8 md:w-9 md:h-9 shrink-0 border border-[#f00856]/30 bg-[#f00856]/[0.06] flex items-center justify-center">
+                        <Icon className="w-4 h-4 text-[#f00856]" />
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <h2 className="text-sm md:text-lg font-black text-white uppercase tracking-tight">{item.title}</h2>
-                          <ArrowRight className="w-3 h-3 text-slate-600 group-hover:text-[#f00856] group-hover:translate-x-0.5 transition-all" />
+                          <h2 className="text-[11px] md:text-sm font-black text-white uppercase tracking-tight leading-tight">{item.title}</h2>
+                          <ArrowRight className="w-3 h-3 text-slate-600 group-hover:text-[#f00856] group-hover:translate-x-0.5 transition-all shrink-0" />
                         </div>
                         <p className="text-[9px] md:text-[10px] text-slate-500 font-medium mt-1 leading-snug line-clamp-2">{item.desc}</p>
                       </div>
