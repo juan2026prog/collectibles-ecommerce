@@ -1,6 +1,6 @@
 import { Link, useSearchParams, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search, Store, ExternalLink, Loader2 } from 'lucide-react';
+import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search, Store, ExternalLink, Loader2, Boxes, Shirt, Gamepad2, Coffee, Backpack, Package } from 'lucide-react';
 import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata, useBrandFacets, useInternationalCategoryFacets, useLicense, useTheme, useLicenses, useThemes, useCatalogFacets } from '../hooks/useData';
 import { useInternationalSettings } from '../hooks/useInternationalSettings';
 import { usePromotions, getApplicablePromotions } from '../hooks/usePromotions';
@@ -1323,6 +1323,65 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
           </p>
         </div>
       </section>
+
+      {/* PREVIEW — navegación visual por categorías dentro de un Universo */}
+      {isLicenseRoute && !facetsLoading && (() => {
+        const universeCategories = visibleCategories
+          .filter((cat: any) => cat.status === 'approved' && (categoryFacets[cat.id] || 0) > 0)
+          .sort((a: any, b: any) => (categoryFacets[b.id] || 0) - (categoryFacets[a.id] || 0))
+          .slice(0, 8);
+
+        if (!universeCategories.length) return null;
+
+        const getCategoryIcon = (name: string) => {
+          const n = normalizeText(name);
+          if (n.includes('ropa') || n.includes('accesor')) return Shirt;
+          if (n.includes('juego') || n.includes('gaming')) return Gamepad2;
+          if (n.includes('taza') || n.includes('home') || n.includes('hogar')) return Coffee;
+          if (n.includes('mochila') || n.includes('bolso')) return Backpack;
+          if (n.includes('figura') || n.includes('estatua') || n.includes('busto')) return Boxes;
+          return Package;
+        };
+
+        return (
+          <section className="border-b border-white/10 bg-[#070a12]">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 md:py-7">
+              <div className="flex items-end justify-between gap-4 mb-4">
+                <div>
+                  <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.22em] text-[#f00856]">Explorá el universo</span>
+                  <h2 className="text-lg md:text-2xl font-black text-white mt-1">¿QUÉ BUSCÁS DE {String(currentLicense?.name || licParam || '').toUpperCase()}?</h2>
+                </div>
+                {categorySlug && (
+                  <button onClick={() => handleCategorySelect('')} className="text-[11px] md:text-xs font-black text-[#f00856] hover:text-white uppercase whitespace-nowrap">
+                    Ver todo
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5 md:gap-3">
+                {universeCategories.map((cat: any) => {
+                  const Icon = getCategoryIcon(cat.name);
+                  const active = categorySlug === cat.slug;
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => handleCategorySelect(active ? '' : cat.slug)}
+                      className={`group min-h-[88px] md:min-h-[98px] border px-3 py-3 text-left transition-all ${
+                        active
+                          ? 'border-[#f00856] bg-[#f00856]/10'
+                          : 'border-white/10 bg-white/[0.025] hover:border-[#f00856]/60 hover:bg-[#f00856]/[0.04]'
+                      }`}
+                    >
+                      <Icon className={`w-5 h-5 mb-3 transition-colors ${active ? 'text-[#f00856]' : 'text-slate-400 group-hover:text-[#f00856]'}`} />
+                      <div className="text-[11px] md:text-xs font-black text-white uppercase leading-tight line-clamp-2">{cat.name}</div>
+                      <div className="text-[9px] md:text-[10px] text-slate-500 mt-1">{categoryFacets[cat.id] || 0} productos</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        );
+      })()}
 
       {/* MOBILE FILTER BUTTON & TOOLBAR */}
       <div className="lg:hidden sticky top-14 z-30 bg-[#05070f]/95 backdrop-blur-lg border-b border-white/10 px-4 sm:px-6 py-2.5 flex items-center justify-between">
