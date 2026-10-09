@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { useImageProtection } from '../../hooks/useImageProtection';
 
 export interface FeaturedDrop {
@@ -20,40 +20,11 @@ interface FeaturedDropsProps {
 }
 
 export default function FeaturedDrops({ drops }: FeaturedDropsProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [showLeft, setShowLeft] = useState(false);
-  const [showRight, setShowRight] = useState(true);
   const { getImageProps } = useImageProtection({ isProduct: false });
 
   const activeDrops = drops
     .filter(d => d.enabled !== false)
     .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-
-  const updateArrows = () => {
-    if (!containerRef.current) return;
-    const { scrollLeft, scrollWidth, clientWidth } = containerRef.current;
-    setShowLeft(scrollLeft > 10);
-    setShowRight(scrollLeft < scrollWidth - clientWidth - 10);
-  };
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (el) {
-      el.addEventListener('scroll', updateArrows);
-      // Run once on mount / update
-      updateArrows();
-    }
-    return () => el?.removeEventListener('scroll', updateArrows);
-  }, [activeDrops.length]);
-
-  const scroll = (direction: 'left' | 'right') => {
-    if (!containerRef.current) return;
-    const scrollAmount = 624; // Card width + gap
-    containerRef.current.scrollBy({
-      left: direction === 'left' ? -scrollAmount : scrollAmount,
-      behavior: 'smooth',
-    });
-  };
 
   if (!activeDrops.length) return null;
 
