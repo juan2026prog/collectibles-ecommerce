@@ -368,12 +368,19 @@ export default function Home() {
         const parsed = JSON.parse(jsonVal);
         if (Array.isArray(parsed) && parsed.length > 0) {
           let migrated = parsed.map((b: any) => b.id === 'mundial' ? { ...b, id: 'campaign' } : b);
-          const hadBestSellers = migrated.some((b: any) => b.id === 'best_sellers');
-          if (!hadBestSellers) {
-            const newArrivalsIndex = migrated.findIndex((b: any) => b.id === 'new_arrivals');
-            const insertAt = newArrivalsIndex >= 0 ? newArrivalsIndex + 1 : 1;
-            migrated = [...migrated.slice(0, insertAt), { id: 'best_sellers', visible: true }, ...migrated.slice(insertAt)];
-          }
+
+          // Preview Home: force the three commercial product shelves to be visible and consecutive.
+          // This avoids an older CMS layout hiding or moving PREVENTAS out of the redesigned flow.
+          migrated = migrated.filter((b: any) => b.id !== 'best_sellers' && b.id !== 'preorders');
+          const newArrivalsIndex = migrated.findIndex((b: any) => b.id === 'new_arrivals');
+          const insertAt = newArrivalsIndex >= 0 ? newArrivalsIndex + 1 : 1;
+          migrated = [
+            ...migrated.slice(0, insertAt),
+            { id: 'best_sellers', visible: true },
+            { id: 'preorders', visible: true },
+            ...migrated.slice(insertAt)
+          ];
+
           const savedIds = new Set(migrated.map((b: any) => b.id));
           const missing = DEFAULT_BLOCK_IDS.filter(id => !savedIds.has(id)).map(id => ({
             id,
