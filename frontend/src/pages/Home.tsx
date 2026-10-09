@@ -676,6 +676,7 @@ export default function Home() {
 
       /* ━━━━━━━━━━━ CATEGORÍAS (EXPLORÁ UNIVERSOS) ━━━━━━━━━━━ */
       case 'bento':
+        return null;
         return (
           <section className="max-w-[1500px] mx-auto px-6 py-24 relative overflow-hidden">
             {/* Ambient glow */}
