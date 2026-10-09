@@ -537,7 +537,7 @@ export default function Home() {
       /* ━━━━━━━━━━━ TRUST BAR COMPACTA + EXPERIENCIAS DEL COLECCIONISTA ━━━━━━━━━━━ */
       case 'trust':
         return (
-          <section className="max-w-[1500px] mx-auto px-4 md:px-6 my-4 md:-mt-8 relative z-20 space-y-3 md:space-y-4">
+          <section className="max-w-[1500px] mx-auto px-4 md:px-6 my-4 md:my-6 relative z-20 space-y-3 md:space-y-4">
             <div className="rounded-xl md:rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-sm p-3 md:p-8 flex md:grid overflow-x-auto md:overflow-visible grid-cols-1 md:grid-cols-3 gap-3 md:gap-6 no-scrollbar">
               {[
                 { icon: Truck, title: 'Envíos a todo Uruguay', desc: 'Entregas rápidas y seguras' },
@@ -1169,7 +1169,7 @@ export default function Home() {
 
           {/* Preview-only redesign: four clear commercial entrances directly after the current official hero. */}
           {b.id === 'hero' && (
-            <section className="max-w-[1500px] mx-auto px-4 md:px-6 -mt-3 md:-mt-10 relative z-20">
+            <section className="max-w-[1500px] mx-auto px-4 md:px-6 mt-4 md:mt-6 mb-6 md:mb-10 relative z-20">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
                 {[
                   { eyebrow: 'DESCUBRÍ', title: 'Universos', desc: 'Pokémon, Marvel, Star Wars, Dragon Ball y más.', to: '/licencias', cta: 'Explorar universos' },
