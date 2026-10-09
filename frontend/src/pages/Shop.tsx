@@ -1,6 +1,6 @@
 import { Link, useSearchParams, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search, Store, ExternalLink, Loader2, Boxes, Shirt, Gamepad2, Coffee, Backpack, Package } from 'lucide-react';
+import { ChevronRight, ChevronLeft, SlidersHorizontal, X, Search, Store, ExternalLink, Loader2, Shirt, Gamepad2, Coffee, Backpack, Package, PersonStanding, CircleDot, Castle, Dices, Trophy, Puzzle, CarFront, BookOpen } from 'lucide-react';
 import { useProducts, useCategories, useBrands, useFilterMappings, useProductGroupMetadata, useBrandFacets, useInternationalCategoryFacets, useLicense, useTheme, useLicenses, useThemes, useCatalogFacets } from '../hooks/useData';
 import { useInternationalSettings } from '../hooks/useInternationalSettings';
 import { usePromotions, getApplicablePromotions } from '../hooks/usePromotions';
@@ -1326,9 +1326,16 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
           {isLicenseRoute && (
             <div className="mt-5 md:mt-7 flex flex-wrap items-center gap-2 md:gap-3">
               {[
-                { label: 'Figuras', icon: Boxes },
+                { label: 'Figuras', icon: PersonStanding },
+                { label: 'Funko / Vinyl', icon: CircleDot },
+                { label: 'Playsets', icon: Castle },
+                { label: 'Board Games', icon: Dices },
+                { label: 'Trading Cards', icon: Trophy },
+                { label: 'Puzzles', icon: Puzzle },
+                { label: 'Vehículos', icon: CarFront },
+                { label: 'Cómics', icon: BookOpen },
                 { label: 'Ropa', icon: Shirt },
-                { label: 'Juegos', icon: Gamepad2 },
+                { label: 'Gaming', icon: Gamepad2 },
                 { label: 'Tazas', icon: Coffee },
                 { label: 'Mochilas', icon: Backpack },
                 { label: 'Otros', icon: Package }
