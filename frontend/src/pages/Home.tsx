@@ -371,9 +371,16 @@ export default function Home() {
 
           // Preview Home: force the three commercial product shelves to be visible and consecutive.
           // This avoids an older CMS layout hiding or moving PREVENTAS out of the redesigned flow.
-          migrated = migrated.filter((b: any) => b.id !== 'best_sellers' && b.id !== 'preorders');
+          migrated = migrated.filter((b: any) => b.id !== 'brands' && b.id !== 'best_sellers' && b.id !== 'preorders');
           const newArrivalsIndex = migrated.findIndex((b: any) => b.id === 'new_arrivals');
-          const insertAt = newArrivalsIndex >= 0 ? newArrivalsIndex + 1 : 1;
+          const brandsAt = newArrivalsIndex >= 0 ? newArrivalsIndex : 1;
+          migrated = [
+            ...migrated.slice(0, brandsAt),
+            { id: 'brands', visible: true },
+            ...migrated.slice(brandsAt)
+          ];
+          const refreshedNewArrivalsIndex = migrated.findIndex((b: any) => b.id === 'new_arrivals');
+          const insertAt = refreshedNewArrivalsIndex >= 0 ? refreshedNewArrivalsIndex + 1 : 2;
           migrated = [
             ...migrated.slice(0, insertAt),
             { id: 'best_sellers', visible: true },
@@ -1105,49 +1112,40 @@ export default function Home() {
         );
       }
 
-      /* ━━━━━━━━━━━ MARCAS DESTACADAS ━━━━━━━━━━━ */
+      /* ━━━━━━━━━━━ MARCAS DESTACADAS — PREVIEW GRID ━━━━━━━━━━━ */
       case 'brands': {
-        const activeBrands = (brands || []).filter((b: any) => b.is_active !== false);
+        const activeBrands = (brands || []).filter((b: any) => b.is_active !== false).slice(0, 6);
         if (!activeBrands.length) return null;
 
-        // Duplicate brands array to ensure infinite smooth loop
-        const marqueeBrands = [...activeBrands, ...activeBrands, ...activeBrands];
-
         return (
-          <section className="py-24 overflow-hidden relative">
-            {/* Subtle glow background */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[150px] bg-[#f00856]/[.02] blur-[120px] rounded-full pointer-events-none" />
-
-            <div className="max-w-[1500px] mx-auto px-6 mb-16 text-center relative z-10">
-              <div className="text-[10px] text-[#f00856] font-black tracking-[0.3em] uppercase mb-2">
-                Universos que coleccionamos
+          <section className="py-10 md:py-14 border-t border-white/5">
+            <div className="max-w-[1500px] mx-auto px-4 md:px-6">
+              <div className="flex items-end justify-between mb-6">
+                <div>
+                  <div className="text-[9px] md:text-[10px] text-[#f00856] font-black tracking-[0.25em] uppercase mb-1">Fabricantes que coleccionás</div>
+                  <h2 className="text-2xl md:text-4xl font-black text-white tracking-tight uppercase">MARCAS DESTACADAS</h2>
+                </div>
+                <Link to="/shop" className="inline-flex items-center gap-1 text-xs md:text-sm font-black text-[#f00856] hover:text-white transition-colors uppercase tracking-wider">
+                  VER TODAS <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
               </div>
-              <h2 className="text-3xl md:text-4xl font-black text-white tracking-tight uppercase">
-                Marcas destacadas
-              </h2>
-            </div>
 
-            {/* Marquee with slower speed and color pop on hover */}
-            <div className="relative w-full flex items-center py-4 bg-white/[0.01] border-y border-white/5">
-              <div className="flex animate-marquee whitespace-nowrap gap-28 items-center py-2 opacity-60 hover:opacity-100 transition-opacity duration-700">
-                {marqueeBrands.map((b, i) => (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
+                {activeBrands.map((brand: any) => (
                   <Link
-                    key={`${b.id}-${i}`}
-                    to={`/marca/${b.slug}`}
-                    className="shrink-0 grayscale hover:grayscale-0 hover:scale-[1.05] transition-all duration-500 ease-out"
+                    key={brand.id}
+                    to={brand.slug ? `/marca/${brand.slug}` : '/shop'}
+                    className="group min-h-[112px] md:min-h-[132px] border border-white/10 bg-white/[0.025] flex items-center justify-center p-5 md:p-6 hover:border-[#f00856]/50 hover:bg-[#f00856]/[0.04] transition-all"
                   >
-                    {b.logo_url ? (
+                    {brand.logo_url ? (
                       <img
-                        src={b.logo_url}
-                        alt={b.name}
+                        src={brand.logo_url}
+                        alt={brand.name}
                         loading="lazy"
-                        decoding="async"
-                        className="h-14 md:h-16 w-auto object-contain"
+                        className="max-w-[130px] max-h-[58px] w-auto h-auto object-contain opacity-85 group-hover:opacity-100 group-hover:scale-[1.04] transition-all"
                       />
                     ) : (
-                      <span className="text-2xl font-black text-slate-500 hover:text-white uppercase tracking-widest transition-colors">
-                        {b.name}
-                      </span>
+                      <span className="text-white text-sm md:text-base font-black uppercase tracking-wide text-center">{brand.name}</span>
                     )}
                   </Link>
                 ))}
