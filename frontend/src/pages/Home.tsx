@@ -330,6 +330,7 @@ export default function Home() {
   const [layoutBlocks, setLayoutBlocks] = useState<any[]>([
     { id: 'hero', visible: true },
     { id: 'new_arrivals', visible: true },
+    { id: 'best_sellers', visible: true },
     { id: 'trust', visible: true },
     { id: 'bento', visible: true },
     { id: 'featured_drops', visible: true },
@@ -346,6 +347,7 @@ export default function Home() {
   const DEFAULT_BLOCK_IDS = [
     'hero',
     'new_arrivals',
+    'best_sellers',
     'trust',
     'bento',
     'featured_drops',
@@ -365,7 +367,13 @@ export default function Home() {
       try {
         const parsed = JSON.parse(jsonVal);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const migrated = parsed.map((b: any) => b.id === 'mundial' ? { ...b, id: 'campaign' } : b);
+          let migrated = parsed.map((b: any) => b.id === 'mundial' ? { ...b, id: 'campaign' } : b);
+          const hadBestSellers = migrated.some((b: any) => b.id === 'best_sellers');
+          if (!hadBestSellers) {
+            const newArrivalsIndex = migrated.findIndex((b: any) => b.id === 'new_arrivals');
+            const insertAt = newArrivalsIndex >= 0 ? newArrivalsIndex + 1 : 1;
+            migrated = [...migrated.slice(0, insertAt), { id: 'best_sellers', visible: true }, ...migrated.slice(insertAt)];
+          }
           const savedIds = new Set(migrated.map((b: any) => b.id));
           const missing = DEFAULT_BLOCK_IDS.filter(id => !savedIds.has(id)).map(id => ({
             id,
@@ -891,13 +899,67 @@ export default function Home() {
         );
       }
 
-      /* ━━━━━━━━━━━ PREVENTAS ACTIVAS ━━━━━━━━━━━ */
-      case 'preorders':
+      /* ━━━━━━━━━━━ BEST SELLERS — PREVIEW VISUAL ━━━━━━━━━━━ */
+      case 'best_sellers': {
+        // Preview branch only: reuse published catalogue cards to validate Home layout.
+        // Final ranking source will be the relative Amazon rank among Collectibles-published products.
+        const previewBestSellers = (featured.length > 0 ? featured : displayedNewArrivals).slice(0, 5);
+        if (!previewBestSellers.length) return null;
         return (
-          <Suspense fallback={<div className="max-w-[1500px] mx-auto px-6 py-20 animate-pulse"><div className="h-[400px] bg-white/5 rounded-2xl" /></div>}>
-            <PreOrders preorders={preorders} />
-          </Suspense>
+          <section className="py-10 md:py-20 border-t border-white/5 relative overflow-hidden">
+            <div className="max-w-[1500px] mx-auto px-4 md:px-6">
+              <div className="flex flex-row items-end justify-between mb-6">
+                <div>
+                  <div className="text-[9px] md:text-[10px] text-[#f00856] font-black tracking-[0.25em] uppercase mb-1">Los favoritos del catálogo</div>
+                  <h2 className="text-2xl md:text-4xl font-black text-white tracking-tight uppercase">BEST SELLERS</h2>
+                </div>
+                <Link to="/shop" className="inline-flex items-center gap-1 text-xs md:text-sm font-black text-[#f00856] hover:text-white transition-colors uppercase tracking-wider">
+                  VER TODOS <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+                {previewBestSellers.map((p) => (
+                  <ProductGridCard key={p.id} product={p} onAddToCart={handleAddToCart} formatPrice={formatCurrencyPrice} />
+                ))}
+              </div>
+            </div>
+          </section>
         );
+      }
+
+      /* ━━━━━━━━━━━ PREVENTAS ACTIVAS ━━━━━━━━━━━ */
+      case 'preorders': {
+        if (preorders.length > 0) {
+          return (
+            <Suspense fallback={<div className="max-w-[1500px] mx-auto px-6 py-20 animate-pulse"><div className="h-[400px] bg-white/5 rounded-2xl" /></div>}>
+              <PreOrders preorders={preorders} />
+            </Suspense>
+          );
+        }
+        // Preview fallback only, so the redesigned Home can be evaluated even before preorder data is configured.
+        const previewPreorders = displayedNewArrivals.slice(0, 5);
+        if (!previewPreorders.length) return null;
+        return (
+          <section className="py-10 md:py-20 border-t border-white/5 relative overflow-hidden">
+            <div className="max-w-[1500px] mx-auto px-4 md:px-6">
+              <div className="flex flex-row items-end justify-between mb-6">
+                <div>
+                  <div className="text-[9px] md:text-[10px] text-[#f00856] font-black tracking-[0.25em] uppercase mb-1">Próximos lanzamientos</div>
+                  <h2 className="text-2xl md:text-4xl font-black text-white tracking-tight uppercase">PREVENTAS</h2>
+                </div>
+                <Link to="/shop" className="inline-flex items-center gap-1 text-xs md:text-sm font-black text-[#f00856] hover:text-white transition-colors uppercase tracking-wider">
+                  VER TODAS <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+                {previewPreorders.map((p) => (
+                  <ProductGridCard key={p.id} product={p} onAddToCart={handleAddToCart} formatPrice={formatCurrencyPrice} />
+                ))}
+              </div>
+            </div>
+          </section>
+        );
+      }
 
       /* ━━━━━━━━━━━ PRÓXIMOS DROPS ━━━━━━━━━━━ */
       case 'upcoming_drops': {
