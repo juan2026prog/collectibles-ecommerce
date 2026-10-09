@@ -540,13 +540,15 @@ export default function StorefrontLayout() {
             ))}
           </nav>
 
-            {/* SEARCH BOX (DESKTOP) */}
-            <StorefrontSearchBar
-              aiSearchEnabled={isModuleVisible('ai_search')}
-              allBrands={allBrands}
-              activeLicenses={activeLicenses}
-              className="hidden lg:flex"
-            />
+            {/* SEARCH BOX (DESKTOP) — hidden on Home preview to avoid duplicate search */}
+            {!isHome && (
+              <StorefrontSearchBar
+                aiSearchEnabled={isModuleVisible('ai_search')}
+                allBrands={allBrands}
+                activeLicenses={activeLicenses}
+                className="hidden lg:flex"
+              />
+            )}
 
           {/* ACTIONS */}
           <div className="flex items-center gap-2 sm:gap-3">
@@ -719,18 +721,6 @@ export default function StorefrontLayout() {
           </div>
         </div>
       </header>
-
-      {/* ═══ MOBILE HOME SEARCH BAR (NATURAL SCROLL, NOT STICKY) ═══ */}
-      {isHome && (
-        <div className="lg:hidden bg-[#05070f] border-b border-white/10 px-4 py-2 relative z-[20]">
-          <StorefrontSearchBar
-            aiSearchEnabled={isModuleVisible('ai_search')}
-            allBrands={allBrands}
-            activeLicenses={activeLicenses}
-            className="w-full max-w-none"
-          />
-        </div>
-      )}
 
       {/* MOBILE MENU DRAWER */}
       {mobileMenuOpen && (
