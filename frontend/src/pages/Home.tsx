@@ -796,8 +796,8 @@ export default function Home() {
                     <div className="h-8 w-64 bg-white/5 animate-pulse rounded" />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8">
-                  {[...Array(4)].map((_, i) => (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+                  {[...Array(5)].map((_, i) => (
                     <ProductSkeleton key={i} />
                   ))}
                 </div>
@@ -875,9 +875,9 @@ export default function Home() {
                 </Link>
               </div>
 
-              {/* 2x2 grid on mobile (4 products), 4 cols on desktop */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-6">
-                {activeProducts.slice(0, 4).map((p) => (
+              {/* Compact merchandising grid: 2 mobile, 3 tablet, 5 desktop */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+                {activeProducts.slice(0, 5).map((p) => (
                   <ProductGridCard
                     key={p.id}
                     product={p}
