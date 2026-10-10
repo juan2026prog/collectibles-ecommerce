@@ -555,7 +555,7 @@ export default function Home() {
       /* ━━━━━━━━━━━ HERO CINEMATOGRÁFICO ━━━━━━━━━━━ */
       case 'hero': {
         return (
-          <HeroSlider banners={banners} loading={bannersLoading} />
+          <HeroSlider banners={banners} loading={bannersLoading} compact />
         );
       }
 
@@ -1236,7 +1236,7 @@ export default function Home() {
       {/* PREVIEW CONCEPT — conversion-first Home composition */}
       <div className="preview-home-concept">
         {/* 1. Hero oficial, visualmente más contenido por el flujo que sigue */}
-        <div className="max-h-[540px] overflow-hidden">
+        <div>
           {renderBlock('hero')}
         </div>
 
