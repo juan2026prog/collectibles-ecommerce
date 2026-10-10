@@ -23,9 +23,10 @@ interface Banner {
 interface HeroSliderProps {
   banners: Banner[];
   loading?: boolean;
+  compact?: boolean;
 }
 
-export default function HeroSlider({ banners, loading = false }: HeroSliderProps) {
+export default function HeroSlider({ banners, loading = false, compact = false }: HeroSliderProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [loadedIndices, setLoadedIndices] = useState<Set<number>>(() => new Set([0, 1]));
   const touchStartX = useRef<number | null>(null);
@@ -149,7 +150,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
   if (loading && activeBanners.length === 0) {
     // Render a stable dark cinematic background container without any fake text/buttons
     return (
-      <section className="relative h-[380px] sm:h-[420px] md:h-screen w-full bg-[#05070f] overflow-hidden">
+      <section className={`relative ${compact ? 'h-[320px] sm:h-[360px] md:h-[500px] lg:h-[540px]' : 'h-[380px] sm:h-[420px] md:h-screen'} w-full bg-[#05070f] overflow-hidden`}>
         <div className="absolute inset-0 bg-[#05070f]" />
         <div className="absolute -right-40 -top-40 w-[800px] h-[800px] bg-[#f00856]/[.05] blur-[180px] rounded-full pointer-events-none" />
         <div className="absolute inset-0 opacity-[0.025] pointer-events-none" style={{
@@ -163,7 +164,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
   // Fallback if no banners are present
   if (activeBanners.length === 0) {
     return (
-      <section className="relative h-[380px] sm:h-[420px] md:h-screen w-full bg-[#05070f] flex items-center justify-center overflow-hidden">
+      <section className={`relative ${compact ? 'h-[320px] sm:h-[360px] md:h-[500px] lg:h-[540px]' : 'h-[380px] sm:h-[420px] md:h-screen'} w-full bg-[#05070f] flex items-center justify-center overflow-hidden`}>
         <div className="absolute inset-0 bg-[#05070f]" />
         <div className="absolute -right-40 -top-40 w-[800px] h-[800px] bg-[#f00856]/[.05] blur-[180px] rounded-full pointer-events-none" />
         <div className="max-w-[1500px] mx-auto px-6 w-full relative z-10 text-center flex flex-col items-center">
@@ -188,7 +189,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
 
   return (
     <section 
-      className="relative h-[380px] sm:h-[420px] md:h-screen w-full bg-[#05070f] overflow-hidden select-none"
+      className={`relative ${compact ? 'h-[320px] sm:h-[360px] md:h-[500px] lg:h-[540px]' : 'h-[380px] sm:h-[420px] md:h-screen'} w-full bg-[#05070f] overflow-hidden select-none`}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -239,7 +240,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
                   loading={index === 0 ? "eager" : "lazy"}
                   fetchPriority={index === 0 ? "high" : "low"}
                   decoding="async"
-                  {...getImageProps("absolute inset-0 w-full h-full object-cover object-center transition-transform duration-[7000ms] ease-out")}
+                  {...getImageProps(`absolute inset-0 w-full h-full object-cover ${compact ? 'object-center md:object-[center_42%]' : 'object-center'} transition-transform duration-[7000ms] ease-out`)}
                 />
               </picture>
             ) : (
@@ -272,7 +273,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
               }`}
             >
               <div 
-                className={`w-full max-w-4xl ${
+                className={`w-full ${compact ? 'max-w-3xl -translate-y-5 md:-translate-y-8' : 'max-w-4xl'} ${
                   alignCenter 
                     ? 'text-center mx-auto flex flex-col items-center' 
                     : 'text-left'
@@ -281,7 +282,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
                 {/* Upper Badge */}
                 {banner.badge_text && (
                   <div 
-                    className="inline-block px-4 py-1.5 rounded-full border border-primary-500/30 bg-primary-500/10 text-primary-500 text-[10px] font-black uppercase tracking-[0.25em] mb-6 shadow-[0_0_15px_rgba(240,8,86,0.15)]"
+                    className={`inline-block px-4 py-1.5 rounded-full border border-primary-500/30 bg-primary-500/10 text-primary-500 text-[10px] font-black uppercase tracking-[0.25em] ${compact ? 'mb-3 md:mb-4' : 'mb-6'} shadow-[0_0_15px_rgba(240,8,86,0.15)]`}
                   >
                     {banner.badge_text}
                   </div>
@@ -290,7 +291,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
                 {/* Main Title */}
                 {banner.title && (
                   <h1 
-                    className="text-3xl sm:text-6xl md:text-7xl lg:text-8xl font-black leading-[0.9] tracking-tighter text-white uppercase drop-shadow-md select-text break-words"
+                    className={`${compact ? 'text-3xl sm:text-5xl md:text-6xl lg:text-7xl' : 'text-3xl sm:text-6xl md:text-7xl lg:text-8xl'} font-black leading-[0.9] tracking-tighter text-white uppercase drop-shadow-md select-text break-words`}
                   >
                     {banner.title}
                   </h1>
@@ -299,7 +300,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
                 {/* Subtitle */}
                 {banner.subtitle && (
                   <p 
-                    className="text-slate-300 text-xs sm:text-base md:text-lg lg:text-xl mt-4 sm:mt-6 max-w-2xl font-bold leading-relaxed drop-shadow select-text"
+                    className={`text-slate-300 ${compact ? 'text-xs sm:text-sm md:text-base lg:text-lg mt-3 sm:mt-4 max-w-xl' : 'text-xs sm:text-base md:text-lg lg:text-xl mt-4 sm:mt-6 max-w-2xl'} font-bold leading-relaxed drop-shadow select-text`}
                   >
                     {banner.subtitle}
                   </p>
@@ -307,7 +308,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
 
                 {/* Buttons (CTAs) */}
                 <div 
-                  className={`flex flex-wrap gap-3 sm:gap-4 mt-6 sm:mt-10 ${
+                  className={`flex flex-wrap gap-3 sm:gap-4 ${compact ? 'mt-4 sm:mt-6' : 'mt-6 sm:mt-10'} ${
                     alignCenter ? 'justify-center' : 'justify-start'
                   }`}
                 >
