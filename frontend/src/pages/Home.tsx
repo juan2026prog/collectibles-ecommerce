@@ -256,6 +256,7 @@ export default function Home() {
 
   const [personalizedShelves, setPersonalizedShelves] = useState<DynamicShelfConfig[]>([]);
   const [homeSearch, setHomeSearch] = useState('');
+  const [homeProductTab, setHomeProductTab] = useState<'new' | 'best' | 'preorder'>('new');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -1232,113 +1233,179 @@ export default function Home() {
         keywords="figuras de accion uruguay, funko pop uruguay, neca uruguay, coleccionables uruguay, bandai uruguay, marvel legends uruguay, anime uruguay, collectibles.uy"
       />
 
-      {layoutBlocks.filter((b: any) => b.visible !== false).map((b: any) => (
-        <div key={b.id}>
-          {renderBlock(b.id)}
+      {/* PREVIEW CONCEPT — conversion-first Home composition */}
+      <div className="preview-home-concept">
+        {/* 1. Hero oficial, visualmente más contenido por el flujo que sigue */}
+        <div className="max-h-[540px] overflow-hidden">
+          {renderBlock('hero')}
+        </div>
 
-          {/* Preview-only redesign: search-first discovery + quick suggestions. */}
-          {b.id === 'hero' && (
-            <section className="max-w-[1500px] mx-auto px-4 md:px-6 mt-3 md:mt-4 mb-4 md:mb-6 relative z-20">
-              <div className="border border-white/10 bg-[#090c13] px-4 md:px-6 py-4 md:py-5">
-                <div className="max-w-5xl mx-auto">
-                  <div className="mb-3">
-                    <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.22em] text-[#f00856]">Buscar en Collectibles</span>
-                    <h2 className="text-lg md:text-2xl font-black text-white tracking-tight mt-1">¿QUÉ ESTÁS BUSCANDO?</h2>
-                  </div>
-
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault();
-                      const q = homeSearch.trim();
-                      if (q) navigate(`/shop?q=${encodeURIComponent(q)}`);
-                    }}
-                    className="relative"
-                  >
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-slate-500" />
-                    <input
-                      value={homeSearch}
-                      onChange={(e) => setHomeSearch(e.target.value)}
-                      placeholder="Batman menos de USD 70, Funko Pokémon, preventas Marvel..."
-                      className="w-full h-12 md:h-14 bg-[#05070f] border border-white/12 pl-11 md:pl-12 pr-24 md:pr-28 text-sm md:text-base text-white placeholder:text-slate-600 focus:outline-none focus:border-[#f00856]/70 transition-colors"
-                    />
-                    <button
-                      type="button"
-                      title="Búsqueda por voz próximamente"
-                      aria-label="Búsqueda por voz próximamente"
-                      className="absolute right-12 md:right-14 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center text-slate-500 hover:text-[#f00856] transition-colors"
-                    >
-                      <Mic className="w-4 h-4 md:w-5 md:h-5" />
-                    </button>
-                    <button
-                      type="submit"
-                      aria-label="Buscar"
-                      className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 bg-[#f00856] text-white flex items-center justify-center hover:bg-[#d8074e] transition-colors"
-                    >
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </form>
-
-                  <div className="flex flex-wrap gap-2 mt-3 md:mt-4">
-                    {[
-                      { label: 'Preventas', to: '/shop?badge=preorder' },
-                      { label: 'Recién llegados', to: '/shop?badge=new' },
-                      { label: 'Menos de USD 50', to: '/shop?maxPrice=50' },
-                      { label: 'Batman', to: '/shop?q=Batman' },
-                      { label: 'Funko', to: '/shop?q=Funko' },
-                      { label: 'Marvel', to: '/shop?q=Marvel' },
-                    ].map((suggestion) => (
-                      <Link
-                        key={suggestion.label}
-                        to={suggestion.to}
-                        className="px-3 py-1.5 md:px-3.5 md:py-2 border border-white/10 bg-white/[0.025] text-[9px] md:text-[10px] font-black uppercase tracking-wide text-slate-400 hover:text-white hover:border-[#f00856]/50 hover:bg-[#f00856]/5 transition-all"
-                      >
-                        {suggestion.label}
-                      </Link>
-                    ))}
-                  </div>
-                </div>
+        {/* 2. Search-first discovery */}
+        <section className="max-w-[1500px] mx-auto px-4 md:px-6 mt-3 md:mt-4 mb-5 md:mb-7 relative z-20">
+          <div className="border border-white/10 bg-[#090c13] px-4 md:px-6 py-4 md:py-5">
+            <div className="max-w-5xl mx-auto">
+              <div className="mb-3">
+                <span className="text-[9px] md:text-[10px] font-black uppercase tracking-[0.22em] text-[#f00856]">Buscar en Collectibles</span>
+                <h2 className="text-lg md:text-2xl font-black text-white tracking-tight mt-1">¿QUÉ ESTÁS BUSCANDO?</h2>
               </div>
-            </section>
-          )}
-
-          {/* Preview-only category merchandising: real DB categories + their current images, no horizontal carousel. */}
-          {b.id === 'banners' && featuredCommercialCategories.length > 0 && (
-            <section className="max-w-[1500px] mx-auto px-4 md:px-6 py-12 md:py-20">
-              <div className="flex items-end justify-between gap-4 mb-7 md:mb-10">
-                <div>
-                  <div className="text-[9px] md:text-[10px] text-[#f00856] font-black tracking-[0.28em] uppercase mb-2">Explorá por tipo de colección</div>
-                  <h2 className="text-2xl md:text-4xl font-black text-white uppercase tracking-tight">Categorías destacadas</h2>
-                </div>
-                <Link to="/shop" className="text-[10px] md:text-xs font-black text-slate-400 hover:text-white uppercase tracking-wider inline-flex items-center gap-1">
-                  Ver todas <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-2 md:gap-5">
-                {featuredCommercialCategories.map((cat: any) => (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const q = homeSearch.trim();
+                  if (q) navigate(`/shop?q=${encodeURIComponent(q)}`);
+                }}
+                className="relative"
+              >
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-slate-500" />
+                <input
+                  value={homeSearch}
+                  onChange={(e) => setHomeSearch(e.target.value)}
+                  placeholder="Batman menos de USD 70, Funko Pokémon, preventas Marvel..."
+                  className="w-full h-12 md:h-14 bg-white border border-white pl-11 md:pl-12 pr-24 md:pr-28 text-sm md:text-base text-[#15171c] placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-[#f00856]/50 transition"
+                />
+                <button
+                  type="button"
+                  title="Búsqueda por voz próximamente"
+                  aria-label="Búsqueda por voz próximamente"
+                  className="absolute right-12 md:right-14 top-1/2 -translate-y-1/2 w-9 h-9 flex items-center justify-center text-slate-500 hover:text-[#f00856] transition-colors"
+                >
+                  <Mic className="w-4 h-4 md:w-5 md:h-5" />
+                </button>
+                <button
+                  type="submit"
+                  aria-label="Buscar"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 md:w-10 md:h-10 bg-[#f00856] text-white flex items-center justify-center hover:bg-[#d8074e] transition-colors"
+                >
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </form>
+              <div className="flex flex-wrap gap-2 mt-3 md:mt-4">
+                {[
+                  { label: 'Preventas', to: '/shop?badge=preorder' },
+                  { label: 'Recién llegados', to: '/shop?badge=new' },
+                  { label: 'Menos de USD 50', to: '/shop?maxPrice=50' },
+                  { label: 'Batman', to: '/shop?q=Batman' },
+                  { label: 'Funko', to: '/shop?q=Funko' },
+                  { label: 'Marvel', to: '/shop?q=Marvel' },
+                ].map((suggestion) => (
                   <Link
-                    key={cat.id}
-                    to={`/categoria/${cat.slug}`}
-                    className="group relative min-h-[220px] md:min-h-[330px] overflow-hidden border border-white/10 hover:border-[#f00856]/50 bg-[#0a0d14] transition-all"
+                    key={suggestion.label}
+                    to={suggestion.to}
+                    className="px-3 py-1.5 md:px-3.5 md:py-2 border border-white/10 bg-white/[0.025] text-[9px] md:text-[10px] font-black uppercase tracking-wide text-slate-400 hover:text-white hover:border-[#f00856]/50 hover:bg-[#f00856]/5 transition-all"
                   >
-                    {cat.image_url && (
-                      <img src={cat.image_url} alt={cat.name} loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.035] transition-transform duration-700" />
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#05070f] via-black/30 to-transparent" />
-                    <div className="absolute inset-x-0 bottom-0 p-4 md:p-6">
-                      <span className="text-[8px] text-[#f00856] font-black tracking-[0.2em] uppercase">Categoría</span>
-                      <h3 className="text-lg md:text-2xl font-black text-white uppercase tracking-tight mt-1">{cat.name}</h3>
-                      {cat.metadata?.subtitle && <p className="hidden md:block text-xs text-slate-300 mt-1 max-w-md">{cat.metadata.subtitle}</p>}
-                      <span className="inline-flex items-center gap-1 mt-3 text-[9px] md:text-[10px] font-black uppercase tracking-wider text-white group-hover:text-[#f00856]">
-                        Explorar <ArrowRight className="w-3 h-3" />
-                      </span>
-                    </div>
+                    {suggestion.label}
                   </Link>
                 ))}
               </div>
-            </section>
-          )}
-        </div>
-      ))}
+            </div>
+          </div>
+        </section>
+
+        {/* 3. Product-first module: Novedades / Best Sellers / Preventas */}
+        <section className="py-8 md:py-12 border-t border-white/5">
+          <div className="max-w-[1500px] mx-auto px-4 md:px-6">
+            <div className="flex items-end justify-between gap-4 mb-5">
+              <div>
+                <div className="text-[9px] md:text-[10px] text-[#f00856] font-black tracking-[0.25em] uppercase mb-1">Lo mejor del catálogo</div>
+                <h2 className="text-2xl md:text-4xl font-black text-white tracking-tight uppercase">PRODUCTOS PARA DESCUBRIR</h2>
+              </div>
+              <Link to="/shop" className="text-[10px] md:text-xs font-black text-slate-400 hover:text-white uppercase inline-flex items-center gap-1">
+                Ver todos <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+            <div className="flex flex-wrap gap-2 mb-5">
+              {[
+                { id: 'new', label: 'Novedades' },
+                { id: 'best', label: 'Best Sellers' },
+                { id: 'preorder', label: 'Preventas' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setHomeProductTab(tab.id as 'new' | 'best' | 'preorder')}
+                  className={`px-3.5 py-2 border text-[10px] md:text-xs font-black uppercase tracking-wide transition-all ${
+                    homeProductTab === tab.id
+                      ? 'border-[#f00856] bg-[#f00856]/10 text-white'
+                      : 'border-white/10 text-slate-400 hover:text-white hover:border-white/20'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4">
+              {(homeProductTab === 'best'
+                ? (featured.length > 0 ? featured : displayedNewArrivals)
+                : displayedNewArrivals
+              ).slice(0, 5).map((p) => (
+                <ProductGridCard
+                  key={p.id}
+                  product={p}
+                  onAddToCart={handleAddToCart}
+                  formatPrice={formatCurrencyPrice}
+                />
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* 4. Compact categories */}
+        {featuredCommercialCategories.length > 0 && (
+          <section className="max-w-[1500px] mx-auto px-4 md:px-6 py-8 md:py-12">
+            <div className="flex items-end justify-between gap-4 mb-5 md:mb-6">
+              <div>
+                <div className="text-[9px] md:text-[10px] text-[#f00856] font-black tracking-[0.25em] uppercase mb-1">Explorá por tipo</div>
+                <h2 className="text-2xl md:text-3xl font-black text-white uppercase tracking-tight">CATEGORÍAS</h2>
+              </div>
+              <Link to="/shop" className="text-[10px] md:text-xs font-black text-slate-400 hover:text-white uppercase inline-flex items-center gap-1">
+                Ver todas <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 md:gap-3">
+              {featuredCommercialCategories.map((cat: any) => (
+                <Link
+                  key={cat.id}
+                  to={`/categoria/${cat.slug}`}
+                  className="group relative min-h-[120px] md:min-h-[150px] overflow-hidden border border-white/10 hover:border-[#f00856]/50 bg-[#0a0d14] transition-all"
+                >
+                  {cat.image_url && (
+                    <img src={cat.image_url} alt={cat.name} loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover opacity-70 group-hover:scale-[1.03] transition-transform duration-500" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#05070f] via-black/35 to-black/5" />
+                  <div className="absolute inset-x-0 bottom-0 p-3 md:p-4">
+                    <h3 className="text-sm md:text-base font-black text-white uppercase tracking-tight">{cat.name}</h3>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* 5. Universos */}
+        {renderBlock('featured_drops')}
+
+        {/* 6. Marcas */}
+        {renderBlock('brands')}
+
+        {/* 7. Capability strip — no generic trust/help block */}
+        <section className="max-w-[1500px] mx-auto px-4 md:px-6 py-8 md:py-12">
+          <div className="border-y border-white/10 bg-white/[0.02] px-2 md:px-4 py-3 md:py-4 grid grid-cols-2 md:grid-cols-4 gap-y-3">
+            {[
+              { icon: Boxes, title: 'MILES DE PRODUCTOS', desc: 'Un catálogo que crece todos los días' },
+              { icon: Globe2, title: 'STOCK USA', desc: 'Disponibilidad desde Estados Unidos' },
+              { icon: RefreshCw, title: 'ACTUALIZADO A DIARIO', desc: 'Novedades, lanzamientos y preventas' },
+              { icon: BadgeCheck, title: '100% COLECCIONABLES', desc: 'Marcas, licencias y productos originales' },
+            ].map(({ icon: Icon, title, desc }, index) => (
+              <div key={title} className={`flex items-center gap-2.5 md:gap-3 px-2 md:px-5 ${index % 2 === 0 ? 'border-r border-white/10 md:border-r-0' : ''} md:border-r md:last:border-r-0`}>
+                <Icon className="w-4 h-4 md:w-5 md:h-5 text-[#f00856] shrink-0" />
+                <div className="min-w-0">
+                  <h4 className="text-white font-black text-[10px] md:text-xs tracking-wide leading-tight">{title}</h4>
+                  <p className="text-slate-500 text-[9px] md:text-[10px] font-medium mt-0.5 leading-tight">{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
 
 
       <style dangerouslySetInnerHTML={{__html: `
