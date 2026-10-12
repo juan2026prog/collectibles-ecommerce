@@ -720,17 +720,15 @@ export default function StorefrontLayout() {
         </div>
       </header>
 
-      {/* ═══ MOBILE HOME SEARCH BAR (NATURAL SCROLL, NOT STICKY) ═══ */}
-      {isHome && (
-        <div className="lg:hidden bg-[#05070f] border-b border-white/10 px-4 py-2 relative z-[20]">
-          <StorefrontSearchBar
-            aiSearchEnabled={isModuleVisible('ai_search')}
-            allBrands={allBrands}
-            activeLicenses={activeLicenses}
-            className="w-full max-w-none"
-          />
-        </div>
-      )}
+      {/* ═══ MOBILE SEARCH BAR (ALL STOREFRONT PAGES) ═══ */}
+      <div className="lg:hidden bg-[#05070f] border-b border-white/10 px-4 py-2 relative z-[20]">
+        <StorefrontSearchBar
+          aiSearchEnabled={isModuleVisible('ai_search')}
+          allBrands={allBrands}
+          activeLicenses={activeLicenses}
+          className="w-full max-w-none"
+        />
+      </div>
 
       {/* MOBILE MENU DRAWER */}
       {mobileMenuOpen && (
@@ -738,7 +736,7 @@ export default function StorefrontLayout() {
            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileMenuOpen(false)} />
            <div className="absolute inset-y-0 left-0 w-[85%] max-w-sm bg-[#05070f] p-6 sm:p-8 flex flex-col animate-slide-right overflow-y-auto">
               {/* Drawer Header */}
-              <div className="flex items-center justify-between mb-6 shrink-0">
+              <div className="flex items-center justify-between mb-4 shrink-0">
                  <img src="/logo-horizontal.png" alt="Collectibles" className="h-7 sm:h-8 object-contain" />
                  <button 
                    onClick={() => setMobileMenuOpen(false)}
@@ -747,6 +745,16 @@ export default function StorefrontLayout() {
                  >
                    <X className="w-5 h-5 text-white" />
                  </button>
+              </div>
+
+              {/* Drawer Search */}
+              <div className="mb-4 shrink-0">
+                <StorefrontSearchBar
+                  aiSearchEnabled={isModuleVisible('ai_search')}
+                  allBrands={allBrands}
+                  activeLicenses={activeLicenses}
+                  className="w-full max-w-none"
+                />
               </div>
 
               {/* 1. PRIMARY NAVIGATION (PROMINENT AT TOP) */}

@@ -4,6 +4,7 @@ import { Search, Sparkles, X, Clock, TrendingUp, ArrowRight, Tag, Shield } from 
 import { supabase } from "../../lib/supabase";
 import { getProductImage } from "../../lib/imageUtils";
 import { useCurrency } from "../../contexts/CurrencyContext";
+import { resolveSearchTokens, buildProductSearchOrClause } from "../../lib/search/searchQueryNormalizer";
 
 interface BrandItem {
   id: string;
@@ -23,9 +24,11 @@ interface ProductItem {
   id: string;
   title: string;
   slug: string;
-  price: number;
+  base_price: number;
+  price?: number;
   currency?: string;
-  images?: string[];
+  images?: any;
+  product_images?: Array<{ id: string; url: string; is_primary?: boolean }>;
   brand?: { name: string } | null;
 }
 
@@ -130,10 +133,15 @@ export default function StorefrontSearchBar({
       setMatchedLicenses(lMatches);
 
       try {
+        const tokens = await resolveSearchTokens(trimmed);
+        const orClause = buildProductSearchOrClause(tokens);
+
         const { data, error } = await supabase
           .from("products")
-          .select("id, title, slug, price, currency, images, brand:brands(name)")
-          .ilike("title", "%" + trimmed + "%")
+          .select("id, title, slug, base_price, product_images(id, url, is_primary), brand:brands!products_brand_id_fkey(name)")
+          .eq("status", "published")
+          .eq("is_active", true)
+          .or(orClause)
           .limit(5);
 
         if (!error && data) {
@@ -360,7 +368,10 @@ export default function StorefrontSearchBar({
                     Productos sugeridos
                   </span>
                   {products.map(p => {
-                    const imgUrl = getProductImage(p.images);
+                    const imgUrl = (p.product_images && p.product_images.length > 0)
+                      ? (p.product_images.find(img => img.is_primary)?.url || p.product_images[0]?.url)
+                      : getProductImage(p);
+                    const displayPrice = p.base_price ?? p.price ?? 0;
                     return (
                       <Link
                         key={p.id}
@@ -383,7 +394,7 @@ export default function StorefrontSearchBar({
                             {p.title}
                           </p>
                           <p className="text-[11px] font-black text-[#f00856]">
-                            {formatCurrencyPrice(p.price)}
+                            {formatCurrencyPrice(displayPrice)}
                           </p>
                         </div>
                       </Link>

@@ -7,6 +7,7 @@ import {
 } from '../../lib/search/aiQueryInterpreter';
 import { FALLBACK_USD_TO_UYU_RATE, getStoredExchangeRate } from '../currencyService';
 import { executeAI } from '../ai/aiGateway';
+import { resolveSearchTokens, buildProductSearchOrClause } from '../../lib/search/searchQueryNormalizer';
 
 export interface SearchProductResult {
   id: string;
@@ -156,6 +157,9 @@ export class CollectiblesSearchService {
     }
 
     // 1. Query Local Products
+    const tokens = await resolveSearchTokens(searchTerm);
+    const orClause = buildProductSearchOrClause(tokens);
+
     let localQuery = supabase
       .from('products')
       .select(`
@@ -167,10 +171,12 @@ export class CollectiblesSearchService {
         vendor:vendors(id, store_name, slug, logo_url),
         vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official)
       `)
-      .eq('is_active', true)
-      .limit(limitLocal);
+      .eq('status', 'published')
+      .eq('is_active', true);
 
-    if (searchTerm) {
+    if (orClause) {
+      localQuery = localQuery.or(orClause);
+    } else if (searchTerm) {
       localQuery = localQuery.ilike('title', `%${searchTerm}%`);
     }
     if (localPriceMax) {
@@ -179,6 +185,8 @@ export class CollectiblesSearchService {
     if (localPriceMin) {
       localQuery = localQuery.gte('base_price', Math.round(localPriceMin));
     }
+
+    localQuery = localQuery.limit(limitLocal);
 
     const { data: localData, error: localErr } = await localQuery;
     let localResults: SearchProductResult[] = [];
@@ -219,8 +227,7 @@ export class CollectiblesSearchService {
     let intlQuery = supabase
       .from('international_products')
       .select('id, title, slug, final_price_usd, amazon_list_price_usd, image_url, brand, category, status')
-      .eq('status', 'published')
-      .limit(limitIntl);
+      .eq('status', 'published');
 
     if (searchTerm) {
       intlQuery = intlQuery.ilike('title', `%${searchTerm}%`);
@@ -231,6 +238,8 @@ export class CollectiblesSearchService {
     if (intlPriceMin) {
       intlQuery = intlQuery.gte('final_price_usd', Math.round(intlPriceMin * 100) / 100);
     }
+
+    intlQuery = intlQuery.limit(limitIntl);
 
     const { data: intlData } = await intlQuery;
     let intlResults: SearchProductResult[] = [];
@@ -424,8 +433,10 @@ export class CollectiblesSearchService {
     try {
       supabase.from('ai_search_logs').insert({
         query: rawQuery,
+        normalized_query: tokens.normalized || rawQuery.toLowerCase().trim(),
+        interpreted_intent: interp.intent,
         results_count: combined.length,
-        filters_detected: {
+        applied_filters: {
           brand: interp.detectedBrand,
           license: interp.detectedLicense,
           line: interp.detectedLine,

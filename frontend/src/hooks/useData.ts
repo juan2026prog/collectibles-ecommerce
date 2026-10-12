@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAnalytics } from '../contexts/AnalyticsContext';
+import { resolveSearchTokens, buildProductSearchOrClause, normalizeSearchText } from '../lib/search/searchQueryNormalizer';
 
 // ═══ useProducts ═══
 interface ProductFilters {
@@ -42,13 +43,14 @@ export function useProducts(filters: ProductFilters = {}) {
     let productIds: string[] | null = null;
     let categoryIds: string[] | null = null;
 
-    const [groupRes, catRes, brandRes, licRes, themeRes, colRes] = await Promise.all([
+    const [groupRes, catRes, brandRes, licRes, themeRes, colRes, searchTokens] = await Promise.all([
       filters.group ? supabase.from('product_groups').select('id').eq('slug', filters.group).eq('is_active', true).maybeSingle() : Promise.resolve({ data: null, error: null }),
       filters.category ? supabase.from('categories').select('id').eq('slug', filters.category).eq('is_active', true).maybeSingle() : Promise.resolve({ data: null, error: null }),
       filters.brand ? supabase.from('brands').select('id').eq('slug', filters.brand).eq('status', 'approved').eq('is_active', true).eq('is_public', true).maybeSingle() : Promise.resolve({ data: null, error: null }),
       filters.license ? supabase.from('licenses').select('id').eq('slug', filters.license).eq('is_active', true).maybeSingle() : Promise.resolve({ data: null, error: null }),
       filters.theme ? supabase.from('themes').select('id').eq('slug', filters.theme).eq('is_active', true).maybeSingle() : Promise.resolve({ data: null, error: null }),
-      filters.collection_id ? supabase.from('vendor_store_collection_products').select('product_id').eq('collection_id', filters.collection_id) : Promise.resolve({ data: null, error: null })
+      filters.collection_id ? supabase.from('vendor_store_collection_products').select('product_id').eq('collection_id', filters.collection_id) : Promise.resolve({ data: null, error: null }),
+      filters.search ? resolveSearchTokens(filters.search) : Promise.resolve(null)
     ]);
 
     // Handle group
@@ -318,7 +320,9 @@ export function useProducts(filters: ProductFilters = {}) {
 
       if (filters.minPrice) localQuery = localQuery.gte('base_price', filters.minPrice);
       if (filters.maxPrice) localQuery = localQuery.lte('base_price', filters.maxPrice);
-      if (filters.search) {
+      if (searchTokens) {
+        localQuery = localQuery.or(buildProductSearchOrClause(searchTokens));
+      } else if (filters.search) {
         localQuery = localQuery.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
       }
 
@@ -506,7 +510,9 @@ export function useProducts(filters: ProductFilters = {}) {
 
     if (filters.minPrice) query = query.gte('base_price', filters.minPrice);
     if (filters.maxPrice) query = query.lte('base_price', filters.maxPrice);
-    if (filters.search) {
+    if (searchTokens) {
+      query = query.or(buildProductSearchOrClause(searchTokens));
+    } else if (filters.search) {
       query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
     }
 
@@ -1892,11 +1898,31 @@ export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
           }
 
           if (f.search && f.search.trim()) {
-            const q = f.search.toLowerCase().trim();
+            const rawQ = f.search.toLowerCase().trim();
+            const normQ = normalizeSearchText(f.search);
             const title = (item.title || '').toLowerCase();
+            const normTitle = normalizeSearchText(item.title);
             const desc = (item.description || '').toLowerCase();
+            const normDesc = normalizeSearchText(item.description);
             const brandName = isIntl ? (item.brand || '').toLowerCase() : '';
-            if (!title.includes(q) && !desc.includes(q) && !brandName.includes(q)) {
+            const normBrandName = normalizeSearchText(item.brand);
+
+            // Check if product brand matches query
+            const brandObj = !isIntl && item.brand_id ? brands.find(b => b.id === item.brand_id) : null;
+            const normBrand = brandObj ? normalizeSearchText(brandObj.name) : '';
+
+            // Check if product license matches query
+            const licObj = !isIntl && item.license_id ? licenses.find(l => l.id === item.license_id) : null;
+            const normLic = licObj ? normalizeSearchText(licObj.name) : '';
+
+            const matchesQuery = 
+              title.includes(rawQ) || normTitle.includes(normQ) ||
+              desc.includes(rawQ) || normDesc.includes(normQ) ||
+              (brandName && (brandName.includes(rawQ) || normBrandName.includes(normQ))) ||
+              (normBrand && normBrand.includes(normQ)) ||
+              (normLic && normLic.includes(normQ));
+
+            if (!matchesQuery) {
               return false;
             }
           }
