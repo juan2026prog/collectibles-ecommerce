@@ -140,7 +140,8 @@ describe('FASE 5 — REGRESIÓN Y CALIDAD DEL BUSCADOR DE PRODUCTOS', () => {
             })
           })
         }),
-        insert: () => Promise.resolve({ data: null, error: null })
+        insert: () => Promise.resolve({ data: null, error: null }),
+        rpc: (fn: string) => Promise.resolve({ data: 'mock-uuid', error: null })
       } as any;
     });
 
@@ -164,5 +165,20 @@ describe('FASE 5 — REGRESIÓN Y CALIDAD DEL BUSCADOR DE PRODUCTOS', () => {
     const rate = CollectiblesSearchService.getExchangeRate();
     expect(typeof rate).toBe('number');
     expect(rate).toBeGreaterThan(0);
+  });
+
+  it('6. Registra telemetría segura mediante log_ai_search_event sin bloquear el flujo', async () => {
+    const rpcSpy = vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: 'telemetry-id-123', error: null } as any);
+    
+    await CollectiblesSearchService.search({
+      query: 'Chucky',
+      limitLocal: 5,
+      enableAIEditorial: false
+    });
+
+    expect(rpcSpy).toHaveBeenCalledWith('log_ai_search_event', expect.objectContaining({
+      p_query: 'Chucky',
+      p_source: 'search_service'
+    }));
   });
 });

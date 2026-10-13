@@ -456,9 +456,29 @@ export function useProducts(filters: ProductFilters = {}) {
           });
       }
 
+      const finalCount = localCount + intlCount;
       setProducts(combined.slice(offset, offset + limit));
-      setCount(localCount + intlCount);
+      setCount(finalCount);
       setLoading(false);
+
+      // Controlled telemetry logging for public search queries (non-blocking)
+      if (filters.search && offset === 0) {
+        try {
+          supabase.rpc('log_ai_search_event', {
+            p_query: filters.search,
+            p_normalized_query: searchTokens?.normalized || filters.search.toLowerCase().trim(),
+            p_intent: 'catalog_search',
+            p_filters: {
+              brand: filters.brand,
+              category: filters.category,
+              condition: filters.condition,
+              availability: availMode
+            },
+            p_results_count: finalCount,
+            p_source: 'catalog_shop'
+          }).then(() => {}).catch(() => {});
+        } catch (_) {}
+      }
       return;
     }
 
@@ -552,8 +572,28 @@ export function useProducts(filters: ProductFilters = {}) {
       setProducts([]);
       setCount(0);
     } else if (data) {
+      const finalCount = totalCount || 0;
       setProducts(data);
-      setCount(totalCount || 0);
+      setCount(finalCount);
+
+      // Controlled telemetry logging for public search queries (non-blocking)
+      if (filters.search && offset === 0) {
+        try {
+          supabase.rpc('log_ai_search_event', {
+            p_query: filters.search,
+            p_normalized_query: searchTokens?.normalized || filters.search.toLowerCase().trim(),
+            p_intent: 'catalog_search',
+            p_filters: {
+              brand: filters.brand,
+              category: filters.category,
+              condition: filters.condition,
+              availability: availMode
+            },
+            p_results_count: finalCount,
+            p_source: 'catalog_shop'
+          }).then(() => {}).catch(() => {});
+        } catch (_) {}
+      }
     }
     setLoading(false);
   }, [JSON.stringify(filters)]);

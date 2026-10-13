@@ -429,21 +429,22 @@ export class CollectiblesSearchService {
       }
     }
 
-    // Telemetry log to ai_search_logs (non-blocking)
+    // Telemetry log via secure controlled RPC (non-blocking)
     try {
-      supabase.from('ai_search_logs').insert({
-        query: rawQuery,
-        normalized_query: tokens.normalized || rawQuery.toLowerCase().trim(),
-        interpreted_intent: interp.intent,
-        results_count: combined.length,
-        applied_filters: {
+      supabase.rpc('log_ai_search_event', {
+        p_query: rawQuery,
+        p_normalized_query: tokens.normalized || rawQuery.toLowerCase().trim(),
+        p_intent: interp.intent || 'product_search',
+        p_filters: {
           brand: interp.detectedBrand,
           license: interp.detectedLicense,
           line: interp.detectedLine,
           scale: interp.detectedScale,
           priceCurrency: interp.priceCurrency,
           priceRange: [interp.priceMin, interp.priceMax]
-        }
+        },
+        p_results_count: combined.length,
+        p_source: 'search_service'
       }).then(() => {}).catch(() => {});
     } catch (_) {}
 
