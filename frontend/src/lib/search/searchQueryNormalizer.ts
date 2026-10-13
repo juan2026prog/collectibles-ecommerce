@@ -61,6 +61,20 @@ export async function resolveSearchTokens(query: string): Promise<SearchTokens> 
   if (raw) termSet.add(raw);
   if (normalized) termSet.add(normalized);
 
+  // Strip punctuation and add cleaned phrase if different
+  const cleanedPunctuation = normalized.replace(/[,()]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (cleanedPunctuation && cleanedPunctuation !== normalized) {
+    termSet.add(cleanedPunctuation);
+  }
+
+  // If query contains parentheses, extract the main clause before the parenthesis
+  if (normalized.includes('(')) {
+    const beforeParen = normalized.split('(')[0].replace(/[,()]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (beforeParen.length >= 3) {
+      termSet.add(beforeParen);
+    }
+  }
+
   const synonyms = KNOWN_SYNONYMS[normalized];
   if (synonyms) {
     synonyms.forEach(s => termSet.add(s));

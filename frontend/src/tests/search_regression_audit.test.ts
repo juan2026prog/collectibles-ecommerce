@@ -50,6 +50,10 @@ describe('FASE 5 — REGRESIÓN Y CALIDAD DEL BUSCADOR DE PRODUCTOS', () => {
     const dbzTokens = await resolveSearchTokens('Dragon Ball');
     expect(dbzTokens.terms).toContain('dragon ball');
     expect(dbzTokens.terms).toContain('dragon ball z');
+
+    const parenTokens = await resolveSearchTokens('99 Nights Collectible Plush Toy - Assorted -(20 cm)');
+    expect(parenTokens.terms).toContain('99 nights collectible plush toy - assorted - 20 cm');
+    expect(parenTokens.terms).toContain('99 nights collectible plush toy - assorted -');
   });
 
   it('3. Genera cláusula OR compatible con PostgREST para productos', async () => {
