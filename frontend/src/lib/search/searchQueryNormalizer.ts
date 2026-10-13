@@ -80,12 +80,24 @@ export async function resolveSearchTokens(query: string): Promise<SearchTokens> 
     synonyms.forEach(s => termSet.add(s));
   }
 
-  // Try sub-tokens if multi-word query
+  // Try sub-tokens and prefix windows if multi-word query
   const words = normalized.split(/\s+/).filter(w => w.length > 1);
   words.forEach(w => {
     const subSyns = KNOWN_SYNONYMS[w];
     if (subSyns) subSyns.forEach(s => termSet.add(s));
+    // Include individual significant tokens (e.g. character/brand names >= 4 chars)
+    if (w.length >= 4) {
+      termSet.add(w);
+    }
   });
+
+  // Include 2-word and 3-word prefix windows if available
+  if (words.length >= 2) {
+    termSet.add(words.slice(0, 2).join(' '));
+  }
+  if (words.length >= 3) {
+    termSet.add(words.slice(0, 3).join(' '));
+  }
 
   // Query database brands and licenses asynchronously in parallel
   let brandIds: string[] = [];

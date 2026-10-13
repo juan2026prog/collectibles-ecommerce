@@ -47,13 +47,79 @@ test.describe('E2E Public Search Verification on https://collectibles.uy', () =>
       const bodyText = await page.textContent('body');
       expect(bodyText).toBeDefined();
     });
+
+    test('4. Full Product Card Integrity: Own Product (Minecraft)', async ({ page }) => {
+      await page.goto('https://collectibles.uy/shop?q=MINECRAFT', { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(2500);
+
+      // Target article.grid-card containing product
+      const card = page.locator('article.grid-card').first();
+      await expect(card).toBeVisible({ timeout: 10000 });
+
+      // Title H3 is visible and non-empty
+      const titleElem = card.locator('h3').first();
+      await expect(titleElem).toBeVisible({ timeout: 5000 });
+      const titleText = await titleElem.textContent();
+      expect(titleText?.trim().length).toBeGreaterThan(0);
+
+      // Image has src attribute
+      const imgElem = card.locator('img').first();
+      await expect(imgElem).toBeVisible({ timeout: 5000 });
+      const imgSrc = await imgElem.getAttribute('src');
+      expect(imgSrc).toBeTruthy();
+
+      // Link points to product detail
+      const linkElem = card.locator('a[href^="/producto/"]').first();
+      const href = await linkElem.getAttribute('href');
+      expect(href).toMatch(/^\/producto\/[\w-]+$/);
+    });
+
+    test('5. Full Product Card Integrity: Vendor Product (Star Wars / Black Series)', async ({ page }) => {
+      await page.goto('https://collectibles.uy/shop?q=Star%20Wars', { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(2500);
+
+      const card = page.locator('article.grid-card').first();
+      await expect(card).toBeVisible({ timeout: 10000 });
+
+      const titleElem = card.locator('h3').first();
+      await expect(titleElem).toBeVisible({ timeout: 5000 });
+      const titleText = await titleElem.textContent();
+      expect(titleText?.trim().length).toBeGreaterThan(0);
+
+      const imgElem = card.locator('img').first();
+      await expect(imgElem).toBeVisible({ timeout: 5000 });
+
+      const linkElem = card.locator('a[href^="/producto/"]').first();
+      const href = await linkElem.getAttribute('href');
+      expect(href).toMatch(/^\/producto\/[\w-]+$/);
+    });
+
+    test('6. Full Product Card Integrity: International Product (NECA Ghost Face)', async ({ page }) => {
+      await page.goto('https://collectibles.uy/shop?q=Ghost%20Face', { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(2500);
+
+      const card = page.locator('article.grid-card').first();
+      await expect(card).toBeVisible({ timeout: 10000 });
+
+      const titleElem = card.locator('h3').first();
+      await expect(titleElem).toBeVisible({ timeout: 5000 });
+      const titleText = await titleElem.textContent();
+      expect(titleText?.trim().length).toBeGreaterThan(0);
+
+      const imgElem = card.locator('img').first();
+      await expect(imgElem).toBeVisible({ timeout: 5000 });
+
+      const linkElem = card.locator('a[href^="/producto/"]').first();
+      const href = await linkElem.getAttribute('href');
+      expect(href).toMatch(/^\/producto\/[\w-]+$/);
+    });
   });
 
   // Test mobile viewport
   test.describe('Mobile Viewport (390x844)', () => {
     test.use({ viewport: { width: 390, height: 844 } });
 
-    test('4. Mobile storefront search accessible and responsive', async ({ page }) => {
+    test('7. Mobile storefront search accessible and responsive', async ({ page }) => {
       await page.goto('https://collectibles.uy/shop', { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(1000);
 
