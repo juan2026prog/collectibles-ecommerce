@@ -549,17 +549,34 @@ const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLI
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+function loadTaxonomiesCache() {
+  try {
+    const p = path.join(process.cwd(), 'api', 'taxonomies-cache.json');
+    if (fs.existsSync(p)) {
+      return JSON.parse(fs.readFileSync(p, 'utf8'));
+    }
+  } catch {}
+  return { categories: {}, brands: {}, licenses: {}, themes: {} };
+}
+
+const TAXONOMIES_CACHE = loadTaxonomiesCache();
+
 const STATIC_CATEGORIES = {
-  'figuras': { id: 'cat-figuras', name: 'Figuras de Acción', slug: 'figuras', is_active: true },
-  'estatuas': { id: 'cat-estatuas', name: 'Estatuas y Réplicas', slug: 'estatuas', is_active: true },
-  'accesorios': { id: 'cat-accesorios', name: 'Accesorios y Vitrinas', slug: 'accesorios', is_active: true }
+  ...TAXONOMIES_CACHE.categories,
+  'figuras': { id: 'ddd41421-fb1c-423f-a282-131aba8c4373', name: 'Figuras de Acción', slug: 'figuras', is_active: true, status: 'approved' },
+  'funko-pop': { id: '94c47727-f07d-4c80-b74d-eb8344c8ddeb', name: 'Funko POP', slug: 'funko-pop', is_active: true, status: 'approved' },
+  'estatuas': { id: 'b0e01761-e0e6-4993-9c80-b5443a60c6d9', name: 'Estatuas', slug: 'estatuas', is_active: true, status: 'approved' }
 };
 
 const STATIC_BRANDS = {
+  ...TAXONOMIES_CACHE.brands,
   'funko': { id: 'brand-funko', name: 'Funko', slug: 'funko', description: 'Figuras y Coleccionables Funko Pop en Uruguay.', is_active: true, status: 'approved' },
-  'neca': { id: 'brand-neca', name: 'NECA', slug: 'neca', description: 'Figuras de Acción NECA en Uruguay.', is_active: true, status: 'approved' },
-  'bandai': { id: 'brand-bandai', name: 'Bandai Spirits', slug: 'bandai', description: 'Figuras Bandai Spirits y S.H.Figuarts en Uruguay.', is_active: true, status: 'approved' }
+  'neca': { id: '43edaabc-3910-45ab-b93d-857698fad50b', name: 'NECA', slug: 'neca', description: 'Figuras de Acción NECA en Uruguay.', is_active: true, status: 'approved' },
+  'bandai': { id: 'f8fa5cb1-ae8b-49aa-971c-3cb72199f7d4', name: 'Bandai Spirits', slug: 'bandai', description: 'Figuras Bandai Spirits y S.H.Figuarts en Uruguay.', is_active: true, status: 'approved' }
 };
+
+const STATIC_LICENSES = TAXONOMIES_CACHE.licenses || {};
+const STATIC_THEMES = TAXONOMIES_CACHE.themes || {};
 
 const STATIC_MLU_MAPPINGS = {
   'mercadolibre-mlu1044226594': 'neca-body-knocker-solar-power-marvel-dr-strange',
@@ -584,7 +601,7 @@ const STATIC_MLU_MAPPINGS = {
   'mlu629964263': 'funko-plushies-avenger-infinity-war-hulkbuster'
 };
 
-async function withTimeout(promise, ms = 300) {
+async function withTimeout(promise, ms = 4000) {
   return Promise.race([
     Promise.resolve(promise),
     new Promise((_, reject) => setTimeout(() => reject(new Error('DB Timeout')), ms))
@@ -1383,19 +1400,37 @@ export default async function handler(req, res) {
 
     // 9b. LICENCIA DETAIL
     } else if (type === 'licencia_detail' && slug) {
-      const { data: license } = await supabase
-        .from('licenses')
-        .select('name, slug')
-        .eq('slug', slug)
-        .maybeSingle();
+      let { data: license } = await withTimeout(
+        supabase
+          .from('licenses')
+          .select('id, name, slug')
+          .eq('slug', slug)
+          .maybeSingle(),
+        4000
+      ).catch(() => ({ data: null }));
 
-      const licName = license?.name || slug;
+      if (!license && STATIC_LICENSES[slug]) {
+        license = STATIC_LICENSES[slug];
+      }
+
+      const licName = license?.name || slug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
       title = generateMetaTitle('licencias', licName);
       description = generateMetaDescription('licencias', null, licName);
       canonical = generateCanonical('licencias', slug);
 
       const breadcrumbSchema = generateBreadcrumbs('licencias', { name: licName, slug });
       jsonLdScripts.push(breadcrumbSchema);
+
+      const { data: licProducts } = license?.id ? await withTimeout(
+        supabase
+          .from('products')
+          .select('title, slug, base_price')
+          .eq('license_id', license.id)
+          .eq('is_active', true)
+          .eq('status', 'published')
+          .limit(16),
+        4000
+      ).catch(() => ({ data: [] })) : { data: [] };
 
       bodyContent = `
         <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
@@ -1404,18 +1439,35 @@ export default async function handler(req, res) {
           </nav>
           <h1 style="font-size: 28px; font-weight: bold; margin-bottom: 10px;">${escapeHtml(licName)} en Uruguay</h1>
           <p>${escapeHtml(description)}</p>
+          ${licProducts && licProducts.length > 0 ? `
+            <ul style="list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 15px; margin-top: 20px;">
+              ${licProducts.map(p => `
+                <li style="border: 1px solid #eee; padding: 12px; border-radius: 6px;">
+                  <a href="${BASE_URL}/producto/${p.slug}" style="text-decoration: none; color: #2563eb; font-weight: bold;">${escapeHtml(p.title)}</a>
+                  <p style="color: #16a34a; font-weight: 600; margin-top: 5px;">$${p.base_price} UYU</p>
+                </li>
+              `).join('')}
+            </ul>
+          ` : '<p>Explora nuestras figuras y coleccionables disponibles en el catálogo.</p>'}
         </div>
       `;
 
     // 9c. THEME DETAIL
     } else if (type === 'theme_detail' && slug) {
-      const { data: theme } = await supabase
-        .from('themes')
-        .select('name, slug')
-        .eq('slug', slug)
-        .maybeSingle();
+      let { data: theme } = await withTimeout(
+        supabase
+          .from('themes')
+          .select('id, name, slug')
+          .eq('slug', slug)
+          .maybeSingle(),
+        4000
+      ).catch(() => ({ data: null }));
 
-      const themeName = theme?.name || slug;
+      if (!theme && STATIC_THEMES[slug]) {
+        theme = STATIC_THEMES[slug];
+      }
+
+      const themeName = theme?.name || slug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
       title = generateMetaTitle('themes', themeName);
       description = generateMetaDescription('themes', null, themeName);
       canonical = generateCanonical('themes', slug);

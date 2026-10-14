@@ -50,6 +50,19 @@ const ACADEMY_ARTICLE_SLUGS = [
   "vitrinas-iluminacion-led-y-control-uv"
 ];
 
+import fs from 'fs';
+import path from 'path';
+
+function getFallbackTaxonomies() {
+  try {
+    const p = path.join(process.cwd(), 'api', 'taxonomies-cache.json');
+    if (fs.existsSync(p)) {
+      return JSON.parse(fs.readFileSync(p, 'utf8'));
+    }
+  } catch {}
+  return { categories: {}, brands: {}, licenses: {}, themes: {} };
+}
+
 async function fetchCategories() {
   let allCategories = [];
   let page = 0;
@@ -61,10 +74,10 @@ async function fetchCategories() {
       const { data: batch, error } = await withTimeout(
         supabase
           .from('categories')
-          .select('slug, updated_at, created_at')
+          .select('slug, status, is_active')
           .eq('is_active', true)
           .range(page * pageSize, (page + 1) * pageSize - 1),
-        300
+        5000
       );
 
       if (error) {
@@ -83,6 +96,12 @@ async function fetchCategories() {
       hasMore = false;
     }
   }
+
+  if (allCategories.length === 0) {
+    const cache = getFallbackTaxonomies();
+    allCategories = Object.values(cache.categories || {}).filter(c => c.is_active);
+  }
+
   return allCategories;
 }
 
@@ -101,7 +120,7 @@ async function fetchBrands() {
           .eq('is_active', true)
           .eq('status', 'approved')
           .range(page * pageSize, (page + 1) * pageSize - 1),
-        300
+        5000
       );
 
       if (error) {
@@ -120,6 +139,12 @@ async function fetchBrands() {
       hasMore = false;
     }
   }
+
+  if (allBrands.length === 0) {
+    const cache = getFallbackTaxonomies();
+    allBrands = Object.values(cache.brands || {}).filter(b => b.is_active && (b.status === 'approved' || !b.status));
+  }
+
   return allBrands;
 }
 
@@ -130,16 +155,17 @@ async function fetchLicenses() {
         .from('licenses')
         .select('slug')
         .eq('is_active', true),
-      300
+      5000
     );
 
-    if (error) {
-      console.error('Error fetching sitemap licenses:', error);
-      return [];
+    if (error || !data || data.length === 0) {
+      const cache = getFallbackTaxonomies();
+      return Object.values(cache.licenses || {}).filter(l => l.is_active);
     }
     return data || [];
   } catch {
-    return [];
+    const cache = getFallbackTaxonomies();
+    return Object.values(cache.licenses || {}).filter(l => l.is_active);
   }
 }
 
@@ -150,16 +176,17 @@ async function fetchThemes() {
         .from('themes')
         .select('slug')
         .eq('is_active', true),
-      300
+      5000
     );
 
-    if (error) {
-      console.error('Error fetching sitemap themes:', error);
-      return [];
+    if (error || !data || data.length === 0) {
+      const cache = getFallbackTaxonomies();
+      return Object.values(cache.themes || {}).filter(t => t.is_active);
     }
     return data || [];
   } catch {
-    return [];
+    const cache = getFallbackTaxonomies();
+    return Object.values(cache.themes || {}).filter(t => t.is_active);
   }
 }
 
@@ -178,7 +205,7 @@ async function fetchProducts() {
           .eq('is_active', true)
           .eq('status', 'published')
           .range(page * pageSize, (page + 1) * pageSize - 1),
-        300
+        8000
       );
 
       if (error) {
@@ -281,7 +308,7 @@ export default async function handler(req, res) {
       let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
       categories.forEach(c => {
         if (c.slug) {
-          const date = c.updated_at || c.created_at;
+          const date = c.updated_at || c.created_at || c.approved_at;
           const lastMod = date ? new Date(date).toISOString() : new Date().toISOString();
           xml += `  <url>\n    <loc>${BASE_URL}/categoria/${c.slug}</loc>\n    <lastmod>${lastMod}</lastmod>\n    <priority>0.9</priority>\n    <changefreq>weekly</changefreq>\n  </url>\n`;
         }

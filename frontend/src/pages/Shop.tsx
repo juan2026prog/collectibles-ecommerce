@@ -1168,27 +1168,29 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
       (isLicenseRoute && (currentLicense?.name || licParam) ? currentLicense?.name || licParam : null) ||
       (isThemeRoute && (currentTheme?.name || themeParam) ? currentTheme?.name || themeParam : null) ||
       currentCategory?.name ||
+      (isCategoryRoute && catParam ? catParam.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : null) ||
       currentBrand?.name ||
+      (isBrandRoute && brandParam ? brandParam.toUpperCase() : null) ||
       (searchQ ? `"${searchQ}"` : t('shop.title'));
 
   const seoType = isLicenseRoute
     ? 'licencia'
     : isThemeRoute
     ? 'theme'
-    : isCategoryRoute && currentCategory
+    : isCategoryRoute
     ? 'categoria'
-    : isBrandRoute && currentBrand
+    : isBrandRoute
     ? 'marca'
     : 'shop';
 
   const entityObj = isLicenseRoute
-    ? currentLicense
+    ? currentLicense || (licParam ? { name: licParam, slug: licParam } : undefined)
     : isThemeRoute
-    ? currentTheme
-    : isCategoryRoute && currentCategory
-    ? currentCategory
-    : isBrandRoute && currentBrand
-    ? currentBrand
+    ? currentTheme || (themeParam ? { name: themeParam, slug: themeParam } : undefined)
+    : isCategoryRoute
+    ? currentCategory || (catParam ? { name: catParam.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()), slug: catParam } : undefined)
+    : isBrandRoute
+    ? currentBrand || (brandParam ? { name: brandParam.toUpperCase(), slug: brandParam } : undefined)
     : group;
 
   const breadcrumbSchema = generateBreadcrumbs(seoType as any, entityObj);
@@ -1208,6 +1210,10 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     ? `https://collectibles.uy/licencias/${licParam}`
     : isThemeRoute && themeParam
     ? `https://collectibles.uy/themes/${themeParam}`
+    : isCategoryRoute && catParam
+    ? `https://collectibles.uy/categoria/${catParam}`
+    : isBrandRoute && brandParam
+    ? `https://collectibles.uy/marca/${brandParam}`
     : generateCanonical(seoType, entityObj?.slug);
 
   return (
@@ -1296,10 +1302,10 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                 ? currentTheme?.name || themeParam
                 : group
                 ? group.name
-                : isCategoryRoute && currentCategory
-                ? currentCategory.name
-                : isBrandRoute && currentBrand
-                ? currentBrand.name
+                : isCategoryRoute && (currentCategory || catParam)
+                ? currentCategory?.name || (catParam ? catParam.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : "Categoría")
+                : isBrandRoute && (currentBrand || brandParam)
+                ? currentBrand?.name || (brandParam ? brandParam.toUpperCase() : "Marca")
                 : "Productos"}
             </h1>
             {group?.badge_image_url && (
@@ -1317,6 +1323,12 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
               ? currentLicense.description
               : isThemeRoute && currentTheme?.description
               ? currentTheme.description
+              : isCategoryRoute && currentCategory?.metadata?.subtitle
+              ? currentCategory.metadata.subtitle
+              : isCategoryRoute && catParam
+              ? generateMetaDescription('categoria', null, currentCategory?.name || catParam.replace(/-/g, ' '))
+              : isBrandRoute && (currentBrand?.description || brandParam)
+              ? currentBrand?.description || generateMetaDescription('marca', null, currentBrand?.name || brandParam)
               : group
               ? group.description || "Explora esta colección exclusiva de productos curados."
               : ""}

@@ -1,0 +1,1327 @@
+{
+  "categories": {
+    "tcg": {
+      "id": "6e659b91-5130-4f20-9ddb-609410b9f84c",
+      "name": "TCG & Boardgames",
+      "slug": "tcg",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": null
+    },
+    "home-and-decor": {
+      "id": "8c8e5b0b-9b1e-46e3-980a-db6e4d5156cd",
+      "name": "Home & Decor",
+      "slug": "home-and-decor",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": null
+    },
+    "figuras": {
+      "id": "ddd41421-fb1c-423f-a282-131aba8c4373",
+      "name": "Figuras de Acción",
+      "slug": "figuras",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": null
+    },
+    "esculturas": {
+      "id": "0f5f33ba-8326-48bd-b61d-ec2a484bd5d4",
+      "name": "Esculturas y Estatuas",
+      "slug": "esculturas",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": null
+    },
+    "ropa": {
+      "id": "5d4bbaf6-8e04-42ad-a4ed-3364e47d117c",
+      "name": "Ropa & Accesorios",
+      "slug": "ropa",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": null
+    },
+    "funko-pop": {
+      "id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb",
+      "name": "Funko POP",
+      "slug": "funko-pop",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": null
+    },
+    "cromos-figuritas": {
+      "id": "f899100f-6983-4b46-8fb0-7961baef5c4e",
+      "name": "Cromos / Figuritas",
+      "slug": "cromos-figuritas",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": null
+    },
+    "peluches": {
+      "id": "b1cdd325-1be1-47f8-a8af-bcb58fa9b403",
+      "name": "Peluches",
+      "slug": "peluches",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": null
+    },
+    "llaveros": {
+      "id": "78e5cb29-946b-4bd3-91e4-ded4c06573b7",
+      "name": "Llaveros",
+      "slug": "llaveros",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": null
+    },
+    "juguetes": {
+      "id": "f3436353-9149-435b-b18f-95f24c9e853e",
+      "name": "Juegos y Juguetes",
+      "slug": "juguetes",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": null
+    },
+    "model-kits-v61a4": {
+      "id": "0ec3e416-9ec7-43d6-8c30-6d361da83644",
+      "name": "Model Kits",
+      "slug": "model-kits-v61a4",
+      "is_active": true,
+      "status": "pending_review",
+      "parent_id": null
+    },
+    "mu-ecas-v61a4": {
+      "id": "9a089aa7-3a0c-4f23-8bbb-e7a6bbb52773",
+      "name": "Muñecas",
+      "slug": "mu-ecas-v61a4",
+      "is_active": true,
+      "status": "pending_review",
+      "parent_id": null
+    },
+    "funko-pop-animation": {
+      "id": "c793a3b0-5d6d-4c4d-aad8-b18ff604a393",
+      "name": "Funko Pop! Animation",
+      "slug": "funko-pop-animation",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-anime": {
+      "id": "b88f314a-ed95-4fe0-9c46-452e0cc527ae",
+      "name": "Funko Pop! Anime",
+      "slug": "funko-pop-anime",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-movies": {
+      "id": "82348aa9-bbe6-46a3-871e-d141f10800d7",
+      "name": "Funko Pop! Movies",
+      "slug": "funko-pop-movies",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-television": {
+      "id": "294774df-ce8d-48ee-b5b4-f512ad61b103",
+      "name": "Funko Pop! Television",
+      "slug": "funko-pop-television",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-marvel": {
+      "id": "1d292131-1dbf-4dfc-809d-6a47c709cf66",
+      "name": "Funko Pop! Marvel",
+      "slug": "funko-pop-marvel",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-dc-comics": {
+      "id": "a8d6e67e-8873-4049-a242-d1c2bc2db057",
+      "name": "Funko Pop! DC Comics",
+      "slug": "funko-pop-dc-comics",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-star-wars": {
+      "id": "2983e120-c1f8-49c7-aa04-a083675252a3",
+      "name": "Funko Pop! Star Wars",
+      "slug": "funko-pop-star-wars",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-disney": {
+      "id": "a2c8ab5b-7d09-448d-8ddc-1fb055158bb7",
+      "name": "Funko Pop! Disney",
+      "slug": "funko-pop-disney",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-pixar": {
+      "id": "ee383bb9-f015-4f3c-af5c-c19b5c00bdbf",
+      "name": "Funko Pop! Pixar",
+      "slug": "funko-pop-pixar",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-harry-potter": {
+      "id": "91e804a2-3524-407b-8fb1-14f2f058b8d4",
+      "name": "Funko Pop! Harry Potter",
+      "slug": "funko-pop-harry-potter",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-games": {
+      "id": "72f96baa-8d3a-4675-8006-37a0d560a6f7",
+      "name": "Funko Pop! Games",
+      "slug": "funko-pop-games",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "vehiculos-a-escala": {
+      "id": "c1a368f5-0dea-49dc-95a0-6347cfbd7fd1",
+      "name": "Vehículos a Escala",
+      "slug": "vehiculos-a-escala",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": null
+    },
+    "papeleria": {
+      "id": "96029fc3-6fcc-4fb6-819e-3a0ed87a5cff",
+      "name": "Papelería",
+      "slug": "papeleria",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": null
+    },
+    "funko-pop-pokemon": {
+      "id": "5c2cb14c-dc86-44ad-a539-7ab927f7e829",
+      "name": "Funko Pop! Pokémon",
+      "slug": "funko-pop-pokemon",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-horror": {
+      "id": "644477ae-c1bb-4d35-8241-14189372703e",
+      "name": "Funko Pop! Horror",
+      "slug": "funko-pop-horror",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-rocks": {
+      "id": "91ec86fd-2c21-47d8-a389-23f332f86147",
+      "name": "Funko Pop! Rocks",
+      "slug": "funko-pop-rocks",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-sports": {
+      "id": "ade4b28a-79d8-43a3-9b2f-27ad175a2ac0",
+      "name": "Funko Pop! Sports",
+      "slug": "funko-pop-sports",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-ad-icons": {
+      "id": "9a759014-b89b-4886-8106-b9b23afe9687",
+      "name": "Funko Pop! Ad Icons",
+      "slug": "funko-pop-ad-icons",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-retro-toys": {
+      "id": "2417d5cb-42ae-4370-b78b-2475b9b2f46d",
+      "name": "Funko Pop! Retro Toys",
+      "slug": "funko-pop-retro-toys",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-comic-covers": {
+      "id": "a3e8eeef-ede7-42b0-8f22-67e5f63b47e7",
+      "name": "Funko Pop! Comic Covers",
+      "slug": "funko-pop-comic-covers",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-movie-posters": {
+      "id": "04be3985-1711-41cc-9df5-94e71bf06015",
+      "name": "Funko Pop! Movie Posters",
+      "slug": "funko-pop-movie-posters",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-albums": {
+      "id": "f052219c-aafa-45fd-b35d-2a7788653460",
+      "name": "Funko Pop! Albums",
+      "slug": "funko-pop-albums",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-rides": {
+      "id": "76f23f79-4db4-43b6-9b60-eff48b4285b2",
+      "name": "Funko Pop! Rides",
+      "slug": "funko-pop-rides",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-town": {
+      "id": "3dbe04d7-6efe-4fd5-b7d6-87963921dbee",
+      "name": "Funko Pop! Town",
+      "slug": "funko-pop-town",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-deluxe": {
+      "id": "ca8359d1-4ec3-41a4-8009-b57790cccffb",
+      "name": "Funko Pop! Deluxe",
+      "slug": "funko-pop-deluxe",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-moments": {
+      "id": "ecd9c81d-91ea-4723-994d-e5aca4b83958",
+      "name": "Funko Pop! Moments",
+      "slug": "funko-pop-moments",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-holiday": {
+      "id": "773aef20-2256-448e-8bb4-3929811abc37",
+      "name": "Funko Pop! Holiday",
+      "slug": "funko-pop-holiday",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-art-series": {
+      "id": "bbad7300-b6f0-487b-9f96-b2130d661db6",
+      "name": "Funko Pop! Art Series",
+      "slug": "funko-pop-art-series",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-jumbo-10": {
+      "id": "24d89c37-042e-442a-939e-d635638b5f6c",
+      "name": "Funko Pop! Jumbo (10\")",
+      "slug": "funko-pop-jumbo-10",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "funko-pop-mega-18": {
+      "id": "496c637c-4929-4b05-a511-92a54b1fc2f3",
+      "name": "Funko Pop! Mega (18\")",
+      "slug": "funko-pop-mega-18",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "94c47727-f07d-4c80-b74d-eb8344c8ddeb"
+    },
+    "blindboxes": {
+      "id": "1692ba93-1011-4b16-9432-ab1957d08c0f",
+      "name": "BlindBoxes",
+      "slug": "blindboxes",
+      "is_active": true,
+      "status": "pending_review",
+      "parent_id": null
+    },
+    "trading-cards-sports-cards": {
+      "id": "9e1132b7-b9c4-4325-8785-bb2de4d15760",
+      "name": "TRADING CARDS / SPORTS CARDS",
+      "slug": "trading-cards-sports-cards",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "6e659b91-5130-4f20-9ddb-609410b9f84c"
+    },
+    "tcg-cards": {
+      "id": "e0e632d0-309e-4d2d-b0f6-fd76b2dada86",
+      "name": "TCG",
+      "slug": "tcg-cards",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "6e659b91-5130-4f20-9ddb-609410b9f84c"
+    },
+    "board-games": {
+      "id": "832ca0b5-2ebf-4afe-928c-fa87c0382b4b",
+      "name": "BOARD GAMES",
+      "slug": "board-games",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "6e659b91-5130-4f20-9ddb-609410b9f84c"
+    },
+    "futbol-cards": {
+      "id": "6150142d-bb27-4c02-9022-f95df99943f6",
+      "name": "Fútbol",
+      "slug": "futbol-cards",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "9e1132b7-b9c4-4325-8785-bb2de4d15760"
+    },
+    "basketball-nba-cards": {
+      "id": "dd4909d9-3fb7-468a-b1ae-8003ef346ed4",
+      "name": "Basketball / NBA",
+      "slug": "basketball-nba-cards",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "9e1132b7-b9c4-4325-8785-bb2de4d15760"
+    },
+    "formula-1-cards": {
+      "id": "d1342b30-c704-4c17-9fea-c0ed81f8501e",
+      "name": "Fórmula 1",
+      "slug": "formula-1-cards",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "9e1132b7-b9c4-4325-8785-bb2de4d15760"
+    },
+    "baseball-mlb-cards": {
+      "id": "569337a8-6901-4d6f-8482-74a7c58df377",
+      "name": "Baseball / MLB",
+      "slug": "baseball-mlb-cards",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "9e1132b7-b9c4-4325-8785-bb2de4d15760"
+    },
+    "american-football-nfl-cards": {
+      "id": "de914ae0-4df8-45f0-81a1-f1a6ce77b2b9",
+      "name": "American Football / NFL",
+      "slug": "american-football-nfl-cards",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "9e1132b7-b9c4-4325-8785-bb2de4d15760"
+    },
+    "wrestling-cards": {
+      "id": "2cb3957f-da59-4f52-95a1-c1be1281e47f",
+      "name": "Wrestling",
+      "slug": "wrestling-cards",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "9e1132b7-b9c4-4325-8785-bb2de4d15760"
+    },
+    "comics-entertainment-cards": {
+      "id": "942c7725-eb7c-4bc2-921b-953ad21362cc",
+      "name": "Comics & Entertainment",
+      "slug": "comics-entertainment-cards",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "9e1132b7-b9c4-4325-8785-bb2de4d15760"
+    },
+    "otros-sports-cards": {
+      "id": "3ccb4595-56db-43ca-8ef8-fd8552703a87",
+      "name": "Otros Sports Cards",
+      "slug": "otros-sports-cards",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "9e1132b7-b9c4-4325-8785-bb2de4d15760"
+    },
+    "marvel-cards": {
+      "id": "431b178e-f485-4b9d-bc35-81b98fd73bfb",
+      "name": "Marvel",
+      "slug": "marvel-cards",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "942c7725-eb7c-4bc2-921b-953ad21362cc"
+    },
+    "dc-comics-cards": {
+      "id": "f9cc0114-ea98-47f6-aa35-a2fe7db4754e",
+      "name": "DC Comics",
+      "slug": "dc-comics-cards",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "942c7725-eb7c-4bc2-921b-953ad21362cc"
+    },
+    "star-wars-cards": {
+      "id": "26fcca86-ce4b-42da-a1b6-3a5f8f0db372",
+      "name": "Star Wars",
+      "slug": "star-wars-cards",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "942c7725-eb7c-4bc2-921b-953ad21362cc"
+    },
+    "movies-tv-cards": {
+      "id": "def6277c-d825-4777-a3ed-940b9902ca79",
+      "name": "Movies & TV",
+      "slug": "movies-tv-cards",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "942c7725-eb7c-4bc2-921b-953ad21362cc"
+    },
+    "otros-comics-cards": {
+      "id": "9b5e638a-c9ab-48a6-951a-c639596ac4f8",
+      "name": "Otros",
+      "slug": "otros-comics-cards",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "942c7725-eb7c-4bc2-921b-953ad21362cc"
+    },
+    "pokemon-tcg": {
+      "id": "7fd6a7e2-14f8-4094-86b4-b9ade96ba761",
+      "name": "Pokémon",
+      "slug": "pokemon-tcg",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "e0e632d0-309e-4d2d-b0f6-fd76b2dada86"
+    },
+    "magic-the-gathering-tcg": {
+      "id": "ef9c3a40-3187-4cf0-9c76-97880d170e1f",
+      "name": "Magic: The Gathering",
+      "slug": "magic-the-gathering-tcg",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "e0e632d0-309e-4d2d-b0f6-fd76b2dada86"
+    },
+    "yu-gi-oh-tcg": {
+      "id": "fc27e0f4-c83b-483f-b694-ede3e4237f0b",
+      "name": "Yu-Gi-Oh!",
+      "slug": "yu-gi-oh-tcg",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "e0e632d0-309e-4d2d-b0f6-fd76b2dada86"
+    },
+    "one-piece-tcg": {
+      "id": "1db4b810-d5e6-4e4b-9c5f-d1e3f8b6a076",
+      "name": "One Piece Card Game",
+      "slug": "one-piece-tcg",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "e0e632d0-309e-4d2d-b0f6-fd76b2dada86"
+    },
+    "disney-lorcana-tcg": {
+      "id": "07b174ca-5fcd-4948-85c5-e466bb4a847a",
+      "name": "Disney Lorcana",
+      "slug": "disney-lorcana-tcg",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "e0e632d0-309e-4d2d-b0f6-fd76b2dada86"
+    },
+    "dragon-ball-tcg": {
+      "id": "641a61d5-24ea-4fdd-8d26-c07c2b0e4d7c",
+      "name": "Dragon Ball",
+      "slug": "dragon-ball-tcg",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "e0e632d0-309e-4d2d-b0f6-fd76b2dada86"
+    },
+    "otros-tcg": {
+      "id": "9ac119c8-97a6-47e7-bfe5-418fc7e69aa4",
+      "name": "Otros TCG",
+      "slug": "otros-tcg",
+      "is_active": true,
+      "status": "approved",
+      "parent_id": "e0e632d0-309e-4d2d-b0f6-fd76b2dada86"
+    }
+  },
+  "brands": {
+    "medicos-entertainment": {
+      "id": "ba4cf015-ae50-48cd-8de5-90be5cb5ff06",
+      "name": "Medicos Entertainment",
+      "slug": "medicos-entertainment",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "just": {
+      "id": "5a665d6f-1990-4306-a439-cf88ab493ad5",
+      "name": "JUST",
+      "slug": "just",
+      "is_active": true,
+      "status": "pending_review",
+      "description": null
+    },
+    "majorette": {
+      "id": "55e332f3-b901-4b94-940a-5c4d4c4dd949",
+      "name": "Majorette",
+      "slug": "majorette",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "figgyz": {
+      "id": "404df64d-398b-4bb2-ae85-329e30088a55",
+      "name": "Figgyz",
+      "slug": "figgyz",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "panini": {
+      "id": "6d57d352-c5c4-49a6-b676-726c7e39301e",
+      "name": "Panini",
+      "slug": "panini",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "heroclix": {
+      "id": "d4df1b10-4eb7-4915-8697-38fcd108aa2d",
+      "name": "Heroclix",
+      "slug": "heroclix",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "funrise": {
+      "id": "a2ea77a2-46d5-4fc2-9832-048f8575fd3e",
+      "name": "Funrise",
+      "slug": "funrise",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "kenner": {
+      "id": "7dadd647-50c7-4f53-ab9f-0848b3287991",
+      "name": "Kenner",
+      "slug": "kenner",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "just-toys-intl-": {
+      "id": "3d4d8ac0-45bc-4e35-b323-609c45d027d1",
+      "name": "Just Toys Intl.",
+      "slug": "just-toys-intl-",
+      "is_active": true,
+      "status": "pending_review",
+      "description": null
+    },
+    "dc-collectibles": {
+      "id": "ad5d4bf0-769c-49ea-9d84-211a2fb33a68",
+      "name": "DC Collectibles",
+      "slug": "dc-collectibles",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "square-enix": {
+      "id": "9476b914-5aa8-457a-8850-f318212d9cd2",
+      "name": "Square Enix",
+      "slug": "square-enix",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "phatmojo": {
+      "id": "7fb95fff-e06e-4761-b000-a38e1661b001",
+      "name": "PhatMojo",
+      "slug": "phatmojo",
+      "is_active": true,
+      "status": "pending_review",
+      "description": null
+    },
+    "takaratomy": {
+      "id": "b2d190fa-057b-44b8-868e-ced887d9e55a",
+      "name": "TakaraTomy",
+      "slug": "takaratomy",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "boss-fight-studio": {
+      "id": "9896d591-9eed-4c14-9747-aefdd2164dd8",
+      "name": "Boss Fight Studio",
+      "slug": "boss-fight-studio",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "figma": {
+      "id": "9ddf0ef1-d0ee-4618-8309-ee3c58905bb8",
+      "name": "Figma",
+      "slug": "figma",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "mojang-studio": {
+      "id": "e9e6065d-da94-42dc-98f6-a61fedb9aabe",
+      "name": "Mojang Studio",
+      "slug": "mojang-studio",
+      "is_active": true,
+      "status": "pending_review",
+      "description": null
+    },
+    "banpresto": {
+      "id": "46b57b4d-a454-4fdd-ad71-5920d9def3dd",
+      "name": "Banpresto",
+      "slug": "banpresto",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "mezco-toyz": {
+      "id": "65e6db0a-f7cc-49e4-9d2e-2bac37eaf8da",
+      "name": "Mezco Toyz",
+      "slug": "mezco-toyz",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "jakks-pacific": {
+      "id": "4c557954-aa44-444a-96c8-f1c714d5847f",
+      "name": "Jakks Pacific",
+      "slug": "jakks-pacific",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "funko": {
+      "id": "1cbd2abc-1508-40c4-8823-9806998979e3",
+      "name": "Funko",
+      "slug": "funko",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "hasbro": {
+      "id": "0df4aeab-c5e9-4d35-8a9b-e63f391d5a57",
+      "name": "Hasbro",
+      "slug": "hasbro",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "mcfarlane": {
+      "id": "c2451c65-4354-4955-8afd-ad4bffecd26c",
+      "name": "Mcfarlane",
+      "slug": "mcfarlane",
+      "is_active": true,
+      "status": "approved",
+      "description": "McFarlane"
+    },
+    "neca": {
+      "id": "43edaabc-3910-45ab-b93d-857698fad50b",
+      "name": "NECA",
+      "slug": "neca",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "bandai": {
+      "id": "35d99a48-df19-4d41-8f1e-944862b40f3e",
+      "name": "Bandai",
+      "slug": "bandai",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "mattel": {
+      "id": "ad42bb8f-2dee-4f99-b47a-85c1d029b528",
+      "name": "Mattel",
+      "slug": "mattel",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "hot-toys": {
+      "id": "fc844555-f19f-4278-9f4b-efdfdb45b42e",
+      "name": "Hot Toys",
+      "slug": "hot-toys",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "iron-studios": {
+      "id": "5527492d-c2d3-484c-9148-6fa04f79122c",
+      "name": "Iron Studios",
+      "slug": "iron-studios",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "super7": {
+      "id": "28865b10-c492-4773-9810-270afa95b3d4",
+      "name": "Super7",
+      "slug": "super7",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "cinereplicas": {
+      "id": "6616db35-0d98-41ce-a81f-a99610d9bd24",
+      "name": "Cinereplicas",
+      "slug": "cinereplicas",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "playmates-toys": {
+      "id": "944a8649-47e9-47cc-bfcb-5320ea5a1adb",
+      "name": "Playmates Toys",
+      "slug": "playmates-toys",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "jazwares": {
+      "id": "e28345e2-abee-4faf-9fdf-937acd487cd3",
+      "name": "Jazwares",
+      "slug": "jazwares",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "dasin-model": {
+      "id": "1131563d-5cd6-49f7-a3f1-7511da3e9a13",
+      "name": "Dasin Model",
+      "slug": "dasin-model",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    },
+    "rongdafreng": {
+      "id": "ca1a90ea-8d2a-4083-91ed-bdd67dbcb2e4",
+      "name": "Rongdafreng",
+      "slug": "rongdafreng",
+      "is_active": true,
+      "status": "approved",
+      "description": null
+    }
+  },
+  "licenses": {
+    "dc": {
+      "id": "8956afcb-0f0d-4be9-b26e-3d9ff47ebc1b",
+      "name": "DC",
+      "slug": "dc",
+      "is_active": true,
+      "description": "Universo DC Comics y Warner Bros"
+    },
+    "marvel": {
+      "id": "39af7eed-0ae2-4c7f-ac30-107d20957036",
+      "name": "Marvel",
+      "slug": "marvel",
+      "is_active": true,
+      "description": "Universo Marvel Comics y Marvel Studios"
+    },
+    "dc-comics": {
+      "id": "639a2b37-92df-433f-896e-7c9c1170aa00",
+      "name": "DC Comics",
+      "slug": "dc-comics",
+      "is_active": true,
+      "description": null
+    },
+    "star-wars": {
+      "id": "1d4ebf30-350d-4336-9058-90689b87700a",
+      "name": "Star Wars",
+      "slug": "star-wars",
+      "is_active": true,
+      "description": "Universo Star Wars Lucasfilm"
+    },
+    "one-piece": {
+      "id": "4104dfb1-f1dd-408b-b392-19d8a8fc012e",
+      "name": "One Piece",
+      "slug": "one-piece",
+      "is_active": true,
+      "description": "One Piece Eiichiro Oda / Toei"
+    },
+    "naruto": {
+      "id": "cf17945b-e570-4369-8b87-6e82bef9bfda",
+      "name": "Naruto",
+      "slug": "naruto",
+      "is_active": true,
+      "description": "Naruto Masashi Kishimoto / Pierrot"
+    },
+    "the-simpsons": {
+      "id": "1515e55f-5b84-47b8-9163-db3b72867498",
+      "name": "The Simpsons",
+      "slug": "the-simpsons",
+      "is_active": true,
+      "description": null
+    },
+    "sonic": {
+      "id": "e0b9f1da-0b23-4007-905a-8c6ce242d445",
+      "name": "Sonic",
+      "slug": "sonic",
+      "is_active": true,
+      "description": "Sonic the Hedgehog SEGA"
+    },
+    "disney": {
+      "id": "c948500a-b519-4843-82fd-a70f782c8571",
+      "name": "Disney",
+      "slug": "disney",
+      "is_active": true,
+      "description": "Clásicos y propiedades Disney"
+    },
+    "minecraft": {
+      "id": "4ad35ef9-fc3f-419c-92c2-0fa65949d736",
+      "name": "Minecraft",
+      "slug": "minecraft",
+      "is_active": true,
+      "description": "Minecraft Mojang/Microsoft"
+    },
+    "roblox": {
+      "id": "232c01a8-c01e-40af-8886-f7195380b48f",
+      "name": "Roblox",
+      "slug": "roblox",
+      "is_active": true,
+      "description": "Plataforma Roblox"
+    },
+    "zelda": {
+      "id": "05d7532c-9826-4c56-b1cb-6fabc62e3531",
+      "name": "Zelda",
+      "slug": "zelda",
+      "is_active": true,
+      "description": "The Legend of Zelda Nintendo"
+    },
+    "nightmare-on-elm-street": {
+      "id": "42cf74e3-afba-4c86-b312-7114bb3d996e",
+      "name": "A Nightmare on Elm Street",
+      "slug": "nightmare-on-elm-street",
+      "is_active": true,
+      "description": null
+    },
+    "friday-the-13th": {
+      "id": "ded1f75b-5413-409b-947d-c8eed16784be",
+      "name": "Friday the 13th",
+      "slug": "friday-the-13th",
+      "is_active": true,
+      "description": null
+    },
+    "halloween": {
+      "id": "c05802e2-ac72-40e8-bb36-c78732701f72",
+      "name": "Halloween",
+      "slug": "halloween",
+      "is_active": true,
+      "description": null
+    },
+    "childs-play": {
+      "id": "c529cab8-29dd-4d97-9243-3a81cf4b45a7",
+      "name": "Child's Play / Chucky",
+      "slug": "childs-play",
+      "is_active": true,
+      "description": null
+    },
+    "scream": {
+      "id": "2e649f1b-714f-420d-a939-acd1aec57ec0",
+      "name": "Scream",
+      "slug": "scream",
+      "is_active": true,
+      "description": null
+    },
+    "alien": {
+      "id": "75a66649-7170-4c39-914b-d0b94b7aa409",
+      "name": "Alien",
+      "slug": "alien",
+      "is_active": true,
+      "description": null
+    },
+    "predator": {
+      "id": "4a40dcdc-0500-425e-9d86-292193598395",
+      "name": "Predator",
+      "slug": "predator",
+      "is_active": true,
+      "description": null
+    },
+    "it-pennywise": {
+      "id": "ff66d468-f92c-48cb-b727-bcee2dc63100",
+      "name": "IT / Pennywise",
+      "slug": "it-pennywise",
+      "is_active": true,
+      "description": null
+    },
+    "resident-evil": {
+      "id": "318d8ff4-f6b0-4145-a553-ac2561146f85",
+      "name": "Resident Evil",
+      "slug": "resident-evil",
+      "is_active": true,
+      "description": null
+    },
+    "beetlejuice": {
+      "id": "d8e18aea-2f77-4b7d-ad36-3fce340de9ab",
+      "name": "Beetlejuice",
+      "slug": "beetlejuice",
+      "is_active": true,
+      "description": null
+    },
+    "the-exorcist": {
+      "id": "55417b7c-861c-4109-9dde-587040ede1e8",
+      "name": "The Exorcist",
+      "slug": "the-exorcist",
+      "is_active": true,
+      "description": null
+    },
+    "terrifier": {
+      "id": "190655ce-42f2-4322-a26d-7ae616bfda14",
+      "name": "Terrifier",
+      "slug": "terrifier",
+      "is_active": true,
+      "description": null
+    },
+    "queen": {
+      "id": "9e74d461-bb70-4243-bec6-3749c1ed1456",
+      "name": "Queen",
+      "slug": "queen",
+      "is_active": true,
+      "description": null
+    },
+    "iron-maiden": {
+      "id": "f8b256c8-59a4-4a7e-97ba-883e65c4e983",
+      "name": "Iron Maiden",
+      "slug": "iron-maiden",
+      "is_active": true,
+      "description": null
+    },
+    "kiss": {
+      "id": "2a25018d-b0c6-45d0-92de-961b692e8980",
+      "name": "KISS",
+      "slug": "kiss",
+      "is_active": true,
+      "description": null
+    },
+    "nba": {
+      "id": "7a751bb8-2850-44fc-9937-c5a11e85194d",
+      "name": "NBA",
+      "slug": "nba",
+      "is_active": true,
+      "description": null
+    },
+    "wwe": {
+      "id": "0599ee78-5c06-4e7b-9227-e69f0b48eee1",
+      "name": "WWE",
+      "slug": "wwe",
+      "is_active": true,
+      "description": null
+    },
+    "teenage-mutant-ninja-turtles": {
+      "id": "b4444753-23ec-4ead-8062-0833c97a8d28",
+      "name": "TMNT (Tortugas Ninja)",
+      "slug": "teenage-mutant-ninja-turtles",
+      "is_active": true,
+      "description": null
+    },
+    "saint-seiya": {
+      "id": "e9193fdb-c8ba-4601-9290-eea636e8e891",
+      "name": "Saint Seiya",
+      "slug": "saint-seiya",
+      "is_active": true,
+      "description": null
+    },
+    "sailor-moon": {
+      "id": "0c205bb6-388d-4c09-82e7-f1b08fe1a04c",
+      "name": "Sailor Moon",
+      "slug": "sailor-moon",
+      "is_active": true,
+      "description": null
+    },
+    "mega-man": {
+      "id": "902af3d4-8369-48d4-9ace-32e08c7cdcdc",
+      "name": "Mega Man",
+      "slug": "mega-man",
+      "is_active": true,
+      "description": null
+    },
+    "gargoyles": {
+      "id": "227d9113-d5d4-4436-a1df-e5d9891eac20",
+      "name": "Gargoyles",
+      "slug": "gargoyles",
+      "is_active": true,
+      "description": null
+    },
+    "stranger-things": {
+      "id": "0e707732-9742-4e40-92bd-fe08d82b6739",
+      "name": "Stranger Things",
+      "slug": "stranger-things",
+      "is_active": true,
+      "description": null
+    },
+    "chainsaw-man": {
+      "id": "334f2e20-a854-486e-b479-e176943edca1",
+      "name": "Chainsaw Man",
+      "slug": "chainsaw-man",
+      "is_active": true,
+      "description": null
+    },
+    "demon-slayer": {
+      "id": "a7922dca-5f38-4283-8dbf-e56ba091d39d",
+      "name": "Demon Slayer",
+      "slug": "demon-slayer",
+      "is_active": true,
+      "description": null
+    },
+    "jujutsu-kaisen": {
+      "id": "a8c27f30-6892-4d1e-bb5f-66299b30e808",
+      "name": "Jujutsu Kaisen",
+      "slug": "jujutsu-kaisen",
+      "is_active": true,
+      "description": null
+    },
+    "masters-of-the-universe": {
+      "id": "b97dc1ef-04ed-4589-9b92-5beee22d3323",
+      "name": "Masters of the Universe",
+      "slug": "masters-of-the-universe",
+      "is_active": true,
+      "description": null
+    },
+    "transformers": {
+      "id": "02c9a66b-428d-4030-8f61-87e450014085",
+      "name": "Transformers",
+      "slug": "transformers",
+      "is_active": true,
+      "description": null
+    },
+    "gi-joe": {
+      "id": "de25b560-bb1d-4eca-8345-3f26155155d7",
+      "name": "G.I. Joe",
+      "slug": "gi-joe",
+      "is_active": true,
+      "description": null
+    },
+    "lord-of-the-rings": {
+      "id": "fd0d127a-a47f-42fa-b031-8e1eb7ee9e82",
+      "name": "Lord of the Rings",
+      "slug": "lord-of-the-rings",
+      "is_active": true,
+      "description": null
+    },
+    "super-mario": {
+      "id": "c895d1b0-0a4a-43f7-80d7-68453495f3d2",
+      "name": "Super Mario",
+      "slug": "super-mario",
+      "is_active": true,
+      "description": null
+    },
+    "mortal-kombat": {
+      "id": "3c02b48a-9893-46d7-9b5b-799c047b50b9",
+      "name": "Mortal Kombat",
+      "slug": "mortal-kombat",
+      "is_active": true,
+      "description": null
+    },
+    "street-fighter": {
+      "id": "e0c41888-e55a-49be-843b-90cbc26c2d7b",
+      "name": "Street Fighter",
+      "slug": "street-fighter",
+      "is_active": true,
+      "description": null
+    },
+    "spawn": {
+      "id": "bcc4f57b-f5f1-43da-90b5-39dc75a1e486",
+      "name": "Spawn",
+      "slug": "spawn",
+      "is_active": true,
+      "description": null
+    },
+    "plants-vs-zombies": {
+      "id": "2b678043-2f99-4ea6-9b3d-80a3393e88bf",
+      "name": "Plants vs. Zombies",
+      "slug": "plants-vs-zombies",
+      "is_active": true,
+      "description": null
+    },
+    "spongebob": {
+      "id": "f4e10648-0cde-45ec-9030-36639a29f5d7",
+      "name": "SpongeBob SquarePants",
+      "slug": "spongebob",
+      "is_active": true,
+      "description": null
+    },
+    "beyblade": {
+      "id": "940626a6-79fe-467c-8b81-68ad97ec3343",
+      "name": "Beyblade",
+      "slug": "beyblade",
+      "is_active": true,
+      "description": null
+    },
+    "evangelion": {
+      "id": "c3bff102-0ff8-4808-a467-893453495995",
+      "name": "Neon Genesis Evangelion",
+      "slug": "evangelion",
+      "is_active": true,
+      "description": null
+    },
+    "thundercats": {
+      "id": "1afa67ce-77c1-4782-9342-047509d3f46d",
+      "name": "ThunderCats",
+      "slug": "thundercats",
+      "is_active": true,
+      "description": null
+    },
+    "metal-gear": {
+      "id": "67c10a51-7430-4e31-99e2-acb55cc8ad76",
+      "name": "Metal Gear Solid",
+      "slug": "metal-gear",
+      "is_active": true,
+      "description": null
+    },
+    "universal-monsters": {
+      "id": "a22e7e33-5328-44b2-98a3-f4bd2cd14a91",
+      "name": "Universal Monsters",
+      "slug": "universal-monsters",
+      "is_active": true,
+      "description": null
+    },
+    "the-conjuring": {
+      "id": "3d3516fc-e4b9-4a28-8470-f0a7c6ad817d",
+      "name": "The Conjuring Universe",
+      "slug": "the-conjuring",
+      "is_active": true,
+      "description": null
+    },
+    "fifa-world-cup": {
+      "id": "c20f04aa-b2c8-4c52-8917-7a99ec7b7f9a",
+      "name": "Copa Mundial / FIFA",
+      "slug": "fifa-world-cup",
+      "is_active": true,
+      "description": null
+    },
+    "ghostbusters": {
+      "id": "e58f9fdd-bc42-4c4c-9d02-fa511dbd0ad6",
+      "name": "Ghostbusters",
+      "slug": "ghostbusters",
+      "is_active": true,
+      "description": null
+    },
+    "jurassic-park": {
+      "id": "75703cd6-5be7-481e-a172-d4393ce30476",
+      "name": "Jurassic Park / World",
+      "slug": "jurassic-park",
+      "is_active": true,
+      "description": null
+    },
+    "silent-hill": {
+      "id": "5d91c5e0-f8b5-433a-a5ac-52be1a61c7ce",
+      "name": "Silent Hill",
+      "slug": "silent-hill",
+      "is_active": true,
+      "description": null
+    },
+    "fortnite": {
+      "id": "ed1fa15b-bc87-42ed-b901-a7cc5a1a4e9d",
+      "name": "Fortnite",
+      "slug": "fortnite",
+      "is_active": true,
+      "description": null
+    },
+    "halo": {
+      "id": "81290d27-d67b-40e4-9f81-143877282388",
+      "name": "Halo",
+      "slug": "halo",
+      "is_active": true,
+      "description": null
+    },
+    "et-extra-terrestrial": {
+      "id": "f5ad2350-25d5-4915-a6c6-a10f48d27df7",
+      "name": "E.T. the Extra-Terrestrial",
+      "slug": "et-extra-terrestrial",
+      "is_active": true,
+      "description": null
+    },
+    "dungeons-and-dragons": {
+      "id": "4fcd31af-d8e0-4d41-ad04-325db35439de",
+      "name": "Dungeons & Dragons",
+      "slug": "dungeons-and-dragons",
+      "is_active": true,
+      "description": null
+    },
+    "rick-and-morty": {
+      "id": "17ad2ab1-1aff-4368-b321-a78fe4c452de",
+      "name": "Rick and Morty",
+      "slug": "rick-and-morty",
+      "is_active": true,
+      "description": null
+    },
+    "five-nights-at-freddys": {
+      "id": "0963eb09-0ecc-43a6-b369-2ea9f6b15e80",
+      "name": "Five Nights at Freddy's",
+      "slug": "five-nights-at-freddys",
+      "is_active": true,
+      "description": null
+    },
+    "pokemon": {
+      "id": "b3ab0279-a354-4417-b40e-dcd52f022a57",
+      "name": "Pokémon",
+      "slug": "pokemon",
+      "is_active": true,
+      "description": "Franquicia Pokémon Nintendo/Game Freak"
+    },
+    "dragon-ball": {
+      "id": "372f7dd6-f134-4a9e-a1cf-f82497ba6ed3",
+      "name": "Dragon Ball",
+      "slug": "dragon-ball",
+      "is_active": true,
+      "description": "Dragon Ball Akira Toriyama / Toei"
+    },
+    "harry-potter": {
+      "id": "3a1d5406-c556-4f3a-a77a-29d0cd182e9b",
+      "name": "Harry Potter",
+      "slug": "harry-potter",
+      "is_active": true,
+      "description": "Mundo Mágico de Harry Potter"
+    }
+  },
+  "themes": {
+    "comics": {
+      "id": "62b18c3f-dc7b-4a9b-bdc9-89e5a8020acf",
+      "name": "Comics",
+      "slug": "comics",
+      "is_active": true,
+      "description": "Historietas, novelas gráficas y superhéroes de los universos más grandes."
+    },
+    "anime-manga": {
+      "id": "f049a53b-67cf-4f3d-8b83-682ff2bda574",
+      "name": "Anime & Manga",
+      "slug": "anime-manga",
+      "is_active": true,
+      "description": "Series de animación japonesa, mangas y franquicias clásicas y contemporáneas del anime."
+    },
+    "cine-tv": {
+      "id": "4c758e04-87ff-49ce-8823-7405c3fcbf8b",
+      "name": "Cine",
+      "slug": "cine-tv",
+      "is_active": true,
+      "description": "Películas de culto, sagas cinematográficas y series de televisión."
+    },
+    "videojuegos": {
+      "id": "1dfb8110-c2e5-4610-bc3f-9122265de66d",
+      "name": "Videojuegos",
+      "slug": "videojuegos",
+      "is_active": true,
+      "description": "Franquicias icónicas de consolas, retro gaming y videojuegos modernos."
+    },
+    "horror": {
+      "id": "0f911214-4de2-4c7c-95ed-9346c2d93292",
+      "name": "Horror",
+      "slug": "horror",
+      "is_active": true,
+      "description": "Cine de terror, slashers, criaturas de la noche y suspenso."
+    },
+    "deportes": {
+      "id": "52986c79-e5a9-454f-8367-a88f71601c36",
+      "name": "Deportes",
+      "slug": "deportes",
+      "is_active": true,
+      "description": "Franquicias deportivas, tarjetas de colección de atletas e íconos del deporte."
+    },
+    "tvseries": {
+      "id": "0890dcd9-7204-4c7c-893a-d82cedf52c18",
+      "name": "TV y Series",
+      "slug": "tvseries",
+      "is_active": true,
+      "description": "Bandas legendarias, íconos del rock, pop y cultura musical."
+    },
+    "musica": {
+      "id": "f2eadd7a-ea36-4db5-aeb8-a3bc9e1876e8",
+      "name": "Musica",
+      "slug": "musica",
+      "is_active": true,
+      "description": null
+    }
+  }
+}
