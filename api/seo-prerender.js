@@ -602,9 +602,10 @@ const STATIC_MLU_MAPPINGS = {
 };
 
 async function withTimeout(promise, ms = 4000) {
+  const actualMs = Math.max(ms, 4000);
   return Promise.race([
     Promise.resolve(promise),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('DB Timeout')), ms))
+    new Promise((_, reject) => setTimeout(() => reject(new Error('DB Timeout')), actualMs))
   ]);
 }
 
@@ -740,9 +741,7 @@ async function resolveCanonicalProduct(slug) {
         .from('products')
         .select(selectFields)
         .eq('slug', slug)
-        .maybeSingle(),
-      300
-    );
+        .maybeSingle(), 4000);
 
     if (directProduct && directProduct.is_active && directProduct.status === 'published') {
       return { product: directProduct, isRedirect: false, canonicalSlug: directProduct.slug };
@@ -754,9 +753,7 @@ async function resolveCanonicalProduct(slug) {
         .from('product_slug_redirects')
         .select('new_slug, product_id')
         .eq('old_slug', slug)
-        .maybeSingle(),
-      300
-    );
+        .maybeSingle(), 4000);
 
     if (redirect?.new_slug) {
       const { data: redirectedProduct } = await withTimeout(
@@ -764,9 +761,7 @@ async function resolveCanonicalProduct(slug) {
           .from('products')
           .select(selectFields)
           .eq('slug', redirect.new_slug)
-          .maybeSingle(),
-        300
-      );
+          .maybeSingle(), 4000);
 
       if (redirectedProduct && redirectedProduct.is_active && redirectedProduct.status === 'published') {
         return { product: redirectedProduct, isRedirect: true, canonicalSlug: redirectedProduct.slug };
@@ -781,9 +776,7 @@ async function resolveCanonicalProduct(slug) {
           .from('products')
           .select(selectFields)
           .eq('ml_item_id', mluId)
-          .maybeSingle(),
-        300
-      );
+          .maybeSingle(), 4000);
 
       if (mluProduct && mluProduct.is_active && mluProduct.status === 'published') {
         return { product: mluProduct, isRedirect: true, canonicalSlug: mluProduct.slug };
@@ -798,9 +791,7 @@ async function resolveCanonicalProduct(slug) {
           .from('products')
           .select(selectFields)
           .eq('id', slug)
-          .maybeSingle(),
-        300
-      );
+          .maybeSingle(), 4000);
 
       if (uuidProduct && uuidProduct.is_active && uuidProduct.status === 'published') {
         return { product: uuidProduct, isRedirect: true, canonicalSlug: uuidProduct.slug };
@@ -1036,9 +1027,7 @@ export default async function handler(req, res) {
           .from('categories')
           .select('id, name, slug, is_active, status')
           .eq('slug', slug)
-          .maybeSingle(),
-        300
-      ).catch(() => ({ data: null }));
+          .maybeSingle(), 4000).catch(() => ({ data: null }));
 
       if (!category && STATIC_CATEGORIES[slug]) {
         category = STATIC_CATEGORIES[slug];
@@ -1055,16 +1044,28 @@ export default async function handler(req, res) {
       const breadcrumbSchema = generateBreadcrumbs('categoria', category);
       jsonLdScripts.push(breadcrumbSchema);
 
+      let catIds = [category.id];
+      const { data: subcats } = await withTimeout(
+        supabase
+          .from('categories')
+          .select('id')
+          .eq('parent_id', category.id)
+          .eq('is_active', true),
+        2500
+      ).catch(() => ({ data: [] }));
+
+      if (subcats && subcats.length > 0) {
+        catIds = catIds.concat(subcats.map(s => s.id));
+      }
+
       const { data: catProducts } = await withTimeout(
         supabase
           .from('products')
           .select('title, slug, base_price')
-          .eq('category_id', category.id)
+          .in('category_id', catIds)
           .eq('is_active', true)
           .eq('status', 'published')
-          .limit(16),
-        300
-      ).catch(() => ({ data: [] }));
+          .limit(16), 4000).catch(() => ({ data: [] }));
 
       bodyContent = `
         <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
@@ -1093,9 +1094,7 @@ export default async function handler(req, res) {
           .from('brands')
           .select('id, name, slug, description, is_active, status')
           .eq('slug', slug)
-          .maybeSingle(),
-        300
-      ).catch(() => ({ data: null }));
+          .maybeSingle(), 4000).catch(() => ({ data: null }));
 
       if (!brand && STATIC_BRANDS[slug]) {
         brand = STATIC_BRANDS[slug];
@@ -1112,16 +1111,28 @@ export default async function handler(req, res) {
       const breadcrumbSchema = generateBreadcrumbs('marca', brand);
       jsonLdScripts.push(breadcrumbSchema);
 
-      const { data: brandProducts } = await withTimeout(
+      let { data: brandProducts } = await withTimeout(
         supabase
           .from('products')
           .select('title, slug, base_price')
           .eq('brand_id', brand.id)
           .eq('is_active', true)
           .eq('status', 'published')
-          .limit(16),
-        300
-      ).catch(() => ({ data: [] }));
+          .limit(16), 4000).catch(() => ({ data: [] }));
+
+      if ((!brandProducts || brandProducts.length === 0) && brand.name) {
+        const { data: fallbackBrandProds } = await withTimeout(
+          supabase
+            .from('products')
+            .select('title, slug, base_price')
+            .ilike('title', `%${brand.name}%`)
+            .eq('is_active', true)
+            .eq('status', 'published')
+            .limit(16), 3000).catch(() => ({ data: [] }));
+        if (fallbackBrandProds && fallbackBrandProds.length > 0) {
+          brandProducts = fallbackBrandProds;
+        }
+      }
 
       bodyContent = `
         <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
@@ -1641,9 +1652,7 @@ export default async function handler(req, res) {
           supabase.from('products').select('title, slug, base_price').eq('is_active', true).eq('status', 'published').limit(12),
           supabase.from('categories').select('name, slug').eq('is_active', true).eq('status', 'approved').limit(10),
           supabase.from('brands').select('name, slug').eq('is_active', true).eq('status', 'approved').limit(10)
-        ]),
-        300
-      ).catch(() => [{ data: [] }, { data: [] }, { data: [] }]);
+        ]), 4000).catch(() => [{ data: [] }, { data: [] }, { data: [] }]);
 
       bodyContent = `
         <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
