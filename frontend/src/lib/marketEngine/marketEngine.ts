@@ -8,6 +8,7 @@ export const INITIAL_DEFAULT_MARKETS: MarketRecord[] = [
     country_name: 'Uruguay',
     currency: 'UYU',
     logistics_mode: 'IMPORT_HUB',
+    commerce_mode: 'FULL_COMMERCE',
     market_status: 'LIVE',
     public_enabled: true,
     checkout_enabled: true,
@@ -22,20 +23,22 @@ export const INITIAL_DEFAULT_MARKETS: MarketRecord[] = [
     country_name: 'Argentina',
     currency: 'ARS',
     logistics_mode: 'IMPORT_HUB',
-    market_status: 'LIVE',
-    public_enabled: true,
-    checkout_enabled: true,
+    commerce_mode: 'INTERNATIONAL_ONLY',
+    market_status: 'DISABLED',
+    public_enabled: false,
+    checkout_enabled: false,
     provider: 'import_hub',
-    provider_environment: 'production',
+    provider_environment: 'test',
     preview_enabled: true,
     sort_order: 2,
-    metadata: { flag: '🇦🇷', tax_regime: 'franquicia_argentina' }
+    metadata: { flag: '🇦🇷', tax_regime: 'franquicia_argentina', notes: 'En espera de certificación Deblex' }
   },
   {
     country_code: 'CL',
     country_name: 'Chile',
     currency: 'CLP',
     logistics_mode: 'SKYPOSTAL',
+    commerce_mode: 'INTERNATIONAL_ONLY',
     market_status: 'PREVIEW',
     public_enabled: false,
     checkout_enabled: false,
@@ -54,7 +57,7 @@ export const INITIAL_DEFAULT_MARKETS: MarketRecord[] = [
         rates_ready: true,
         fuel_ready: true,
         pricing_ready: true,
-        checkout_ready: true,
+        checkout_ready: false,
         api_ready: false, // Pending production API credentials
         tracking_ready: true,
         security_ready: true,
@@ -69,6 +72,7 @@ export const INITIAL_DEFAULT_MARKETS: MarketRecord[] = [
     country_name: 'Perú',
     currency: 'PEN',
     logistics_mode: 'SKYPOSTAL',
+    commerce_mode: 'INTERNATIONAL_ONLY',
     market_status: 'PREVIEW',
     public_enabled: false,
     checkout_enabled: false,
@@ -83,20 +87,22 @@ export const INITIAL_DEFAULT_MARKETS: MarketRecord[] = [
     country_name: 'Brasil',
     currency: 'BRL',
     logistics_mode: 'SKYPOSTAL',
-    market_status: 'PREVIEW',
+    commerce_mode: 'INTERNATIONAL_ONLY',
+    market_status: 'DISABLED',
     public_enabled: false,
     checkout_enabled: false,
     provider: 'skypostal',
     provider_environment: 'test',
-    preview_enabled: true,
+    preview_enabled: false,
     sort_order: 5,
-    metadata: { flag: '🇧🇷', target_tier: 'tier_2' }
+    metadata: { flag: '🇧🇷', target_tier: 'tier_2', notes: 'Fuera de la expansión comercial inicial' }
   },
   {
     country_code: 'CO',
     country_name: 'Colombia',
     currency: 'COP',
     logistics_mode: 'SKYPOSTAL',
+    commerce_mode: 'INTERNATIONAL_ONLY',
     market_status: 'PREVIEW',
     public_enabled: false,
     checkout_enabled: false,
@@ -111,6 +117,7 @@ export const INITIAL_DEFAULT_MARKETS: MarketRecord[] = [
     country_name: 'Ecuador',
     currency: 'USD',
     logistics_mode: 'SKYPOSTAL',
+    commerce_mode: 'INTERNATIONAL_ONLY',
     market_status: 'PREVIEW',
     public_enabled: false,
     checkout_enabled: false,
@@ -125,6 +132,7 @@ export const INITIAL_DEFAULT_MARKETS: MarketRecord[] = [
     country_name: 'México',
     currency: 'MXN',
     logistics_mode: 'SKYPOSTAL',
+    commerce_mode: 'INTERNATIONAL_ONLY',
     market_status: 'DISABLED',
     public_enabled: false,
     checkout_enabled: false,
@@ -162,14 +170,16 @@ export function resolveMarket(
     const isReadyForLive = found.market_status === 'READY_FOR_LIVE';
     const isLive = found.market_status === 'LIVE';
     const isDisabled = found.market_status === 'DISABLED';
-    const canCheckout = found.checkout_enabled && isLive;
-    const canBrowse = found.public_enabled || isPreview || isReadyForLive;
+    const canCheckout = Boolean(found.checkout_enabled && isLive);
+    const canBrowse = Boolean(found.public_enabled || isPreview || isReadyForLive);
+    const commerceMode = found.commerce_mode || (found.country_code === 'UY' ? 'FULL_COMMERCE' : 'INTERNATIONAL_ONLY');
 
     return {
       countryCode: found.country_code,
       countryName: found.country_name,
       currency: found.currency,
       logisticsMode: found.logistics_mode,
+      commerceMode,
       marketStatus: found.market_status,
       provider: found.provider,
       canCheckout,
@@ -178,17 +188,20 @@ export function resolveMarket(
       isReadyForLive,
       isLive,
       isDisabled,
+      isFullCommerce: commerceMode === 'FULL_COMMERCE',
+      isInternationalOnly: commerceMode === 'INTERNATIONAL_ONLY',
       flag: found.metadata?.flag || FLAG_FALLBACK_MAP[found.country_code] || '🌐',
       metadata: found.metadata || {}
     };
   }
 
-  // Fallback for unrecognized country
+  // Fallback for unrecognized country - Fail Safe
   return {
     countryCode: code,
     countryName: code,
     currency: 'USD',
     logisticsMode: 'IMPORT_HUB',
+    commerceMode: 'INTERNATIONAL_ONLY',
     marketStatus: 'DISABLED',
     provider: 'import_hub',
     canCheckout: false,
@@ -197,6 +210,8 @@ export function resolveMarket(
     isReadyForLive: false,
     isLive: false,
     isDisabled: true,
+    isFullCommerce: false,
+    isInternationalOnly: true,
     flag: FLAG_FALLBACK_MAP[code] || '🌐',
     metadata: {}
   };

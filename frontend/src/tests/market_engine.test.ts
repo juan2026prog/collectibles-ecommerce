@@ -17,14 +17,14 @@ describe('Market Engine — Phase 1 Destination Resolution', () => {
     expect(isSkyPostalMarket(market)).toBe(false);
   });
 
-  it('resolves Argentina (AR) to IMPORT_HUB in LIVE state', () => {
+  it('resolves Argentina (AR) to IMPORT_HUB in DISABLED state by default (Fail-Safe)', () => {
     const market = resolveMarket('AR', INITIAL_DEFAULT_MARKETS);
     expect(market.countryCode).toBe('AR');
     expect(market.countryName).toBe('Argentina');
     expect(market.logisticsMode).toBe('IMPORT_HUB');
-    expect(market.marketStatus).toBe('LIVE');
-    expect(market.canCheckout).toBe(true);
-    expect(market.canBrowse).toBe(true);
+    expect(market.marketStatus).toBe('DISABLED');
+    expect(market.canCheckout).toBe(false);
+    expect(market.canBrowse).toBe(false);
     expect(market.currency).toBe('ARS');
     expect(isSkyPostalMarket(market)).toBe(false);
   });
@@ -53,13 +53,13 @@ describe('Market Engine — Phase 1 Destination Resolution', () => {
     expect(market.currency).toBe('PEN');
   });
 
-  it('resolves Brasil (BR) to SKYPOSTAL in PREVIEW state', () => {
+  it('resolves Brasil (BR) to SKYPOSTAL in DISABLED state', () => {
     const market = resolveMarket('BR', INITIAL_DEFAULT_MARKETS);
     expect(market.countryCode).toBe('BR');
     expect(market.logisticsMode).toBe('SKYPOSTAL');
-    expect(market.marketStatus).toBe('PREVIEW');
+    expect(market.marketStatus).toBe('DISABLED');
     expect(market.canCheckout).toBe(false);
-    expect(market.isPreview).toBe(true);
+    expect(market.isDisabled).toBe(true);
     expect(market.currency).toBe('BRL');
   });
 
