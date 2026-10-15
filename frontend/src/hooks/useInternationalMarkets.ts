@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { MarketRecord, MarketResolution, MarketStatus } from '../lib/marketEngine/marketTypes';
 import { INITIAL_DEFAULT_MARKETS, resolveMarket } from '../lib/marketEngine/marketEngine';
+import { resolveCountryFromHostname } from '../lib/marketEngine/domainMarketResolver';
 
 export interface AuditLogEntry {
   id: string;
@@ -207,6 +208,12 @@ export function useInternationalMarkets() {
     return resolveMarket(countryCode, markets);
   }, [markets]);
 
+  const getMarketByHostname = useCallback((rawHostname?: string): MarketResolution => {
+    const host = rawHostname !== undefined ? rawHostname : (typeof window !== 'undefined' ? window.location.hostname : '');
+    const code = resolveCountryFromHostname(host);
+    return resolveMarket(code, markets);
+  }, [markets]);
+
   return {
     markets,
     loading,
@@ -219,6 +226,7 @@ export function useInternationalMarkets() {
     updateMarketConfig,
     updateGlobalMarkup,
     logAuditAction,
-    getMarket
+    getMarket,
+    getMarketByHostname
   };
 }

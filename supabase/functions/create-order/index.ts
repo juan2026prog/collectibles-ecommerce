@@ -141,6 +141,138 @@ function isLocationInSoyDeliveryZone(department?: string | null, city?: string |
   return false;
 }
 
+const URUGUAY_DEPARTMENTS = new Set([
+  "artigas", "canelones", "cerro largo", "colonia", "durazno",
+  "flores", "florida", "lavalleja", "maldonado", "montevideo",
+  "paysandu", "rio negro", "rivera", "rocha", "salto",
+  "san jose", "soriano", "tacuarembo", "treinta y tres"
+]);
+
+const ARGENTINA_PROVINCES = new Set([
+  "buenos aires", "caba", "ciudad autonoma de buenos aires", "catamarca", "chaco", "chubut",
+  "cordoba", "corrientes", "entre rios", "formosa", "jujuy", "la pampa", "la rioja",
+  "mendoza", "misiones", "neuquen", "rio negro", "salta", "san juan", "san luis",
+  "santa cruz", "santa fe", "santiago del estero", "tierra del fuego", "tucuman"
+]);
+
+export interface CountryValidationResult {
+  countryCode: string;
+  countryName: string;
+  isUruguay: boolean;
+  isArgentina: boolean;
+  isValid: boolean;
+  error?: string;
+}
+
+export function validateAndResolveOrderCountry(shippingAddress: any, declaredCurrency?: string): CountryValidationResult {
+  if (!shippingAddress || typeof shippingAddress !== 'object') {
+    return {
+      countryCode: '',
+      countryName: '',
+      isUruguay: false,
+      isArgentina: false,
+      isValid: false,
+      error: "La dirección de envío es obligatoria para determinar el país de destino."
+    };
+  }
+
+  const rawCountry = (shippingAddress.country || '').toString().trim();
+  const rawDept = normalizeLocation(shippingAddress.department || '').toLowerCase();
+  const rawCity = normalizeLocation(shippingAddress.city || '').toLowerCase();
+  const normCountry = normalizeLocation(rawCountry).toLowerCase();
+
+  // Detect explicit international indicator flags in address
+  const hasArgentinaFiscalId = !!(shippingAddress.dni || shippingAddress.cuit || shippingAddress.razon_social);
+  const hasInternationalCourier = !!(shippingAddress.international_courier_name || shippingAddress.international_customer_code);
+
+  // If no country was declared:
+  if (!rawCountry) {
+    // Check if address signals an international destination disguised without country
+    if (hasArgentinaFiscalId || ARGENTINA_PROVINCES.has(rawDept)) {
+      return {
+        countryCode: 'AR',
+        countryName: 'Argentina',
+        isUruguay: false,
+        isArgentina: true,
+        isValid: false,
+        error: "Se detectó destino o identificación de Argentina pero el país no fue declarado explícitamente."
+      };
+    }
+    // Backward compatibility: If it has a valid Uruguayan department/city or DAC method, treat as Uruguay
+    if (URUGUAY_DEPARTMENTS.has(rawDept) || rawDept === 'montevideo' || rawCity === 'montevideo') {
+      return {
+        countryCode: 'UY',
+        countryName: 'Uruguay',
+        isUruguay: true,
+        isArgentina: false,
+        isValid: true
+      };
+    }
+    return {
+      countryCode: '',
+      countryName: '',
+      isUruguay: false,
+      isArgentina: false,
+      isValid: false,
+      error: "El país de destino es obligatorio y no pudo determinarse confiablemente a partir de la dirección."
+    };
+  }
+
+  // Cross-check Uruguay
+  if (normCountry === 'uruguay' || normCountry === 'uy') {
+    // Cross-check: If country is declared as Uruguay, but address contains Argentina fiscal fields or provinces
+    if (hasArgentinaFiscalId) {
+      return {
+        countryCode: 'UY',
+        countryName: 'Uruguay',
+        isUruguay: false,
+        isArgentina: true,
+        isValid: false,
+        error: "Contradicción de destino: Se declaró Uruguay pero se proporcionaron datos fiscales o de identificación de Argentina (DNI/CUIT)."
+      };
+    }
+    if (rawDept && ARGENTINA_PROVINCES.has(rawDept) && rawDept !== 'rio negro') {
+      // 'rio negro' exists in both UY and AR, but all other provinces are uniquely AR
+      return {
+        countryCode: 'UY',
+        countryName: 'Uruguay',
+        isUruguay: false,
+        isArgentina: true,
+        isValid: false,
+        error: `Contradicción de destino: Se declaró Uruguay pero la provincia o departamento "${shippingAddress.department}" corresponde a Argentina.`
+      };
+    }
+    return {
+      countryCode: 'UY',
+      countryName: 'Uruguay',
+      isUruguay: true,
+      isArgentina: false,
+      isValid: true
+    };
+  }
+
+  // Cross-check Argentina
+  if (normCountry === 'argentina' || normCountry === 'ar') {
+    return {
+      countryCode: 'AR',
+      countryName: 'Argentina',
+      isUruguay: false,
+      isArgentina: true,
+      isValid: true
+    };
+  }
+
+  // Other countries
+  const code = normCountry.slice(0, 2).toUpperCase();
+  return {
+    countryCode: code,
+    countryName: rawCountry,
+    isUruguay: false,
+    isArgentina: false,
+    isValid: true
+  };
+}
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -1276,9 +1408,52 @@ function sanitizePayloadForLogging(data: any) {
       });
     }
 
-    // Resolve country & destination
-    const targetCountry = (payload.shipping_address?.country || 'Uruguay').trim();
-    const isArgentinaOrder = targetCountry.toLowerCase() === 'argentina' || targetCountry.toLowerCase() === 'ar';
+    // Resolve country & destination via strict server-side validation and address cross-checking
+    const countryValidation = validateAndResolveOrderCountry(payload.shipping_address, payload.currency);
+    if (!countryValidation.isValid) {
+      console.error("[Create Order] Destination Country Validation Error:", countryValidation.error);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: countryValidation.error || "Los datos de destino son contradictorios o inválidos.",
+          details: {
+            reason: "INVALID_DESTINATION_COUNTRY",
+            message: countryValidation.error
+          }
+        }),
+        { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const targetCountry = countryValidation.countryName;
+    const isArgentinaOrder = countryValidation.isArgentina;
+    const isUruguayOrder = countryValidation.isUruguay;
+
+    // SERVER-SIDE ZERO TRUST: Validate market commercial authorization
+    // Only Uruguay is LIVE for full commercial checkout. All other countries are blocked from checkout until certified.
+    if (!isUruguayOrder) {
+      const countryCode = countryValidation.countryCode;
+      
+      // Check database market status if table exists
+      const { data: dbMarket } = await supabase
+        .from('international_markets')
+        .select('market_status, checkout_enabled')
+        .eq('country_code', countryCode)
+        .maybeSingle();
+
+      const isLiveAndEnabled = dbMarket ? (dbMarket.market_status === 'LIVE' && dbMarket.checkout_enabled === true) : false;
+
+      // Fail-Safe: If market is not explicitly LIVE and checkout_enabled, reject immediately
+      if (!isLiveAndEnabled) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `El checkout para ${targetCountry} se encuentra temporalmente inactivo mientras se completa la integración logística y aduanera oficial.`
+          }),
+          { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
     // SERVER-SIDE ZERO TRUST: Calculate Real Weight, Volumetric Weight, and Packaging Type directly from DB products
     let totalRealWeightKg = 0;
