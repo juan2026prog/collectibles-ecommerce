@@ -19,7 +19,10 @@ export async function checkDatabaseStability(fetcher = fetch) {
       const elapsed_ms = Math.round(performance.now() - started);
       checks.push({ path, status: response.status, ok: valid, elapsed_ms,
         slow: elapsed_ms > 4000, cache: response.headers.get('x-vercel-cache'),
-        ...(api && data ? { count: data.count, page_size: data.products?.length } : {}) });
+        ...(api && data ? { count: data.count, page_size: data.products?.length,
+          origin_snapshot: response.headers.get('x-catalog-snapshot'),
+          origin_snapshot_age_seconds: response.headers.has('x-catalog-snapshot-age') ? Number(response.headers.get('x-catalog-snapshot-age')) : null,
+          cdn_age_seconds: response.headers.has('age') ? Number(response.headers.get('age')) : null } : {}) });
     } catch (error) {
       // Print no response bodies, credentials or raw upstream errors.
       checks.push({ path, ok: false, elapsed_ms: Math.round(performance.now() - started),

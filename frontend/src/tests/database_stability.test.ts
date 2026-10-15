@@ -94,10 +94,10 @@ describe('Public catalog correctness and bounded payloads', () => {
 });
 
 describe('Snapshot stampede and failure protection', () => {
-  function fakeClient(fail:()=>boolean=()=>false) {
+  function fakeClient(fail:()=>boolean=()=>false, products:any[] = []) {
     const from=vi.fn((table:string)=>{
       const builder:any={select:()=>builder,eq:()=>builder,order:()=>builder,
-        range:vi.fn(async()=> fail() && table==='products' ? {data:null,error:{message:'timeout'}} : {data:[],error:null})};return builder;
+        range:vi.fn(async()=> fail() && table==='products' ? {data:null,error:{message:'timeout'}} : {data:table==='products'?products:[],error:null})};return builder;
     });
     return {from,rpc:vi.fn(async()=>({data:{international_public_enabled:false},error:null}))};
   }
@@ -111,6 +111,18 @@ describe('Snapshot stampede and failure protection', () => {
     await expect(repo.get()).rejects.toThrow();const calls=client.from.mock.calls.length;
     await expect(repo.get()).rejects.toThrow();expect(client.from.mock.calls.length).toBe(calls);
     clock=31000;fail=false;await expect(repo.get()).resolves.toMatchObject({stale:false});
+  });
+  it('uses only a verified snapshot during a transient refresh failure and never renews its expiry',async()=>{
+    let clock=0,fail=false;const client=fakeClient(()=>fail,[raw().local[0]]);
+    const repo=createCatalogRepository(client,()=>clock);
+    const verified=await repo.get();expect(verified.catalog.rows.map(p=>p.id)).toEqual(['a']);
+    clock=61000;fail=true;
+    const fallback=await repo.get();expect(fallback).toMatchObject({stale:true,age_ms:61000});
+    expect(fallback.catalog).toBe(verified.catalog);
+    const calls=client.rpc.mock.calls.length;
+    clock=62000;await expect(repo.get()).resolves.toMatchObject({stale:true});
+    expect(client.rpc).toHaveBeenCalledTimes(calls);
+    clock=180000;await expect(repo.get()).rejects.toThrow();
   });
 });
 
@@ -127,6 +139,17 @@ describe('HTTP failure and cancellation semantics',()=>{
     await createCatalogHandler(()=>({get:async()=>({catalog}),client:{from}}))({method:'GET',query:{mode:'facets',availability:'all',limit:'0'},headers:{authorization:'Bearer private-user'}},res);
     expect(res.statusCode).toBe(200);expect(res.body.products).toEqual([]);expect(res.body.count).toBe(3);expect(from).not.toHaveBeenCalled();
     expect(res.headers['Vercel-CDN-Cache-Control']).toContain('s-maxage=60');
+  });
+  it('does not cache a verified fallback again and still hydrates current prices and publication status',async()=>{
+    const catalog=prepareCatalog(raw({internationalEnabled:false})),res=response();
+    const current={...raw().local[0],base_price:9999};
+    const builder:any={select:()=>builder,in:()=>builder,eq:vi.fn(()=>builder),then:(resolve:any)=>Promise.resolve({data:[current],error:null}).then(resolve)};
+    await createCatalogHandler(()=>({get:async()=>({catalog,stale:true,age_ms:61000}),client:{from:()=>builder}}))
+      ({method:'GET',query:{availability:'all',limit:'1',sortBy:'price-low'}},res);
+    expect(res.statusCode).toBe(200);expect(res.body.products[0].base_price).toBe(9999);
+    expect(builder.eq).toHaveBeenCalledWith('status','published');expect(builder.eq).toHaveBeenCalledWith('is_active',true);
+    expect(res.headers['Vercel-CDN-Cache-Control']).toBe('no-store');
+    expect(res.headers['X-Catalog-Snapshot']).toBe('stale');expect(res.headers['X-Catalog-Snapshot-Age']).toBe('61');
   });
   it('aborts the actual database operation at its deadline',async()=>{
     vi.useFakeTimers();let signal:AbortSignal|undefined;

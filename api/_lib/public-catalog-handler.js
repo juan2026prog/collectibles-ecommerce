@@ -21,7 +21,7 @@ export function createCatalogHandler(getRepository = getCatalogRepository) {
     catch { return res.status(400).json({ error: 'Invalid catalog filters' }); }
     try {
       const repo = getRepository();
-      const { catalog } = await repo.get();
+      const { catalog, stale = false, age_ms = 0 } = await repo.get();
       let collectionIds = null;
       if (filters.collection_id) {
         if (!/^[0-9a-f-]{36}$/i.test(filters.collection_id)) return res.status(400).json({ error: 'Invalid collection' });
@@ -58,9 +58,15 @@ export function createCatalogHandler(getRepository = getCatalogRepository) {
       }
       const imageVariants = await readMediaVariants(repo.client, filters.mode === 'facets' ? catalog : products);
       // This response is anonymous and identical for every caller; never forward cookies or user JWTs.
-      res.setHeader('Cache-Control', 'public, max-age=0');
-      res.setHeader('CDN-Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
-      res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
+      res.setHeader('X-Catalog-Snapshot', stale ? 'stale' : 'fresh');
+      res.setHeader('X-Catalog-Snapshot-Age', String(Math.floor(age_ms / 1000)));
+      if (stale) {
+        // Do not let another CDN lifetime extend the verified snapshot budget.
+      } else {
+        res.setHeader('Cache-Control', 'public, max-age=0');
+        res.setHeader('CDN-Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
+        res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
+      }
       res.setHeader('X-Catalog-Version', '2026-10-stability-1');
       return res.status(200).json({ products, image_variants:imageVariants, count:selected.count, facets:selected.facets,
         ...(filters.mode === 'facets' ? { taxonomies: {

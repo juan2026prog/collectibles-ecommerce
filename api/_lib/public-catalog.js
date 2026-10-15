@@ -130,6 +130,10 @@ export function selectCatalog(catalog, filters, collectionIds = null) {
 
 export function createCatalogRepository(client, now = Date.now) {
   let snapshot = null, loadedAt = 0, retryAt = 0, pending = null;
+  // Match the existing CDN freshness budget: 60s fresh + at most 120s grace.
+  // A fallback never advances loadedAt, and cards are still hydrated afresh.
+  const cached = stale => ({ catalog: snapshot, stale, age_ms: Math.max(0, now() - loadedAt) });
+  const usableFallback = () => snapshot && now() - loadedAt >= 0 && now() - loadedAt < 180000;
   let reading = 0;
   const queue = [];
   const read = task => new Promise((resolve, reject) => {
@@ -184,12 +188,26 @@ export function createCatalogRepository(client, now = Date.now) {
     client,
     readAll,
     async get() {
-      if (snapshot && now() - loadedAt < 60000) return { catalog: snapshot, stale: false };
-      if (now() < retryAt) throw new Error('Catalog temporarily unavailable');
-      if (!pending) pending = refresh().catch(error => { retryAt = now() + 30000; throw error; }).finally(() => { pending = null; });
+      if (snapshot && now() - loadedAt >= 0 && now() - loadedAt < 60000) return cached(false);
+      if (now() < retryAt) {
+        if (usableFallback()) return cached(true);
+        throw new Error('Catalog temporarily unavailable');
+      }
+      if (!pending) pending = refresh().catch(error => {
+        retryAt = now() + 30000;
+        if (usableFallback()) console.error('[public-catalog] Upstream snapshot refresh failed', {
+          kind: /57014/.test(String(error?.message)) ? 'QUERY_CANCELLED'
+            : /timeout|timed out/i.test(String(error?.message)) ? 'TIMEOUT' : 'UPSTREAM_READ_FAILED',
+          fallback_available: true, age_ms: now() - loadedAt,
+        });
+        throw error;
+      }).finally(() => { pending = null; });
       // Never replace a verified snapshot with partial results after an upstream failure.
-      const catalog = await pending;
-      return { catalog, stale: false };
+      try { await pending; return cached(false); }
+      catch (error) {
+        if (usableFallback()) return cached(true);
+        throw error;
+      }
     },
   };
 }
