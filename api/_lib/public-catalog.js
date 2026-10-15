@@ -152,7 +152,7 @@ export function createCatalogRepository(client, now = Date.now) {
         const page = query.range(offset, offset + 999);
         return signal && typeof page.abortSignal === 'function' ? page.abortSignal(signal) : page;
       });
-      if (error || !data) throw new Error(`Catalog read failed: ${table}`);
+      if (error || !data) throw new Error(`Catalog read failed: ${table} (${error?.code || 'network'}: ${String(error?.message || 'empty response').slice(0, 180)})`);
       all.push(...data);
       if (data.length < 1000) return all;
     }
@@ -161,7 +161,7 @@ export function createCatalogRepository(client, now = Date.now) {
   async function refresh() {
     const signal = AbortSignal.timeout(10000);
     const { data: status, error } = await client.rpc('get_international_public_status');
-    if (error) throw new Error('Catalog settings unavailable');
+    if (error) throw new Error(`Catalog settings unavailable (${error.code || 'network'}: ${String(error.message || 'unknown').slice(0, 180)})`);
     const internationalEnabled = status?.international_public_enabled === true;
     const snapshotRows = (table, fields, configure, order = 'id') => readAll(table, fields, configure, order, signal);
     const [local, international, categories, brands, licenses, themes, licenseThemes, groups] = await Promise.all([

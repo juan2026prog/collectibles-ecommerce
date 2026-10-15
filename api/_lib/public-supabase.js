@@ -11,10 +11,15 @@ export function createPublicSupabase(env = process.env) {
   });
 }
 
-export function fetchWithDeadline(input, init = {}) {
+export async function fetchWithDeadline(input, init = {}) {
   const timeout = AbortSignal.timeout(5000);
   const signal = init.signal ? AbortSignal.any([init.signal, timeout]) : timeout;
-  return fetch(input, { ...init, signal });
+  try {
+    return await fetch(input, { ...init, signal });
+  } catch (error) {
+    // Report only controlled transport metadata, never request headers or credentials.
+    throw new Error(`Public database transport failed: ${error?.name || 'Error'} ${error?.cause?.code || ''}`);
+  }
 }
 
 export async function withDeadline(operation, milliseconds = 4000) {

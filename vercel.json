@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["pdx1"],
   "buildCommand": "npm --prefix frontend run build",
   "outputDirectory": "frontend/dist",
   "crons": [
