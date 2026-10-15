@@ -16,6 +16,15 @@ beforeEach(() => {
 });
 const file = (type='image/png') => ({type,size:1000,name:'original.png',arrayBuffer:async()=>new TextEncoder().encode('original bytes').buffer}) as File;
 describe('Persistent public image uploads', () => {
+  it('keeps a compact original when resized encodings would increase download bytes', async () => {
+    vi.spyOn(HTMLCanvasElement.prototype,'getContext').mockReturnValue({drawImage:vi.fn()} as any);
+    mocks.load.mockResolvedValue({naturalWidth:1200,naturalHeight:900});
+    mocks.encode.mockResolvedValue(new Blob(['x'.repeat(2000)],{type:'image/webp'}));
+    await uploadPublicMedia('public-assets','compact.png',file());
+    expect(mocks.upload).toHaveBeenCalledTimes(1);
+    expect(mocks.upsert.mock.calls[0][0].variants).toEqual({});
+    vi.restoreAllMocks();
+  });
   it('keeps original bytes and creates one versioned derivative for a small source without upscaling', async () => {
     vi.spyOn(HTMLCanvasElement.prototype,'getContext').mockReturnValue({drawImage:vi.fn()} as any);
     const original=file();

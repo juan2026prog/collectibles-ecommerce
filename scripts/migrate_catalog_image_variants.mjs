@@ -1,6 +1,6 @@
 /** Full-catalog batch runner. Dry-run by default. Originals stay unchanged.
  * --manifest: public URL array, or --catalog to inventory published products;
- * --limit: 1..50; --concurrency: 1..3 (Storage requests are globally capped at 2);
+ * --limit: 1..50; --concurrency: 1..3 (Storage requests are globally serialized);
  * --external explicitly permits immutable snapshots of the two known CDNs.
  * All encodings are decoded/validated offline; every card is verified over HTTP.
  * --verify-all also downloads every derivative after upload (for deep audits). */
@@ -24,7 +24,7 @@ await mkdir(cache,{recursive:true}); await mkdir('docs/audits/monitoring',{recur
 let storageActive=0;const storageWaiters=[];
 async function request(input,init={}){
   const storage=String(input).startsWith(url+'/storage/');
-  if(storage){if(storageActive>=2)await new Promise(resolve=>storageWaiters.push(resolve));else storageActive++;}
+  if(storage){if(storageActive>=1)await new Promise(resolve=>storageWaiters.push(resolve));else storageActive++;}
   try{
     const signal=init.signal?AbortSignal.any([init.signal,AbortSignal.timeout(30000)]):AbortSignal.timeout(30000);
     return await fetch(input,{...init,signal});
@@ -78,12 +78,19 @@ if(!args.includes('--apply')){for(const source_url of plan)console.log(JSON.stri
 
 async function health(){
   for(let attempt=0;attempt<2;attempt++){
+    const probe={at:new Date().toISOString(),attempt};const started=Date.now();
     try{
-      const {error}=await client.from('media_image_variants').select('original_url').limit(1).abortSignal(AbortSignal.timeout(10000));
+      const {error,status}=await client.from('media_image_variants').select('original_url').limit(1).abortSignal(AbortSignal.timeout(10000));
+      probe.registry_status=status;
+      if(error)probe.registry_error=/^[A-Z0-9_]{1,40}$/.test(error.code||'')?error.code:'READ_FAILED';
       const response=await fetch('https://collectibles.uy/api/public-catalog?limit=15&availability=all',{signal:AbortSignal.timeout(15000)});
       const data=response.ok?await response.json():null;
+      probe.catalog_status=response.status;probe.catalog_shape_ok=Array.isArray(data?.products)&&data.count>0;
+      probe.origin_snapshot=response.headers.get('x-catalog-snapshot');
       if(!error&&response.ok&&Array.isArray(data?.products)&&data.count>0)return;
-    }catch{ /* Repeat one failed health check; stop subsequent images if confirmed. */ }
+    }catch(error){probe.transport_class=['TimeoutError','AbortError','TypeError'].includes(error?.name)?error.name:'CHECK_FAILED';}
+    probe.elapsed_ms=Date.now()-started;
+    await appendFile('docs/audits/monitoring/image-migration-health.jsonl',JSON.stringify(probe)+'\n');
   }
   throw Error('Confirmed catalog/database health failure; migration stopped');
 }

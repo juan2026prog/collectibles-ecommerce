@@ -29,7 +29,7 @@ export async function createPersistentVariants(bucket: string, path: string, fil
       context.drawImage(image, 0, 0, width, height);
       const blob = await canvasToBlob(canvas, 0.86);
       if (blob.type !== 'image/webp') throw new Error('WebP encoder unavailable');
-      if (blob.size >= file.size && width === image.naturalWidth) { generated.set(width, null); continue; }
+      if (blob.size >= file.size) { generated.set(width, null); continue; }
       const variantPath = `${folder}_variants/v1/${content_hash}/${width}.webp`;
       const { error } = await supabase.storage.from(bucket).upload(variantPath, blob,
         { cacheControl: '31536000', upsert: false, contentType: 'image/webp' });

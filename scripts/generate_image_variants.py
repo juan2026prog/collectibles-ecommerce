@@ -21,7 +21,7 @@ with Image.open(source) as image:
             resized = image.resize((size, max(1, round(height * size / width))), Image.Resampling.LANCZOS)
             output = destination / f'{size}.webp'
             resized.save(output, 'WEBP', quality=86, method=6, exact=True)
-            if output.stat().st_size >= source.stat().st_size and size == width:
+            if output.stat().st_size >= source.stat().st_size:
                 generated[size] = None
             else:
                 # Validate decoding, dimensions and alpha before publishing a registry entry.
