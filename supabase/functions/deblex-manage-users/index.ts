@@ -48,39 +48,25 @@ Deno.serve(async (req: Request) => {
     // 2. Cliente administrativo para comprobaciones seguras
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    const callerEmail = (callerUser.email || "").trim().toLowerCase();
+    // 3. Comprobación estricta de autorización administrativa:
+    // Exclusivamente por registro persistido en deblex_portal_users con:
+    // - user_id = callerUser.id
+    // - role = 'deblex_admin'
+    // - is_active = true
+    // - status = 'ACTIVE'
+    // CERO excepciones por correo electrónico hardcodeado ni metadatos del cliente.
+    const { data: portalAdmin, error: queryError } = await supabaseAdmin
+      .from("deblex_portal_users")
+      .select("id, role, is_active, status")
+      .eq("user_id", callerUser.id)
+      .eq("role", "deblex_admin")
+      .eq("is_active", true)
+      .eq("status", "ACTIVE")
+      .maybeSingle();
 
-    // 3. Comprobar en base de datos que el llamador tiene rol deblex_admin
-    let isAuthorizedAdmin = false;
-    if (callerEmail === "juanmacastillo2008@gmail.com" || callerEmail === "ariel.delpino@deblex.com.ar") {
-      isAuthorizedAdmin = true;
-    } else {
-      const { data: portalAdmin } = await supabaseAdmin
-        .from("deblex_portal_users")
-        .select("role, is_active")
-        .eq("user_id", callerUser.id)
-        .eq("role", "deblex_admin")
-        .eq("is_active", true)
-        .maybeSingle();
-
-      if (portalAdmin) {
-        isAuthorizedAdmin = true;
-      } else {
-        const { data: globalProfile } = await supabaseAdmin
-          .from("profiles")
-          .select("is_admin")
-          .eq("id", callerUser.id)
-          .maybeSingle();
-
-        if (globalProfile?.is_admin) {
-          isAuthorizedAdmin = true;
-        }
-      }
-    }
-
-    if (!isAuthorizedAdmin) {
+    if (queryError || !portalAdmin) {
       return new Response(
-        JSON.stringify({ error: "Acceso denegado: Se requieren permisos de administrador Deblex" }),
+        JSON.stringify({ error: "Acceso denegado: Se requieren permisos de administrador Deblex activo y autorizado" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -98,9 +84,13 @@ Deno.serve(async (req: Request) => {
     }
 
     // 5. Reservar cupo de operador mediante RPC transaccional segura
-    const { data: reservationData, error: quotaError } = await supabaseUserClient.rpc(
+    // La RPC valida nuevamente que callerUser.id sea deblex_admin activo y bloquea concurrentemente
+    const { data: reservationData, error: quotaError } = await supabaseAdmin.rpc(
       "reserve_deblex_operator_quota",
-      { p_email: cleanEmail }
+      { 
+        p_email: cleanEmail,
+        p_admin_user_id: callerUser.id 
+      }
     );
 
     if (quotaError) {
