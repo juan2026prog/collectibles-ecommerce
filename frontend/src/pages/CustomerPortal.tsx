@@ -19,7 +19,9 @@ import AddressAutocomplete from '../components/AddressAutocomplete';
 import { FranchiseStatusCard } from '../components/customs/FranchiseStatusCard';
 import { ImportHub } from '../components/customs/ImportHub';
 import CustomerQuestionsTab from '../components/customer/CustomerQuestionsTab';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, Layers } from 'lucide-react';
+import { MyPackagesTab } from '../components/argentina/MyPackagesTab';
+import { MyShipmentsTab } from '../components/argentina/MyShipmentsTab';
 
 function getOrderItemImage(item: any): string {
   const img = item.products?.images?.[0];
@@ -56,7 +58,7 @@ export default function CustomerPortal() {
   
   // Supported tabs
   const tabFromUrl = searchParams.get('tab');
-  const validTabs = ['orders', 'questions', 'import_hub', 'profile', 'franchise', 'couriers', 'security'] as const;
+  const validTabs = ['orders', 'argentina_packages', 'argentina_shipments', 'questions', 'import_hub', 'profile', 'franchise', 'couriers', 'security'] as const;
   type TabType = typeof validTabs[number];
   
   const initialTab: TabType = validTabs.includes(tabFromUrl as any) ? (tabFromUrl as TabType) : 'orders';
@@ -666,6 +668,8 @@ export default function CustomerPortal() {
             <nav className="mt-6 space-y-1.5">
               {([
                 { key: 'orders', icon: Package, label: 'Mis Pedidos', badge: orders.length > 0 ? String(orders.length) : undefined, color: 'text-blue-400' },
+                { key: 'argentina_packages', icon: Layers, label: 'Mis Paquetes (Miami)', badge: 'AR', color: 'text-amber-400' },
+                { key: 'argentina_shipments', icon: Truck, label: 'Mis Envíos (Deblex)', color: 'text-sky-400' },
                 { key: 'questions', icon: MessageSquare, label: 'Mis Preguntas', color: 'text-pink-400' },
                 { key: 'import_hub', icon: Globe, label: 'Importador HUB (Aduana & Casilla)', badge: '2026', color: 'text-sky-400' },
                 { key: 'profile', icon: User, label: 'Mis Datos y Direcciones', color: 'text-purple-400' },
@@ -825,6 +829,26 @@ export default function CustomerPortal() {
                   <div className="bg-gradient-to-r from-[#f00856] via-purple-500 to-amber-400 h-full rounded-full w-3/4 animate-pulse" />
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ═══ TAB: Mis Paquetes Argentina (Miami Central Suite) ═══ */}
+          {activeTab === 'argentina_packages' && (
+            <div className="space-y-6 max-w-5xl">
+              <MyPackagesTab
+                packages={[]}
+                userZone="CABA"
+                onConsolidate={async (ids) => {
+                  console.log('Consolidando paquetes:', ids);
+                }}
+              />
+            </div>
+          )}
+
+          {/* ═══ TAB: Mis Envíos Argentina (Deblex) ═══ */}
+          {activeTab === 'argentina_shipments' && (
+            <div className="space-y-6 max-w-5xl">
+              <MyShipmentsTab shipments={[]} />
             </div>
           )}
 
