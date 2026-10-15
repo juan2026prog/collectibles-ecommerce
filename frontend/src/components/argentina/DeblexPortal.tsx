@@ -99,7 +99,7 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({ packages, onUpdateSt
             Portal de Operaciones Deblex (Suite Central Miami)
           </h1>
           <p className="text-sm text-gray-400 mt-1">
-            Recepción, identificación por CUIT, pesaje y despacho de paquetes en 8400 NW 25th St.
+            Recepción, identificación por CUIT, pesaje y despacho de paquetes en 2301 NW 107th AVE Ste #102 DAR101334.
           </p>
         </div>
 

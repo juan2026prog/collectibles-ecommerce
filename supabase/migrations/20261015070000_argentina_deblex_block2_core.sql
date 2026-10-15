@@ -92,7 +92,7 @@ CREATE INDEX IF NOT EXISTS idx_customer_argentina_clean_doc ON public.customer_a
 -- 3. Tabla: argentina_packages (Paquetes en Suite Central Miami)
 CREATE TABLE IF NOT EXISTS public.argentina_packages (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_id uuid REFERENCES public.orders(id) ON DELETE SET NULL,
+    order_id uuid,
     order_number text,
     user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
     recipient_document text,
@@ -137,7 +137,7 @@ CREATE INDEX IF NOT EXISTS idx_arg_packages_doc ON public.argentina_packages (re
 
 -- 4. Tabla: argentina_consolidations (Consolidaciones con Single Logistic Pack)
 CREATE TABLE IF NOT EXISTS public.argentina_consolidations (
-    id uuid PRIMARY KEY DEFAULT gen_random_usd() PRIMARY KEY,
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     consolidation_code text NOT NULL UNIQUE,
     user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE RESTRICT,
     recipient_document text NOT NULL,
@@ -179,7 +179,7 @@ CREATE TABLE IF NOT EXISTS public.argentina_consolidation_items (
 -- 6. Tabla: deblex_pre_alerts (Manifiestos y Avisos previos a Deblex)
 CREATE TABLE IF NOT EXISTS public.deblex_pre_alerts (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    order_id uuid REFERENCES public.orders(id),
+    order_id uuid,
     order_number text NOT NULL,
     user_id uuid REFERENCES auth.users(id),
     buyer_full_name text NOT NULL,
@@ -202,7 +202,7 @@ CREATE TABLE IF NOT EXISTS public.deblex_pre_alerts (
 CREATE TABLE IF NOT EXISTS public.argentina_financial_ledger (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id uuid NOT NULL REFERENCES auth.users(id),
-    order_id uuid REFERENCES public.orders(id),
+    order_id uuid,
     consolidation_id uuid REFERENCES public.argentina_consolidations(id),
     entry_type text NOT NULL CHECK (entry_type IN ('CHARGE_CHECKOUT', 'LOGISTIC_PACK_PAID', 'CONSOLIDATION_CREDIT', 'WEIGHT_ADJUSTMENT', 'DEBLEX_COST_ACCRUAL', 'REFUND')),
     amount_usd numeric(10,2) NOT NULL,
@@ -255,8 +255,14 @@ USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_admin 
 CREATE POLICY "Users view own packages" ON public.argentina_packages FOR SELECT TO authenticated
 USING (auth.uid() = user_id);
 CREATE POLICY "Admins manage all packages" ON public.argentina_packages FOR ALL TO authenticated
-USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (is_admin = true OR role = 'deblex_operator')))
-WITH CHECK (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (is_admin = true OR role = 'deblex_operator')));
+USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_admin = true) OR
+  EXISTS (SELECT 1 FROM public.deblex_portal_users WHERE user_id = auth.uid() AND is_active = true)
+)
+WITH CHECK (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_admin = true) OR
+  EXISTS (SELECT 1 FROM public.deblex_portal_users WHERE user_id = auth.uid() AND is_active = true)
+);
 
 -- argentina_consolidations: usuario ve las suyas y puede crear si es el dueño
 CREATE POLICY "Users view own consolidations" ON public.argentina_consolidations FOR SELECT TO authenticated
@@ -264,8 +270,14 @@ USING (auth.uid() = user_id);
 CREATE POLICY "Users create own consolidations" ON public.argentina_consolidations FOR INSERT TO authenticated
 WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Admins manage all consolidations" ON public.argentina_consolidations FOR ALL TO authenticated
-USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (is_admin = true OR role = 'deblex_operator')))
-WITH CHECK (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (is_admin = true OR role = 'deblex_operator')));
+USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_admin = true) OR
+  EXISTS (SELECT 1 FROM public.deblex_portal_users WHERE user_id = auth.uid() AND is_active = true)
+)
+WITH CHECK (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_admin = true) OR
+  EXISTS (SELECT 1 FROM public.deblex_portal_users WHERE user_id = auth.uid() AND is_active = true)
+);
 
 -- argentina_consolidation_items: visible por dueño del paquete o admin
 CREATE POLICY "Users view consolidation items" ON public.argentina_consolidation_items FOR SELECT TO authenticated
@@ -276,8 +288,14 @@ WITH CHECK (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_a
 
 -- deblex_pre_alerts: solo admins y operadores de Deblex
 CREATE POLICY "Admins manage pre alerts" ON public.deblex_pre_alerts FOR ALL TO authenticated
-USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (is_admin = true OR role = 'deblex_operator')))
-WITH CHECK (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (is_admin = true OR role = 'deblex_operator')));
+USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_admin = true) OR
+  EXISTS (SELECT 1 FROM public.deblex_portal_users WHERE user_id = auth.uid() AND is_active = true)
+)
+WITH CHECK (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_admin = true) OR
+  EXISTS (SELECT 1 FROM public.deblex_portal_users WHERE user_id = auth.uid() AND is_active = true)
+);
 
 -- argentina_financial_ledger: usuario ve sus transacciones, admins ven todo
 CREATE POLICY "Users view own ledger" ON public.argentina_financial_ledger FOR SELECT TO authenticated

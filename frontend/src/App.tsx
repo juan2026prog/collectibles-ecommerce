@@ -106,6 +106,7 @@ const AdminAISystemTest = lazy(() => import('./pages/superadmin/AdminAISystemTes
 const AdminArgentinaLogistics = lazy(() => import('./pages/admin/AdminArgentinaLogistics').then(m => ({ default: m.AdminArgentinaLogistics })));
 const ArgentinaFinancialDashboard = lazy(() => import('./pages/admin/ArgentinaFinancialDashboard').then(m => ({ default: m.ArgentinaFinancialDashboard })));
 const DeblexPortalPage = lazy(() => import('./components/argentina/DeblexPortal').then(m => ({ default: () => <m.DeblexPortal packages={[]} /> })));
+const DeblexEntryPage = lazy(() => import('./pages/DeblexEntryPage'));
 
 // Collector Plugins (6 official modules)
 // 01. AI Search
@@ -250,7 +251,7 @@ function App() {
                     <Route path="/import-hub" element={<CollectorPluginGuard module="import_hub"><ImportHubPage /></CollectorPluginGuard>} />
                     <Route path="/importaciones" element={<Navigate to="/import-hub" replace />} />
                     <Route path="/franquicia" element={<Navigate to="/import-hub?tab=franchise" replace />} />
-                    <Route path="/franquicias" element={<Navigate to="/import-hub?tab=franchise" replace />} />
+                    <Route path="/deblex" element={<DeblexEntryPage />} />
                   </Route>
 
                 {/* Isolated Portals with Lateral Navigation */}

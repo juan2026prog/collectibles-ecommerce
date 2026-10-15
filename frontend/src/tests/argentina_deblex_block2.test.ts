@@ -34,22 +34,21 @@ import { generateDeblexExcelBuffer, DeblexExportRow } from '../lib/argentina/exc
 
 describe('Bloque 2 — 1. Single Central Miami Suite (Pixel & Codes / Deblex)', () => {
   it('Uses the single unified Miami suite address for all Argentina orders', () => {
-    expect(PIXEL_CODES_MIAMI_SUITE.suite_code).toBe('DEBLEX-AR-CENTRAL');
-    expect(PIXEL_CODES_MIAMI_SUITE.address_line_1).toBe('8400 NW 25th St');
+    expect(PIXEL_CODES_MIAMI_SUITE.suite_code).toBe('Ste #102 DAR101334');
+    expect(PIXEL_CODES_MIAMI_SUITE.address_line_1).toBe('2301 NW 107th AVE');
     expect(PIXEL_CODES_MIAMI_SUITE.city).toBe('Doral');
     expect(PIXEL_CODES_MIAMI_SUITE.state).toBe('FL');
-    expect(PIXEL_CODES_MIAMI_SUITE.zip_code).toBe('33122');
+    expect(PIXEL_CODES_MIAMI_SUITE.zip_code).toBe('33172-2177');
     expect(PIXEL_CODES_MIAMI_SUITE.courier_partner).toBe('Deblex');
   });
 
   it('Fulfillment address attaches buyer name and recipient CUIT without modifying physical suite', () => {
     const address = buildMiamiFulfillmentAddress('Juan Pérez', '20334455667');
-    expect(address.firstName).toBe('Juan Pérez');
-    expect(address.lastName).toBe('(Pixel&Codes)');
-    expect(address.addressLine1).toBe('8400 NW 25th St');
-    expect(address.addressLine2).toContain('Suite AR-CENTRAL');
-    expect(address.addressLine2).toContain('CUIT 20334455667');
-    expect(address.zipCode).toBe('33122');
+    expect(address.firstName).toBe('Juan Castillo');
+    expect(address.lastName).toContain('Deblex (Juan Pérez - CUIT 20334455667)');
+    expect(address.addressLine1).toBe('2301 NW 107th AVE');
+    expect(address.addressLine2).toBe('Ste #102 DAR101334');
+    expect(address.zipCode).toBe('33172-2177');
   });
 });
 
@@ -186,7 +185,7 @@ describe('Bloque 2 — 5. Zinc Fulfillment & Excel Export Structure', () => {
       items: [{ asin: 'B08ABC1234', quantity: 1 }],
     });
 
-    expect(req.shipping_address.address_line1).toBe('8400 NW 25th St');
+    expect(req.shipping_address.address_line1).toBe('2301 NW 107th AVE');
     expect(req.shipping_address.city).toBe('Doral');
     expect(req.shipping_address.state).toBe('FL');
     expect(req.client_notes.recipient_cuit).toBe('27334455664');
