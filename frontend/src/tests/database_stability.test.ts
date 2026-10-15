@@ -4,7 +4,7 @@ import { readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { prepareCatalog, parseFilters, selectCatalog, createCatalogRepository } from '../../../api/_lib/public-catalog.js';
 import { createCatalogHandler } from '../../../api/_lib/public-catalog-handler.js';
-import { withDeadline } from '../../../api/_lib/public-supabase.js';
+import { withDeadline, fetchWithDeadline } from '../../../api/_lib/public-supabase.js';
 import { authorizeWorker, guardWorker } from '../../../supabase/functions/_shared/workerGuard.ts';
 
 const raw = (overrides = {}) => ({
@@ -18,6 +18,41 @@ const raw = (overrides = {}) => ({
 });
 const select = (filters = {}, fixture = raw()) => selectCatalog(prepareCatalog(fixture),parseFilters({availability:'all',...filters}));
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+
+describe('Bounded public database transport recovery', () => {
+  it.each([
+    ['GET', '/rest/v1/products'],
+    ['POST', '/rest/v1/rpc/get_international_public_status']
+  ])('recovers one transient connection failure on the safe read %s %s', async (method, path) => {
+    const transport = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new TypeError('connection reset'))
+      .mockResolvedValueOnce(new Response('{}'));
+    expect((await fetchWithDeadline(`https://example.com${path}`, { method })).status).toBe(200);
+    expect(transport).toHaveBeenCalledTimes(2);
+  });
+  it('never retries writes or arbitrary RPCs', async () => {
+    const transport = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('connection reset'));
+    await expect(fetchWithDeadline('https://example.com/rest/v1/rpc/place_order', { method: 'POST' })).rejects.toThrow('transport failed');
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
+  it('never retries an explicit cancellation', async () => {
+    const controller = new AbortController();
+    const transport = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      controller.abort(); throw new DOMException('cancelled', 'AbortError');
+    });
+    await expect(fetchWithDeadline('https://example.com/rest/v1/products', { signal: controller.signal })).rejects.toThrow('AbortError');
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
+  it('stops after two failures and omits raw transport messages from errors', async () => {
+    const transport = vi.spyOn(globalThis, 'fetch').mockRejectedValue(new TypeError('sensitive headers would be here'));
+    await expect(fetchWithDeadline('https://example.com/rest/v1/products')).rejects.toThrow(/^Public database transport failed: TypeError$/);
+    expect(transport).toHaveBeenCalledTimes(2);
+  });
+  it('does not retry HTTP errors returned by the database', async () => {
+    const transport = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 503 }));
+    expect((await fetchWithDeadline('https://example.com/rest/v1/products')).status).toBe(503);
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('Public catalog correctness and bounded payloads', () => {
   it('fits the production Hobby budget of twelve serverless entrypoints', () => {

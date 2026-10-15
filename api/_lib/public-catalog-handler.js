@@ -65,7 +65,7 @@ export function createCatalogHandler(getRepository = getCatalogRepository) {
           categories:catalog.categories,brands:catalog.brands,licenses:catalog.licenses,themes:catalog.themes,
         } } : {}) });
     } catch (error) {
-      console.error('[public-catalog] Upstream unavailable', error instanceof Error ? error.message : 'unknown');
+      console.error('[public-catalog] Upstream unavailable', { region: process.env.VERCEL_REGION || 'unknown', message: error instanceof Error ? error.message : 'unknown' });
       res.setHeader('Retry-After', '30');
       return res.status(503).json({ error: 'El catálogo está temporalmente demorado. Intentá nuevamente en unos segundos.' });
     }
