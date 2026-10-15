@@ -6,6 +6,7 @@ import { readFile, writeFile, mkdir, appendFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
+import { isPublicMediaSource } from '../shared/public-media-sources.js';
 
 config({ path: '.env', quiet: true });
 const args = process.argv.slice(2);
@@ -44,6 +45,7 @@ else {
 }
 let processed = 0;
 for (const original_url of [...new Set(manifest)]) {
+  if (!isPublicMediaSource(original_url)) continue;
   const parsed = new URL(original_url);
   const match = parsed.pathname.match(/^\/storage\/v1\/object\/public\/(public-assets|product-images)\/(.+)$/);
   if (parsed.origin !== url || !match || parsed.search || /\.(svg|gif)$/i.test(parsed.pathname)) continue;

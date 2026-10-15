@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir, appendFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { collectPublicMediaSources, isPublicMediaSource } from '../shared/public-media-sources.js';
 config({path:'.env',quiet:true});
 const args=process.argv.slice(2), option=(name,fallback)=>args.includes(name)?args[args.indexOf(name)+1]:fallback;
 const limit=Number(option('--limit','8')), concurrency=Number(option('--concurrency','1'));
@@ -38,12 +39,7 @@ let manifest;
 if(args.includes('--manifest'))manifest=JSON.parse(await readFile(option('--manifest'),'utf8'));
 else if(args.includes('--catalog')){
   const urls=new Set();
-  const visit=(value,key='')=>{
-    if(typeof value==='string'&&/url|image|logo|icon|main/i.test(key)
-      &&(value.startsWith(url+'/storage/v1/object/public/')||sourcePattern.test(value)))urls.add(value);
-    else if(Array.isArray(value))value.forEach(item=>visit(item,key));
-    else if(value&&typeof value==='object')Object.entries(value).forEach(([name,item])=>visit(item,name));
-  };
+  const visit=value=>collectPublicMediaSources(value).forEach(source=>urls.add(source));
   for(let from=0;;from+=1000){
     const {data,error}=await client.from('product_images').select('id,url,product:products!inner(status,is_active)')
       .eq('product.status','published').eq('product.is_active',true).order('id').range(from,from+999);
@@ -62,6 +58,7 @@ else if(args.includes('--catalog')){
 }else throw Error('Use --manifest or --catalog');
 if (!Array.isArray(manifest)||!manifest.every(x=>typeof x==='string')) throw Error('Manifest must contain public URLs');
 const eligible=[...new Set(manifest)].filter(source=>{
+  if(!isPublicMediaSource(source))return false;
   try { const parsed=new URL(source); return (parsed.origin===url&&!parsed.search&&!parsed.hash
     &&/^\/storage\/v1\/object\/public\/(public-assets|product-images)\/.+/.test(parsed.pathname)
     &&!/\.(svg|gif)$/i.test(parsed.pathname))||(args.includes('--external')&&sourcePattern.test(source)); }

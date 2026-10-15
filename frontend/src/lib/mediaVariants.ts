@@ -1,3 +1,5 @@
+import { collectPublicMediaSources } from '../../../shared/public-media-sources.js';
+
 export interface ImageDerivative { url: string; width: number; height: number; bytes: number }
 export interface MediaVariantRecord {
   original_url: string; width: number; height: number; original_bytes: number;
@@ -16,13 +18,5 @@ export function getMediaVariants(url: string) { return registry.get(url); }
 
 /** Collect only public image references, never arbitrary product/customer data. */
 export function collectMediaUrls(value: any): string[] {
-  const urls = new Set<string>();
-  const visit = (item: any, key = '') => {
-    if (typeof item === 'string' && /(?:url|image|logo|icon)/i.test(key)
-      && /^https:\/\/(?:cobtsgkwcftvexaarwmo\.supabase\.co\/storage\/v1\/object\/public\/(?:public-assets|product-images)\/|http2\.mlstatic\.com\/|m\.media-amazon\.com\/images\/I\/)/.test(item)) urls.add(item);
-    else if (Array.isArray(item)) item.forEach(child => visit(child, key));
-    else if (item && typeof item === 'object') Object.entries(item).forEach(([k, v]) => visit(v, k));
-  };
-  visit(value);
-  return [...urls];
+  return collectPublicMediaSources(value);
 }

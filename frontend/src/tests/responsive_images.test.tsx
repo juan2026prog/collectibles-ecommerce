@@ -7,6 +7,17 @@ import { readMediaVariants } from '../../../api/_lib/media-variants';
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe('Product image selection and responsive delivery', () => {
+  it('does not rediscover generated variants from API metadata as original sources', async () => {
+    const source='https://http2.mlstatic.com/D_original-O.jpg';
+    const gallery='https://m.media-amazon.com/images/I/gallery.jpg';
+    const derivative='https://cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/public-assets/media/_variants/v1/hash/320.webp';
+    const value={products:[{images:[{url:source}],raw_data:{images:[{link:gallery}]}}],
+      image_variants:[{original_url:source,variants:{card:{url:derivative}}}],image_url:derivative};
+    expect(collectMediaUrls(value)).toEqual([source,gallery]);
+    const rpc=vi.fn().mockReturnValue({abortSignal:async()=>({data:[],error:null})});
+    await readMediaVariants({rpc},value);
+    expect(rpc).toHaveBeenCalledWith('get_catalog_media_variants',{urls:[source,gallery]});
+  });
   it('uses imported provider variants while preserving the provider original for zoom and fallback', () => {
     const source='https://http2.mlstatic.com/D_product-O.jpg';
     registerMediaVariants([{source_url:source,original_url:'https://storage/snapshot.jpg',width:500,height:400,original_bytes:10000,
