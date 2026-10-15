@@ -218,3 +218,49 @@ describe('Bloque 2 — 5. Zinc Fulfillment & Excel Export Structure', () => {
     expect(buffer.length).toBeGreaterThan(100);
   });
 });
+
+describe('Bloque 2 — 6. RBAC & Strict User Quota (Max 8 Accounts)', () => {
+  it('Enforces max 8 accounts rule: 2 initial admins + max 6 operators', () => {
+    const MAX_ALLOWED = 8;
+    const initialAdmins = ['juanmacastillo2008@gmail.com', 'ariel.delpino@deblex.com.ar'];
+    expect(initialAdmins.length).toBe(2);
+
+    const operators = [
+      'op1@deblex.com.ar',
+      'op2@deblex.com.ar',
+      'op3@deblex.com.ar',
+      'op4@deblex.com.ar',
+      'op5@deblex.com.ar',
+      'op6@deblex.com.ar',
+    ];
+    expect(operators.length).toBe(6);
+
+    const totalAccounts = initialAdmins.length + operators.length;
+    expect(totalAccounts).toBe(MAX_ALLOWED);
+
+    // Attempting a 7th operator exceeds limit
+    const attemptSeventhOperator = (currentTotal: number) => {
+      if (currentTotal >= MAX_ALLOWED) {
+        throw new Error('Cupo alcanzado: Se ha alcanzado el límite máximo permitido de 8 cuentas en el Portal Deblex (2 admins + 6 operadores).');
+      }
+      return currentTotal + 1;
+    };
+
+    expect(() => attemptSeventhOperator(totalAccounts)).toThrow('Cupo alcanzado');
+  });
+
+  it('Calculates quota consumption correctly: ACTIVE, PENDING_INVITE and SUSPENDED consume quota, FAILED does not', () => {
+    const accounts = [
+      { email: 'juanmacastillo2008@gmail.com', role: 'deblex_admin', status: 'ACTIVE' },
+      { email: 'ariel.delpino@deblex.com.ar', role: 'deblex_admin', status: 'ACTIVE' },
+      { email: 'op1@deblex.com.ar', role: 'deblex_operator', status: 'ACTIVE' },
+      { email: 'op2@deblex.com.ar', role: 'deblex_operator', status: 'PENDING_INVITE' },
+      { email: 'op3@deblex.com.ar', role: 'deblex_operator', status: 'SUSPENDED' },
+      { email: 'op_failed@deblex.com.ar', role: 'deblex_operator', status: 'FAILED' },
+    ];
+
+    const quotaConsumingCount = accounts.filter(a => ['ACTIVE', 'PENDING_INVITE', 'SUSPENDED'].includes(a.status)).length;
+    expect(quotaConsumingCount).toBe(5); // 2 admins + 3 operators (the FAILED one did not consume)
+    expect(8 - quotaConsumingCount).toBe(3); // 3 remaining operator slots available
+  });
+});

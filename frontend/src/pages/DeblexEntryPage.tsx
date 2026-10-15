@@ -57,28 +57,18 @@ export default function DeblexEntryPage() {
 
   const checkUserRole = async (userId: string, email?: string | null) => {
     try {
-      const normEmail = (email || '').trim().toLowerCase();
-
-      // Rule: Two primary deblex_admin accounts
-      if (normEmail === 'juanmacastillo2008@gmail.com' || normEmail === 'ariel.delpino@deblex.com.ar') {
-        setDeblexRole('deblex_admin');
-        await loadDeblexData('deblex_admin');
-        setLoading(false);
-        return;
-      }
-
-      // Check deblex_portal_users table in Supabase Cloud
+      // Validar identidad y rol en Supabase Cloud únicamente a través del user_id autenticado
       const { data, error } = await supabase
         .from('deblex_portal_users')
-        .select('role, is_active')
+        .select('role, is_active, status')
         .eq('user_id', userId)
         .maybeSingle();
 
-      if (data && data.is_active) {
+      if (data && data.is_active && data.status !== 'SUSPENDED') {
         setDeblexRole(data.role as any);
         await loadDeblexData(data.role);
       } else {
-        // Also check public.profiles if is_admin
+        // En caso de que el usuario no esté en deblex_portal_users, verificar si es superadministrador global
         const { data: profileData } = await supabase
           .from('profiles')
           .select('is_admin')

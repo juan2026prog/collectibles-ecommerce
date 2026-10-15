@@ -51,25 +51,25 @@ export const DeblexUserManagement: React.FC<DeblexUserManagementProps> = ({
     setStatusMessage(null);
 
     try {
-      // Call Supabase RPC / Edge Function to create user with bounded quota check
-      const { data, error } = await supabase.rpc('create_deblex_user_atomic', {
-        p_email: newEmail.trim().toLowerCase(),
-        p_password: newPassword,
-        p_role: newRole,
+      // Invocar Edge Function deblex-manage-users que valida JWT, admin Deblex y reserva cupo atómicamente
+      const { data, error } = await supabase.functions.invoke('deblex-manage-users', {
+        body: { email: newEmail.trim().toLowerCase() }
       });
 
       if (error) {
-        setStatusMessage({ type: 'error', text: error.message });
-      } else if (data && !data.success) {
-        setStatusMessage({ type: 'error', text: data.error || 'No se pudo crear el usuario.' });
+        setStatusMessage({ type: 'error', text: error.message || 'Error invocando función de gestión' });
+      } else if (data && data.error) {
+        setStatusMessage({ type: 'error', text: data.error });
       } else {
-        setStatusMessage({ type: 'success', text: `Usuario ${newEmail} creado exitosamente.` });
+        setStatusMessage({ 
+          type: 'success', 
+          text: data?.message || `Invitación enviada exitosamente a ${newEmail}. Activará su cuenta por correo seguro.` 
+        });
         setNewEmail('');
-        setNewPassword('');
         await onRefreshUsers();
       }
     } catch (err: any) {
-      setStatusMessage({ type: 'error', text: err.message || 'Error al crear usuario' });
+      setStatusMessage({ type: 'error', text: err.message || 'Error al invitar operador' });
     } finally {
       setIsCreating(false);
     }
@@ -138,25 +138,13 @@ export const DeblexUserManagement: React.FC<DeblexUserManagementProps> = ({
           </p>
 
           <form onSubmit={handleCreateUser} className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-            <div>
-              <label className="block text-gray-400 mb-1">Correo Electrónico *</label>
+            <div className="sm:col-span-2">
+              <label className="block text-gray-400 mb-1">Correo Electrónico del Operador *</label>
               <input
                 type="email"
                 value={newEmail}
                 onChange={e => setNewEmail(e.target.value)}
                 placeholder="operador@deblex.com.ar"
-                required
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-400 mb-1">Contraseña Inicial *</label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-                placeholder="Mínimo 8 caracteres"
                 required
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-500"
               />
@@ -169,7 +157,7 @@ export const DeblexUserManagement: React.FC<DeblexUserManagementProps> = ({
                 className="w-full py-2.5 bg-amber-500 hover:bg-amber-400 text-gray-950 font-bold rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer shadow-lg shadow-amber-500/20"
               >
                 <UserPlus className="w-4 h-4" />
-                {isCreating ? 'Creando...' : 'Crear Usuario'}
+                {isCreating ? 'Enviando Invitación...' : 'Invitar Operador'}
               </button>
             </div>
           </form>
