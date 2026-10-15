@@ -1,10 +1,7 @@
-import { createClient } from '@supabase/supabase-js';
+import { createPublicSupabase } from './_lib/public-supabase.js';
 import publicCatalogHandler from './_lib/public-catalog-handler.js';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-const supabase = createClient(supabaseUrl, supabaseKey);
+let supabase;
 
 const BASE_SITE_URL = 'https://collectibles.uy';
 
@@ -72,6 +69,7 @@ export default async function handler(req, res) {
   // Keep both public catalog formats in one Vercel function (Hobby permits twelve).
   if (req.query?.__public_catalog === '1') return publicCatalogHandler(req, res);
   try {
+    supabase ||= createPublicSupabase();
     let allProducts = [];
     let page = 0;
     const pageSize = 1000;
@@ -79,6 +77,7 @@ export default async function handler(req, res) {
 
     // Paginate through Supabase to overcome default 1,000 row REST limit
     while (hasMore) {
+      if (page >= 50) throw new Error('Meta catalog exceeds safety limit');
       const { data, error } = await supabase
         .from('products')
         .select(`
@@ -92,12 +91,13 @@ export default async function handler(req, res) {
           status,
           is_active,
           category:categories(name),
-          brand:brands(name),
+          brand:brands!products_brand_id_fkey(name),
           images:product_images(url, is_primary, sort_order),
           variants:product_variants(id, sku, inventory_count)
         `)
         .eq('status', 'published')
         .eq('is_active', true)
+        .order('id')
         .range(page * pageSize, (page + 1) * pageSize - 1);
 
       if (error) {
@@ -232,9 +232,15 @@ export default async function handler(req, res) {
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'inline; filename="meta-catalog.csv"');
     res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
+    res.setHeader('CDN-Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
+    res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
     res.status(200).send(csvContent);
   } catch (error) {
     console.error('Error generating meta-catalog.csv:', error);
-    res.status(500).json({ error: 'Internal Server Error generating meta catalog' });
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('CDN-Cache-Control', 'no-store');
+    res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
+    res.setHeader('Retry-After', '30');
+    res.status(503).json({ error: 'Meta catalog temporarily unavailable' });
   }
 }
