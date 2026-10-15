@@ -45,7 +45,7 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 2. Cliente administrativo para comprobaciones seguras
+    // 2. Cliente administrativo exclusivo para operaciones que requieren privilegios de servidor (Auth Admin)
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     // 3. Comprobación estricta de autorización administrativa:
@@ -83,14 +83,12 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // 5. Reservar cupo de operador mediante RPC transaccional segura
-    // La RPC valida nuevamente que callerUser.id sea deblex_admin activo y bloquea concurrentemente
-    const { data: reservationData, error: quotaError } = await supabaseAdmin.rpc(
+    // 5. Reservar cupo de operador mediante supabaseUserClient (asociado a la sesión JWT del usuario)
+    // La RPC sólo acepta p_email y deriva la identidad EXCLUSIVAMENTE de auth.uid() en PostgreSQL
+    // CERO paso de p_admin_user_id ni suplantación posible
+    const { data: reservationData, error: quotaError } = await supabaseUserClient.rpc(
       "reserve_deblex_operator_quota",
-      { 
-        p_email: cleanEmail,
-        p_admin_user_id: callerUser.id 
-      }
+      { p_email: cleanEmail }
     );
 
     if (quotaError) {
