@@ -1,3 +1,4 @@
+import { uploadPublicMedia } from '../../lib/persistentMediaUpload';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Layers, Plus, Trash2, Save, X, Package, Search, Link2, Copy, Check, Upload, Store, Pencil } from 'lucide-react';
@@ -88,9 +89,7 @@ export default function VCollections({ activeStoreId }: VCollectionsProps) {
     const sanitized = file.name.replace(`.${ext}`, '').toLowerCase().replace(/[^a-z0-9]/g, '-');
     const path = `collections/${activeStoreId}-${Date.now()}-${sanitized}.${ext}`;
     
-    const { error } = await supabase.storage
-      .from('public-assets')
-      .upload(path, file, { cacheControl: '3600', upsert: false });
+    const { error } = await uploadPublicMedia('public-assets', path, file);
 
     if (error) throw error;
 

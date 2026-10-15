@@ -9,13 +9,23 @@
  * - Missing/null → returns local SVG fallback (no external placeholder services)
  */
 
+import { getMediaVariants } from './mediaVariants';
 const SUPABASE_URL = 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const STORAGE_BUCKET = 'product-images';
 
 /** Local inline SVG fallback — clean neutral background, crisp icon, no external requests */
 const FALLBACK_IMAGE = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400' fill='none'%3E%3Crect width='400' height='400' rx='16' fill='%23f8fafc' stroke='%23e2e8f0' stroke-width='2'/%3E%3Cg opacity='0.45' transform='translate(136, 120)'%3E%3Crect x='10' y='26' width='108' height='88' rx='12' stroke='%2364748b' stroke-width='6' fill='%23ffffff'/%3E%3Ccircle cx='46' cy='56' r='14' fill='%2394a3b8'/%3E%3Cpath d='M20 98l28-28 20 20 32-34 18 18v24H20v-0z' fill='%23cbd5e1'/%3E%3Cpath d='M44 14h40l8 12h18a10 10 0 0110 10v4' stroke='%2364748b' stroke-width='5' stroke-linecap='round' fill='none'/%3E%3C/g%3E%3Ctext x='200' y='276' text-anchor='middle' fill='%2394a3b8' font-family='system-ui, -apple-system, sans-serif' font-size='13' font-weight='600' letter-spacing='0.5'%3ESIN IMAGEN%3C/text%3E%3C/svg%3E";
 
-export type ImageSizeVariant = 'thumbnail' | 'card' | 'detail' | 'raw';
+export type ImageSizeVariant = 'thumbnail' | 'card' | 'card-2x' | 'detail' | 'raw';
+
+/** Primary selection wins; ties have a stable order independent of PostgREST row order. */
+export function sortProductImages(images: any[] = []): any[] {
+  const order = (image: any) => Number.isFinite(Number(image?.sort_order ?? image?.position))
+    ? Number(image.sort_order ?? image.position) : Number.MAX_SAFE_INTEGER;
+  return [...images].sort((a, b) => Number(Boolean(b?.is_primary)) - Number(Boolean(a?.is_primary))
+    || order(a) - order(b)
+    || String(a?.id || a?.url || a).localeCompare(String(b?.id || b?.url || b)));
+}
 
 const INVALID_IMAGE_PATTERNS = [
   /via\.placeholder\.com/i,
@@ -51,7 +61,7 @@ export function isBrokenImageUrl(url: string | null | undefined): boolean {
 /**
  * Extracts all possible candidate image URLs from a raw or normalized product object in priority order.
  */
-export function extractCandidateImages(product: any): string[] {
+export function extractCandidateImages(product: any, includeBroken = false): string[] {
   if (!product) return [];
   const urls: string[] = [];
 
@@ -61,7 +71,7 @@ export function extractCandidateImages(product: any): string[] {
       if (
         trimmed && 
         !isInvalidImageUrl(trimmed) && 
-        !isBrokenImageUrl(trimmed) &&
+        (includeBroken || !isBrokenImageUrl(trimmed)) &&
         !trimmed.startsWith('data:image/svg+xml') && 
         !urls.includes(trimmed)
       ) {
@@ -89,14 +99,18 @@ export function extractCandidateImages(product: any): string[] {
     }
   };
 
-  // 1. Direct fields
+  // Explicit gallery selection takes precedence over stale legacy direct fields.
+  if (Array.isArray(product.images)) sortProductImages(product.images).forEach(add);
+  if (Array.isArray(product.product_images)) sortProductImages(product.product_images).forEach(add);
+
+  // Legacy and external sources remain valid fallbacks.
   add(product.image_url);
   add(product.main_image_url_external);
   add(product.image);
 
   // 2. Images arrays
   if (Array.isArray(product.images)) {
-    product.images.forEach((img: any) => add(img));
+    sortProductImages(product.images).forEach((img: any) => add(img));
   }
   if (Array.isArray(product.gallery_images)) {
     product.gallery_images.forEach((img: any) => add(img));
@@ -149,6 +163,11 @@ function resolveImageUrl(url: string | null | undefined, variant: ImageSizeVaria
     rawUrl = `${SUPABASE_URL}/storage/v1/object/public/${STORAGE_BUCKET}${cleanPath}`;
   }
 
+  if (isBrokenImageUrl(rawUrl)) return FALLBACK_IMAGE;
+  if (variant !== 'raw') {
+    const derivative = getMediaVariants(rawUrl)?.variants[variant];
+    if (derivative && !isBrokenImageUrl(derivative.url)) return derivative.url;
+  }
   return rawUrl;
 }
 
@@ -172,6 +191,22 @@ export function getProductImage(product: any, variant: ImageSizeVariant = 'card'
  */
 export function resolveImage(url: string | null | undefined, variant: ImageSizeVariant = 'card'): string {
   return resolveImageUrl(url, variant);
+}
+
+export function getImageSources(url: string | null | undefined, variant: ImageSizeVariant = 'card') {
+  const original = resolveImageUrl(url, 'raw');
+  const record = getMediaVariants(original);
+  const src = resolveImageUrl(url, variant);
+  const target = variant === 'thumbnail' ? 320 : variant === 'card' || variant === 'card-2x' ? 640 : 960;
+  const candidates = record && variant !== 'raw' ? Object.values(record.variants)
+    .filter(v => v && v.width <= target && !isBrokenImageUrl(v.url))
+    .sort((a, b) => a!.width - b!.width)
+    .filter((v, i, list) => i === 0 || v!.width !== list[i - 1]!.width) : [];
+  // If the requested derivative failed, try the original before any other photo.
+  const selected = candidates.find(v => v!.url === src);
+  return { src, srcSet: selected && candidates.length > 1
+    ? candidates.map(v => `${v!.url} ${v!.width}w`).join(', ') : undefined,
+    width: record?.width || 400, height: record?.height || 400 };
 }
 
 /** Exported fallback for direct use */

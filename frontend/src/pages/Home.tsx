@@ -8,7 +8,8 @@ import { useCurrency } from '../contexts/CurrencyContext';
 import { useFeatures } from '../contexts/FeatureToggleContext';
 import { ProductSkeleton } from '../components/Skeletons';
 import { ProductGridCard } from '../components/ProductGridCard';
-import { getProductImage } from '../lib/imageUtils';
+import { getProductImage, getImageSources } from '../lib/imageUtils';
+import { ResponsiveImage } from '../components/ResponsiveImage';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { useCollectorPermissions } from '../hooks/useCollectorPermissions';
 import HeroSlider from '../components/HeroSlider';
@@ -711,10 +712,12 @@ export default function Home() {
                     className="relative rounded-2xl overflow-hidden group border border-white/10 transition-all hover:border-[#f00856]/30 hover:-translate-y-1 flex flex-col justify-end aspect-[9/12] md:aspect-[3/4] w-[78vw] md:w-[360px] shrink-0 shadow-[0_10px_30px_rgba(0,0,0,0.4)] snap-start select-none"
                   >
                     <picture className="absolute inset-0 w-full h-full">
-                      {mobileImg && <source media="(max-width: 767px)" srcSet={mobileImg} />}
+                      {mobileImg && <source media="(max-width: 767px)" sizes="78vw" srcSet={getImageSources(mobileImg, 'detail').srcSet || mobileImg} />}
                       {desktopImg && (
-                        <img
+                        <ResponsiveImage
                           src={desktopImg}
+                          variant="detail"
+                          sizes="(max-width: 767px) 78vw, 360px"
                           alt={c.name}
                           loading="lazy"
                           decoding="async"
@@ -907,7 +910,7 @@ export default function Home() {
                     <div key={idx} className="relative rounded-2xl overflow-hidden border border-white/10 bg-[#05070f] aspect-[16/10] flex flex-col justify-end group hover:border-[#f00856]/40 transition-all duration-500 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
                       {/* Teaser Image / Silhouette */}
                       {t.image_url && (
-                        <img
+                        <ResponsiveImage
                           src={t.image_url}
                           alt={t.title}
                           loading="lazy"

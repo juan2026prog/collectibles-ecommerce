@@ -1,3 +1,4 @@
+import { uploadPublicMedia } from '../../lib/persistentMediaUpload';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Plus, Pencil, Save, X, Image as ImageIcon, Store, CheckCircle, Clock, AlertTriangle, Globe, Phone, Mail, Link as LinkIcon, Trash2 } from 'lucide-react';
@@ -149,9 +150,7 @@ export default function VStores() {
     const sanitized = file.name.replace(`.${ext}`, '').toLowerCase().replace(/[^a-z0-9]/g, '-');
     const path = `stores/${user!.id}-${Date.now()}-${type}-${sanitized}.${ext}`;
     
-    const { error } = await supabase.storage
-      .from('public-assets')
-      .upload(path, file, { cacheControl: '3600', upsert: false });
+    const { error } = await uploadPublicMedia('public-assets', path, file);
 
     if (error) throw error;
 

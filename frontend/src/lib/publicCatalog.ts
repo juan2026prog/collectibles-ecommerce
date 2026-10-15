@@ -1,3 +1,5 @@
+import { registerMediaVariants } from './mediaVariants';
+
 export async function fetchPublicCatalog(filters: Record<string, unknown>, signal: AbortSignal) {
   const params = new URLSearchParams();
   Object.keys(filters).sort().forEach(key => {
@@ -8,7 +10,9 @@ export async function fetchPublicCatalog(filters: Record<string, unknown>, signa
     credentials: 'omit', signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]),
   });
   if (!response.ok) throw new Error('El catálogo está temporalmente demorado. Intentá nuevamente.');
-  return response.json();
+  const result = await response.json();
+  registerMediaVariants(result.image_variants);
+  return result;
 }
 
 let taxonomyCache: { data: any; expires: number } | null = null;

@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { Star, ShoppingCart, Heart, Check, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { ProductBadge } from './ProductBadge';
-import { getProductImage } from '../lib/imageUtils';
+import { extractCandidateImages } from '../lib/imageUtils';
+import { ResponsiveImage } from './ResponsiveImage';
 import { evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { useWishlistContext } from '../contexts/WishlistContext';
 import { useAdminMode } from '../contexts/AdminModeContext';
@@ -32,7 +33,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
   const { getImageProps, handleDragStart } = useImageProtection({ isProduct: true });
   const [addState, setAddState] = useState<'idle' | 'loading' | 'added'>('idle');
 
-  const img = getProductImage(product);
+  const candidates = extractCandidateImages(product);
   const resolvedPriceInfo = resolveProductPrice(product, product.variants?.[0]);
   const finalPrice = resolvedPriceInfo.amount;
   const isInternational = resolvedPriceInfo.isInternational;
@@ -115,13 +116,11 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
               : 'border border-slate-100 group-hover:border-[#f00856]/30'
           }`}
         >
-          <img
-            src={img}
+          <ResponsiveImage
+            src={candidates[0]}
+            fallbackUrls={candidates.slice(1)}
             alt={product.title}
             referrerPolicy="no-referrer"
-            loading="lazy"
-            decoding="async"
-            fetchPriority="low"
             {...getImageProps('max-w-full max-h-full object-contain transition-transform duration-300 group-hover:scale-105')}
           />
         </Link>
@@ -148,13 +147,12 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
             <div className="absolute top-11 left-1.5 z-20 flex flex-col gap-1 pointer-events-none drop-shadow-md select-none scale-90 md:scale-100 origin-top-left">
               {groupBadges.map((gb, idx) => (
                 <div key={`${gb.url}-${idx}`} className="w-9 h-9 md:w-12 md:h-12">
-                  <img
+                  <ResponsiveImage
                     src={gb.url}
+                    variant="thumbnail"
+                    sizes="48px"
                     alt={gb.alt}
                     draggable={false}
-                    loading="lazy"
-                    decoding="async"
-                    fetchPriority="low"
                     onDragStart={handleDragStart}
                     className="w-full h-full object-contain img-protected"
                   />

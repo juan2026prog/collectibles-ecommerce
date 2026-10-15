@@ -1,3 +1,4 @@
+import { uploadPublicMedia } from '../../lib/persistentMediaUpload';
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Upload, Trash2, Copy, FileIcon, ImageIcon, ExternalLink, RefreshCw, AlertCircle, Folder, ChevronRight, FolderPlus, Edit, Move, Search, X } from 'lucide-react';
@@ -83,9 +84,7 @@ export default function AdminMedia() {
         const fileName = `${Date.now()}-${sanitizedName}.${fileExt}`;
         const fullPath = targetPath ? `${targetPath}${fileName}` : fileName;
 
-        const { error: uploadError } = await supabase.storage
-          .from(BUCKET_NAME)
-          .upload(fullPath, file, { cacheControl: '3600', upsert: false });
+        const { error: uploadError } = await uploadPublicMedia(BUCKET_NAME, fullPath, file);
           
         if (uploadError) throw uploadError;
       } catch (err: any) {

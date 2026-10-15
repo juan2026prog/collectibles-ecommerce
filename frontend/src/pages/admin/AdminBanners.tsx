@@ -1,3 +1,4 @@
+import { uploadPublicMedia } from '../../lib/persistentMediaUpload';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Plus, Pencil, Trash2, Save, X, Image as ImageIcon, Upload, ToggleLeft, ToggleRight, TrendingUp, Megaphone, Film, Sparkles, Clock, Eye, Folder, ArrowUp, ArrowDown } from 'lucide-react';
@@ -13,7 +14,7 @@ async function uploadBannerImage(file: File): Promise<string> {
   const ext = file.name.split('.').pop();
   const sanitized = file.name.replace(`.${ext}`, '').toLowerCase().replace(/[^a-z0-9]/g, '-');
   const path = `banners/${Date.now()}-${sanitized}.${ext}`;
-  const { error } = await supabase.storage.from('public-assets').upload(path, file, { cacheControl: '3600', upsert: false });
+  const { error } = await uploadPublicMedia('public-assets', path, file);
   if (error) throw error;
   const { data } = supabase.storage.from('public-assets').getPublicUrl(path);
   return data.publicUrl;

@@ -1,3 +1,4 @@
+import { uploadPublicMedia } from '../../lib/persistentMediaUpload';
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
@@ -237,9 +238,7 @@ export default function AdminGroups() {
       const sanitizedName = file.name.replace(`.${ext}`, '').toLowerCase().replace(/[^a-z0-9]/g, '-');
       const storagePath = `group-badges/${editing.id}/${Date.now()}-${sanitizedName}.${ext}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('public-assets')
-        .upload(storagePath, file, { cacheControl: '3600', upsert: false });
+      const { error: uploadError } = await uploadPublicMedia('public-assets', storagePath, file);
 
       if (uploadError) throw uploadError;
 

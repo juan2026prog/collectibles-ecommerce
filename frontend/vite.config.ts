@@ -11,6 +11,7 @@ export default defineConfig({
     },
   },
   build: {
+    manifest: true,
     rollupOptions: {
       output: {
         manualChunks: (id) => {
@@ -22,10 +23,8 @@ export default defineConfig({
             if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) return 'vendor-react';
             return 'vendor-libs';
           }
-          if (id.includes('/src/pages/admin/') || id.includes('/src/components/admin/') || id.includes('/src/layouts/AdminLayout')) return 'admin-chunk';
-          if (id.includes('/src/pages/Vendor') || id.includes('/src/components/vendor/') || id.includes('/src/pages/Artist') || id.includes('/src/pages/Affiliate') || id.includes('/src/pages/Star2Fan')) return 'portal-chunk';
-          if (id.includes('/src/pages/Login') || id.includes('/src/pages/Auth')) return 'auth-chunk';
-          if (id.includes('/src/pages/Home') || id.includes('/src/pages/Shop') || id.includes('/src/layouts/StorefrontLayout')) return 'storefront-chunk';
+          // Let route-level dynamic imports isolate application code. Grouping all admin
+          // components pulled every admin page into the public graph via shared UI.
         },
       },
     },

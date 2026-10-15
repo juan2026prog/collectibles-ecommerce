@@ -4,7 +4,7 @@ import { RefreshCw, ImageIcon, FileIcon, X, Folder, ChevronRight, Upload, Check,
 import { useToast } from './admin/Toast';
 import { useConfirmModal } from './admin/ConfirmModal';
 import { useAuth } from '../contexts/AuthContext';
-import { optimizeImageForUpload } from '../lib/imageUploadOptimizer';
+import { createPersistentVariants, uploadPublicMedia } from '../lib/persistentMediaUpload';
 
 interface MediaPickerModalProps {
   isOpen: boolean;
@@ -61,7 +61,7 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
         sortBy: { column: 'name', order: 'asc' }
       });
       if (error) throw error;
-      setFiles((data || []).filter(f => f.name !== '.emptyFolderPlaceholder'));
+      setFiles((data || []).filter(f => f.name !== '.emptyFolderPlaceholder' && f.name !== '_variants'));
     } catch (err: any) {
       console.error(err);
     } finally {
@@ -108,18 +108,14 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
     const targetPath = destPath !== undefined ? destPath : currentPath;
     try {
       for (const file of filesToUpload) {
-        const optimizedFile = await optimizeImageForUpload(file);
+        const optimizedFile = file;
         const fileExt = optimizedFile.name.split('.').pop() || 'webp';
         const rawName = optimizedFile.name.replace(/\.[^.]+$/, '');
         const sanitizedName = rawName.toLowerCase().replace(/[^a-z0-9]/g, '-');
         const fileName = `${Date.now()}-${sanitizedName}.${fileExt}`;
         const filePath = rootPathPrefix + targetPath + fileName;
         
-        const { error } = await supabase.storage.from(BUCKET_NAME).upload(filePath, optimizedFile, {
-          cacheControl: '31536000',
-          upsert: false,
-          contentType: optimizedFile.type
-        });
+        const { error } = await uploadPublicMedia(BUCKET_NAME, filePath, optimizedFile);
         if (error) throw error;
       }
       fetchMedia(currentPath);
@@ -143,7 +139,11 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
       const { data: candidates, error: candidateError } = await supabase.rpc('admin_media_heavy_asset_candidates');
       if (candidateError) throw candidateError;
 
-      const heavyAssets = (candidates || []) as Array<{
+      const { data: registered } = await supabase.rpc('get_media_image_variants', {
+        urls: (candidates || []).slice(0, 300).map((asset: any) => asset.old_url)
+      });
+      const ready = new Set((registered || []).map((asset: any) => asset.original_url));
+      const heavyAssets = (candidates || []).filter((asset: any) => !ready.has(asset.old_url)).slice(0, 20) as Array<{
         kind: 'product' | 'banner';
         old_url: string;
         object_path: string;
@@ -163,32 +163,7 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
 
           const sourceName = objectPath.split('/').pop() || (asset.kind === 'banner' ? 'banner.jpg' : 'image.jpg');
           const source = new File([blob], sourceName, { type: blob.type || 'image/jpeg' });
-          const optimizedFile = await optimizeImageForUpload(source);
-          if (optimizedFile.size >= blob.size) { skipped++; continue; }
-
-          const stem = objectPath.replace(/\.[^.]+$/, '');
-          const optimizedPath = asset.kind === 'banner'
-            ? `optimized/banners/${stem.replace(/^banners\//, '')}.webp`
-            : `optimized/${stem}.webp`;
-
-          const { error: uploadError } = await supabase.storage.from(BUCKET_NAME).upload(optimizedPath, optimizedFile, {
-            cacheControl: '31536000',
-            upsert: true,
-            contentType: 'image/webp'
-          });
-          if (uploadError) throw uploadError;
-
-          const newUrl = supabase.storage.from(BUCKET_NAME).getPublicUrl(optimizedPath).data.publicUrl;
-          if (asset.kind === 'product') {
-            const { error: updateError } = await supabase.from('product_images').update({ url: newUrl }).eq('url', asset.old_url);
-            if (updateError) throw updateError;
-          } else {
-            const [{ error: desktopError }, { error: mobileError }] = await Promise.all([
-              supabase.from('banners').update({ image_url: newUrl }).eq('image_url', asset.old_url),
-              supabase.from('banners').update({ mobile_image_url: newUrl }).eq('mobile_image_url', asset.old_url)
-            ]);
-            if (desktopError || mobileError) throw desktopError || mobileError;
-          }
+          await createPersistentVariants(BUCKET_NAME, objectPath, source);
           optimized++;
         } catch (itemError) {
           skipped++;
@@ -196,7 +171,7 @@ export function MediaPickerModal({ isOpen, onClose, onSelect, multiple = true, o
         }
       }
 
-      toast.success(`Optimización terminada: ${optimized} imágenes migradas; ${skipped} omitidas. Originales conservados.`);
+      toast.success(`Optimización terminada: ${optimized} imágenes con variantes; ${skipped} omitidas. Originales conservados.`);
       fetchMedia(currentPath);
     } catch (err: any) {
       console.error('[MediaPicker] Existing image optimization error:', err);

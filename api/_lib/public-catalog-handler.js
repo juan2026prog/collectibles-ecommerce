@@ -1,8 +1,9 @@
 import { getCatalogRepository, parseFilters, selectCatalog } from './public-catalog.js';
+import { readMediaVariants } from './media-variants.js';
 
 const CARD_FIELDS = `id,title,slug,base_price,compare_at_price,badge,is_featured,is_active,status,vendor_id,vendor_store_id,brand_id,category_id,condition,created_at,
   category:categories(id,name,slug),brand:brands!products_brand_id_fkey(id,name,slug,logo_url),
-  images:product_images(id,url,alt_text,is_primary),variants:product_variants(id,sku,price_adjustment,inventory_count),
+  images:product_images(id,url,alt_text,is_primary,sort_order),variants:product_variants(id,sku,price_adjustment,inventory_count),
   vendor:vendors(id,store_name,slug,logo_url),vendor_store:vendor_stores(id,store_name,slug,logo_url,is_official),
   product_group_items(group_id,group:product_groups(id,name,slug,is_active,sort_order,badge_image_url,badge_storage_path,badge_alt_text))`;
 
@@ -55,12 +56,13 @@ export function createCatalogHandler(getRepository = getCatalogRepository) {
         }
         products = selected.selected.map(p => cards.get(`${p.origin}:${p.id}`)).filter(Boolean);
       }
+      const imageVariants = await readMediaVariants(repo.client, filters.mode === 'facets' ? catalog : products);
       // This response is anonymous and identical for every caller; never forward cookies or user JWTs.
       res.setHeader('Cache-Control', 'public, max-age=0');
       res.setHeader('CDN-Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
       res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
       res.setHeader('X-Catalog-Version', '2026-10-stability-1');
-      return res.status(200).json({ products, count:selected.count, facets:selected.facets,
+      return res.status(200).json({ products, image_variants:imageVariants, count:selected.count, facets:selected.facets,
         ...(filters.mode === 'facets' ? { taxonomies: {
           categories:catalog.categories,brands:catalog.brands,licenses:catalog.licenses,themes:catalog.themes,
         } } : {}) });

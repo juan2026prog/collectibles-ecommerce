@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { IMAGE_PROTECTION_ENABLED, IMAGE_PROTECTION_TOAST_MESSAGE } from '../config/imageProtection';
-import { useToast } from '../components/admin/Toast';
+import { useToast } from '../components/ui/Toast';
 
 interface ImageProtectionOptions {
   /**

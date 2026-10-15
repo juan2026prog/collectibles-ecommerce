@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchPublicCatalog, fetchPublicTaxonomies } from '../lib/publicCatalog';
+import { loadMediaVariants } from '../lib/loadMediaVariants';
 import { useAnalytics } from '../contexts/AnalyticsContext';
 import { resolveSearchTokens, buildProductSearchOrClause, normalizeSearchText } from '../lib/search/searchQueryNormalizer';
 
@@ -659,6 +660,7 @@ export function useProduct(slug: string | undefined) {
           .maybeSingle();
           
         if (data) {
+          await loadMediaVariants(data);
           setProduct(data);
         } else {
           // Check 301 redirects table for legacy/migrated slugs
@@ -687,6 +689,7 @@ export function useProduct(slug: string | undefined) {
               .maybeSingle();
 
             if (redirectedProduct) {
+              await loadMediaVariants(redirectedProduct);
               setProduct({ ...redirectedProduct, _redirectSlug: redirect.new_slug });
               return;
             }

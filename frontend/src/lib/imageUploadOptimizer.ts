@@ -3,7 +3,7 @@ const TARGET_BYTES = 600 * 1024;
 const START_QUALITY = 0.86;
 const MIN_QUALITY = 0.68;
 
-function loadImage(file: File): Promise<HTMLImageElement> {
+export function loadImage(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
@@ -13,7 +13,7 @@ function loadImage(file: File): Promise<HTMLImageElement> {
   });
 }
 
-function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
+export function canvasToBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('No se pudo optimizar la imagen')), 'image/webp', quality);
   });

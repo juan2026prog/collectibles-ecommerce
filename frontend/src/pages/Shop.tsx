@@ -1314,7 +1314,8 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
                 : "Productos"}
             </h1>
             {group?.badge_image_url && (
-              <img
+              <ResponsiveImage
+                variant="thumbnail" sizes="64px"
                 src={group.badge_image_url}
                 alt={group.badge_alt_text || `Cocarda de ${group.name}`}
                 className="w-8 h-8 md:w-16 md:h-16 object-contain pointer-events-none drop-shadow-md select-none"
@@ -1674,3 +1675,4 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     </div>
   );
 }
+import { ResponsiveImage } from '../components/ResponsiveImage';

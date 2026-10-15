@@ -29,7 +29,7 @@ import { sanitizeHeadMarkup, sanitizeRichHtml } from '../lib/sanitize';
 import { FacebookIcon, InstagramIcon, TwitterIcon, YoutubeIcon, TiktokIcon, WhatsappIcon } from '../components/SocialIcons';
 import { CurrencySelector } from '../components/CurrencySelector';
 import AdminModeToggle from '../components/AdminModeToggle';
-import { ToastProvider } from '../components/admin/Toast';
+import { ToastProvider } from '../components/ui/Toast';
 import { ImageProtectionGlobalListener } from '../hooks/useImageProtection';
 import { getDropdownMediaUrl } from '../utils/responsiveMedia';
 import React from 'react';

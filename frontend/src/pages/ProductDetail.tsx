@@ -10,7 +10,8 @@ import { usePromotions, getApplicablePromotions, evaluateItemDiscountDetailed } 
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useLocale } from '../contexts/LocaleContext';
 import { useFeatures } from '../contexts/FeatureToggleContext';
-import { resolveImage, FALLBACK_IMAGE } from '../lib/imageUtils';
+import { resolveImage, FALLBACK_IMAGE, extractCandidateImages } from '../lib/imageUtils';
+import { ResponsiveImage } from '../components/ResponsiveImage';
 import { useImageProtection } from '../hooks/useImageProtection';
 import { analytics } from '../lib/analytics';
 import { trackGA4Event } from '../lib/analyticsTracker';
@@ -375,14 +376,10 @@ export default function ProductDetail() {
   const discountPercent = hasDiscount ? Math.round((promoResult.discount / basePriceWithVariant) * 100) : 0;
   const productCurrency = resolveProductNativeCurrency(product);
 
-  const images = Array.isArray(product.images) && product.images.length > 0
-    ? [...product.images].sort((a: any, b: any) => (a.sort_order || a.position || 0) - (b.sort_order || b.position || 0))
-    : Array.isArray(product.product_images) && product.product_images.length > 0
-      ? [...product.product_images].sort((a: any, b: any) => (a.position || a.sort_order || 0) - (b.position || b.sort_order || 0))
-      : [{ url: product.image_url || FALLBACK_IMAGE }];
+  const images = extractCandidateImages(product, true).map(url => ({ url }));
 
   const currentImgObj = images[selectedImage] || images[0];
-  const displayImage = resolveImage(currentImgObj?.url || product.image_url, 'detail');
+  const displayImage = resolveImage(currentImgObj?.url || product.image_url, 'raw');
 
   const inventoryResolution = resolveProductInventory(product, selectedVariant);
   const isIntl = product.source_provider === 'zinc' || Boolean(product.is_international);
@@ -548,8 +545,10 @@ export default function ProductDetail() {
                 <div className="absolute top-3 left-3 sm:top-5 sm:left-5 z-20 flex flex-col gap-2 pointer-events-none drop-shadow-md select-none scale-90 sm:scale-100 origin-top-left">
                   {groupBadges.map((gb, idx) => (
                     <div key={`${gb.url}-${idx}`} className="w-12 h-12 sm:w-16 sm:h-16">
-                      <img
+                      <ResponsiveImage
                         src={gb.url}
+                        variant="thumbnail"
+                        sizes="64px"
                         alt={gb.alt}
                         draggable={false}
                         onDragStart={handleDragStart}
@@ -560,8 +559,12 @@ export default function ProductDetail() {
                 </div>
               );
             })()}
-            <img
+            <ResponsiveImage
               src={displayImage}
+              fallbackUrls={images.map(image => image.url)}
+              variant={isHovering ? 'raw' : 'detail'}
+              priority="high"
+              sizes="(max-width: 767px) 90vw, (max-width: 1279px) 45vw, 560px"
               alt={product.title}
               referrerPolicy="no-referrer"
               className={`max-w-full max-h-full object-contain transition-transform duration-200 pointer-events-none ${isHovering ? 'scale-150' : 'scale-100'}`}
@@ -582,11 +585,11 @@ export default function ProductDetail() {
           {images.length > 1 && (
             <div className="flex gap-2 sm:gap-3 overflow-x-auto pb-2 no-scrollbar">
               {images.map((img: any, index: number) => {
-                const src = resolveImage(img.url);
+                const src = img.url;
                 const activeImage = selectedImage;
                 return (
                   <button
-                    key={img.id || index}
+                    key={img.url || index}
                     onClick={() => setSelectedImage(index)}
                     className={`w-14 h-14 sm:w-20 sm:h-20 rounded-lg sm:rounded-xl overflow-hidden bg-white/5 p-1 transition-all duration-300 flex-shrink-0 cursor-pointer ${
                       activeImage === index
@@ -594,7 +597,8 @@ export default function ProductDetail() {
                         : 'border border-white/10 opacity-60 hover:opacity-100 hover:border-white/30'
                     }`}
                   >
-                    <img 
+                    <ResponsiveImage
+                      variant="thumbnail" sizes="80px"
                       src={src} 
                       alt="" 
                       referrerPolicy="no-referrer" 
@@ -1182,7 +1186,8 @@ export default function ProductDetail() {
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#05070f]/95 backdrop-blur-lg border-t border-white/10 px-4 py-2.5 pb-[calc(0.6rem+env(safe-area-inset-bottom,0px))] animate-slide-up lg:hidden shadow-[0_-8px_30px_rgba(0,0,0,0.8)]">
           <div className="flex items-center justify-between gap-3 max-w-7xl mx-auto">
             <div className="flex items-center gap-2.5 overflow-hidden min-w-0 flex-1">
-              <img
+              <ResponsiveImage
+                variant="thumbnail" sizes="40px" priority="lazy"
                 src={displayImage}
                 alt={product.title}
                 referrerPolicy="no-referrer"
