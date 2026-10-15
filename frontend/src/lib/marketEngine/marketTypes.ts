@@ -4,6 +4,8 @@ export type MarketStatus = 'DISABLED' | 'PREVIEW' | 'SANDBOX' | 'READY_FOR_LIVE'
 
 export type LogisticsMode = 'IMPORT_HUB' | 'SKYPOSTAL';
 
+export type CommerceMode = 'FULL_COMMERCE' | 'INTERNATIONAL_ONLY';
+
 export type ProviderEnvironment = 'test' | 'production';
 
 export interface MarketRecord {
@@ -12,6 +14,7 @@ export interface MarketRecord {
   country_name: string;
   currency: string;
   logistics_mode: LogisticsMode;
+  commerce_mode?: CommerceMode;
   market_status: MarketStatus;
   public_enabled: boolean;
   checkout_enabled: boolean;
@@ -51,6 +54,7 @@ export interface MarketResolution {
   countryName: string;
   currency: string;
   logisticsMode: LogisticsMode;
+  commerceMode: CommerceMode;
   marketStatus: MarketStatus;
   provider: string;
   canCheckout: boolean;
@@ -59,6 +63,8 @@ export interface MarketResolution {
   isReadyForLive: boolean;
   isLive: boolean;
   isDisabled: boolean;
+  isFullCommerce: boolean;
+  isInternationalOnly: boolean;
   flag: string;
   metadata: Record<string, any>;
 }
