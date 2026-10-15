@@ -1,7 +1,9 @@
 // @vitest-environment node
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { prepareCatalog, parseFilters, selectCatalog, createCatalogRepository } from '../../../api/_lib/public-catalog.js';
-import { createCatalogHandler } from '../../../api/public-catalog.js';
+import { createCatalogHandler } from '../../../api/_lib/public-catalog-handler.js';
 import { withDeadline } from '../../../api/_lib/public-supabase.js';
 import { authorizeWorker, guardWorker } from '../../../supabase/functions/_shared/workerGuard.ts';
 
@@ -18,6 +20,13 @@ const select = (filters = {}, fixture = raw()) => selectCatalog(prepareCatalog(f
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe('Public catalog correctness and bounded payloads', () => {
+  it('fits the production Hobby budget of twelve serverless entrypoints', () => {
+    const root = fileURLToPath(new URL('../../../api/', import.meta.url));
+    const count = (dir: string): number => readdirSync(dir, { withFileTypes: true })
+      .filter(entry => !entry.name.startsWith('_') && !entry.name.startsWith('.'))
+      .reduce((total, entry) => total + (entry.isDirectory() ? count(dir + '/' + entry.name) : Number(/\.[cm]?[jt]s$/.test(entry.name))), 0);
+    expect(count(root)).toBeLessThanOrEqual(12);
+  });
   it('counts a product only once across multiple category assignments and includes descendants', () => {
     const result=select({category:'figuras'});
     expect(result.count).toBe(3); expect(result.facets.categoryFacets.parent).toBe(3);

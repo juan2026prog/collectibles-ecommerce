@@ -5,7 +5,7 @@
 La migración y las seis funciones de Supabase están aplicadas en producción. La verificación final del despliegue web se registra en la respuesta de cierre de esta tarea.
 
 - El build de producción de Vite pasa.
-- Pasan 57 pruebas en 7 suites relacionadas con catálogo, búsqueda, paginación, autorización de workers y separación de configuración pública/administrativa.
+- La validación incluye catálogo, búsqueda, paginación, autorización de workers, separación de configuración pública/administrativa y el límite de doce funciones del hosting.
 - Las seis funciones están activas: ml-import-worker v11, campaign-runner v10, abandoned-carts-cron v7, smart-wishlist-cron v7, zinc-sync-published-products v9 y zinc-sync-order-tracking v2. Todas rechazaron llamadas anónimas con HTTP 401 en el runtime real.
 - La comprobación global de tipos presenta errores en módulos preexistentes. No debe confundirse el build exitoso con un typecheck global exitoso.
 - Migración remota registrada como `20261015004657_stabilize_database_access_and_cron`; el archivo local se alineó con esa versión.
@@ -20,6 +20,8 @@ La migración y las seis funciones de Supabase están aplicadas en producción. 
 ### Catálogo y tráfico público
 
 `/api/public-catalog` usa exclusivamente credenciales públicas, RLS y un cliente sin sesión. Nunca hereda el JWT ni cookies del visitante.
+
+El primer despliegue web encontró el límite de doce funciones del plan Hobby de Vercel. El endpoint JSON y el feed CSV de Meta se sirven mediante una misma función, conservando sus URLs y formatos originales. Los helpers permanecen en `api/_lib`, excluido de los entrypoints de Vercel. Esto mantiene el proyecto en doce funciones sin cambiar el plan contratado.
 
 Sustituye las descargas completas de productos desde cada navegador por una instantánea compacta del servidor: TTL 60 segundos, una sola renovación simultánea por instancia, máximo tres lecturas concurrentes y plazo de renovación de 10 segundos. Las respuestas correctas pueden almacenarse en el CDN durante 60 segundos, con revalidación posterior de 120 segundos. Cada instancia de Vercel mantiene su propia instantánea; esto no es una caché distribuida ni una vista materializada.
 

@@ -23,7 +23,7 @@
     "api/sourcing-discovery.js": {
       "maxDuration": 60
     },
-    "api/public-catalog.js": {
+    "api/meta-catalog.js": {
       "maxDuration": 30
     }
   },
@@ -188,7 +188,7 @@
   "rewrites": [
     {
       "source": "/api/public-catalog",
-      "destination": "/api/public-catalog"
+      "destination": "/api/meta-catalog?__public_catalog=1"
     },
     {
       "source": "/api/currency-sync",

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import publicCatalogHandler from './_lib/public-catalog-handler.js';
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -68,6 +69,8 @@ function escapeCsvField(val) {
 }
 
 export default async function handler(req, res) {
+  // Keep both public catalog formats in one Vercel function (Hobby permits twelve).
+  if (req.query?.__public_catalog === '1') return publicCatalogHandler(req, res);
   try {
     let allProducts = [];
     let page = 0;

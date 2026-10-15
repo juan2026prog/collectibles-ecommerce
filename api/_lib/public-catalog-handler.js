@@ -1,4 +1,4 @@
-import { getCatalogRepository, parseFilters, selectCatalog } from './_lib/public-catalog.js';
+import { getCatalogRepository, parseFilters, selectCatalog } from './public-catalog.js';
 
 const CARD_FIELDS = `id,title,slug,base_price,compare_at_price,badge,is_featured,is_active,status,vendor_id,vendor_store_id,brand_id,category_id,condition,created_at,
   category:categories(id,name,slug),brand:brands!products_brand_id_fkey(id,name,slug,logo_url),
