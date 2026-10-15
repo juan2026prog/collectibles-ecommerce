@@ -1,7 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
-import { verifyAuth } from "../_shared/auth.ts";
+import { verifyAuth } from "./auth-v113.ts";
+import { workerFetch } from "../_shared/workerGuard.ts";
+import { fetchWithWorkerReadBackoff } from "../_shared/workerReadBackoff.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -130,54 +132,22 @@ async function resolveCollectiblesCategoryFromML(supabase: any, title: string, b
     return d4?.id || null;
 }
 
-function isValidGtinChecksum(code: string | null | undefined): boolean {
-  if (!code) return false;
-  const clean = code.replace(/[^0-9]/g, '');
-  const len = clean.length;
-  if (![8, 12, 13, 14].includes(len)) return false;
-
-  let sum = 0;
-  for (let i = 1; i < len; i++) {
-    const digit = parseInt(clean.charAt(len - 1 - i), 10);
-    const weight = (i % 2 === 1) ? 3 : 1;
-    sum += digit * weight;
-  }
-  const check = (10 - (sum % 10)) % 10;
-  return check === parseInt(clean.charAt(len - 1), 10);
-}
-
 function extractRealSkuFromML(item: any, variation: any = null) {
-   let sku: string | null = null;
+   let sku = null;
    let source = 'missing';
 
    const getFromAttr = (attrs: any[], code: string) => attrs?.find((a: any) => a.id === code)?.value_name;
 
-   const gtin = getFromAttr(item.attributes, 'GTIN') || 
-                getFromAttr(item.attributes, 'EAN') || 
-                getFromAttr(item.attributes, 'UPC') || 
-                getFromAttr(item.attributes, 'JAN') ||
-                getFromAttr(variation?.attributes, 'GTIN') || 
-                getFromAttr(variation?.attributes, 'EAN') || 
-                getFromAttr(variation?.attributes, 'UPC');
+   if (item.seller_custom_field) { sku = item.seller_custom_field; source = 'seller_custom_field'; }
+   else if (variation?.seller_custom_field) { sku = variation.seller_custom_field; source = 'seller_custom_field_var'; }
+   else if (getFromAttr(item.attributes, 'SELLER_SKU')) { sku = getFromAttr(item.attributes, 'SELLER_SKU'); source = 'seller_sku'; }
+   else if (getFromAttr(item.attributes, 'SKU')) { sku = getFromAttr(item.attributes, 'SKU'); source = 'sku'; }
+   else if (item.inventory_id) { sku = item.inventory_id; source = 'inventory_id'; }
+   else if (variation?.inventory_id) { sku = variation.inventory_id; source = 'inventory_id_var'; }
 
-   if (gtin && isValidGtinChecksum(gtin.trim())) {
-      sku = gtin.trim();
-      source = 'universal_gtin';
-   } else {
-      const candidate = item.seller_custom_field || 
-                        variation?.seller_custom_field || 
-                        getFromAttr(item.attributes, 'SELLER_SKU') || 
-                        getFromAttr(item.attributes, 'SKU');
-      if (candidate && isValidGtinChecksum(candidate.trim())) {
-         sku = candidate.trim();
-         source = 'seller_gtin';
-      }
-   }
-
-   // Regla de Negocio: Si no posee un código universal con checksum válido, sku es null y se generará COL-XXXXXX
-   if (!sku || !isValidGtinChecksum(sku)) {
-       sku = null; 
-       source = 'missing_universal_code';
+   if (!sku) {
+       sku = item.id; 
+       source = 'ml_item_id_fallback';
    }
    return { sku, source, generated_sku: sku };
 }
@@ -334,9 +304,8 @@ Deno.serve(async (req) => {
   // Create supabase client inside the handler to avoid cold-start issues
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  const isDev = Deno.env.get('ENVIRONMENT') === 'development' || Deno.env.get('ALLOW_TEST_BYPASS') === 'true';
-  const bypassSecret = isDev ? Deno.env.get('TEST_BYPASS_SECRET') : null;
-  const isTestBypass = !!(bypassSecret && req.headers.get('x-test-bypass') === bypassSecret);
+  const bypassSecret = Deno.env.get('TEST_BYPASS_SECRET');
+  const isTestBypass = bypassSecret && req.headers.get('x-test-bypass') === bypassSecret;
 
   // Mock data for sandbox testing
   const mockItem1 = {
@@ -1064,85 +1033,60 @@ Deno.serve(async (req) => {
                 // 4. Run Normalizer
                 const cleanTitleText = cleanTitle(titleOriginal);
                 
-                // Detect Brand & License from attributes or cleanTitleText
-                let brandId: string | null = null;
-                let detectedLicenseId: string | null = null;
-                let rawBrandAttr = item.attributes?.find((a: any) => a.id === 'BRAND' || a.id === 'MANUFACTURER')?.value_name || null;
-                let rawBrandLower = rawBrandAttr ? rawBrandAttr.trim().toLowerCase() : '';
-
-                const GENERIC_LIST = ['genérica', 'generica', 'generic', 'sin marca', 'no brand', 'n/a', 'na', 'desconocido', 'ninguna', '—', '-', 'unbranded'];
-                const KNOWN_LICENSES_NAMES = ['marvel', 'disney', 'star wars', 'dc', 'dc comics', 'pokémon', 'pokemon', 'sonic', 'minecraft', 'roblox', 'harry potter', 'dragon ball', 'naruto', 'one piece', 'zelda'];
-
-                // Check if raw brand is a known license
-                if (rawBrandAttr && KNOWN_LICENSES_NAMES.includes(rawBrandLower)) {
-                   const { data: matchedLic } = await supabase
-                     .from('licenses')
-                     .select('id')
-                     .ilike('name', rawBrandAttr.trim())
-                     .maybeSingle();
-                   if (matchedLic) {
-                     detectedLicenseId = matchedLic.id;
-                   }
-                   rawBrandAttr = null;
-                } else if (rawBrandAttr && GENERIC_LIST.includes(rawBrandLower)) {
-                   rawBrandAttr = null;
-                }
-
-                if (rawBrandAttr) {
+                // Detect Brand from attributes or cleanTitleText
+                let brandId = null;
+                let brandName = item.attributes?.find((a: any) => a.id === 'BRAND')?.value_name || null;
+                if (brandName) {
+                   // Search for an existing brand (case insensitive check)
                    const { data: existingBrands } = await supabase
                      .from('brands')
-                     .select('id, name, status, brand_type')
-                     .ilike('name', rawBrandAttr.trim());
+                     .select('id, status, owner_vendor_id')
+                     .ilike('name', brandName.trim());
                    
-                   const approvedBrand = existingBrands?.find((b: any) => b.status === 'approved' && b.brand_type !== 'generic');
+                   const approvedBrand = existingBrands?.find((b: any) => b.status === 'approved');
+                   const vendorPendingBrand = targetVendorId ? existingBrands?.find((b: any) => b.status === 'pending_review' && b.owner_vendor_id === targetVendorId) : null;
+                   
                    if (approvedBrand) {
                       brandId = approvedBrand.id;
-                   } else if (targetVendorId) {
-                       const { data: vPermission } = await supabase
-                         .from('vendors')
-                         .select('can_request_brands')
-                         .eq('id', targetVendorId)
-                         .maybeSingle();
-
-                       if (vPermission?.can_request_brands) {
-                         await supabase.from('vendor_brand_requests').insert({
-                            vendor_id: targetVendorId,
-                            requested_name: rawBrandAttr.trim(),
-                            source: 'ml_import',
-                            external_brand_name: rawBrandAttr.trim(),
-                            status: 'pending'
-                         });
-                       }
-                    }
-                }
-
-                // Fallback: Detect true manufacturer from title keywords
-                if (!brandId) {
-                   const mfrKeywordsMap: Record<string, string[]> = {
-                     'Hasbro': ['hasbro', 'kenner', 'marvel legends', 'star wars black series'],
-                     'Funko': ['funko', 'funko pop', 'pop!'],
-                     'Bandai': ['bandai', 'tamashii', 'banpresto', 'sh figuarts'],
-                     'Mattel': ['mattel', 'hot wheels', 'barbie'],
-                     'Takara Tomy': ['takara tomy', 'takaratomy'],
-                     'McFarlane Toys': ['mcfarlane'],
-                     'NECA': ['neca'],
-                     'Super7': ['super7'],
-                     'Hot Toys': ['hot toys'],
-                     'LEGO': ['lego']
-                   };
-
-                   for (const [mfrName, syns] of Object.entries(mfrKeywordsMap)) {
-                     if (syns.some(syn => cleanTitleText.toLowerCase().includes(syn))) {
-                       const { data: dbMfr } = await supabase
-                         .from('brands')
-                         .select('id')
-                         .ilike('name', mfrName)
-                         .eq('status', 'approved')
-                         .maybeSingle();
-                       if (dbMfr) {
-                         brandId = dbMfr.id;
-                         break;
-                       }
+                   } else if (vendorPendingBrand) {
+                      brandId = vendorPendingBrand.id;
+                   } else {
+                      // Create a new brand proposal (pending review if created by vendor)
+                      const slugBrandBase = brandName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+                      const slugBrand = targetVendorId ? `${slugBrandBase}-v${targetVendorId.substring(0, 4)}` : slugBrandBase;
+                      const { data: newBr, error: newBrErr } = await supabase
+                        .from('brands')
+                        .insert({
+                          name: brandName.trim(),
+                          slug: slugBrand,
+                          owner_vendor_id: targetVendorId || null,
+                          status: targetVendorId ? 'pending_review' : 'approved',
+                          is_active: targetVendorId ? false : true,
+                          is_public: targetVendorId ? false : true,
+                          source: targetVendorId ? 'vendor_import' : 'manual'
+                        })
+                        .select()
+                        .single();
+                      
+                      if (newBrErr) {
+                         console.error("Error creating brand during import:", newBrErr.message);
+                      } else if (newBr) {
+                         brandId = newBr.id;
+                      }
+                   }
+                } else {
+                   // Title search fallback for brand
+                   // We only match against approved brands
+                   const { data: allBrands } = await supabase
+                     .from('brands')
+                     .select('id, name')
+                     .eq('status', 'approved');
+                   if (allBrands) {
+                     const lowerCleanTitle = cleanTitleText.toLowerCase();
+                     const matchedBrand = allBrands.find((b: any) => lowerCleanTitle.includes(b.name.toLowerCase()));
+                     if (matchedBrand) {
+                       brandId = matchedBrand.id;
+                       brandName = matchedBrand.name;
                      }
                    }
                 }
@@ -1414,7 +1358,7 @@ Deno.serve(async (req) => {
                 currency_id: "UYU",
                 available_quantity: Math.max(1, p.product_variants?.[0]?.inventory_count || 1), // ML requires >0 to publish
                 buying_mode: "buy_it_now",
-                condition: (p.condition && (p.condition.startsWith('used_') || p.condition.startsWith('loose_'))) ? "used" : "new",
+                condition: p.condition || "new",
                 listing_type_id: "gold_special",
                 pictures: pictures,
                 attributes: attributes
@@ -1488,6 +1432,18 @@ Deno.serve(async (req) => {
 
     // ═══ ACTION: PROCESS SYNC QUEUE ═══
     if (action === 'process_sync_queue') {
+        const deadline = Date.now() + 45000;
+        const budgetSignal = AbortSignal.timeout(45000);
+        const expired = () => budgetSignal.aborted || Date.now() >= deadline;
+        const withBudget = (init: RequestInit = {}) => ({ ...init,
+          signal: init.signal ? AbortSignal.any([init.signal, budgetSignal]) : budgetSignal });
+        const queueRead = (input: RequestInfo | URL, init: RequestInit = {}) => {
+          const method = String(init.method || 'GET').toUpperCase();
+          return method === 'GET' || method === 'HEAD'
+            ? fetchWithWorkerReadBackoff(input, withBudget(init)) : workerFetch(input, init);
+        };
+        // Keep cleanup writes possible after the read budget expires. No write retries.
+        const supabase = createClient(supabaseUrl, supabaseServiceKey, { global: { fetch: queueRead } });
         const { data: queueItems, error: qErr } = await supabase
           .from('ml_sync_queue')
           .select('*')
@@ -1500,11 +1456,7 @@ Deno.serve(async (req) => {
           throw new Error(`Failed to query sync queue: ${qErr.message}`);
         }
 
-        if (!queueItems || queueItems.length === 0) {
-          return new Response(JSON.stringify({ success: true, count: 0, message: "Queue is empty." }), { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } });
-        }
-
-        // Backlog check and alert only when items exist
+        // Backlog check and alert
         const { count: backlogCount, error: cntErr } = await supabase
           .from('ml_sync_queue')
           .select('*', { count: 'exact', head: true })
@@ -1528,20 +1480,34 @@ Deno.serve(async (req) => {
         const results = [];
 
         for (const item of (queueItems || [])) {
-          // Move item to processing status immediately
-          const { error: updErr } = await supabase
+          if (expired()) break;
+          const retryCount = item.retry_count ?? 0;
+          const withRetryCount = (query: any) => item.retry_count == null
+            ? query.is('retry_count', null) : query.eq('retry_count', item.retry_count);
+          // A single conditional UPDATE wins the claim; concurrent dispatches skip it.
+          const claimQuery = supabase
             .from('ml_sync_queue')
             .update({ status: 'processing', last_error: null })
-            .eq('id', item.id);
+            .eq('id', item.id).eq('status', item.status);
+          const { data: claimed, error: updErr } = await withRetryCount(claimQuery).select('id');
 
           if (updErr) {
              console.error(`[Sync Worker] Failed to set status to processing for item ${item.id}:`, updErr.message);
              continue;
           }
 
+          if (!claimed?.length) continue;
+          let externalWriteStarted = false;
+          const itemFetch: typeof fetch = (input, init = {}) => {
+            budgetSignal.throwIfAborted();
+            const method = String(init.method || 'GET').toUpperCase();
+            if (method !== 'GET' && method !== 'HEAD') externalWriteStarted = true;
+            return method === 'GET' || method === 'HEAD'
+              ? fetchWithWorkerReadBackoff(input, withBudget(init)) : workerFetch(input, withBudget(init));
+          };
           try {
              // 1. Get valid token for the seller
-             const token = await getValidMercadoLibreToken(supabase, item.seller_id, fetch);
+             const token = await getValidMercadoLibreToken(supabase, item.seller_id, itemFetch);
              if (!token) {
                 throw new Error(`Could not retrieve valid token for seller_id: ${item.seller_id}`);
              }
@@ -1622,7 +1588,7 @@ Deno.serve(async (req) => {
                    'Content-Type': 'application/json'
                  };
 
-                 const mlRes = await fetch(`https://api.mercadolibre.com/items/${item.ml_item_id}`, {
+                 const mlRes = await itemFetch(`https://api.mercadolibre.com/items/${item.ml_item_id}`, {
                    method: 'PUT',
                    headers: mlHeaders,
                    body: JSON.stringify(payload)
@@ -1642,7 +1608,7 @@ Deno.serve(async (req) => {
                .update({
                   status: 'completed',
                   processed_at: new Date().toISOString(),
-                  retry_count: item.retry_count + 1
+                  retry_count: retryCount + 1
                })
                .eq('id', item.id);
 
@@ -1677,7 +1643,15 @@ Deno.serve(async (req) => {
              results.push({ id: item.id, status: 'completed' });
 
           } catch (err: any) {
-             const nextRetry = item.retry_count + 1;
+             if (budgetSignal.aborted && !externalWriteStarted) {
+               const releaseQuery = supabase.from('ml_sync_queue')
+                 .update({ status: item.status, last_error: item.last_error })
+                 .eq('id', item.id).eq('status', 'processing');
+               const { error: releaseError } = await withRetryCount(releaseQuery);
+               if (releaseError) throw new Error('Sync queue deferred claim release unavailable');
+               continue;
+             }
+             const nextRetry = retryCount + 1;
              const isDeadLetter = nextRetry >= 3;
              const finalStatus = isDeadLetter ? 'dead_letter' : 'failed';
 
@@ -2714,5 +2688,6 @@ Deno.serve(async (req) => {
     );
   }
 });
+
 
 

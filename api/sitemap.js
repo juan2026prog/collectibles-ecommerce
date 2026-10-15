@@ -1,16 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.dummy';
-
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-async function withTimeout(promise, ms = 300) {
-  return Promise.race([
-    Promise.resolve(promise),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('DB Timeout')), ms))
-  ]);
-}
+import { createPublicSupabase, publicReadFailure } from './_lib/public-supabase.js';
+import { createSitemapRepository } from './_lib/seo-sitemap-repository.js';
 
 const BASE_URL = 'https://collectibles.uy';
 
@@ -50,184 +39,10 @@ const ACADEMY_ARTICLE_SLUGS = [
   "vitrinas-iluminacion-led-y-control-uv"
 ];
 
-import fs from 'fs';
-import path from 'path';
-
-function getFallbackTaxonomies() {
-  try {
-    const p = path.join(process.cwd(), 'api', 'taxonomies-cache.json');
-    if (fs.existsSync(p)) {
-      return JSON.parse(fs.readFileSync(p, 'utf8'));
-    }
-  } catch {}
-  return { categories: {}, brands: {}, licenses: {}, themes: {} };
-}
-
-async function fetchCategories() {
-  let allCategories = [];
-  let page = 0;
-  const pageSize = 1000;
-  let hasMore = true;
-
-  while (hasMore) {
-    try {
-      const { data: batch, error } = await withTimeout(
-        supabase
-          .from('categories')
-          .select('slug, status, is_active')
-          .eq('is_active', true)
-          .range(page * pageSize, (page + 1) * pageSize - 1),
-        5000
-      );
-
-      if (error) {
-        console.error('Error fetching sitemap categories batch:', error);
-        break;
-      }
-
-      if (batch && batch.length > 0) {
-        allCategories = allCategories.concat(batch);
-        if (batch.length < pageSize) hasMore = false;
-        else page++;
-      } else {
-        hasMore = false;
-      }
-    } catch {
-      hasMore = false;
-    }
-  }
-
-  if (allCategories.length === 0) {
-    const cache = getFallbackTaxonomies();
-    allCategories = Object.values(cache.categories || {}).filter(c => c.is_active);
-  }
-
-  return allCategories;
-}
-
-async function fetchBrands() {
-  let allBrands = [];
-  let page = 0;
-  const pageSize = 1000;
-  let hasMore = true;
-
-  while (hasMore) {
-    try {
-      const { data: batch, error } = await withTimeout(
-        supabase
-          .from('brands')
-          .select('slug, created_at')
-          .eq('is_active', true)
-          .eq('status', 'approved')
-          .range(page * pageSize, (page + 1) * pageSize - 1),
-        5000
-      );
-
-      if (error) {
-        console.error('Error fetching sitemap brands batch:', error);
-        break;
-      }
-
-      if (batch && batch.length > 0) {
-        allBrands = allBrands.concat(batch);
-        if (batch.length < pageSize) hasMore = false;
-        else page++;
-      } else {
-        hasMore = false;
-      }
-    } catch {
-      hasMore = false;
-    }
-  }
-
-  if (allBrands.length === 0) {
-    const cache = getFallbackTaxonomies();
-    allBrands = Object.values(cache.brands || {}).filter(b => b.is_active && (b.status === 'approved' || !b.status));
-  }
-
-  return allBrands;
-}
-
-async function fetchLicenses() {
-  try {
-    const { data, error } = await withTimeout(
-      supabase
-        .from('licenses')
-        .select('slug')
-        .eq('is_active', true),
-      5000
-    );
-
-    if (error || !data || data.length === 0) {
-      const cache = getFallbackTaxonomies();
-      return Object.values(cache.licenses || {}).filter(l => l.is_active);
-    }
-    return data || [];
-  } catch {
-    const cache = getFallbackTaxonomies();
-    return Object.values(cache.licenses || {}).filter(l => l.is_active);
-  }
-}
-
-async function fetchThemes() {
-  try {
-    const { data, error } = await withTimeout(
-      supabase
-        .from('themes')
-        .select('slug')
-        .eq('is_active', true),
-      5000
-    );
-
-    if (error || !data || data.length === 0) {
-      const cache = getFallbackTaxonomies();
-      return Object.values(cache.themes || {}).filter(t => t.is_active);
-    }
-    return data || [];
-  } catch {
-    const cache = getFallbackTaxonomies();
-    return Object.values(cache.themes || {}).filter(t => t.is_active);
-  }
-}
-
-async function fetchProducts() {
-  let allProducts = [];
-  let page = 0;
-  const pageSize = 1000;
-  let hasMore = true;
-
-  while (hasMore) {
-    try {
-      const { data: batch, error } = await withTimeout(
-        supabase
-          .from('products')
-          .select('slug, updated_at, created_at')
-          .eq('is_active', true)
-          .eq('status', 'published')
-          .range(page * pageSize, (page + 1) * pageSize - 1),
-        8000
-      );
-
-      if (error) {
-        console.error('Error fetching sitemap products batch:', error);
-        break;
-      }
-
-      if (batch && batch.length > 0) {
-        allProducts = allProducts.concat(batch);
-        if (batch.length < pageSize) hasMore = false;
-        else page++;
-      } else {
-        hasMore = false;
-      }
-    } catch {
-      hasMore = false;
-    }
-  }
-  return allProducts;
-}
-
-export default async function handler(req, res) {
+export function createSitemapHandler(clientFactory = createPublicSupabase) {
+  let repository;
+  const data = () => repository ||= createSitemapRepository(clientFactory());
+  return async function handler(req, res) {
   try {
     const rawUrl = req.url || '';
     const parsed = new URL(rawUrl, 'https://collectibles.uy');
@@ -252,7 +67,7 @@ export default async function handler(req, res) {
 
     res.setHeader('Content-Type', 'application/xml; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=43200');
-    res.setHeader('X-SEO-Version', '2026.09.07-v5');
+    res.setHeader('X-SEO-Version', '2026.10.15-bounded-reads');
 
     // 1. SITEMAP INDEX (for both /sitemap.xml and /sitemap_index.xml)
     if (isIndex && !isProducts && !isCategories && !isBrands && !isPages && !isAcademy) {
@@ -285,7 +100,7 @@ export default async function handler(req, res) {
 
     // 2. SITEMAP PRODUCTS
     if (isProducts) {
-      const products = await fetchProducts();
+      const products = await data().get('products');
       let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
       products.forEach(p => {
         if (p.slug) {
@@ -300,11 +115,7 @@ export default async function handler(req, res) {
 
     // 3. SITEMAP CATEGORIES
     if (isCategories) {
-      const [categories, licenses, themes] = await Promise.all([
-        fetchCategories(),
-        fetchLicenses(),
-        fetchThemes()
-      ]);
+      const [categories, licenses, themes] = await data().get('categories');
       let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
       categories.forEach(c => {
         if (c.slug) {
@@ -329,7 +140,7 @@ export default async function handler(req, res) {
 
     // 4. SITEMAP BRANDS
     if (isBrands) {
-      const brands = await fetchBrands();
+      const brands = await data().get('brands');
       let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
       brands.forEach(b => {
         if (b.slug) {
@@ -384,7 +195,14 @@ export default async function handler(req, res) {
     }
 
   } catch (error) {
-    console.error('Error generating sitemap:', error);
-    res.status(500).setHeader('Content-Type', 'text/plain').send('500 Error generating sitemap');
-  }
+    console.error('[sitemap] Read unavailable', { stage: error.stage || 'render', ...publicReadFailure(error) });
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('CDN-Cache-Control', 'no-store');
+    res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
+    res.setHeader('Retry-After', '30');
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    return res.status(503).send('Servicio temporalmente no disponible');
+  }  };
 }
+
+export default createSitemapHandler();

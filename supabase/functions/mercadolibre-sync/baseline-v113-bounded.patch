@@ -1,0 +1,104 @@
+--- a/functions/mercadolibre-sync/index.ts
++++ b/functions/mercadolibre-sync/index.ts
+@@ -2,6 +2,8 @@
+ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
+ import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
+ import { verifyAuth } from "../_shared/auth.ts";
++import { workerFetch } from "../_shared/workerGuard.ts";
++import { fetchWithWorkerReadBackoff } from "../_shared/workerReadBackoff.ts";
+ 
+ const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
+ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+@@ -1430,6 +1432,18 @@
+ 
+     // ═══ ACTION: PROCESS SYNC QUEUE ═══
+     if (action === 'process_sync_queue') {
++        const deadline = Date.now() + 45000;
++        const budgetSignal = AbortSignal.timeout(45000);
++        const expired = () => budgetSignal.aborted || Date.now() >= deadline;
++        const withBudget = (init: RequestInit = {}) => ({ ...init,
++          signal: init.signal ? AbortSignal.any([init.signal, budgetSignal]) : budgetSignal });
++        const queueRead = (input: RequestInfo | URL, init: RequestInit = {}) => {
++          const method = String(init.method || 'GET').toUpperCase();
++          return method === 'GET' || method === 'HEAD'
++            ? fetchWithWorkerReadBackoff(input, withBudget(init)) : workerFetch(input, init);
++        };
++        // Keep cleanup writes possible after the read budget expires. No write retries.
++        const supabase = createClient(supabaseUrl, supabaseServiceKey, { global: { fetch: queueRead } });
+         const { data: queueItems, error: qErr } = await supabase
+           .from('ml_sync_queue')
+           .select('*')
+@@ -1466,20 +1480,34 @@
+         const results = [];
+ 
+         for (const item of (queueItems || [])) {
+-          // Move item to processing status immediately
+-          const { error: updErr } = await supabase
++          if (expired()) break;
++          const retryCount = item.retry_count ?? 0;
++          const withRetryCount = (query: any) => item.retry_count == null
++            ? query.is('retry_count', null) : query.eq('retry_count', item.retry_count);
++          // A single conditional UPDATE wins the claim; concurrent dispatches skip it.
++          const claimQuery = supabase
+             .from('ml_sync_queue')
+             .update({ status: 'processing', last_error: null })
+-            .eq('id', item.id);
++            .eq('id', item.id).eq('status', item.status);
++          const { data: claimed, error: updErr } = await withRetryCount(claimQuery).select('id');
+ 
+           if (updErr) {
+              console.error(`[Sync Worker] Failed to set status to processing for item ${item.id}:`, updErr.message);
+              continue;
+           }
+ 
++          if (!claimed?.length) continue;
++          let externalWriteStarted = false;
++          const itemFetch: typeof fetch = (input, init = {}) => {
++            budgetSignal.throwIfAborted();
++            const method = String(init.method || 'GET').toUpperCase();
++            if (method !== 'GET' && method !== 'HEAD') externalWriteStarted = true;
++            return method === 'GET' || method === 'HEAD'
++              ? fetchWithWorkerReadBackoff(input, withBudget(init)) : workerFetch(input, withBudget(init));
++          };
+           try {
+              // 1. Get valid token for the seller
+-             const token = await getValidMercadoLibreToken(supabase, item.seller_id, fetch);
++             const token = await getValidMercadoLibreToken(supabase, item.seller_id, itemFetch);
+              if (!token) {
+                 throw new Error(`Could not retrieve valid token for seller_id: ${item.seller_id}`);
+              }
+@@ -1560,7 +1588,7 @@
+                    'Content-Type': 'application/json'
+                  };
+ 
+-                 const mlRes = await fetch(`https://api.mercadolibre.com/items/${item.ml_item_id}`, {
++                 const mlRes = await itemFetch(`https://api.mercadolibre.com/items/${item.ml_item_id}`, {
+                    method: 'PUT',
+                    headers: mlHeaders,
+                    body: JSON.stringify(payload)
+@@ -1580,7 +1608,7 @@
+                .update({
+                   status: 'completed',
+                   processed_at: new Date().toISOString(),
+-                  retry_count: item.retry_count + 1
++                  retry_count: retryCount + 1
+                })
+                .eq('id', item.id);
+ 
+@@ -1615,7 +1643,15 @@
+              results.push({ id: item.id, status: 'completed' });
+ 
+           } catch (err: any) {
+-             const nextRetry = item.retry_count + 1;
++             if (budgetSignal.aborted && !externalWriteStarted) {
++               const releaseQuery = supabase.from('ml_sync_queue')
++                 .update({ status: item.status, last_error: item.last_error })
++                 .eq('id', item.id).eq('status', 'processing');
++               const { error: releaseError } = await withRetryCount(releaseQuery);
++               if (releaseError) throw new Error('Sync queue deferred claim release unavailable');
++               continue;
++             }
++             const nextRetry = retryCount + 1;
+              const isDeadLetter = nextRetry >= 3;
+              const finalStatus = isDeadLetter ? 'dead_letter' : 'failed';
+ 

@@ -42,8 +42,10 @@ export async function guardWorker(req: Request, client: Client, name: string, en
   if (error) throw new WorkerGuardError('Worker coordination unavailable', 503);
   if (data !== true) throw new WorkerGuardError('Worker already running', 409);
   const deadline = Date.now() + 45000;
+  const signal = AbortSignal.timeout(45000);
   return {
-    expired: () => Date.now() >= deadline,
+    signal,
+    expired: () => signal.aborted || Date.now() >= deadline,
     release: async () => {
       const { error } = await client.rpc('release_worker_lease', { p_worker: name, p_owner: owner });
       if (error) console.error('[worker] Lease release failed', name, error.code);

@@ -1,5 +1,8 @@
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { guardWorker, workerErrorResponse, workerFetch } from "../_shared/workerGuard.ts";
+import { fetchWithWorkerReadBackoff } from "../_shared/workerReadBackoff.ts";
+import { runWorkerBatch } from "../_shared/workerBatch.ts";
+import { releaseUnstartedMlItems } from "../_shared/mlImportClaims.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 
@@ -197,66 +200,41 @@ function extractRealSkuFromML(item: any, variation: any = null) {
    return { sku, source, generated_sku: sku };
 }
 
-// Custom Fetch with backoff for rate limits
-async function customFetch(url: string, init?: any): Promise<Response> {
-  let attempts = 0;
-  const maxAttempts = 3;
-  let delay = 1000;
-  while (attempts < maxAttempts) {
-    try {
-      const res = await workerFetch(url, init);
-      if (res.status === 429) {
-        console.warn(`[ML API 429] Rate limit hit on ${url}. Retrying in ${delay}ms...`);
-        await new Promise(r => setTimeout(r, delay));
-        attempts++;
-        delay *= 2;
-        continue;
-      }
-      return res;
-    } catch (err: any) {
-      if (attempts === maxAttempts - 1) throw err;
-      console.warn(`[ML API Error] Fetch failed on ${url}: ${err.message}. Retrying in ${delay}ms...`);
-      await new Promise(r => setTimeout(r, delay));
-      attempts++;
-      delay *= 2;
-    }
-  }
-  return fetch(url, init);
-}
-
 // ══════════════════════════════════════════════════════════════
 // Core Sync Function logic adapted for a single item
 // ══════════════════════════════════════════════════════════════
 
-async function importMLItemToStaging(supabase: any, mlId: string, sellerId: string, vendorId: string | null, token: string) {
+async function importMLItemToStaging(supabase: any, mlId: string, sellerId: string, vendorId: string | null, token: string, signal: AbortSignal) {
   const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-  
+  let item: any;
+  let description: string;
+  try {
   // 1. Fetch ML Item
-  let res = await customFetch(`https://api.mercadolibre.com/items/${mlId}`, { headers });
+  let res = await fetchWithWorkerReadBackoff(`https://api.mercadolibre.com/items/${mlId}`, { headers, signal });
   if (res.status === 429) {
     throw new Error("RATE_LIMIT_EXCEEDED");
   }
   if (res.status === 401) {
     console.log(`[Staging Ingest] Auth failed for item ${mlId}, falling back to public fetch...`);
-    res = await customFetch(`https://api.mercadolibre.com/items/${mlId}`);
+    res = await fetchWithWorkerReadBackoff(`https://api.mercadolibre.com/items/${mlId}`, { signal });
     if (res.status === 429) {
       throw new Error("RATE_LIMIT_EXCEEDED");
     }
   }
-  const item = await res.json();
+  item = await res.json();
   if (!res.ok) {
     throw new Error(item.message || `No se pudo obtener el item de ML (status ${res.status})`);
   }
 
   // 2. Fetch Description
-  let description = item.title;
+  description = item.title;
   try {
-    let descRes = await customFetch(`https://api.mercadolibre.com/items/${mlId}/description`, { headers });
+    let descRes = await fetchWithWorkerReadBackoff(`https://api.mercadolibre.com/items/${mlId}/description`, { headers, signal });
     if (descRes.status === 429) {
       throw new Error("RATE_LIMIT_EXCEEDED");
     }
     if (descRes.status === 401) {
-      descRes = await customFetch(`https://api.mercadolibre.com/items/${mlId}/description`);
+      descRes = await fetchWithWorkerReadBackoff(`https://api.mercadolibre.com/items/${mlId}/description`, { signal });
       if (descRes.status === 429) {
         throw new Error("RATE_LIMIT_EXCEEDED");
       }
@@ -268,6 +246,13 @@ async function importMLItemToStaging(supabase: any, mlId: string, sellerId: stri
   } catch(_e: any) {
     if (_e.message === "RATE_LIMIT_EXCEEDED") throw _e;
     /* description fallback */
+  }
+  signal.throwIfAborted();
+  } catch (error) {
+    // Fetch body reads can surface AbortError instead of signal.reason. Only
+    // normalize cancellation here, before any staging write has started.
+    if (signal.aborted) throw signal.reason;
+    throw error;
   }
 
   // 3. Extract details
@@ -561,7 +546,7 @@ async function importMLItemToStaging(supabase: any, mlId: string, sellerId: stri
 // Helper: Process a single batch of items for a job
 // ══════════════════════════════════════════════════════════════
 
-async function processBatchItems(supabase: any, job: any, pendingItems: any[], workerId: string): Promise<number> {
+async function processBatchItems(supabase: any, job: any, pendingItems: any[], workerId: string, budget: Awaited<ReturnType<typeof guardWorker>>): Promise<number> {
   console.log(`[ML Import Worker ${workerId}] Processing ${pendingItems.length} claimed items for Job ${job.id}`);
 
   if (!pendingItems || pendingItems.length === 0) {
@@ -570,7 +555,6 @@ async function processBatchItems(supabase: any, job: any, pendingItems: any[], w
 
   // 2. Prepare items processing state
   const itemIds = pendingItems.map((it: any) => it.id);
-  const itemAttemptsMap = new Map(pendingItems.map((it: any) => [it.id, it.attempts]));
   const processedItemIds = new Set<string>();
 
   // 3. Retrieve valid token for this seller
@@ -583,12 +567,11 @@ async function processBatchItems(supabase: any, job: any, pendingItems: any[], w
       .from('ml_import_job_items')
       .update({
         status: 'failed',
-        attempts: pendingItems[0].attempts + 1,
         error_message: `Token auth error: ${tokenErr.message}`,
         http_status: 401,
-        processed_at: new Date().toISOString()
+        processed_at: new Date().toISOString(), locked_by: null, locked_at: null
       })
-      .in('id', itemIds);
+      .in('id', itemIds).eq('status', 'running').eq('locked_by', workerId);
 
     await supabase
       .from('ml_import_jobs')
@@ -604,33 +587,20 @@ async function processBatchItems(supabase: any, job: any, pendingItems: any[], w
     throw tokenErr;
   }
 
-  // 4. Process in parallel chunks with dynamic concurrency limit
+  // 4. Process small settled chunks within the worker execution budget.
   let batchImported = 0;
   let batchSkipped = 0;
   let batchErrors = 0;
   let rateLimitDetected = false;
 
-  let concurrencyLimit = 5; // Default to 5 concurrent requests
-  let offset = 0;
-  
-  while (offset < pendingItems.length) {
-    if (rateLimitDetected) {
-      concurrencyLimit = 2; // Drop to 2 if 429 detected
-    }
-    
-    const chunk = pendingItems.slice(offset, offset + concurrencyLimit);
-    offset += concurrencyLimit;
-    
-    await Promise.all(chunk.map(async (item: any) => {
-      const nextAttempt = (itemAttemptsMap.get(item.id) || 0) + 1;
+  await runWorkerBatch(pendingItems, async (item: any) => {
       try {
-        const result = await importMLItemToStaging(supabase, item.ml_item_id, job.seller_id, job.vendor_id, token);
+        const result = await importMLItemToStaging(supabase, item.ml_item_id, job.seller_id, job.vendor_id, token, budget.signal);
         
         const { data: updatedItem } = await supabase
           .from('ml_import_job_items')
           .update({
             status: 'completed',
-            attempts: nextAttempt,
             processed_at: new Date().toISOString(),
             error_message: null,
             http_status: 200,
@@ -655,6 +625,9 @@ async function processBatchItems(supabase: any, job: any, pendingItems: any[], w
         }
 
       } catch (err: any) {
+        // The shared budget only cancels provider reads before staging writes.
+        // Leave these items unprocessed so their claim increment is restored.
+        if (budget.signal.aborted && err === budget.signal.reason) return;
         processedItemIds.add(item.id);
         batchErrors++;
         
@@ -667,7 +640,6 @@ async function processBatchItems(supabase: any, job: any, pendingItems: any[], w
             .from('ml_import_job_items')
             .update({
               status: 'failed',
-              attempts: nextAttempt,
               error_message: 'Mercado Libre Rate Limit Exceeded (429)',
               http_status: 429,
               processed_at: new Date().toISOString(),
@@ -683,7 +655,6 @@ async function processBatchItems(supabase: any, job: any, pendingItems: any[], w
             .from('ml_import_job_items')
             .update({
               status: 'failed',
-              attempts: nextAttempt,
               error_message: err.message,
               http_status: err.status || 500,
               processed_at: new Date().toISOString(),
@@ -700,23 +671,13 @@ async function processBatchItems(supabase: any, job: any, pendingItems: any[], w
           }
         }
       }
-    }));
-
-    if (rateLimitDetected) {
-      console.log(`[ML Import Worker] Aborting batch processing early due to 429 Rate Limit`);
-      break;
-    }
-  }
+    }, () => budget.expired() || rateLimitDetected);
 
   // 5. Reset any unprocessed items in this batch from 'running' back to 'pending'
   const unprocessedItems = pendingItems.filter((it: any) => !processedItemIds.has(it.id));
   if (unprocessedItems.length > 0) {
-    const unprocessedIds = unprocessedItems.map((it: any) => it.id);
-    await supabase
-      .from('ml_import_job_items')
-      .update({ status: 'pending' })
-      .in('id', unprocessedIds);
-    console.log(`[ML Import Worker] Reset ${unprocessedIds.length} unprocessed items back to pending`);
+    const released = await releaseUnstartedMlItems(supabase, unprocessedItems, workerId);
+    console.log(`[ML Import Worker] Released ${released} unprocessed items back to pending`);
   }
 
   // 6. Update job stats in database
@@ -859,7 +820,7 @@ Deno.serve(async (req) => {
 
     if (claimedItems && claimedItems.length > 0) {
       // 3. Process claimed items (no while loop)
-      processedCount = await processBatchItems(supabase, activeJob, claimedItems, executionId);
+      processedCount = await processBatchItems(supabase, activeJob, claimedItems, executionId, lease);
     } else {
       console.log(`[ML Import Worker ${executionId}] 0 items claimed for active job ${activeJob.id}. Proceeding to finalize or release.`);
     }

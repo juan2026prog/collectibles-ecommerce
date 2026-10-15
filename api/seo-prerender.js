@@ -1,4 +1,5 @@
-import { createPublicSupabase, withDeadline } from './_lib/public-supabase.js';
+import { createPublicSupabase, createPublicReadContext, publicReadFailure } from './_lib/public-supabase.js';
+import { createSeoProductRepository, isUuid } from './_lib/seo-product-repository.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -181,6 +182,13 @@ function escapeHtml(str) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function serializeJsonLd(value) {
+  // JSON inside an HTML script is parsed by the HTML parser first. Escaping '<'
+  // prevents database/editorial text from closing the application/ld+json node.
+  return JSON.stringify(value, null, 2).replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
 }
 
 function generateCanonical(type, slug) {
@@ -452,18 +460,22 @@ function generateProductSchema(product, brand, category, images) {
   const currency = product.currency || 'UYU';
   const price = Number(product.base_price || 0);
 
-  let availability = 'https://schema.org/InStock';
+  let availability;
   if (product.stock_quantity === 0 || product.is_out_of_stock) {
     availability = 'https://schema.org/OutOfStock';
   } else if (product.is_preorder) {
     availability = 'https://schema.org/PreOrder';
+  } else if (typeof product.stock_quantity === 'number' && product.stock_quantity > 0) {
+    availability = 'https://schema.org/InStock';
   }
 
-  let condition = 'https://schema.org/NewCondition';
+  let condition;
   if (product.condition) {
     const cLower = String(product.condition).toLowerCase();
     if (cLower.includes('usad') || cLower.includes('used') || cLower.includes('loose')) {
       condition = 'https://schema.org/UsedCondition';
+    } else if (cLower.startsWith('new') || cLower.includes('nuev')) {
+      condition = 'https://schema.org/NewCondition';
     }
   }
 
@@ -544,7 +556,6 @@ function generateProductSchema(product, brand, category, images) {
   return schema;
 }
 
-let supabase;
 
 function loadTaxonomiesCache() {
   try {
@@ -567,7 +578,7 @@ const STATIC_CATEGORIES = {
 
 const STATIC_BRANDS = {
   ...TAXONOMIES_CACHE.brands,
-  'funko': { id: 'brand-funko', name: 'Funko', slug: 'funko', description: 'Figuras y Coleccionables Funko Pop en Uruguay.', is_active: true, status: 'approved' },
+  'funko': { name: 'Funko', slug: 'funko', description: 'Figuras y Coleccionables Funko Pop en Uruguay.', is_active: true, status: 'approved' },
   'neca': { id: '43edaabc-3910-45ab-b93d-857698fad50b', name: 'NECA', slug: 'neca', description: 'Figuras de Acción NECA en Uruguay.', is_active: true, status: 'approved' },
   'bandai': { id: 'f8fa5cb1-ae8b-49aa-971c-3cb72199f7d4', name: 'Bandai Spirits', slug: 'bandai', description: 'Figuras Bandai Spirits y S.H.Figuarts en Uruguay.', is_active: true, status: 'approved' }
 };
@@ -598,7 +609,6 @@ const STATIC_MLU_MAPPINGS = {
   'mlu629964263': 'funko-plushies-avenger-infinity-war-hulkbuster'
 };
 
-const withTimeout = withDeadline;
 
 function getBaseTemplate() {
   const possiblePaths = [
@@ -693,113 +703,14 @@ function renderGonePage(res, htmlTemplate, reason) {
   return res.status(410).send(renderedHtml);
 }
 
-function extractMluId(rawSlug) {
-  if (!rawSlug) return null;
-  const match = String(rawSlug).match(/(MLU\s*[-_]?\s*\d+)/i);
-  if (match) {
-    return match[1].toUpperCase().replace(/[-_\s]/g, '');
-  }
-  return null;
-}
-
-async function resolveCanonicalProduct(slug) {
-  if (!slug) return null;
-
-  const selectFields = `
-    id,
-    title,
-    slug,
-    description,
-    short_description,
-    base_price,
-    compare_at_price,
-    is_active,
-    status,
-    category_id,
-    brand_id,
-    seo_title,
-    seo_description,
-    meta_title,
-    meta_description,
-    metadata,
-    ml_item_id
-  `;
-
+export function createSeoPrerenderHandler(clientFactory = createPublicSupabase) {
+  let supabase, productRepository;
+  return async function handler(req, res) {
+  const context = createPublicReadContext();
+  const withTimeout = context.read;
   try {
-    // Layer 1: Direct match on products.slug
-    const { data: directProduct } = await withTimeout(
-      supabase
-        .from('products')
-        .select(selectFields)
-        .eq('slug', slug)
-        .maybeSingle(), 4000);
-
-    if (directProduct && directProduct.is_active && directProduct.status === 'published') {
-      return { product: directProduct, isRedirect: false, canonicalSlug: directProduct.slug };
-    }
-
-    // Layer 2: Match on product_slug_redirects.old_slug
-    const { data: redirect } = await withTimeout(
-      supabase
-        .from('product_slug_redirects')
-        .select('new_slug, product_id')
-        .eq('old_slug', slug)
-        .maybeSingle(), 4000);
-
-    if (redirect?.new_slug) {
-      const { data: redirectedProduct } = await withTimeout(
-        supabase
-          .from('products')
-          .select(selectFields)
-          .eq('slug', redirect.new_slug)
-          .maybeSingle(), 4000);
-
-      if (redirectedProduct && redirectedProduct.is_active && redirectedProduct.status === 'published') {
-        return { product: redirectedProduct, isRedirect: true, canonicalSlug: redirectedProduct.slug };
-      }
-    }
-
-    // Layer 3: Match on products.ml_item_id or extracted MLU ID
-    const mluId = extractMluId(slug);
-    if (mluId) {
-      const { data: mluProduct } = await withTimeout(
-        supabase
-          .from('products')
-          .select(selectFields)
-          .eq('ml_item_id', mluId)
-          .maybeSingle(), 4000);
-
-      if (mluProduct && mluProduct.is_active && mluProduct.status === 'published') {
-        return { product: mluProduct, isRedirect: true, canonicalSlug: mluProduct.slug };
-      }
-    }
-
-    // Layer 4: Match on products.id (UUID)
-    const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(slug);
-    if (isUUID) {
-      const { data: uuidProduct } = await withTimeout(
-        supabase
-          .from('products')
-          .select(selectFields)
-          .eq('id', slug)
-          .maybeSingle(), 4000);
-
-      if (uuidProduct && uuidProduct.is_active && uuidProduct.status === 'published') {
-        return { product: uuidProduct, isRedirect: true, canonicalSlug: uuidProduct.slug };
-      }
-    }
-  } catch (error) {
-    throw error;
-  }
-
-  const canonical = STATIC_MLU_MAPPINGS[(slug || '').toLowerCase()];
-  if (canonical) return { product: { slug: canonical }, isRedirect: true, canonicalSlug: canonical };
-  return null;
-}
-
-export default async function handler(req, res) {
-  try {
-    supabase ||= createPublicSupabase();
+    supabase ||= clientFactory();
+    productRepository ||= createSeoProductRepository(supabase, STATIC_MLU_MAPPINGS);
     const rawUrl = req.url || '';
     const parsed = new URL(rawUrl, 'https://collectibles.uy');
     const xForwardedUri = req.headers?.['x-forwarded-uri'] || req.headers?.['x-matched-path'] || '';
@@ -901,7 +812,7 @@ export default async function handler(req, res) {
 
     // 1. PRODUCT
     if ((type === 'producto' || type === 'product' || type === 'p') && slug) {
-      const resolved = await resolveCanonicalProduct(slug);
+      const resolved = await productRepository.resolve(slug, withTimeout);
 
       if (!resolved || !resolved.product) {
         return renderNotFoundPage(res, htmlTemplate, 'producto', slug);
@@ -916,14 +827,12 @@ export default async function handler(req, res) {
         return res.status(301).end();
       }
 
-      const details = await Promise.all([
-        supabase.from('product_images').select('url, alt_text, is_primary').eq('product_id', product.id).order('sort_order', { ascending: true }),
-        product.category_id ? supabase.from('categories').select('name, slug').eq('id', product.category_id).maybeSingle() : Promise.resolve({ data: null }),
-        product.brand_id ? supabase.from('brands').select('name, slug').eq('id', product.brand_id).maybeSingle() : Promise.resolve({ data: null }),
-        product.category_id ? supabase.from('products').select('title, slug, base_price').eq('category_id', product.category_id).eq('is_active', true).eq('status', 'published').neq('id', product.id).limit(6) : Promise.resolve({ data: [] })
-      ]);
+      if (product.base_price === null || product.base_price === undefined || product.base_price === ''
+        || !Number.isFinite(Number(product.base_price)) || Number(product.base_price) < 0) {
+        throw Object.assign(new Error('Product price unavailable'), { stage: 'product_price', code: 'INVALID_PRICE' });
+      }
 
-      if (details.some(result => result.error)) throw new Error('Product details unavailable');
+      const details = await productRepository.details(product, withTimeout);
       const [{ data: images }, { data: category }, { data: brand }, { data: related }] = details;
 
       const prodTitle = product.seo_title || product.meta_title || product.title;
@@ -986,11 +895,11 @@ export default async function handler(req, res) {
           .eq('slug', slug)
           .maybeSingle(), 4000);
 
-      if (!category && STATIC_CATEGORIES[slug]) {
+      if (!category && Object.hasOwn(STATIC_CATEGORIES, slug)) {
         category = STATIC_CATEGORIES[slug];
       }
 
-      if (!category || !category.is_active) {
+      if (!category || !category.is_active || !isUuid(category.id)) {
         return renderNotFoundPage(res, htmlTemplate, 'categoria', slug);
       }
 
@@ -1053,11 +962,11 @@ export default async function handler(req, res) {
           .eq('slug', slug)
           .maybeSingle(), 4000);
 
-      if (!brand && STATIC_BRANDS[slug]) {
+      if (!brand && Object.hasOwn(STATIC_BRANDS, slug)) {
         brand = STATIC_BRANDS[slug];
       }
 
-      if (!brand || !brand.is_active || (brand.status && brand.status !== 'approved' && brand.status !== 'active')) {
+      if (!brand || !brand.is_active || !isUuid(brand.id) || (brand.status && brand.status !== 'approved' && brand.status !== 'active')) {
         return renderNotFoundPage(res, htmlTemplate, 'marca', slug);
       }
 
@@ -1118,11 +1027,11 @@ export default async function handler(req, res) {
       let articleExcerpt = guideData ? guideData.excerpt : '';
 
       if (!guideData) {
-        const { data: dbArticle } = await supabase
+        const { data: dbArticle } = await withTimeout(supabase
           .from('academy_content')
           .select('title, excerpt, featured_image')
           .eq('slug', slug)
-          .maybeSingle();
+          .maybeSingle(), 4000, 'academy_article');
 
         if (dbArticle) {
           articleTitle = dbArticle.title;
@@ -1308,11 +1217,11 @@ export default async function handler(req, res) {
       const breadcrumbSchema = generateBreadcrumbs('static', { name: 'Licencias Oficiales', path: 'licencias' });
       jsonLdScripts.push(breadcrumbSchema);
 
-      const { data: allLicenses } = await supabase
+      const { data: allLicenses } = await withTimeout(supabase
         .from('licenses')
         .select('name, slug')
         .eq('is_active', true)
-        .order('name', { ascending: true });
+        .order('name', { ascending: true }), 4000, 'licenses');
 
       bodyContent = `
         <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
@@ -1341,11 +1250,11 @@ export default async function handler(req, res) {
       const breadcrumbSchema = generateBreadcrumbs('static', { name: 'Temas y Universos', path: 'themes' });
       jsonLdScripts.push(breadcrumbSchema);
 
-      const { data: allThemes } = await supabase
+      const { data: allThemes } = await withTimeout(supabase
         .from('themes')
         .select('name, slug')
         .eq('is_active', true)
-        .order('name', { ascending: true });
+        .order('name', { ascending: true }), 4000, 'themes');
 
       bodyContent = `
         <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
@@ -1377,7 +1286,7 @@ export default async function handler(req, res) {
         4000
       );
 
-      if (!license && STATIC_LICENSES[slug]) {
+      if (!license && Object.hasOwn(STATIC_LICENSES, slug)) {
         license = STATIC_LICENSES[slug];
       }
 
@@ -1389,7 +1298,7 @@ export default async function handler(req, res) {
       const breadcrumbSchema = generateBreadcrumbs('licencias', { name: licName, slug });
       jsonLdScripts.push(breadcrumbSchema);
 
-      const { data: licProducts } = license?.id ? await withTimeout(
+      const { data: licProducts } = isUuid(license?.id) ? await withTimeout(
         supabase
           .from('products')
           .select('title, slug, base_price')
@@ -1431,7 +1340,7 @@ export default async function handler(req, res) {
         4000
       );
 
-      if (!theme && STATIC_THEMES[slug]) {
+      if (!theme && Object.hasOwn(STATIC_THEMES, slug)) {
         theme = STATIC_THEMES[slug];
       }
 
@@ -1462,12 +1371,12 @@ export default async function handler(req, res) {
       const breadcrumbSchema = generateBreadcrumbs('shop');
       jsonLdScripts.push(breadcrumbSchema);
 
-      const { data: shopProducts } = await supabase
+      const { data: shopProducts } = await withTimeout(supabase
         .from('products')
         .select('title, slug, base_price')
         .eq('is_active', true)
         .eq('status', 'published')
-        .limit(20);
+        .limit(20), 4000, 'shop_products');
 
       bodyContent = `
         <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
@@ -1499,11 +1408,11 @@ export default async function handler(req, res) {
       };
       let pageName = pageTitles[pageSlug];
       if (!pageName && type === 'page') {
-        const { data: pageData } = await supabase
+        const { data: pageData } = await withTimeout(supabase
           .from('pages')
           .select('title, slug, is_active')
           .eq('slug', pageSlug)
-          .maybeSingle();
+          .maybeSingle(), 4000, 'page');
 
         if (pageData && pageData.is_active) {
           pageName = pageData.title;
@@ -1605,11 +1514,18 @@ export default async function handler(req, res) {
       jsonLdScripts.push(siteSchema, orgSchema, storeSchema);
 
       const [{ data: featuredProducts }, { data: topCategories }, { data: topBrands }] = await withTimeout(
-        Promise.all([
-          supabase.from('products').select('title, slug, base_price').eq('is_active', true).eq('status', 'published').limit(12),
-          supabase.from('categories').select('name, slug').eq('is_active', true).eq('status', 'approved').limit(10),
-          supabase.from('brands').select('name, slug').eq('is_active', true).eq('status', 'approved').limit(10)
-        ]), 4000).catch(() => [{ data: [] }, { data: [] }, { data: [] }]);
+        async signal => {
+          const results = await Promise.all([
+            supabase.from('products').select('title, slug, base_price').eq('is_active', true).eq('status', 'published').limit(12).abortSignal(signal),
+            supabase.from('categories').select('name, slug').eq('is_active', true).eq('status', 'approved').limit(10).abortSignal(signal),
+            supabase.from('brands').select('name, slug').eq('is_active', true).eq('is_public', true).eq('status', 'approved').limit(10).abortSignal(signal)
+          ]);
+          if (results.some(result => result.error)) throw new Error('Database request failed');
+          return results;
+        }, 4000, 'home_links').catch(error => {
+          console.error('[seo-prerender] Optional read unavailable', { stage: 'home_links', ...publicReadFailure(error) });
+          return [{ data: [] }, { data: [] }, { data: [] }];
+        });
 
       bodyContent = `
         <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
@@ -1694,7 +1610,7 @@ export default async function handler(req, res) {
 
     // 5. JSON-LD Schemas
     if (jsonLdScripts.length > 0) {
-      const scriptsHtml = jsonLdScripts.map(s => `  <script type="application/ld+json">\n${JSON.stringify(s, null, 2)}\n</script>`).join('\n');
+      const scriptsHtml = jsonLdScripts.map(s => `  <script type="application/ld+json">\n${serializeJsonLd(s)}\n</script>`).join('\n');
       renderedHtml = renderedHtml.replace('</head>', `${scriptsHtml}\n</head>`);
     }
 
@@ -1712,7 +1628,7 @@ export default async function handler(req, res) {
     }
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('X-SEO-Version', '2026.09.16-v7');
+    res.setHeader('X-SEO-Version', '2026.10.15-bounded-reads');
     res.setHeader('Cache-Control', 'public, max-age=0');
     // The root HTML differs for crawlers and browsers; do not share it in a URL-only CDN cache.
     res.setHeader('Vary', 'User-Agent');
@@ -1720,11 +1636,16 @@ export default async function handler(req, res) {
     res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
     return res.status(200).send(renderedHtml);
   } catch (error) {
-    console.error('Error in SEO Prerender handler:', error);
+    console.error('[seo-prerender] Read unavailable', { stage: error.stage || 'render', ...publicReadFailure(error) });
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('CDN-Cache-Control', 'no-store');
     res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
     res.setHeader('Retry-After', '30');
     res.status(503).send('Servicio temporalmente no disponible');
+  } finally {
+    context.close();
   }
+  };
 }
+
+export default createSeoPrerenderHandler();

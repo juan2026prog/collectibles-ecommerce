@@ -1,4 +1,4 @@
-import { getCatalogRepository, parseFilters, selectCatalog } from './public-catalog.js';
+import { getCatalogRepository, parseFilters, selectCatalog, catalogReadError, catalogErrorMetadata } from './public-catalog.js';
 import { readMediaVariants } from './media-variants.js';
 
 const CARD_FIELDS = `id,title,slug,base_price,compare_at_price,badge,is_featured,is_active,status,vendor_id,vendor_store_id,brand_id,category_id,condition,created_at,
@@ -9,6 +9,7 @@ const CARD_FIELDS = `id,title,slug,base_price,compare_at_price,badge,is_featured
 
 export function createCatalogHandler(getRepository = getCatalogRepository) {
   return async function handler(req, res) {
+    const startedAt = Date.now();
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('CDN-Cache-Control', 'no-store');
     res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
@@ -19,13 +20,17 @@ export function createCatalogHandler(getRepository = getCatalogRepository) {
     let filters;
     try { filters = parseFilters(req.query || {}); }
     catch { return res.status(400).json({ error: 'Invalid catalog filters' }); }
+    if (filters.collection_id && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(filters.collection_id)) {
+      return res.status(400).json({ error: 'Invalid collection' });
+    }
     try {
       const repo = getRepository();
       const { catalog, stale = false, age_ms = 0 } = await repo.get();
       let collectionIds = null;
       if (filters.collection_id) {
-        if (!/^[0-9a-f-]{36}$/i.test(filters.collection_id)) return res.status(400).json({ error: 'Invalid collection' });
-        const rows = await repo.readAll('vendor_store_collection_products', 'product_id', q => q.eq('collection_id', filters.collection_id), 'product_id');
+        let rows;
+        try { rows = await repo.readAll('vendor_store_collection_products', 'product_id', q => q.eq('collection_id', filters.collection_id), 'product_id', AbortSignal.timeout(4000)); }
+        catch (error) { throw catalogReadError('collection', 'vendor_store_collection_products', error); }
         collectionIds = new Set(rows.map(p => p.product_id));
       }
       const selected = selectCatalog(catalog, filters, collectionIds);
@@ -33,13 +38,25 @@ export function createCatalogHandler(getRepository = getCatalogRepository) {
       if (filters.mode !== 'facets' && selected.selected.length) {
         const localIds = selected.selected.filter(p => p.origin === 'local').map(p => p.id);
         const intlIds = selected.selected.filter(p => p.origin === 'international').map(p => p.id);
+        const controller = new AbortController();
+        const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]);
+        const readCards = async (query, kind) => {
+          try {
+            const result = await (typeof query.abortSignal === 'function' ? query.abortSignal(signal) : query);
+            if (result.error) throw result.error;
+            return result;
+          } catch (error) {
+            const failure = catalogReadError('cards', kind, error);
+            controller.abort(failure);
+            throw failure;
+          }
+        };
         const [local, international] = await Promise.all([
-          localIds.length ? repo.client.from('products').select(CARD_FIELDS).in('id', localIds).eq('status','published').eq('is_active',true) : { data: [] },
-          intlIds.length ? repo.client.from('international_products')
+          localIds.length ? readCards(repo.client.from('products').select(CARD_FIELDS).in('id', localIds).eq('status','published').eq('is_active',true), 'products') : { data: [] },
+          intlIds.length ? readCards(repo.client.from('international_products')
             .select('id,title,description,brand,image_url,final_price_usd,amazon_list_price_usd,created_at,status,collectibles_category_id,collectibles_subcategory_id')
-            .in('id', intlIds).eq('status','published') : { data: [] },
+            .in('id', intlIds).eq('status','published'), 'international_products') : { data: [] },
         ]);
-        if (local.error || international.error) throw new Error('Catalog cards unavailable');
         const cards = new Map((local.data || []).map(p => [`local:${p.id}`, p]));
         for (const p of international.data || []) {
           const category = catalog.categories.find(c => c.id === p.collectibles_category_id);
@@ -73,7 +90,10 @@ export function createCatalogHandler(getRepository = getCatalogRepository) {
           categories:catalog.categories,brands:catalog.brands,licenses:catalog.licenses,themes:catalog.themes,
         } } : {}) });
     } catch (error) {
-      console.error('[public-catalog] Upstream unavailable', { region: process.env.VERCEL_REGION || 'unknown', message: error instanceof Error ? error.message : 'unknown' });
+      console.error('[public-catalog] Upstream unavailable', {
+        ...catalogErrorMetadata(error), elapsed_ms: Date.now() - startedAt,
+        region: /^[a-z0-9-]{1,24}$/.test(process.env.VERCEL_REGION || '') ? process.env.VERCEL_REGION : 'unknown',
+      });
       res.setHeader('Retry-After', '30');
       return res.status(503).json({ error: 'El catálogo está temporalmente demorado. Intentá nuevamente en unos segundos.' });
     }
