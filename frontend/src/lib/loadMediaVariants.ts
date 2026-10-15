@@ -7,7 +7,7 @@ export async function loadMediaVariants(value: unknown) {
   const urls = collectMediaUrls(value).filter(url => (checked.get(url) || 0) < Date.now()).slice(0, 150);
   if (!urls.length) return;
   try {
-    const { data, error } = await supabase.rpc('get_media_image_variants', { urls })
+    const { data, error } = await supabase.rpc('get_catalog_media_variants', { urls })
       .abortSignal(AbortSignal.timeout(2000));
     if (!error) {
       registerMediaVariants(data || []);

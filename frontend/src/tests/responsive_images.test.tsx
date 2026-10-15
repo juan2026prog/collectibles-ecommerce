@@ -2,10 +2,27 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ResponsiveImage } from '../components/ResponsiveImage';
 import { extractCandidateImages, getImageSources, getProductImage, sortProductImages } from '../lib/imageUtils';
-import { registerMediaVariants } from '../lib/mediaVariants';
+import { collectMediaUrls, registerMediaVariants } from '../lib/mediaVariants';
+import { readMediaVariants } from '../../../api/_lib/media-variants';
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 describe('Product image selection and responsive delivery', () => {
+  it('uses imported provider variants while preserving the provider original for zoom and fallback', () => {
+    const source='https://http2.mlstatic.com/D_product-O.jpg';
+    registerMediaVariants([{source_url:source,original_url:'https://storage/snapshot.jpg',width:500,height:400,original_bytes:10000,
+      variants:{card:{url:'https://storage/320.webp',width:320,height:256,bytes:2000}}}]);
+    expect(getImageSources(source).src).toBe('https://storage/320.webp');
+    expect(getImageSources(source,'raw').src).toBe(source);
+  });
+  it('collects only supported public sources and reads provider variants in one bounded RPC', async () => {
+    const image_url='https://m.media-amazon.com/images/I/public.jpg';
+    const value={images:[{url:image_url}],other:{url:'https://unknown.example/private.jpg'},url:'http://http2.mlstatic.com/a.jpg'};
+    expect(collectMediaUrls(value)).toEqual([image_url]);
+    const rpc=vi.fn().mockReturnValue({abortSignal:async()=>({data:[],error:null})});
+    await readMediaVariants({rpc},value);
+    expect(rpc).toHaveBeenCalledTimes(1);
+    expect(rpc).toHaveBeenCalledWith('get_catalog_media_variants',{urls:[image_url]});
+  });
   it('honors primary, order zero, stable ties, both relation names and deduplication', () => {
     const images = [{id:'c',url:'https://img/c.png',sort_order:0},
       {id:'b',url:'https://img/b.png',sort_order:9,is_primary:true},
