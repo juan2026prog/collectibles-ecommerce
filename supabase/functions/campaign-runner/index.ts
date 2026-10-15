@@ -1,3 +1,5 @@
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
+import { guardWorker, workerErrorResponse, workerFetch } from "../_shared/workerGuard.ts";
 // @ts-ignore
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 // @ts-ignore
@@ -6,10 +8,14 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const supabase = createClient(supabaseUrl, supabaseServiceKey, { global: { fetch: workerFetch } });
 
 Deno.serve(async (req: any) => {
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
+  let lease: Awaited<ReturnType<typeof guardWorker>> | undefined;
   try {
+    lease = await guardWorker(req, supabase, 'campaign-runner', Deno.env);
     const now = new Date();
 
     // 1. Fetch campaigns that are scheduled or currently processing (so we can batch them)
@@ -17,19 +23,20 @@ Deno.serve(async (req: any) => {
       .from('campaigns')
       .select('id, name, segment_id, template_id, channel, scheduled_at, stats, status')
       .in('status', ['scheduled', 'processing'])
-      .lte('scheduled_at', now.toISOString());
+      .lte('scheduled_at', now.toISOString()).order('scheduled_at').limit(2);
 
     if (error) throw error;
 
     if (!campaigns || campaigns.length === 0) {
       return new Response(JSON.stringify({ success: true, message: "No campaigns to process." }), {
-        headers: { "Content-Type": "application/json" }
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
       });
     }
 
     let processedCount = 0;
 
     for (const campaign of campaigns) {
+      if (lease.expired()) break;
       // Mark as processing if it was just scheduled
       if (campaign.status === 'scheduled') {
         await supabase.from('campaigns').update({ status: 'processing' }).eq('id', campaign.id);
@@ -123,6 +130,7 @@ Deno.serve(async (req: any) => {
 
       // Process batch
       for (const consent of remainingUsers) {
+        if (lease.expired()) break;
         let msgStatus = 'sent';
         let channelUsed = campaign.channel;
 
@@ -151,7 +159,7 @@ Deno.serve(async (req: any) => {
                
                if (waToken && waToken.startsWith("EAAG") && waPhoneId && consent.phone) {
                  const cleanPhone = consent.phone.replace(/[\+\s\-]/g, '');
-                 const waRes = await fetch(`https://graph.facebook.com/v17.0/${waPhoneId}/messages`, {
+                 const waRes = await workerFetch(`https://graph.facebook.com/v17.0/${waPhoneId}/messages`, {
                    method: "POST",
                    headers: {
                      "Authorization": `Bearer ${waToken}`,
@@ -218,11 +226,12 @@ Deno.serve(async (req: any) => {
     }
 
     return new Response(JSON.stringify({ success: true, processed: processedCount }), {
-      headers: { "Content-Type": "application/json" }
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
     });
 
-  } catch (error: any) {
-    console.error("Campaign runner error:", error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { "Content-Type": "application/json" } });
+  } catch (error: unknown) {
+    return workerErrorResponse(error, getCorsHeaders(req));
+  } finally {
+    await lease?.release();
   }
 });

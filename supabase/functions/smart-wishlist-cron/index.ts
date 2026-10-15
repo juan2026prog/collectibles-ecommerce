@@ -1,3 +1,5 @@
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
+import { guardWorker, workerErrorResponse, workerFetch } from "../_shared/workerGuard.ts";
 // @ts-ignore
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 // @ts-ignore
@@ -6,10 +8,14 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const supabase = createClient(supabaseUrl, supabaseServiceKey, { global: { fetch: workerFetch } });
 
 Deno.serve(async (req: any) => {
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
+  let lease: Awaited<ReturnType<typeof guardWorker>> | undefined;
   try {
+    lease = await guardWorker(req, supabase, 'smart-wishlist-cron', Deno.env);
     const { data: alerts, error } = await supabase
       .from('wishlist_alerts')
       .select(`
@@ -24,7 +30,7 @@ Deno.serve(async (req: any) => {
           )
         )
       `)
-      .eq('status', 'pending');
+      .eq('status', 'pending').order('created_at').limit(25);
 
     if (error) throw error;
 
@@ -37,13 +43,14 @@ Deno.serve(async (req: any) => {
 
     if (!alerts || alerts.length === 0) {
       return new Response(JSON.stringify({ success: true, processed: 0 }), {
-        headers: { "Content-Type": "application/json" }
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
       });
     }
 
     let processedCount = 0;
 
     for (const alert of alerts) {
+      if (lease.expired()) break;
       // Get user email
       const { data: user } = await supabase.auth.admin.getUserById(alert.wishlist.user_id);
       
@@ -82,11 +89,12 @@ Deno.serve(async (req: any) => {
     }
 
     return new Response(JSON.stringify({ success: true, processed: processedCount }), {
-      headers: { "Content-Type": "application/json" }
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
     });
 
-  } catch (error: any) {
-    console.error("Smart wishlist cron error:", error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { "Content-Type": "application/json" } });
+  } catch (error: unknown) {
+    return workerErrorResponse(error, getCorsHeaders(req));
+  } finally {
+    await lease?.release();
   }
 });

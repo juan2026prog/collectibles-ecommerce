@@ -1,3 +1,4 @@
+import { guardWorker, workerErrorResponse, workerFetch } from "../_shared/workerGuard.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
@@ -8,22 +9,12 @@ serve(async (req) => {
   const optionsResponse = handleOptions(req);
   if (optionsResponse) return optionsResponse;
 
+  let lease: Awaited<ReturnType<typeof guardWorker>> | undefined;
   try {
-    const bypassHeader = req.headers.get("x-zinc-sync-bypass");
-    const authHeader = req.headers.get("Authorization") || "";
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    const configuredBypassSecret = Deno.env.get("ZINC_SYNC_BYPASS_SECRET") || "collectibles-zinc-sync-secret";
-
-    const isBypass = !!bypassHeader && (bypassHeader === configuredBypassSecret);
-    const isServiceCall = !!serviceRoleKey && authHeader.includes(serviceRoleKey);
-
-    if (!isBypass && !isServiceCall && !authHeader) {
-      throw new Error('No authorization header');
-    }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, { global: { fetch: workerFetch } });
+    lease = await guardWorker(req, supabase, 'zinc-sync-published-products', Deno.env);
 
     const { resolveZincApiKey } = await import("../_shared/zinc/index.ts");
     let ZINC_API_KEY = "";
@@ -35,7 +26,7 @@ serve(async (req) => {
 
     const { data: settings } = await supabase.from('international_sync_settings').select('*').eq('id', 1).single();
     if (!settings || !settings.auto_sync_enabled) {
-      return new Response(JSON.stringify({ message: "Sync is disabled" }), { headers: getCorsHeaders(), status: 200 });
+      return new Response(JSON.stringify({ message: "Sync is disabled" }), { headers: getCorsHeaders(req), status: 200 });
     }
 
     // Fetch up to 10 stale products (older than 30 minutes or null)
@@ -50,19 +41,20 @@ serve(async (req) => {
       .limit(10);
 
     if (!products || products.length === 0) {
-      return new Response(JSON.stringify({ message: "No stale products needing sync" }), { headers: getCorsHeaders(), status: 200 });
+      return new Response(JSON.stringify({ message: "No stale products needing sync" }), { headers: getCorsHeaders(req), status: 200 });
     }
 
     const { effective_rate } = await getEffectiveExchangeRate(supabase);
     const logs = [];
 
     for (const prod of products) {
+      if (lease.expired()) break;
       try {
         const url = `https://api.zinc.com/products/${prod.external_product_id}?retailer=amazon`;
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
 
-        const res = await fetch(url, {
+        const res = await workerFetch(url, {
           headers: { 'Authorization': `Bearer ${ZINC_API_KEY}` },
           signal: controller.signal
         }).finally(() => clearTimeout(timeoutId));
@@ -202,8 +194,10 @@ serve(async (req) => {
       await supabase.from('international_product_sync_logs').insert(logs);
     }
 
-    return new Response(JSON.stringify({ success: true, processed: products.length }), { headers: getCorsHeaders(), status: 200 });
-  } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), { headers: getCorsHeaders(), status: 500 });
+    return new Response(JSON.stringify({ success: true, processed: products.length }), { headers: getCorsHeaders(req), status: 200 });
+  } catch (error: unknown) {
+    return workerErrorResponse(error, getCorsHeaders(req));
+  } finally {
+    await lease?.release();
   }
 });

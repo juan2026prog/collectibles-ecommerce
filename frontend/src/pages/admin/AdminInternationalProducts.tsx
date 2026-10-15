@@ -24,7 +24,7 @@ function CostTooltip({ text }: { text: string }) {
 
 export default function AdminInternationalProducts() {
   const { addToast } = useToast();
-  const { settings } = useInternationalSettings();
+  const { settings } = useInternationalSettings(true, true);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [products, setProducts] = useState<any[]>([]);

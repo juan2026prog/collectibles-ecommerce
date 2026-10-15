@@ -25,160 +25,93 @@ export interface InternationalSettings {
   urubox_handling_fee?: number;
 }
 
-let _cachedSettings: InternationalSettings | null = null;
-let _pendingPromise: Promise<InternationalSettings | null> | null = null;
-const _listeners = new Set<(s: InternationalSettings | null) => void>();
-let _realtimeSubscribed = false;
 
-function setupRealtimeSubscription() {
-  if (_realtimeSubscribed) return;
-  _realtimeSubscribed = true;
+const CACHE_TTL = 60000;
+const caches = new Map<string, { data: InternationalSettings; expires: number }>();
+const pending = new Map<string, Promise<InternationalSettings | null>>();
+const listeners = new Set<(scope: string, data: InternationalSettings | null) => void>();
+let authRevision = 0;
 
-  try {
-    supabase
-      .channel('public:international_sync_settings_changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'international_sync_settings', filter: 'id=eq.1' },
-        (payload: any) => {
-          if (payload.new) {
-            const data = payload.new;
-            _cachedSettings = {
-              ...data,
-              international_public_enabled: !!data.international_public_enabled,
-              international_purchases_enabled: data.international_purchases_enabled ?? true,
-              international_capacity_enabled: data.international_capacity_enabled ?? true,
-              target_margin_percent: Number(data.target_margin_percent || 15),
-              min_absolute_profit_usd: Number(data.min_absolute_profit_usd || 3.99),
-              min_profit_usd: Number(data.min_profit_usd || 3.99),
-              zinc_fee_usd: Number(data.zinc_fee_usd || 1),
-              fixed_markup_usd: Number(data.fixed_markup_usd || 6),
-              financial_fee_percent: Number(data.financial_fee_percent || 2.5),
-              financial_fee_fixed_usd: Number(data.financial_fee_fixed_usd || 0.5),
-              financial_fee_tax_rate: Number(data.financial_fee_tax_rate || 0.22),
-              florida_sales_tax_percent: Number(data.florida_sales_tax_percent || 0),
-              never_sell_at_loss: data.never_sell_at_loss ?? true
-            };
-            _listeners.forEach(fn => fn(_cachedSettings));
-          }
-        }
-      )
-      .subscribe();
-  } catch (err) {
-    console.warn('Realtime subscription not available for international settings:', err);
-  }
+function formatSettings(data: any, publicOnly: boolean): InternationalSettings {
+  return {
+    ...(publicOnly ? {} : data), id: 1,
+    international_public_enabled: data.international_public_enabled === true,
+    international_purchases_enabled: data.international_purchases_enabled ?? true,
+    international_capacity_enabled: publicOnly ? true : (data.international_capacity_enabled ?? true),
+    target_margin_percent: publicOnly ? 15 : Number(data.target_margin_percent ?? 15),
+    min_absolute_profit_usd: publicOnly ? 3.99 : Number(data.min_absolute_profit_usd ?? 3.99),
+    min_profit_usd: publicOnly ? 3.99 : Number(data.min_profit_usd ?? 3.99),
+    zinc_fee_usd: publicOnly ? 1 : Number(data.zinc_fee_usd ?? 1),
+    never_sell_at_loss: publicOnly ? true : (data.never_sell_at_loss ?? true)
+  };
 }
 
 export async function fetchInternationalSettings(forceRefresh = false, isAdminContext = false): Promise<InternationalSettings | null> {
-  if (_cachedSettings && !forceRefresh) return _cachedSettings;
-  if (_pendingPromise && !forceRefresh) return _pendingPromise;
-
-  _pendingPromise = (async () => {
+  const session = isAdminContext ? (await supabase.auth.getSession()).data.session : null;
+  if (isAdminContext && !session?.user?.id) return null;
+  const scope = isAdminContext ? 'admin:' + session!.user.id : 'public';
+  const requestRevision = authRevision;
+  const cached = caches.get(scope);
+  if (!forceRefresh && cached && cached.expires > Date.now()) return cached.data;
+  if (pending.has(scope)) return pending.get(scope)!;
+  const operation = (async () => {
     try {
-      if (isAdminContext) {
-        const query = supabase
-          .from('international_sync_settings')
-          .select('*')
-          .eq('id', 1);
-
-        const { data, error } = await (typeof (query as any).maybeSingle === 'function' 
-          ? (query as any).maybeSingle() 
-          : (query as any).single());
-
-        if (data) {
-          _cachedSettings = {
-            ...data,
-            international_public_enabled: !!data.international_public_enabled,
-            international_purchases_enabled: data.international_purchases_enabled ?? true,
-            international_capacity_enabled: data.international_capacity_enabled ?? true,
-            target_margin_percent: Number(data.target_margin_percent || 15),
-            min_absolute_profit_usd: Number(data.min_absolute_profit_usd || 3.99),
-            min_profit_usd: Number(data.min_profit_usd || 3.99),
-            zinc_fee_usd: Number(data.zinc_fee_usd || 1),
-            fixed_markup_usd: Number(data.fixed_markup_usd || 6),
-            financial_fee_percent: Number(data.financial_fee_percent || 2.5),
-            financial_fee_fixed_usd: Number(data.financial_fee_fixed_usd || 0.5),
-            financial_fee_tax_rate: Number(data.financial_fee_tax_rate || 0.22),
-            florida_sales_tax_percent: Number(data.florida_sales_tax_percent || 0),
-            never_sell_at_loss: data.never_sell_at_loss ?? true
-          };
-          _listeners.forEach(fn => fn(_cachedSettings));
-          return _cachedSettings;
-        }
-      }
-
-      // Fast public RPC without table permission errors or RLS roundtrips
-      try {
-        const { data: pubData } = await supabase.rpc('get_international_public_status');
-        if (pubData) {
-          _cachedSettings = {
-            id: 1,
-            international_public_enabled: !!pubData.international_public_enabled,
-            international_purchases_enabled: pubData.international_purchases_enabled ?? true,
-            international_capacity_enabled: true,
-            target_margin_percent: 15,
-            min_absolute_profit_usd: 3.99,
-            min_profit_usd: 3.99,
-            zinc_fee_usd: 1.00,
-            never_sell_at_loss: true
-          };
-          _listeners.forEach(fn => fn(_cachedSettings));
-        }
-      } catch (pubErr) {
-        // Safe fallback
-      }
-
-      return _cachedSettings;
-    } catch (e) {
-      return _cachedSettings;
-    } finally {
-      _pendingPromise = null;
-    }
+      const result = isAdminContext
+        ? await supabase.from('international_sync_settings').select('*').eq('id', 1).abortSignal(AbortSignal.timeout(5000)).maybeSingle()
+        : await supabase.rpc('get_international_public_status').abortSignal(AbortSignal.timeout(5000));
+      if (result.error || !result.data) throw new Error('Settings unavailable');
+      if (isAdminContext && requestRevision !== authRevision) return null;
+      const data = formatSettings(result.data, !isAdminContext);
+      caches.set(scope, { data, expires: Date.now() + CACHE_TTL });
+      listeners.forEach(listener => listener(scope, data));
+      return data;
+    } catch {
+      // An admin permission failure never falls back to a public entry with financial defaults.
+      return isAdminContext ? null : cached?.data || null;
+    } finally { if (pending.get(scope) === operation) pending.delete(scope); }
   })();
-
-  return _pendingPromise;
+  pending.set(scope, operation);
+  return operation;
 }
 
 export function useInternationalSettings(enableRealtime = false, isAdminContext = false) {
-  const [settings, setSettings] = useState<InternationalSettings | null>(_cachedSettings);
-  const [loaded, setLoaded] = useState(!!_cachedSettings);
-
+  const [settings, setSettings] = useState<InternationalSettings | null>(() => isAdminContext ? null : caches.get('public')?.data || null);
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
-    if (enableRealtime) {
-      setupRealtimeSubscription();
+    let active = true, revision = 0, scope = isAdminContext ? '' : 'public';
+    async function refresh(force = false) {
+      const current = ++revision;
+      if (isAdminContext) {
+        const { data } = await supabase.auth.getSession();
+        scope = data.session?.user?.id ? 'admin:' + data.session.user.id : '';
+      }
+      const data = await fetchInternationalSettings(force, isAdminContext);
+      if (active && current === revision) { setSettings(data); setLoaded(true); }
     }
-
-    const listener = (s: InternationalSettings | null) => {
-      setSettings(s);
-      setLoaded(true);
+    const listener = (key: string, data: InternationalSettings | null) => {
+      if (active && key === scope) setSettings(data);
     };
-    _listeners.add(listener);
-
-    if (!_cachedSettings) {
-      fetchInternationalSettings(false, isAdminContext).then(s => {
-        setSettings(s);
-        setLoaded(true);
-      });
-    } else {
-      setSettings(_cachedSettings);
-      setLoaded(true);
-    }
-
+    listeners.add(listener);
+    refresh();
+    const timer = setInterval(() => refresh(), CACHE_TTL);
+    const auth = isAdminContext ? supabase.auth.onAuthStateChange(() => {
+      authRevision++; revision++; scope = ''; setSettings(null); setLoaded(false);
+      for (const key of caches.keys()) if (key.startsWith('admin:')) caches.delete(key);
+      for (const key of pending.keys()) if (key.startsWith('admin:')) pending.delete(key);
+      setTimeout(() => { if (active) refresh(true); }, 0);
+    }).data.subscription : null;
+    const channel = enableRealtime && isAdminContext ? supabase.channel('international-settings-admin')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'international_sync_settings', filter: 'id=eq.1' }, () => refresh(true))
+      .subscribe() : null;
     return () => {
-      _listeners.delete(listener);
+      active = false; revision++; clearInterval(timer); listeners.delete(listener); auth?.unsubscribe();
+      if (channel) supabase.removeChannel(channel);
     };
   }, [enableRealtime, isAdminContext]);
-
-  const publicEnabled = !!settings?.international_public_enabled;
-  const purchasesEnabled = settings ? (settings.international_purchases_enabled ?? true) : true;
-  const capacityEnabled = settings ? (settings.international_capacity_enabled ?? true) : true;
-
   return {
-    settings,
-    loaded,
-    publicEnabled,
-    purchasesEnabled,
-    capacityEnabled,
-    refetch: () => fetchInternationalSettings(true)
+    settings, loaded, publicEnabled: settings?.international_public_enabled === true,
+    purchasesEnabled: settings?.international_purchases_enabled ?? true,
+    capacityEnabled: settings?.international_capacity_enabled ?? true,
+    refetch: () => fetchInternationalSettings(true, isAdminContext)
   };
 }

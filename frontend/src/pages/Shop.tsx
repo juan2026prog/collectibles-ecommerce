@@ -55,11 +55,15 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   const { license: currentLicense } = useLicense(licenseSlug || undefined);
   const { theme: currentTheme } = useTheme(themeSlug || undefined);
   const { publicEnabled: intlPublicEnabled } = useInternationalSettings();
+  const { formatCurrencyPrice, exchangeRates } = useCurrency();
+  const fxRate = exchangeRates?.USD ? (1 / exchangeRates.USD) : undefined;
 
   const badge = searchParams.get('badge') || '';
   const searchQ = searchParams.get('q') || '';
   const conditionFilter = searchParams.get('condition') || '';
   const availabilityFilter = searchParams.get('availability') || '';
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
 
   const effectiveAvailability: 'all' | 'local' | 'international' = isInternational ? 'international' : (intlPublicEnabled ? ((availabilityFilter as 'all' | 'local' | 'international') || 'all') : 'local');
 
@@ -81,7 +85,10 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     search: searchQ || undefined,
     condition: conditionFilter || undefined,
     group: groupSlug || undefined,
-    isInternationalEnabled: intlPublicEnabled
+    isInternationalEnabled: intlPublicEnabled,
+    minPrice: priceMin ? Number(priceMin) : undefined,
+    maxPrice: priceMax ? Number(priceMax) : undefined,
+    exchangeRate: fxRate
   });
 
   const licensesLoading = facetsLoading;
@@ -137,8 +144,7 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const [priceMin, setPriceMin] = useState('');
-  const [priceMax, setPriceMax] = useState('');
+
   const [searchInput, setSearchInput] = useState(searchQ);
 
   // Debounce search input changes to prevent query thrashing on typing
@@ -254,14 +260,13 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
   const cart = useCartContext();
   const { promotions } = usePromotions();
   const { t } = useLocale();
-  const { formatCurrencyPrice, exchangeRates } = useCurrency();
-  const fxRate = exchangeRates?.USD ? (1 / exchangeRates.USD) : undefined;
+
   const navigate = useNavigate();
 
   const offset = page * limit;
 
   // ✅ Fully server-side — useProducts now resolves slug → id internally
-  const { products, count, loading } = useProducts({
+  const { products, count, loading, error: catalogError, refetch: retryCatalog } = useProducts({
     category: categorySlug || undefined,
     brand: brandSlug || undefined,
     license: licenseSlug || undefined,
@@ -1498,7 +1503,12 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
               </select>
             </div>
 
-          {loading ? (
+          {catalogError ? (
+            <div role="alert" className="col-span-full rounded-xl border border-white/10 p-8 text-center">
+              <p>{catalogError}</p>
+              <button type="button" onClick={() => retryCatalog()} className="mt-4 rounded-lg bg-[#f00856] px-4 py-2 text-white">Reintentar</button>
+            </div>
+          ) : loading ? (
             <div className={`grid gap-x-6 gap-y-12 grid-cols-2 ${
               gridCols === 3 ? 'md:grid-cols-3' :
               gridCols === 4 ? 'md:grid-cols-3 lg:grid-cols-4' :

@@ -1,3 +1,4 @@
+import { guardWorker, workerErrorResponse, workerFetch } from "../_shared/workerGuard.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
@@ -6,31 +7,12 @@ serve(async (req) => {
   const optionsResponse = handleOptions(req);
   if (optionsResponse) return optionsResponse;
 
+  let lease: Awaited<ReturnType<typeof guardWorker>> | undefined;
   try {
-    // Check bypass or authorization safely via environment or service role
-    const bypassHeader = req.headers.get("x-zinc-sync-bypass");
-    const authHeader = req.headers.get("Authorization") || "";
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-    const configuredBypassSecret = Deno.env.get("ZINC_SYNC_BYPASS_SECRET") || "collectibles-zinc-sync-secret";
-    
-    const isBypass = !!bypassHeader && (bypassHeader === configuredBypassSecret);
-    const isServiceCall = !!serviceRoleKey && authHeader.includes(serviceRoleKey);
-
-    if (!isBypass && !isServiceCall) {
-      // If called manually by an admin, verify they are admin
-      const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-      const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY") || "";
-      const supabase = createClient(supabaseUrl, supabaseKey, { global: { headers: { Authorization: authHeader } } });
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) throw new Error("Unauthorized");
-
-      // Verify admin status
-      const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user.id).single();
-      if (!profile || !profile.is_admin) throw new Error("Forbidden: Admin access required");
-    }
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
-    const serviceClient = createClient(supabaseUrl, serviceRoleKey);
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const serviceClient = createClient(supabaseUrl, serviceRoleKey, { global: { fetch: workerFetch } });
+    lease = await guardWorker(req, serviceClient, 'zinc-sync-order-tracking', Deno.env);
 
     const { resolveZincApiKey } = await import("../_shared/zinc/index.ts");
     let ZINC_API_KEY = "";
@@ -45,12 +27,12 @@ serve(async (req) => {
     const { data: activeItems, error: activeItemsErr } = await serviceClient
       .from('international_order_items')
       .select('*, order_item:order_items(id, order_id)')
-      .in('purchase_status', activeStatuses);
+      .in('purchase_status', activeStatuses).not('zinc_order_id', 'is', null).order('last_zinc_status_check_at', { ascending: true, nullsFirst: true }).limit(20);
 
     if (activeItemsErr) throw activeItemsErr;
     if (!activeItems || activeItems.length === 0) {
       return new Response(JSON.stringify({ success: true, processed: 0, message: "No active international items to track" }), {
-        headers: getCorsHeaders(),
+        headers: getCorsHeaders(req),
         status: 200
       });
     }
@@ -58,11 +40,16 @@ serve(async (req) => {
     let updatedCount = 0;
 
     for (const item of activeItems) {
+      if (lease.expired()) break;
       if (!item.zinc_order_id) continue;
 
       try {
+        // Rotate attempted items even when Zinc fails, so a bad order cannot starve the queue.
+        const { error: attemptError } = await serviceClient.from('international_order_items')
+          .update({ last_zinc_status_check_at: new Date().toISOString() }).eq('id', item.id);
+        if (attemptError) throw attemptError;
         const url = `https://api.zinc.com/orders/${item.zinc_order_id}`;
-        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${ZINC_API_KEY}` } });
+        const res = await workerFetch(url, { headers: { 'Authorization': `Bearer ${ZINC_API_KEY}` } });
         
         if (!res.ok) {
           console.error(`Error querying Zinc order status for ${item.zinc_order_id}: ${res.status}`);
@@ -126,11 +113,13 @@ serve(async (req) => {
     }
 
     return new Response(JSON.stringify({ success: true, processed: activeItems.length, updated: updatedCount }), {
-      headers: getCorsHeaders(),
+      headers: getCorsHeaders(req),
       status: 200
     });
 
-  } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message }), { headers: getCorsHeaders(), status: 500 });
+  } catch (error: unknown) {
+    return workerErrorResponse(error, getCorsHeaders(req));
+  } finally {
+    await lease?.release();
   }
 });

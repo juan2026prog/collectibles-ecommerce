@@ -22,9 +22,11 @@
     },
     "api/sourcing-discovery.js": {
       "maxDuration": 60
+    },
+    "api/public-catalog.js": {
+      "maxDuration": 30
     }
   },
-
   "headers": [
     {
       "source": "/api/:path*",
@@ -184,6 +186,10 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/api/public-catalog",
+      "destination": "/api/public-catalog"
+    },
     {
       "source": "/api/currency-sync",
       "destination": "/api/currency-sync"
@@ -506,4 +512,3 @@
     }
   ]
 }
-

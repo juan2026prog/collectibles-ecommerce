@@ -1,3 +1,5 @@
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
+import { guardWorker, workerErrorResponse, workerFetch } from "../_shared/workerGuard.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 
@@ -42,7 +44,7 @@ async function getValidMercadoLibreToken(supabase: any, sellerId?: string) {
       client_secret: ML_CLIENT_SECRET,
       refresh_token: currentRefreshToken
     });
-    const res = await fetch("https://api.mercadolibre.com/oauth/token", {
+    const res = await workerFetch("https://api.mercadolibre.com/oauth/token", {
        method: "POST",
        headers: { "Content-Type": "application/x-www-form-urlencoded" },
        body: params.toString()
@@ -202,7 +204,7 @@ async function customFetch(url: string, init?: any): Promise<Response> {
   let delay = 1000;
   while (attempts < maxAttempts) {
     try {
-      const res = await fetch(url, init);
+      const res = await workerFetch(url, init);
       if (res.status === 429) {
         console.warn(`[ML API 429] Rate limit hit on ${url}. Retrying in ${delay}ms...`);
         await new Promise(r => setTimeout(r, delay));
@@ -776,13 +778,17 @@ async function processBatchItems(supabase: any, job: any, pendingItems: any[], w
 // --------------------------------------------------------------
 
 Deno.serve(async (req) => {
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const supabase = createClient(supabaseUrl, supabaseServiceKey, { global: { fetch: workerFetch } });
 
+  let lease: Awaited<ReturnType<typeof guardWorker>> | undefined;
   try {
+    lease = await guardWorker(req, supabase, 'ml-import-worker', Deno.env);
     const body = await req.json().catch(() => ({}));
     const action = body.action || "process_queue";
 
@@ -895,11 +901,9 @@ Deno.serve(async (req) => {
       status: 200
     });
 
-  } catch (globalErr: any) {
-    console.error("[ML Import Worker] General error:", globalErr.message);
-    return new Response(JSON.stringify({ success: false, error: globalErr.message }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500
-    });
+  } catch (error: unknown) {
+    return workerErrorResponse(error, getCorsHeaders(req));
+  } finally {
+    await lease?.release();
   }
 });

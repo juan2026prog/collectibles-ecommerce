@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { fetchPublicCatalog, fetchPublicTaxonomies } from '../lib/publicCatalog';
 import { useAnalytics } from '../contexts/AnalyticsContext';
 import { resolveSearchTokens, buildProductSearchOrClause, normalizeSearchText } from '../lib/search/searchQueryNormalizer';
 
@@ -34,8 +35,26 @@ export function useProducts(filters: ProductFilters = {}) {
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  const requestRef = useRef<AbortController | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const fetchProducts = useCallback(async () => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setLoading(true);
+    setError(null);
+    if (!filters.includeDrafts) {
+      try {
+        const result = await fetchPublicCatalog({ ...filters,
+          availability: filters.availability || (filters.isInternational ? 'international' : 'local') }, controller.signal);
+        if (!controller.signal.aborted) { setProducts(result.products); setCount(result.count); }
+      } catch (cause) {
+        if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : 'No se pudo cargar el catálogo');
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+      return;
+    }
 
     // ── Step 1: resolve filter entities in parallel ──
     let categoryId: string | null = null;
@@ -476,7 +495,7 @@ export function useProducts(filters: ProductFilters = {}) {
             },
             p_results_count: finalCount,
             p_source: 'catalog_shop'
-          }).then(() => {}).catch(() => {});
+          }).then(() => {}, () => {});
         } catch (_) {}
       }
       return;
@@ -591,16 +610,16 @@ export function useProducts(filters: ProductFilters = {}) {
             },
             p_results_count: finalCount,
             p_source: 'catalog_shop'
-          }).then(() => {}).catch(() => {});
+          }).then(() => {}, () => {});
         } catch (_) {}
       }
     }
     setLoading(false);
   }, [JSON.stringify(filters)]);
 
-  useEffect(() => { fetchProducts(); }, [fetchProducts]);
+  useEffect(() => { fetchProducts(); return () => requestRef.current?.abort(); }, [fetchProducts]);
 
-  return { products, count, loading, refetch: fetchProducts };
+  return { products, count, loading, error, refetch: fetchProducts };
 }
 
 // ═══ useProductCards (Lightweight version of useProducts for grids & carousels) ═══
@@ -813,13 +832,9 @@ export function useCategories() {
 
     if (!hasValidCache && !_categoriesPromise) {
       _categoriesPromise = Promise.resolve(
-        supabase
-          .from('categories')
-          .select('id, name, slug, parent_id, sort_order, status, is_active, metadata, image_url, products(count)')
-          .eq('is_active', true)
-          .eq('status', 'approved')
-          .order('sort_order')
-          .order('name')
+        fetchPublicTaxonomies().then(result => ({ data: result.taxonomies.categories.map((c: any) => ({
+          ...c, is_active: true, status: 'approved', products: [{ count: result.facets.categoryFacets[c.id] || 0 }]
+        })), error: null }))
       )
         .then(({ data, error }) => {
           if (!error && data) {
@@ -868,13 +883,9 @@ export function useBrands() {
 
     if (!hasValidCache && !_brandsPromise) {
       _brandsPromise = Promise.resolve(
-        supabase
-          .from('brands')
-          .select('*')
-          .eq('status', 'approved')
-          .eq('is_active', true)
-          .eq('is_public', true)
-          .order('sort_order')
+        fetchPublicTaxonomies().then(result => ({ data: result.taxonomies.brands.map((b: any) => ({
+          ...b, is_active: true, is_public: true, status: 'approved'
+        })).sort((a: any, b: any) => (a.sort_order ?? 999) - (b.sort_order ?? 999)), error: null }))
       )
         .then(({ data, error }) => {
           if (!error && data) {
@@ -1561,22 +1572,15 @@ export function useLicenses(onlyPublicWithProducts = false) {
 
     if (!hasValidCache && !_licensesPromise) {
       _licensesPromise = Promise.resolve(
-        supabase
-          .from('licenses_with_counts')
-          .select('*')
-          .order('sort_order', { ascending: true })
-          .order('name', { ascending: true })
+        fetchPublicTaxonomies().then(result => {
+          const counts = new Map(result.facets.licenseFacets.map((item: any) => [item.id, item.published_product_count]));
+          return result.taxonomies.licenses.map((item: any) => ({
+            ...item, is_active: true, published_product_count: counts.get(item.id) || 0
+          })).sort((a: any, b: any) => (a.sort_order ?? 999) - (b.sort_order ?? 999) || a.name.localeCompare(b.name));
+        })
       )
-        .then(async (res) => {
-          if (res.error || !res.data) {
-            res = await supabase
-              .from('licenses')
-              .select('*')
-              .order('sort_order', { ascending: true })
-              .order('name', { ascending: true });
-          }
-
-          let list = res.data || [];
+        .then(data => {
+          let list = data;
           list.sort((a: any, b: any) => {
             const featA = a.is_featured ? 1 : 0;
             const featB = b.is_featured ? 1 : 0;
@@ -1637,22 +1641,15 @@ export function useThemes(onlyPublicWithProducts = false) {
 
     if (!hasValidCache && !_themesPromise) {
       _themesPromise = Promise.resolve(
-        supabase
-          .from('themes_with_counts')
-          .select('*')
-          .order('sort_order', { ascending: true })
-          .order('name', { ascending: true })
+        fetchPublicTaxonomies().then(result => {
+          const counts = new Map(result.facets.themeFacets.map((item: any) => [item.id, item.published_product_count]));
+          return result.taxonomies.themes.map((item: any) => ({
+            ...item, is_active: true, published_product_count: counts.get(item.id) || 0
+          })).sort((a: any, b: any) => (a.sort_order ?? 999) - (b.sort_order ?? 999) || a.name.localeCompare(b.name));
+        })
       )
-        .then(async (res) => {
-          if (res.error || !res.data) {
-            res = await supabase
-              .from('themes')
-              .select('*')
-              .order('sort_order', { ascending: true })
-              .order('name', { ascending: true });
-          }
-
-          let list = res.data || [];
+        .then(data => {
+          let list = data;
           _themesCache = list;
           writeSessionCache('app_themes_cache', list);
           _themesPromise = null;
@@ -1743,420 +1740,30 @@ export interface CatalogFacetFilters {
   condition?: string;
   group?: string;
   isInternationalEnabled?: boolean;
+  minPrice?: number;
+  maxPrice?: number;
+  exchangeRate?: number;
 }
-
-let _cachedLocalCatalogProducts: { data: any[]; timestamp: number } | null = null;
-let _cachedIntlCatalogProducts: { data: any[]; timestamp: number } | null = null;
-const CATALOG_FACET_CACHE_TTL = 3 * 60 * 1000;
 
 export function useCatalogFacets(filters: CatalogFacetFilters = {}) {
   const [facets, setFacets] = useState<{
-    categoryFacets: Record<string, number>;
-    brandFacets: any[];
-    licenseFacets: any[];
-    themeFacets: any[];
+    categoryFacets: Record<string, number>; brandFacets: any[]; licenseFacets: any[]; themeFacets: any[];
     availabilityCounts: { all: number; local: number; international: number };
-    conditionCounts: { all: number; new: number; used: number; loose: number };
-    totalCatalogProducts: number;
-  }>({
-    categoryFacets: {},
-    brandFacets: [],
-    licenseFacets: [],
-    themeFacets: [],
+    conditionCounts: { all: number; new: number; used: number; loose: number }; totalCatalogProducts: number;
+  }>({ categoryFacets: {}, brandFacets: [], licenseFacets: [], themeFacets: [],
     availabilityCounts: { all: 0, local: 0, international: 0 },
-    conditionCounts: { all: 0, new: 0, used: 0, loose: 0 },
-    totalCatalogProducts: 0
-  });
+    conditionCounts: { all: 0, new: 0, used: 0, loose: 0 }, totalCatalogProducts: 0 });
   const [loading, setLoading] = useState(true);
-
+  const [error, setError] = useState<string | null>(null);
+  const key = JSON.stringify(filters);
   useEffect(() => {
-    let active = true;
-    async function calculateFacets() {
-      setLoading(true);
-
-      try {
-        async function fetchAllLocalProducts() {
-          if (_cachedLocalCatalogProducts && Date.now() - _cachedLocalCatalogProducts.timestamp < CATALOG_FACET_CACHE_TTL) {
-            return _cachedLocalCatalogProducts.data;
-          }
-          const pageSize = 1000;
-          let from = 0;
-          let all: any[] = [];
-          while (true) {
-            const { data, error } = await supabase
-              .from('products')
-              .select(`
-                id, brand_id, license_id, category_id, condition, title, description, base_price, status, is_active,
-                product_categories(category_id)
-              `)
-              .eq('status', 'published')
-              .eq('is_active', true)
-              .range(from, from + pageSize - 1);
-
-            if (error || !data) break;
-            all.push(...data);
-            if (data.length < pageSize) break;
-            from += pageSize;
-          }
-          _cachedLocalCatalogProducts = { data: all, timestamp: Date.now() };
-          return all;
-        }
-
-        async function fetchAllIntlProducts() {
-          if (filters.isInternationalEnabled === false) return [];
-          if (_cachedIntlCatalogProducts && Date.now() - _cachedIntlCatalogProducts.timestamp < CATALOG_FACET_CACHE_TTL) {
-            return _cachedIntlCatalogProducts.data;
-          }
-          const pageSize = 1000;
-          let from = 0;
-          let all: any[] = [];
-          while (true) {
-            const { data, error } = await supabase
-              .from('international_products')
-              .select('id, brand, collectibles_category_id, collectibles_subcategory_id, final_price_usd, title, description, status')
-              .eq('status', 'published')
-              .range(from, from + pageSize - 1);
-
-            if (error || !data) break;
-            all.push(...data);
-            if (data.length < pageSize) break;
-            from += pageSize;
-          }
-          _cachedIntlCatalogProducts = { data: all, timestamp: Date.now() };
-          return all;
-        }
-
-        const [
-          { data: categoriesData },
-          { data: brandsData },
-          { data: licensesData },
-          { data: themesData },
-          { data: ltData },
-          localProductsData,
-          intlProductsData
-        ] = await Promise.all([
-          supabase.from('categories').select('id, name, slug, parent_id, is_active, status').eq('is_active', true),
-          supabase.from('brands').select('id, name, slug, is_active, is_public, status').eq('is_active', true).eq('is_public', true),
-          supabase.from('licenses').select('id, name, slug, is_active, is_featured, sort_order').eq('is_active', true),
-          supabase.from('themes').select('id, name, slug, is_active, sort_order').eq('is_active', true),
-          supabase.from('license_themes').select('license_id, theme_id'),
-          fetchAllLocalProducts(),
-          fetchAllIntlProducts()
-        ]);
-
-        if (!active) return;
-
-        const categories = categoriesData || [];
-        const brands = brandsData || [];
-        const licenses = licensesData || [];
-        const themes = themesData || [];
-        const licenseThemes = ltData || [];
-        const localProducts = localProductsData || [];
-        const intlProducts = intlProductsData || [];
-
-        const catSlugToIdMap = new Map<string, string>();
-        categories.forEach(c => catSlugToIdMap.set(c.slug, c.id));
-
-        const brandSlugToIdMap = new Map<string, string>();
-        brands.forEach(b => brandSlugToIdMap.set(b.slug, b.id));
-
-        const licSlugToIdMap = new Map<string, string>();
-        licenses.forEach(l => licSlugToIdMap.set(l.slug, l.id));
-
-        const themeSlugToIdMap = new Map<string, string>();
-        themes.forEach(t => themeSlugToIdMap.set(t.slug, t.id));
-
-        const licToThemesMap = new Map<string, Set<string>>();
-        licenseThemes.forEach(lt => {
-          if (!licToThemesMap.has(lt.license_id)) licToThemesMap.set(lt.license_id, new Set());
-          licToThemesMap.get(lt.license_id)!.add(lt.theme_id);
-        });
-
-        const catSubcatMap = new Map<string, Set<string>>();
-        categories.forEach(c => {
-          if (c.parent_id) {
-            if (!catSubcatMap.has(c.parent_id)) catSubcatMap.set(c.parent_id, new Set());
-            catSubcatMap.get(c.parent_id)!.add(c.id);
-          }
-        });
-
-        const matchItem = (item: any, isIntl: boolean, f: CatalogFacetFilters, excludeDim?: string) => {
-          if (excludeDim !== 'availability') {
-            const avail = f.availability || 'all';
-            if (avail === 'local' && isIntl) return false;
-            if (avail === 'international' && !isIntl) return false;
-          }
-
-          if (excludeDim !== 'category' && f.category) {
-            const targetCatId = catSlugToIdMap.get(f.category) || f.category;
-            const validCatIds = new Set<string>([targetCatId]);
-            const children = catSubcatMap.get(targetCatId);
-            if (children) children.forEach(cId => validCatIds.add(cId));
-
-            if (!isIntl) {
-              const pCatIds = new Set<string>();
-              if (item.category_id) pCatIds.add(item.category_id);
-              if (item.product_categories) {
-                item.product_categories.forEach((pc: any) => pCatIds.add(pc.category_id));
-              }
-              let hasCatMatch = false;
-              for (const cId of pCatIds) {
-                if (validCatIds.has(cId)) { hasCatMatch = true; break; }
-              }
-              if (!hasCatMatch) return false;
-            } else {
-              const intlCat1 = item.collectibles_category_id;
-              const intlCat2 = item.collectibles_subcategory_id;
-              if (!validCatIds.has(intlCat1) && !validCatIds.has(intlCat2)) return false;
-            }
-          }
-
-          if (excludeDim !== 'brand' && f.brand) {
-            const targetBrandId = brandSlugToIdMap.get(f.brand) || f.brand;
-            if (!isIntl) {
-              if (item.brand_id !== targetBrandId) return false;
-            } else {
-              const brandObj = brands.find(b => b.id === targetBrandId || b.slug === f.brand);
-              if (!brandObj || !item.brand || !item.brand.toLowerCase().includes(brandObj.name.toLowerCase())) {
-                return false;
-              }
-            }
-          }
-
-          if (excludeDim !== 'license' && f.license) {
-            if (isIntl) return false;
-            const targetLicId = licSlugToIdMap.get(f.license) || f.license;
-            if (item.license_id !== targetLicId) return false;
-          }
-
-          if (excludeDim !== 'theme' && f.theme) {
-            if (isIntl) return false;
-            const targetThemeId = themeSlugToIdMap.get(f.theme) || f.theme;
-            if (!item.license_id) return false;
-            const themesForLic = licToThemesMap.get(item.license_id);
-            if (!themesForLic || !themesForLic.has(targetThemeId)) return false;
-          }
-
-          if (f.search && f.search.trim()) {
-            const rawQ = f.search.toLowerCase().trim();
-            const normQ = normalizeSearchText(f.search);
-            const title = (item.title || '').toLowerCase();
-            const normTitle = normalizeSearchText(item.title);
-            const desc = (item.description || '').toLowerCase();
-            const normDesc = normalizeSearchText(item.description);
-            const brandName = isIntl ? (item.brand || '').toLowerCase() : '';
-            const normBrandName = normalizeSearchText(item.brand);
-
-            // Check if product brand matches query
-            const brandObj = !isIntl && item.brand_id ? brands.find(b => b.id === item.brand_id) : null;
-            const normBrand = brandObj ? normalizeSearchText(brandObj.name) : '';
-
-            // Check if product license matches query
-            const licObj = !isIntl && item.license_id ? licenses.find(l => l.id === item.license_id) : null;
-            const normLic = licObj ? normalizeSearchText(licObj.name) : '';
-
-            const matchesQuery = 
-              title.includes(rawQ) || normTitle.includes(normQ) ||
-              desc.includes(rawQ) || normDesc.includes(normQ) ||
-              (brandName && (brandName.includes(rawQ) || normBrandName.includes(normQ))) ||
-              (normBrand && normBrand.includes(normQ)) ||
-              (normLic && normLic.includes(normQ));
-
-            if (!matchesQuery) {
-              return false;
-            }
-          }
-
-          if (excludeDim !== 'condition' && f.condition) {
-            if (isIntl) {
-              if (f.condition !== 'new') return false;
-            } else {
-              const cond = item.condition;
-              if (f.condition === 'new' && (cond && cond !== 'new_sealed' && cond !== 'new_open_box')) return false;
-              if (f.condition === 'used' && (!cond || (cond !== 'used_complete' && cond !== 'used_incomplete'))) return false;
-              if (f.condition === 'loose' && (!cond || (cond !== 'loose_complete' && cond !== 'loose_incomplete'))) return false;
-            }
-          }
-
-          return true;
-        };
-
-        // Category Facets — Distinct Set Union Logic (COUNT DISTINCT product_id)
-        const catCounts: Record<string, number> = {};
-        categories.forEach(cat => {
-          const familyCatIds = new Set<string>([cat.id]);
-          if (!cat.parent_id) {
-            const children = categories.filter(c => c.parent_id === cat.id);
-            children.forEach(ch => {
-              familyCatIds.add(ch.id);
-              const grandChildren = categories.filter(g => g.parent_id === ch.id);
-              grandChildren.forEach(g => familyCatIds.add(g.id));
-            });
-          }
-
-          const distinctProdIds = new Set<string>();
-
-          localProducts.forEach(item => {
-            if (matchItem(item, false, filters, 'category')) {
-              const pCatIds = new Set<string>();
-              if (item.category_id) pCatIds.add(item.category_id);
-              if (item.product_categories) {
-                item.product_categories.forEach((pc: any) => pCatIds.add(pc.category_id));
-              }
-              for (const cId of pCatIds) {
-                if (familyCatIds.has(cId)) {
-                  distinctProdIds.add(item.id);
-                  break;
-                }
-              }
-            }
-          });
-
-          intlProducts.forEach(item => {
-            if (matchItem(item, true, filters, 'category')) {
-              if (familyCatIds.has(item.collectibles_category_id) || familyCatIds.has(item.collectibles_subcategory_id)) {
-                distinctProdIds.add(`intl_${item.id}`);
-              }
-            }
-          });
-
-          catCounts[cat.id] = distinctProdIds.size;
-        });
-
-        // Brand Facets
-        const brandCounts: Record<string, number> = {};
-        localProducts.forEach(item => {
-          if (matchItem(item, false, filters, 'brand') && item.brand_id) {
-            brandCounts[item.brand_id] = (brandCounts[item.brand_id] || 0) + 1;
-          }
-        });
-        intlProducts.forEach(item => {
-          if (matchItem(item, true, filters, 'brand') && item.brand) {
-            const bObj = brands.find(b => b.name.toLowerCase() === item.brand.toLowerCase() || b.slug === item.brand.toLowerCase());
-            if (bObj) brandCounts[bObj.id] = (brandCounts[bObj.id] || 0) + 1;
-          }
-        });
-        const computedBrandFacets = brands
-          .map(b => ({
-            brand_id: b.id,
-            brand_name: b.name,
-            brand_slug: b.slug,
-            product_count: brandCounts[b.id] || 0
-          }))
-          .filter(b => b.product_count > 0)
-          .sort((a, b) => b.product_count - a.product_count || a.brand_name.localeCompare(b.brand_name));
-
-        // License Facets (rely ONLY on products.license_id)
-        const licCounts: Record<string, number> = {};
-        localProducts.forEach(item => {
-          if (matchItem(item, false, filters, 'license') && item.license_id) {
-            licCounts[item.license_id] = (licCounts[item.license_id] || 0) + 1;
-          }
-        });
-        const computedLicenseFacets = licenses
-          .map(l => ({
-            id: l.id,
-            name: l.name,
-            slug: l.slug,
-            published_product_count: licCounts[l.id] || 0,
-            is_featured: l.is_featured,
-            sort_order: l.sort_order
-          }))
-          .filter(l => l.published_product_count > 0)
-          .sort((a, b) => {
-            if (b.is_featured !== a.is_featured) return (b.is_featured ? 1 : 0) - (a.is_featured ? 1 : 0);
-            return b.published_product_count - a.published_product_count || a.name.localeCompare(b.name);
-          });
-
-        // Theme Facets (products.license_id -> license_themes -> theme)
-        const themeCounts: Record<string, number> = {};
-        localProducts.forEach(item => {
-          if (matchItem(item, false, filters, 'theme') && item.license_id) {
-            const ths = licToThemesMap.get(item.license_id);
-            if (ths) {
-              ths.forEach(tId => { themeCounts[tId] = (themeCounts[tId] || 0) + 1; });
-            }
-          }
-        });
-        const computedThemeFacets = themes
-          .map(t => ({
-            id: t.id,
-            name: t.name,
-            slug: t.slug,
-            published_product_count: themeCounts[t.id] || 0,
-            sort_order: t.sort_order
-          }))
-          .filter(t => t.published_product_count > 0)
-          .sort((a, b) => (a.sort_order ?? 99) - (b.sort_order ?? 99) || b.published_product_count - a.published_product_count);
-
-        // Availability Counts
-        let localCount = 0;
-        localProducts.forEach(item => { if (matchItem(item, false, filters, 'availability')) localCount++; });
-        let intlCount = 0;
-        intlProducts.forEach(item => { if (matchItem(item, true, filters, 'availability')) intlCount++; });
-
-        // Condition Counts with Self-Exclusion
-        const condCounts = { all: 0, new: 0, used: 0, loose: 0 };
-        localProducts.forEach(item => {
-          if (matchItem(item, false, filters, 'condition')) {
-            condCounts.all++;
-            const cond = item.condition;
-            if (!cond || cond === 'new_sealed' || cond === 'new_open_box') {
-              condCounts.new++;
-            } else if (cond === 'used_complete' || cond === 'used_incomplete') {
-              condCounts.used++;
-            } else if (cond === 'loose_complete' || cond === 'loose_incomplete') {
-              condCounts.loose++;
-            }
-          }
-        });
-        intlProducts.forEach(item => {
-          if (matchItem(item, true, filters, 'condition')) {
-            condCounts.all++;
-            condCounts.new++;
-          }
-        });
-
-        const currentAvail = filters.availability || 'all';
-        let totalCombined = 0;
-        if (currentAvail === 'local') totalCombined = localCount;
-        else if (currentAvail === 'international') totalCombined = intlCount;
-        else totalCombined = localCount + intlCount;
-
-        setFacets({
-          categoryFacets: catCounts,
-          brandFacets: computedBrandFacets,
-          licenseFacets: computedLicenseFacets,
-          themeFacets: computedThemeFacets,
-          availabilityCounts: {
-            all: localCount + intlCount,
-            local: localCount,
-            international: intlCount
-          },
-          conditionCounts: condCounts,
-          totalCatalogProducts: totalCombined
-        });
-        setLoading(false);
-      } catch (err) {
-        console.error('Error calculating catalog facets:', err);
-        if (active) setLoading(false);
-      }
-    }
-
-    calculateFacets();
-    return () => { active = false; };
-  }, [
-    filters.category,
-    filters.brand,
-    filters.license,
-    filters.theme,
-    filters.availability,
-    filters.search,
-    filters.condition,
-    filters.group,
-    filters.isInternationalEnabled
-  ]);
-
-  return { ...facets, loading };
+    const controller = new AbortController();
+    setLoading(true); setError(null);
+    fetchPublicCatalog({ ...JSON.parse(key), mode: 'facets', limit: 0 }, controller.signal)
+      .then(result => { if (!controller.signal.aborted) setFacets(result.facets); })
+      .catch(cause => { if (!controller.signal.aborted) setError(cause.message); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [key]);
+  return { ...facets, loading, error };
 }
-

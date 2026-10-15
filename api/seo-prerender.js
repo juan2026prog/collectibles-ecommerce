@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createPublicSupabase, withDeadline } from './_lib/public-supabase.js';
 import fs from 'fs';
 import path from 'path';
 
@@ -544,10 +544,7 @@ function generateProductSchema(product, brand, category, images) {
   return schema;
 }
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.dummy';
-
-const supabase = createClient(supabaseUrl, supabaseKey);
+let supabase;
 
 function loadTaxonomiesCache() {
   try {
@@ -601,13 +598,7 @@ const STATIC_MLU_MAPPINGS = {
   'mlu629964263': 'funko-plushies-avenger-infinity-war-hulkbuster'
 };
 
-async function withTimeout(promise, ms = 4000) {
-  const actualMs = Math.max(ms, 4000);
-  return Promise.race([
-    Promise.resolve(promise),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('DB Timeout')), actualMs))
-  ]);
-}
+const withTimeout = withDeadline;
 
 function getBaseTemplate() {
   const possiblePaths = [
@@ -797,55 +788,18 @@ async function resolveCanonicalProduct(slug) {
         return { product: uuidProduct, isRedirect: true, canonicalSlug: uuidProduct.slug };
       }
     }
-  } catch {
-    // Fallback if db offline
+  } catch (error) {
+    throw error;
   }
 
-  const lowerSlug = (slug || '').toLowerCase();
-  const isKnownNonExistent = lowerSlug.includes('inexistente') ||
-    lowerSlug.includes('no-existe') ||
-    lowerSlug.includes('falsa') ||
-    lowerSlug.includes('falso') ||
-    lowerSlug.includes('invalid') ||
-    lowerSlug.includes('999999') ||
-    lowerSlug === 'not-found';
-
-  if (isKnownNonExistent) {
-    return null;
-  }
-
-  if (STATIC_MLU_MAPPINGS[lowerSlug]) {
-    const canonical = STATIC_MLU_MAPPINGS[lowerSlug];
-    return {
-      product: {
-        id: 'static-' + canonical,
-        title: canonical.replace(/-/g, ' '),
-        slug: canonical,
-        base_price: 1500,
-        is_active: true,
-        status: 'published'
-      },
-      isRedirect: true,
-      canonicalSlug: canonical
-    };
-  }
-
-  return {
-    product: {
-      id: 'fallback-' + slug,
-      title: slug.replace(/-/g, ' '),
-      slug: slug,
-      base_price: 1500,
-      is_active: true,
-      status: 'published'
-    },
-    isRedirect: false,
-    canonicalSlug: slug
-  };
+  const canonical = STATIC_MLU_MAPPINGS[(slug || '').toLowerCase()];
+  if (canonical) return { product: { slug: canonical }, isRedirect: true, canonicalSlug: canonical };
+  return null;
 }
 
 export default async function handler(req, res) {
   try {
+    supabase ||= createPublicSupabase();
     const rawUrl = req.url || '';
     const parsed = new URL(rawUrl, 'https://collectibles.uy');
     const xForwardedUri = req.headers?.['x-forwarded-uri'] || req.headers?.['x-matched-path'] || '';
@@ -962,12 +916,15 @@ export default async function handler(req, res) {
         return res.status(301).end();
       }
 
-      const [{ data: images }, { data: category }, { data: brand }, { data: related }] = await Promise.all([
+      const details = await Promise.all([
         supabase.from('product_images').select('url, alt_text, is_primary').eq('product_id', product.id).order('sort_order', { ascending: true }),
         product.category_id ? supabase.from('categories').select('name, slug').eq('id', product.category_id).maybeSingle() : Promise.resolve({ data: null }),
         product.brand_id ? supabase.from('brands').select('name, slug').eq('id', product.brand_id).maybeSingle() : Promise.resolve({ data: null }),
         product.category_id ? supabase.from('products').select('title, slug, base_price').eq('category_id', product.category_id).eq('is_active', true).eq('status', 'published').neq('id', product.id).limit(6) : Promise.resolve({ data: [] })
       ]);
+
+      if (details.some(result => result.error)) throw new Error('Product details unavailable');
+      const [{ data: images }, { data: category }, { data: brand }, { data: related }] = details;
 
       const prodTitle = product.seo_title || product.meta_title || product.title;
       title = generateMetaTitle('producto', prodTitle);
@@ -1027,7 +984,7 @@ export default async function handler(req, res) {
           .from('categories')
           .select('id, name, slug, is_active, status')
           .eq('slug', slug)
-          .maybeSingle(), 4000).catch(() => ({ data: null }));
+          .maybeSingle(), 4000);
 
       if (!category && STATIC_CATEGORIES[slug]) {
         category = STATIC_CATEGORIES[slug];
@@ -1052,7 +1009,7 @@ export default async function handler(req, res) {
           .eq('parent_id', category.id)
           .eq('is_active', true),
         2500
-      ).catch(() => ({ data: [] }));
+      );
 
       if (subcats && subcats.length > 0) {
         catIds = catIds.concat(subcats.map(s => s.id));
@@ -1065,7 +1022,7 @@ export default async function handler(req, res) {
           .in('category_id', catIds)
           .eq('is_active', true)
           .eq('status', 'published')
-          .limit(16), 4000).catch(() => ({ data: [] }));
+          .limit(16), 4000);
 
       bodyContent = `
         <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
@@ -1094,7 +1051,7 @@ export default async function handler(req, res) {
           .from('brands')
           .select('id, name, slug, description, is_active, status')
           .eq('slug', slug)
-          .maybeSingle(), 4000).catch(() => ({ data: null }));
+          .maybeSingle(), 4000);
 
       if (!brand && STATIC_BRANDS[slug]) {
         brand = STATIC_BRANDS[slug];
@@ -1118,7 +1075,7 @@ export default async function handler(req, res) {
           .eq('brand_id', brand.id)
           .eq('is_active', true)
           .eq('status', 'published')
-          .limit(16), 4000).catch(() => ({ data: [] }));
+          .limit(16), 4000);
 
       if ((!brandProducts || brandProducts.length === 0) && brand.name) {
         const { data: fallbackBrandProds } = await withTimeout(
@@ -1128,7 +1085,7 @@ export default async function handler(req, res) {
             .ilike('title', `%${brand.name}%`)
             .eq('is_active', true)
             .eq('status', 'published')
-            .limit(16), 3000).catch(() => ({ data: [] }));
+            .limit(16), 3000);
         if (fallbackBrandProds && fallbackBrandProds.length > 0) {
           brandProducts = fallbackBrandProds;
         }
@@ -1418,7 +1375,7 @@ export default async function handler(req, res) {
           .eq('slug', slug)
           .maybeSingle(),
         4000
-      ).catch(() => ({ data: null }));
+      );
 
       if (!license && STATIC_LICENSES[slug]) {
         license = STATIC_LICENSES[slug];
@@ -1441,7 +1398,7 @@ export default async function handler(req, res) {
           .eq('status', 'published')
           .limit(16),
         4000
-      ).catch(() => ({ data: [] })) : { data: [] };
+      ) : { data: [] };
 
       bodyContent = `
         <div style="padding: 20px; font-family: system-ui, -apple-system, sans-serif; max-width: 1200px; margin: 0 auto;">
@@ -1472,7 +1429,7 @@ export default async function handler(req, res) {
           .eq('slug', slug)
           .maybeSingle(),
         4000
-      ).catch(() => ({ data: null }));
+      );
 
       if (!theme && STATIC_THEMES[slug]) {
         theme = STATIC_THEMES[slug];
@@ -1756,10 +1713,18 @@ export default async function handler(req, res) {
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('X-SEO-Version', '2026.09.16-v7');
-    res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=86400, stale-while-revalidate=604800');
+    res.setHeader('Cache-Control', 'public, max-age=0');
+    // The root HTML differs for crawlers and browsers; do not share it in a URL-only CDN cache.
+    res.setHeader('Vary', 'User-Agent');
+    res.setHeader('CDN-Cache-Control', 'no-store');
+    res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
     return res.status(200).send(renderedHtml);
   } catch (error) {
     console.error('Error in SEO Prerender handler:', error);
-    res.status(500).send('Server Error');
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('CDN-Cache-Control', 'no-store');
+    res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
+    res.setHeader('Retry-After', '30');
+    res.status(503).send('Servicio temporalmente no disponible');
   }
 }

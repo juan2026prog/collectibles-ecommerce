@@ -1,3 +1,5 @@
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
+import { guardWorker, workerErrorResponse, workerFetch } from "../_shared/workerGuard.ts";
 // @ts-ignore
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 // @ts-ignore
@@ -7,11 +9,15 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 // Initialize Supabase Client
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+const supabase = createClient(supabaseUrl, supabaseServiceKey, { global: { fetch: workerFetch } });
 
 Deno.serve(async (req: any) => {
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
+  let lease: Awaited<ReturnType<typeof guardWorker>> | undefined;
   try {
-    // Basic verification: allow anonymous invoke if it's from pg_cron (usually bypasses auth if local, but in prod we'd use headers)
+    lease = await guardWorker(req, supabase, 'abandoned-carts-cron', Deno.env);
+
     
     const now = new Date();
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
@@ -38,7 +44,7 @@ Deno.serve(async (req: any) => {
         const templateName = couponCode ? 'customer_cart_recovery' : 'customer_cart_recovery';
         const params = couponCode ? [customerName, couponCode] : [customerName, 'COMPRA10'];
         
-        await fetch(`https://graph.facebook.com/v17.0/${phoneId}/messages`, {
+        await workerFetch(`https://graph.facebook.com/v17.0/${phoneId}/messages`, {
           method: "POST",
           headers: {
             "Authorization": `Bearer ${token}`,
@@ -73,10 +79,11 @@ Deno.serve(async (req: any) => {
       .eq('status', 'abandoned')
       .eq('recovery_email_sent', false)
       .lt('created_at', oneHourAgo.toISOString())
-      .gt('created_at', twentyFourHoursAgo.toISOString());
+      .gt('created_at', twentyFourHoursAgo.toISOString()).order('created_at').limit(20);
 
     if (carts1h && carts1h.length > 0) {
       for (const cart of carts1h) {
+        if (lease.expired()) break;
         const tpl = getTemplate('Recuperación Carrito (1H)');
         let finalHtml = tpl?.content || '<p>Hola {{nombre}}, vimos que dejaste artículos en tu carrito.</p>';
         finalHtml = finalHtml.replace('{{nombre}}', cart.email.split('@')[0]);
@@ -102,7 +109,7 @@ Deno.serve(async (req: any) => {
       .eq('status', 'abandoned')
       .eq('recovery_email_24h_sent', false)
       .lt('created_at', twentyFourHoursAgo.toISOString())
-      .gt('created_at', fortyEightHoursAgo.toISOString());
+      .gt('created_at', fortyEightHoursAgo.toISOString()).order('created_at').limit(20);
 
     if (carts24h && carts24h.length > 0) {
       const emails24h = carts24h.map(c => c.email);
@@ -110,6 +117,7 @@ Deno.serve(async (req: any) => {
       const consentMap24h = new Map(consents24h?.map(c => [c.email, c]) || []);
 
       for (const cart of carts24h) {
+        if (lease.expired()) break;
         let channel = 'email';
         console.log(`Sending 24h recovery email to: ${cart.email}`);
         
@@ -141,7 +149,7 @@ Deno.serve(async (req: any) => {
       .select('*')
       .eq('status', 'abandoned')
       .eq('recovery_48h_sent', false)
-      .lt('created_at', fortyEightHoursAgo.toISOString());
+      .lt('created_at', fortyEightHoursAgo.toISOString()).order('created_at').limit(20);
 
     if (carts48h && carts48h.length > 0) {
       const emails48h = carts48h.map(c => c.email);
@@ -149,6 +157,7 @@ Deno.serve(async (req: any) => {
       const consentMap48h = new Map(consents48h?.map(c => [c.email, c]) || []);
 
       for (const cart of carts48h) {
+        if (lease.expired()) break;
         // Generate unique coupon
         const uniqueCode = `COMEBACK-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
         
@@ -192,11 +201,12 @@ Deno.serve(async (req: any) => {
     }
 
     return new Response(JSON.stringify({ success: true, processed: { '1h': carts1h?.length || 0, '24h': carts24h?.length || 0, '48h': carts48h?.length || 0 } }), {
-      headers: { "Content-Type": "application/json" }
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
     });
 
-  } catch (error: any) {
-    console.error("Abandoned carts cron error:", error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { "Content-Type": "application/json" } });
+  } catch (error: unknown) {
+    return workerErrorResponse(error, getCorsHeaders(req));
+  } finally {
+    await lease?.release();
   }
 });
