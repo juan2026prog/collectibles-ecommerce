@@ -308,7 +308,10 @@ export function validateAndScoreImage(
       isValid: false,
       score: 0,
       reason: 'Sin imagen provista',
-      finalImageUrl: null
+      finalImageUrl: null,
+      provenance: 'NONE',
+      semanticType: 'NONE',
+      isPublishable: false
     };
   }
 
@@ -321,7 +324,10 @@ export function validateAndScoreImage(
       isValid: false,
       score: 0,
       reason: 'URL inválida',
-      finalImageUrl: null
+      finalImageUrl: null,
+      provenance: 'NONE',
+      semanticType: 'UNVERIFIED',
+      isPublishable: false
     };
   }
 

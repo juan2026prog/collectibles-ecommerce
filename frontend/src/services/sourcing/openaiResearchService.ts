@@ -131,9 +131,10 @@ export async function executeOpenAIResearch(
       let mappedStatus: OpenAIResearchStatus = 'FAILED';
       if (response.status === 'BUDGET_EXCEEDED') mappedStatus = 'BUDGET_EXCEEDED';
       if (response.status === 'RATE_LIMITED') mappedStatus = 'RATE_LIMITED';
-      if (response.status === 'FORBIDDEN') mappedStatus = 'FORBIDDEN';
-      if (response.status === 'AI_DISABLED' || response.status === 'ENGINE_DISABLED') mappedStatus = 'FEATURE_DISABLED';
+      if (response.status === 'FORBIDDEN' || response.status === 'UNAUTHORIZED') mappedStatus = 'FORBIDDEN';
+      if (response.status === 'AI_DISABLED' || response.status === 'ENGINE_DISABLED' || response.status === 'COUNTRY_DISABLED') mappedStatus = 'FEATURE_DISABLED';
       if (response.status === 'PROVIDER_NOT_CONFIGURED' || response.status === 'PENDING_CREDENTIAL' || response.status === 'NOT_CONFIGURED') mappedStatus = 'PENDING_CREDENTIAL';
+      if (response.status === 'MODEL_NOT_ALLOWED') mappedStatus = 'MODEL_UNAVAILABLE';
 
       return {
         success: false,
@@ -150,9 +151,9 @@ export async function executeOpenAIResearch(
       pack_id: `pack_${Date.now()}`,
       title: `Investigación: ${params.query}`,
       generated_at: new Date().toISOString(),
-      provider: 'openai_gateway',
-      query: params.query,
-      research_type: params.research_type || 'MANUAL',
+      source: 'openai-research',
+      status: 'READY',
+      items_count: items.length,
       items: items.map((it: any) => ({
         url: it.url || 'https://www.amazon.com',
         retailer: it.retailer || 'amazon',

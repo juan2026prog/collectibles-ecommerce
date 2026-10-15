@@ -799,9 +799,9 @@ export default function AdminRadar() {
                               )}
 
                               {/* Badge de Auditoría si existe */}
-                              {item.audit_corrections?.classification && (
+                              {Boolean(item.audit_corrections?.length) && (
                                 <span className="text-[8px] font-mono px-1 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200">
-                                  {item.audit_corrections.classification}
+                                  {item.audit_corrections?.length} correcciones
                                 </span>
                               )}
                             </div>

@@ -389,7 +389,7 @@ describe('SOURCING & IMPORTACIÓN MULTIFUENTE V2 — Automated Test Suite', () =
       expect(summary.market_verdict).toBe('MUCHO_MAS_BARATO');
     });
 
-    it('Correctly returns NOT_FOUND with zero mocks when no competition exists', () => {
+    it('Returns NOT_FOUND without claiming market absence when no data is available', () => {
       const res = checkUruguayMarketSync({
         title: 'Obscure Unknown Indie Collectible 1985 Limited',
         collectiblesPriceUsd: 59.90
@@ -398,7 +398,8 @@ describe('SOURCING & IMPORTACIÓN MULTIFUENTE V2 — Automated Test Suite', () =
       expect(res.status).toBe('NOT_FOUND');
       expect(res.data_origin).toBe('NO_DATA');
       expect(res.min_price_usd).toBeNull();
-      expect(res.market_verdict).toBe('SIN_COMPETENCIA');
+      expect(res.market_verdict).toBe('NO_DISPONIBLE');
+      expect(res.presence).toBe('UNKNOWN');
     });
   });
 

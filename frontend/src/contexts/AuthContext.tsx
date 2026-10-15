@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useMemo, useCallback, useRef, type ReactNode } from 'react';
-import type { Session, User } from '@supabase/supabase-js';
+import type { Session, User, OAuthResponse } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { loginOneSignalUser, logoutOneSignalUser } from '../lib/pushNotifications';
 
@@ -28,7 +28,7 @@ interface AuthContextType {
   isSuperAdmin: boolean;
   signUp: (email: string, password: string) => Promise<{ data: any; error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signInWithGoogle: () => Promise<{ error: any }>;
+  signInWithGoogle: () => Promise<OAuthResponse>;
   signInWithOtp: (email: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -190,7 +190,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
-    const { data, error } = await supabase.auth.signInWithOAuth({
+    return supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: `${window.location.origin}/`,
@@ -200,7 +200,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
       }
     });
-    return { data, error };
   }, []);
 
   const signInWithOtp = useCallback(async (email: string) => {

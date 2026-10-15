@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
+import { relatedRecord } from '../../lib/relatedRecord';
 import { 
   Check, X, GitMerge, AlertTriangle, ArrowRight, Eye, Tag, Folder, Layers, 
   Image as ImageIcon, Search, Sliders, ShieldCheck, ChevronDown, ChevronRight,
@@ -429,7 +430,7 @@ export default function AdminCatalogCenter() {
       // 1. Fetch products in the database with strictly required fields (avoiding heavy description and metadata)
       const { data: prods, error } = await supabase
         .from('products')
-        .select('id, title, slug, base_price, brand_id, category_id, ml_brand, ml_category, status, is_active, images:product_images(url), variants:product_variants(sku, inventory_count)');
+        .select('id, title, slug, base_price, brand_id, category_id, ml_brand, ml_category, status, is_active, brand:brands!products_brand_id_fkey(name), images:product_images(url), variants:product_variants(sku, inventory_count)');
       if (error) throw error;
       if (!prods || prods.length === 0) {
         toast.info('No hay productos para recalcular');
@@ -447,7 +448,7 @@ export default function AdminCatalogCenter() {
         const logsToInsert = batch.map(p => {
           const mockItem = {
             ...p,
-            ml_brand: p.ml_brand || p.brand_name || '',
+            ml_brand: p.ml_brand || relatedRecord(p.brand)?.name || '',
             ml_category: p.ml_category || ''
           };
           const report = runQualityEngineCheck(mockItem, allProducts, mlMappings, localDuplicates, dictionaries, rules);

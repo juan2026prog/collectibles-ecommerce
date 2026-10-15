@@ -4,6 +4,7 @@ import {
   AlertCircle, ExternalLink, CornerDownRight, ShieldCheck, Filter
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { relatedRecord } from '../../lib/relatedRecord';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/admin/Toast';
 import { BackofficePageHeader, BackofficeTabs } from '../backoffice';
@@ -67,7 +68,7 @@ export default function VQuestions({ activeStoreId }: { activeStoreId?: string }
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setQuestions(data || []);
+      setQuestions((data || []).map(row => ({ ...row, product: relatedRecord(row.product) })));
     } catch (err: any) {
       console.error('Error fetching vendor questions:', err);
       toast.error(err.message || 'Error al cargar preguntas');
@@ -181,9 +182,8 @@ export default function VQuestions({ activeStoreId }: { activeStoreId?: string }
     <div className="space-y-6 animation-fade-in pb-16">
       {/* Header */}
       <BackofficePageHeader
-        badge="Centro de Consultas"
         title="Preguntas sobre tus Productos"
-        description="Respondé a los coleccionistas interesados en tus publicaciones de catálogo local."
+        subtitle="Respondé a los coleccionistas interesados en tus publicaciones de catálogo local."
         actions={
           <button
             onClick={fetchVendorQuestions}

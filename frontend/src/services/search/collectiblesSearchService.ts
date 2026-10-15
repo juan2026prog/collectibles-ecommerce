@@ -1,4 +1,5 @@
 import { supabase } from '../../lib/supabase';
+import { relatedRecord } from '../../lib/relatedRecord';
 import { 
   interpretUserQuery, 
   generateDirectEditorialAnswer, 
@@ -211,10 +212,10 @@ export class CollectiblesSearchService {
           is_featured: item.is_featured,
           is_active: item.is_active,
           status: item.status,
-          brand: item.brand,
-          category: item.category,
-          vendor: item.vendor,
-          vendor_store: item.vendor_store,
+          brand: relatedRecord(item.brand),
+          category: relatedRecord(item.category),
+          vendor: relatedRecord(item.vendor),
+          vendor_store: relatedRecord(item.vendor_store),
           variants: item.variants,
           is_international: false,
           condition: item.condition,
@@ -352,10 +353,10 @@ export class CollectiblesSearchService {
               is_featured: item.is_featured,
               is_active: item.is_active,
               status: item.status,
-              brand: item.brand,
-              category: item.category,
-              vendor: item.vendor,
-              vendor_store: item.vendor_store,
+              brand: relatedRecord(item.brand),
+              category: relatedRecord(item.category),
+              vendor: relatedRecord(item.vendor),
+              vendor_store: relatedRecord(item.vendor_store),
               variants: item.variants,
               is_international: false,
               condition: item.condition,
@@ -445,7 +446,7 @@ export class CollectiblesSearchService {
         },
         p_results_count: combined.length,
         p_source: 'search_service'
-      }).then(() => {}).catch(() => {});
+      }).then(() => {}, () => {});
     } catch (_) {}
 
     return {

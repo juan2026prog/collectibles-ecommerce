@@ -8,7 +8,8 @@ import {
   MessageCircle
 } from 'lucide-react';
 import { CollectiblesSearchService, type SearchProductResult, type RadarSearchResult } from '../services/search/collectiblesSearchService';
-import type { AISearchQueryInterpretation } from '../lib/search/aiQueryInterpreter';
+import { interpretUserQuery, type AISearchQueryInterpretation } from '../lib/search/aiQueryInterpreter';
+import { ProductGridCard } from '../components/ProductGridCard';
 import { queryCollectorKnowledge } from '../plugins/collector-academy/core/draftGuard';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { useCartContext } from '../contexts/CartContext';

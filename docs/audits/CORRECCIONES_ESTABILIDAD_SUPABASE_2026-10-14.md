@@ -93,3 +93,22 @@ Después del despliegue, comparar ventanas de tráfico equivalentes, incluyendo 
 En la comprobación posterior había 34 conexiones y cero esperas por locks. Cron registró dos `job startup timeout` a las 01:43 y 01:44 UTC, seguidos por ejecuciones correctas de campañas y carritos. Son fallos de apertura de la conexión del planificador, anteriores a ejecutar el cuerpo del worker, y no los corrige por sí sola una lease. Debe comprobarse su frecuencia en un período de carga comparable y, si persisten, revisar capacidad y la conexión del planificador con Supabase. No se presenta esta intervención como garantía de que nunca vuelva a producirse un bloqueo.
 
 No hay evidencia que justifique migrar las imágenes a otra base. Los archivos ya están en Storage o proveedores externos; PostgreSQL guarda URLs/metadatos. Si persiste saturación de recursos después de corregir las consultas y cron, dimensionar el cómputo con esas métricas y un presupuesto aprobado.
+
+## Cierre de pendientes técnicos — 15 de octubre, 02:15 UTC
+
+El chequeo global `npm run typecheck` pasa después de reparar importaciones ausentes de búsqueda y portal, normalizar relaciones de PostgREST en preguntas y búsqueda, corregir el contrato de OAuth y retirar una llamada inexistente del recálculo de categorías. Se alinean los metadatos de investigación y procedencia con los contratos del servidor; una imagen inválida queda explícitamente no publicable. Un resultado sin datos de mercado conserva presencia desconocida, sin afirmar ausencia de competencia.
+
+El comando `npm run build` ahora ejecuta también TypeScript: futuros errores de este tipo detienen el build antes del despliegue. Se verificaron 208 pruebas en 15 suites, incluyendo catálogo, paginación, cachés, aislamiento de búsquedas, imágenes, Radar y contratos de investigación.
+
+Se incorporan dos herramientas de observación de solo lectura:
+
+- `node scripts/check_database_stability.mjs`: cuatro solicitudes HTTP secuenciales con límite de 15 segundos, sin invalidar caché ni ejecutar proveedores. Comprueba HTML del sitio, catálogo acotado a 15 productos y una búsqueda. Registra estado, latencia, caché y conteos; nunca cuerpos de respuestas ni credenciales.
+- `scripts/database_stability_snapshot.sql`: conexiones y máximo, consultas largas, locks, transacciones abandonadas, leases y resultados agregados de cron. No lee consultas, comandos de cron ni datos de clientes.
+
+Muestra de producción a las 02:14 UTC: inicio 200/436 ms, tienda 200/88 ms, catálogo 200/2698 ms (1205 productos, página de 15, MISS), búsqueda Pokémon 200/492 ms (127 coincidencias, página de 15). La primera ejecución del script quedó restringida por la red del entorno local; la ejecución con acceso a red fue correcta. Ese fallo local no constituye una caída de producción.
+
+Muestra SQL de las 02:15 UTC: 19/60 conexiones, cero locks, cero transacciones abandonadas, cero consultas activas ajenas y cero leases vigentes. PostgreSQL llevaba aproximadamente nueve días iniciado. En la última hora hubo 48 despachos cron correctos y los dos timeouts de arranque ya registrados a las 01:43/01:44; después ambos trabajos volvieron a despacharse correctamente. Un despacho SQL correcto no demuestra por sí solo que la función remota haya completado su trabajo. Se contrastaron además siete solicitudes HTTP de los cuatro workers activos entre las 01:50 y las 02:16: todas devolvieron 200, con duraciones máximas de 1,47 a 2,47 segundos según el worker.
+
+El [código de pg_cron](https://github.com/citusdata/pg_cron/blob/main/src/pg_cron.c) establece un tiempo máximo de apertura de conexión; el error es anterior al cuerpo del trabajo. La [guía de Supabase Cron](https://supabase.com/docs/guides/cron) recomienda como máximo ocho trabajos concurrentes. Las muestras actuales no permiten atribuir los timeouts aislados a DNS, CPU o memoria: no se cambian parámetros de arranque ni se reinicia la base por una hipótesis.
+
+Quedó activa una observación horaria en este chat hasta el 17 de octubre de 2026 a las 02:30 UTC (`estabilidad-de-collectibles-48-horas`). Registra muestras locales y avisa únicamente por incidencias relevantes, recuperación, acciones necesarias o cierre. Requiere la aplicación y el equipo local disponibles. No sustituye una vigilancia alojada permanente ni demuestra estabilidad bajo picos que no hayan sido observados. CPU/RAM/IOPS históricos durante el bloqueo original siguen sin estar disponibles en estas consultas.

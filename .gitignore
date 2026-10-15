@@ -121,3 +121,6 @@ qa/
 
 .vercel
 .env*
+
+# Operational observations remain local; never include them in routine deploys.
+docs/audits/monitoring/*.jsonl

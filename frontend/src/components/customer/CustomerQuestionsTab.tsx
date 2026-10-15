@@ -5,6 +5,7 @@ import {
   ExternalLink, RefreshCw, Sparkles, ChevronRight
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { relatedRecord } from '../../lib/relatedRecord';
 import { useAuth } from '../../contexts/AuthContext';
 
 interface UserQuestionRecord {
@@ -56,7 +57,7 @@ export default function CustomerQuestionsTab() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setQuestions(data || []);
+      setQuestions((data || []).map(row => ({ ...row, product: relatedRecord(row.product) })));
     } catch (err: any) {
       console.error('Error fetching user questions:', err);
     } finally {

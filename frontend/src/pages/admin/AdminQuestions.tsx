@@ -4,6 +4,7 @@ import {
   AlertCircle, ExternalLink, ShieldCheck, Filter, Eye, EyeOff, Trash2, Store
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { relatedRecord } from '../../lib/relatedRecord';
 import { useAuth } from '../../contexts/AuthContext';
 import { useToast } from '../../components/admin/Toast';
 import { BackofficePageHeader } from '../../components/backoffice';
@@ -78,7 +79,9 @@ export default function AdminQuestions() {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setQuestions(data || []);
+      setQuestions((data || []).map(row => ({
+        ...row, product: relatedRecord(row.product), vendor: relatedRecord(row.vendor)
+      })));
     } catch (err: any) {
       console.error('Error fetching admin questions:', err);
       toast.error(err.message || 'Error al cargar preguntas');
@@ -211,9 +214,8 @@ export default function AdminQuestions() {
   return (
     <div className="space-y-6 animation-fade-in pb-16">
       <BackofficePageHeader
-        badge="Moderación & Q&A"
         title="Preguntas sobre Productos"
-        description="Gestioná consultas de productos propios de Collectibles y moderá preguntas de Vendors."
+        subtitle="Gestioná consultas de productos propios de Collectibles y moderá preguntas de Vendors."
         actions={
           <button
             onClick={fetchAdminQuestions}

@@ -20,12 +20,16 @@ export type AIProviderKey = 'NONE' | 'OPENAI';
 export type AICircuitBreakerState = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 
 export type AIExecutionStatus = 
+  | 'UNAUTHORIZED'
+  | 'FORBIDDEN'
   | 'AI_DISABLED'
   | 'COUNTRY_DISABLED'
   | 'ENGINE_DISABLED'
   | 'BUDGET_EXCEEDED'
   | 'CIRCUIT_OPEN'
   | 'PROVIDER_NOT_CONFIGURED'
+  | 'PENDING_CREDENTIAL'
+  | 'NOT_CONFIGURED'
   | 'RATE_LIMITED'
   | 'TIMEOUT'
   | 'OPENAI_ERROR'

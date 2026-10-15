@@ -485,6 +485,7 @@ export class MultiSourceSearchService {
         is_retro_in_box: retroCheck.isRetroInBox,
         is_lot: isLotDetected,
         is_auction: isAuctionDetected,
+        data_origin: rawItem.data_origin === 'DATABASE' || rawItem.data_origin === 'CACHE' ? rawItem.data_origin : 'LIVE',
         landed_cost_estimated_usd: pricing.realCost,
         sale_price_suggested_usd: pricing.finalPrice
       };
@@ -516,6 +517,9 @@ export class MultiSourceSearchService {
       if (canonicalMap.has(canonicalKey)) {
         const existing = canonicalMap.get(canonicalKey)!;
         existing.offers.push(offerDetail);
+        if (offerDetail.data_origin === 'LIVE' || (offerDetail.data_origin === 'CACHE' && existing.data_origin === 'DATABASE')) {
+          existing.data_origin = offerDetail.data_origin;
+        }
         if (!existing.matched_sources.includes(source)) {
           existing.matched_sources.push(source);
         }
@@ -584,6 +588,7 @@ export class MultiSourceSearchService {
           best_buy_sku: source === 'bestbuy' ? rawExtraction.source_product_id : undefined,
           offers: [offerDetail],
           matched_sources: [source],
+          data_origin: offerDetail.data_origin || 'LIVE',
           lowest_new_price: null,
           lowest_new_retailer: null,
           lowest_used_price: null,

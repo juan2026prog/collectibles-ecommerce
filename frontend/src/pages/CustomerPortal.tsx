@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useImageProtection } from '../hooks/useImageProtection';
 import { useCartContext } from '../contexts/CartContext';
 import { useWishlistContext } from '../contexts/WishlistContext';
 import { 

@@ -26,6 +26,7 @@ import type {
   SourcingTrendCard,
   SourcingProductCandidate,
   SourcingSignal,
+  SourcingResearchSource,
   SourcingCandidateStatus
 } from '../../types/sourcingIntelligence';
 
@@ -61,7 +62,7 @@ export class ResearchIntelligenceService {
     const effectiveResultLimit = result_limit || resultLimit || 'AUTO';
     const effectiveFamily = product_family || category || 'ALL';
 
-    const selectedSources = Array.from(new Set(sources.length ? sources : ['WEB', 'AMAZON']));
+    const selectedSources = Array.from(new Set<SourcingResearchSource>(sources.length ? sources : ['WEB', 'AMAZON']));
     const useWeb = selectedSources.includes('WEB');
     const requestedMarketplaceLimit = effectiveResultLimit === 'AUTO' ? 15 : Number(effectiveResultLimit);
 

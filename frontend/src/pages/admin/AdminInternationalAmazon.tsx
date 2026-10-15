@@ -149,11 +149,6 @@ export default function AdminInternationalAmazon() {
     }
   }
 
-  // Fallback candidate refresher: retains current session candidates or clears them
-  function refreshSessionCandidates() {
-    // Preserves in-memory live search candidates without DB roundtrip
-  }
-
   async function handleRecalculateSuggestions() {
     setRecalculating(true);
     try {
@@ -164,8 +159,8 @@ export default function AdminInternationalAmazon() {
         message: `Se actualizaron sugerencias de ${data} candidatos.`,
         type: 'success'
       });
-      fetchCandidates();
-      fetchRules();
+      // The RPC updates saved candidates; live search results stay in this session.
+      await fetchRules();
     } catch (err: any) {
       addToast({ title: 'Error recalculando', message: err.message, type: 'error' });
     } finally {

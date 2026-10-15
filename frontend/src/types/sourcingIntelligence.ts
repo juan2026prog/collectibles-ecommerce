@@ -86,6 +86,12 @@ export interface SourcingProductCandidate {
   confidence_score: number | null; // Evidence completeness; null means unknown.
   confidence_level?: SourcingConfidenceLevel | 'UNKNOWN';
   validation_version?: number;
+  /** Unverified input claims retained by the canonical validator, never observations. */
+  claims?: {
+    asin?: string;
+    brand?: string;
+    [field: string]: unknown;
+  };
   provenance?: Record<string, SourcingDataProvenance>;
   market_presence?: Record<string, { presence: 'PRESENT' | 'VERIFIED_ABSENT' | 'VERIFIED_LOW_SUPPLY' | 'UNKNOWN'; reason?: string; price?: SourcingDataProvenance }>;
   validation_diagnostics?: Array<Record<string, unknown>>;
@@ -138,11 +144,13 @@ export interface SourcingProductCandidate {
 
 export interface SourcingDataProvenance {
   value: unknown;
-  status: 'OBSERVED' | 'DERIVED' | 'UNKNOWN';
+  status: 'OBSERVED' | 'CORROBORATED' | 'DERIVED' | 'UNKNOWN';
   source: string | null;
   source_url: string | null;
   observed_at: string | null;
-  verification?: 'AI_DECLARED' | 'SOURCE_EXTRACTED' | 'SOURCE_VERIFIED';
+  verification?: 'AI_DECLARED' | 'SOURCE_EXTRACTED' | 'SOURCE_VERIFIED' | 'SOURCE_CORROBORATED' | 'UNVERIFIED';
+  method?: string;
+  image_provenance?: string;
   currency?: string;
   derived_from?: SourcingDataProvenance[];
 }

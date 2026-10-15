@@ -78,7 +78,9 @@ describe('Módulo 02: Collectibles Radar & Release Calendar Engine Tests', () =>
       'https://tamashiiweb.com'
     );
     expect(result.isValid).toBe(false);
-    expect(result.provenance).toBeUndefined();
+    expect(result.provenance).toBe('NONE');
+    expect(result.semanticType).toBe('NONE');
+    expect(result.isPublishable).toBe(false);
   });
 
   it('3. Unsplash → no puede publicar', () => {

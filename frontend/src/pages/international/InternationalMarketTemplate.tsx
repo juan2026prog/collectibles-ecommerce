@@ -44,7 +44,7 @@ export default function InternationalMarketTemplate() {
       <SEO
         title={`Collectibles ${market.countryName} | Catálogo Internacional`}
         description={`Descubrí figuras, cómics y coleccionables internacionales con envíos directos a ${market.countryName}.`}
-        noindex={market.isPreview} // Enforces noindex, nofollow on preview markets
+        noIndex={market.isPreview} // Enforces noindex, nofollow on preview markets
       />
 
       {market.isPreview && <MarketPreviewBanner market={market} />}
