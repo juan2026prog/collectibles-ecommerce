@@ -105,7 +105,6 @@ const AdminAIControlCenter = lazy(() => import('./pages/superadmin/AdminAIContro
 const AdminAISystemTest = lazy(() => import('./pages/superadmin/AdminAISystemTest'));
 const AdminArgentinaLogistics = lazy(() => import('./pages/admin/AdminArgentinaLogistics').then(m => ({ default: m.AdminArgentinaLogistics })));
 const ArgentinaFinancialDashboard = lazy(() => import('./pages/admin/ArgentinaFinancialDashboard').then(m => ({ default: m.ArgentinaFinancialDashboard })));
-const DeblexPortalPage = lazy(() => import('./components/argentina/DeblexPortal').then(m => ({ default: () => <m.DeblexPortal packages={[]} /> })));
 const DeblexEntryPage = lazy(() => import('./pages/DeblexEntryPage'));
 
 // Collector Plugins (6 official modules)
@@ -402,7 +401,7 @@ function App() {
                   <Route path="international-markets/:countryCode/preview" element={<ProtectedRoute requireSuperAdmin><AdminInternationalMarketPreview /></ProtectedRoute>} />
                   <Route path="argentina/logistics" element={<ProtectedRoute requireSuperAdmin><AdminArgentinaLogistics /></ProtectedRoute>} />
                   <Route path="argentina/finances" element={<ProtectedRoute requireSuperAdmin><ArgentinaFinancialDashboard /></ProtectedRoute>} />
-                  <Route path="deblex/portal" element={<ProtectedRoute requireAdmin><DeblexPortalPage /></ProtectedRoute>} />
+                  <Route path="deblex/portal" element={<Navigate to="/deblex" replace />} />
                   <Route path="markets" element={<ProtectedRoute requireSuperAdmin><Navigate to="/admin/international-markets" replace /></ProtectedRoute>} />
                   <Route path="markets/:countryCode/preview" element={<ProtectedRoute requireSuperAdmin><AdminInternationalMarketPreview /></ProtectedRoute>} />
                   <Route path="ai" element={<ProtectedRoute requireSuperAdmin><Navigate to="/superadmin/ai" replace /></ProtectedRoute>} />
