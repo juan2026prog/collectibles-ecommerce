@@ -432,36 +432,36 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
   };
 
   return (
-    <div className="space-y-6">
-      {/* Search & Filter Bar */}
-      <div className="bg-white border border-[#dce6eb] rounded-xl p-5 shadow-[0_2px_12px_rgba(23,54,70,0.03)]">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div className="space-y-4">
+      {/* Search & Filter Bar — Compact */}
+      <div className="bg-white border border-[#dce6eb] rounded-xl p-3.5 shadow-xs">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold text-[#182f3c] flex items-center gap-2">
-              <Package className="w-5 h-5 text-[#146981]" />
+            <h2 className="text-base font-bold text-[#182f3c] flex items-center gap-1.5">
+              <Package className="w-4 h-4 text-[#146981]" />
               Envíos y Consolidados
             </h2>
-            <p className="text-xs text-[#6b808d] mt-0.5">
+            <p className="text-[11px] text-[#6b808d] mt-0.5">
               Administración de envíos individuales y consolidados
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5">
-            <div className="relative flex-1 sm:w-72 min-w-[200px]">
-              <Search className="w-4 h-4 text-[#8ea4b0] absolute left-3 top-2.5 pointer-events-none" />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 sm:w-64 min-w-[170px]">
+              <Search className="w-3.5 h-3.5 text-[#8ea4b0] absolute left-2.5 top-2 pointer-events-none" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Buscar tracking, código CS, cliente..."
-                className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-[#cddbe1] rounded-lg text-[#182f3c] placeholder-[#9fb5c0] focus:outline-none focus:ring-2 focus:ring-[#146981]/20 focus:border-[#146981]"
+                className="w-full pl-8 pr-2.5 py-1 text-xs bg-white border border-[#cddbe1] rounded-lg text-[#182f3c] placeholder-[#9fb5c0] focus:outline-none focus:ring-1 focus:ring-[#146981]"
               />
             </div>
 
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-1.5 text-xs bg-white border border-[#cddbe1] rounded-lg text-[#182f3c] focus:outline-none focus:ring-2 focus:ring-[#146981]/20 focus:border-[#146981]"
+              className="px-2.5 py-1 text-xs bg-white border border-[#cddbe1] rounded-lg text-[#182f3c] focus:outline-none focus:ring-1 focus:ring-[#146981]"
             >
               <option value="ALL">Todos los estados</option>
               <option value="RECIBIDO_EN_DEPOSITO">Recibido en Miami</option>
@@ -475,7 +475,7 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value as any)}
-              className="px-3 py-1.5 text-xs bg-white border border-[#cddbe1] rounded-lg text-[#182f3c] focus:outline-none focus:ring-2 focus:ring-[#146981]/20 focus:border-[#146981]"
+              className="px-2.5 py-1 text-xs bg-white border border-[#cddbe1] rounded-lg text-[#182f3c] focus:outline-none focus:ring-1 focus:ring-[#146981]"
             >
               <option value="ALL">Todos los tipos</option>
               <option value="CONSOLIDATED">Solo consolidados</option>
@@ -484,34 +484,34 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
 
             <button
               onClick={handleExportCsv}
-              className="px-3.5 py-1.5 bg-white border border-[#cedbe1] hover:bg-[#edf6f8] text-[#173846] font-semibold text-xs rounded-lg transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+              className="px-2.5 py-1 bg-white border border-[#cedbe1] hover:bg-[#edf6f8] text-[#173846] font-semibold text-xs rounded-lg transition flex items-center gap-1 cursor-pointer shadow-xs"
             >
-              <Download className="w-3.5 h-3.5 text-[#146981]" />
+              <Download className="w-3 h-3 text-[#146981]" />
               <span>Exportar CSV</span>
             </button>
           </div>
         </div>
 
         {/* Shipments Table — 100% width, flexible columns */}
-        <div className="mt-5 overflow-x-auto border border-[#edf1f4] rounded-lg w-full bg-white">
+        <div className="mt-3 overflow-x-auto border border-[#edf1f4] rounded-lg w-full bg-white">
           <table className="w-full text-xs text-left border-collapse table-auto">
             <thead>
               <tr className="bg-[#f5f8fa] text-[#698190] border-b border-[#edf1f4]">
-                <th className="py-2.5 px-2.5 font-semibold whitespace-nowrap w-[150px]">ID / Tipo</th>
-                <th className="py-2.5 px-2.5 font-semibold whitespace-nowrap min-w-[130px]">Destinatario</th>
-                <th className="py-2.5 px-2.5 font-semibold whitespace-nowrap min-w-[140px]">Tracking Number(s)</th>
-                <th className="py-2.5 px-2.5 font-semibold whitespace-nowrap min-w-[130px]">Producto(s)</th>
-                <th className="py-2.5 px-2.5 font-semibold whitespace-nowrap w-[80px]">FOB Total</th>
-                <th className="py-2.5 px-2.5 font-semibold whitespace-nowrap min-w-[120px]">Logística</th>
-                <th className="py-2.5 px-2.5 font-semibold whitespace-nowrap min-w-[90px]">Facturas</th>
-                <th className="py-2.5 px-2.5 font-semibold whitespace-nowrap min-w-[140px]">Estado Logístico</th>
-                <th className="py-2.5 px-2.5 font-semibold text-right whitespace-nowrap w-[120px]">Acciones</th>
+                <th className="py-2 px-2 font-semibold whitespace-nowrap text-[11px] w-[130px]">ID / Tipo</th>
+                <th className="py-2 px-2 font-semibold whitespace-nowrap text-[11px] min-w-[110px]">Destinatario</th>
+                <th className="py-2 px-2 font-semibold whitespace-nowrap text-[11px] min-w-[120px]">Tracking Number(s)</th>
+                <th className="py-2 px-2 font-semibold whitespace-nowrap text-[11px] min-w-[110px]">Producto(s)</th>
+                <th className="py-2 px-2 font-semibold whitespace-nowrap text-[11px] w-[70px]">FOB Total</th>
+                <th className="py-2 px-2 font-semibold whitespace-nowrap text-[11px] min-w-[105px]">Logística</th>
+                <th className="py-2 px-2 font-semibold whitespace-nowrap text-[11px] min-w-[75px]">Facturas</th>
+                <th className="py-2 px-2 font-semibold whitespace-nowrap text-[11px] min-w-[125px]">Estado Logístico</th>
+                <th className="py-2 px-2 font-semibold text-right whitespace-nowrap text-[11px] w-[105px]">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#edf1f4]">
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-[#718895]">
+                  <td colSpan={9} className="py-6 text-center text-[#718895] text-xs">
                     No se encontraron envíos ni consolidados con los filtros aplicados.
                   </td>
                 </tr>
@@ -524,33 +524,33 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                   return (
                     <React.Fragment key={r.id}>
                       <tr className={`hover:bg-[#f8fbfc] transition ${isExpanded ? 'bg-[#f8fbfc]' : ''}`}>
-                        <td className="py-2.5 px-2.5 align-top">
+                        <td className="py-1.5 px-2 align-top">
                           <div className="flex items-start gap-1">
                             <button
                               onClick={() => toggleExpand(r.id)}
                               className="p-0.5 hover:bg-[#e2edf1] rounded text-[#6b808d] cursor-pointer mt-0.5 shrink-0"
                             >
                               {isExpanded ? (
-                                <ChevronDown className="w-3.5 h-3.5 text-[#146981]" />
+                                <ChevronDown className="w-3 h-3 text-[#146981]" />
                               ) : (
-                                <ChevronRight className="w-3.5 h-3.5" />
+                                <ChevronRight className="w-3 h-3" />
                               )}
                             </button>
                             <div className="min-w-0">
-                              <span className="font-mono font-bold text-[#182f3c] block text-xs whitespace-nowrap tracking-tight [font-variant-numeric:tabular-nums]">
+                              <span className="font-mono font-bold text-[#182f3c] block text-[11px] whitespace-nowrap tracking-tight [font-variant-numeric:tabular-nums]">
                                 {r.code}
                               </span>
                               {r.legacyCode && (
-                                <span className="text-[10px] text-[#8ea4b0] block font-mono whitespace-nowrap">
+                                <span className="text-[9px] text-[#8ea4b0] block font-mono whitespace-nowrap">
                                   Ref: {r.legacyCode}
                                 </span>
                               )}
                               {r.isConsolidation ? (
-                                <span className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#dff2e9] text-[#146946] whitespace-nowrap">
+                                <span className="inline-flex items-center gap-0.5 mt-0.5 px-1 py-0.2 rounded text-[9px] font-bold bg-[#dff2e9] text-[#146946] whitespace-nowrap">
                                   CONSOLIDADO (v{r.rawConsolidation?.version || 1})
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#f0f4f7] text-[#6b808d] mt-0.5 whitespace-nowrap">
+                                <span className="inline-flex items-center px-1 py-0.2 rounded text-[9px] font-medium bg-[#f0f4f7] text-[#6b808d] mt-0.5 whitespace-nowrap">
                                   Individual
                                 </span>
                               )}
@@ -558,24 +558,24 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                           </div>
                         </td>
 
-                        <td className="py-2.5 px-2.5 align-top">
-                          <strong className="block text-[#182f3c] font-semibold">
+                        <td className="py-1.5 px-2 align-top">
+                          <strong className="block text-[#182f3c] font-semibold text-[11px] leading-tight">
                             {r.recipientName}
                           </strong>
-                          <span className="text-[11px] text-[#718795] block whitespace-nowrap">
+                          <span className="text-[10px] text-[#718795] block whitespace-nowrap mt-0.5">
                             {r.recipientDoc}
                           </span>
-                          <span className="text-[10px] text-[#8fa5b1] block">
+                          <span className="text-[9px] text-[#8fa5b1] block">
                             Zona: {r.zone}
                           </span>
                         </td>
 
-                        <td className="py-2.5 px-2.5 align-top">
-                          <div className="flex flex-wrap gap-1 max-w-[200px]">
+                        <td className="py-1.5 px-2 align-top">
+                          <div className="flex flex-wrap gap-0.5 max-w-[170px]">
                             {r.children.map((c, i) => (
                               <span
                                 key={i}
-                                className="font-mono text-[10px] bg-[#edf3f5] px-1.5 py-0.5 rounded text-[#182f3c] border border-[#dbe6ec] whitespace-nowrap"
+                                className="font-mono text-[9px] bg-[#edf3f5] px-1 py-0.2 rounded text-[#182f3c] border border-[#dbe6ec] whitespace-nowrap"
                               >
                                 {c.original_tracking_number || c.order_number || 'N/A'}
                               </span>
@@ -583,33 +583,33 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                           </div>
                         </td>
 
-                        <td className="py-2.5 px-2.5 align-top text-[#182f3c]">
-                          <span className="font-semibold">{r.children.length} pieza(s)</span>
-                          <span className="block text-[11px] text-[#718795] truncate max-w-[180px]" title={r.children.map(c => c.product_title).join(' | ')}>
+                        <td className="py-1.5 px-2 align-top text-[#182f3c]">
+                          <span className="font-semibold text-[11px]">{r.children.length} pieza(s)</span>
+                          <span className="block text-[10px] text-[#718795] truncate max-w-[140px]" title={r.children.map(c => c.product_title).join(' | ')}>
                             {r.children[0]?.product_title || 'Coleccionables'}
                           </span>
                         </td>
 
-                        <td className="py-2.5 px-2.5 align-top font-semibold text-[#182f3c] whitespace-nowrap font-mono">
+                        <td className="py-1.5 px-2 align-top font-semibold text-[#182f3c] whitespace-nowrap font-mono text-[11px]">
                           USD {r.fob.toFixed(2)}
                         </td>
 
-                        <td className="py-2.5 px-2.5 align-top whitespace-nowrap">
-                          <strong className="block text-[#182f3c] font-mono">
+                        <td className="py-1.5 px-2 align-top whitespace-nowrap">
+                          <strong className="block text-[#182f3c] font-mono text-[11px] leading-tight">
                             USD {r.totalLogistics.toFixed(2)}
                           </strong>
-                          <span className="text-[10px] text-[#718795] block font-mono">
-                            {r.weight.toFixed(2)} kg · LP USD {r.logisticPack.toFixed(2)}
+                          <span className="text-[9px] text-[#718795] block font-mono mt-0.5">
+                            {r.weight.toFixed(2)} kg · LP {r.logisticPack.toFixed(2)}
                           </span>
                         </td>
 
-                        <td className="py-2.5 px-2.5 align-top">
-                          <div className="flex flex-wrap gap-1">
+                        <td className="py-1.5 px-2 align-top">
+                          <div className="flex flex-wrap gap-0.5">
                             {r.children.map((c, i) => (
                               <button
                                 key={i}
                                 onClick={() => handleDownloadInvoice(c)}
-                                className="px-1.5 py-0.5 bg-white border border-[#cedbe1] hover:bg-[#edf6f8] text-[#146981] text-[10px] rounded font-medium cursor-pointer whitespace-nowrap"
+                                className="px-1 py-0.2 bg-white border border-[#cedbe1] hover:bg-[#edf6f8] text-[#146981] text-[9px] rounded font-medium cursor-pointer whitespace-nowrap"
                                 title="Descargar comprobante"
                               >
                                 ↓ Fact {i + 1}
@@ -618,38 +618,38 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                           </div>
                         </td>
 
-                        <td className="py-2.5 px-2.5 align-top">
+                        <td className="py-1.5 px-2 align-top">
                           <select
                             value={r.status}
                             disabled={updatingStatusId === r.id}
                             onChange={(e) => handleStateChange(r, e.target.value)}
-                            className="w-full px-2 py-1 text-[11px] bg-white border border-[#cedbe1] rounded text-[#182f3c] focus:outline-none focus:ring-1 focus:ring-[#146981] disabled:opacity-50"
+                            className="w-full px-1.5 py-0.5 text-[10px] bg-white border border-[#cedbe1] rounded text-[#182f3c] focus:outline-none focus:ring-1 focus:ring-[#146981] disabled:opacity-50"
                           >
-                            <option value="RECIBIDO_EN_DEPOSITO">Recibido en Miami</option>
-                            <option value="DISPONIBLE_PARA_CONSOLIDAR">Disp. p/ consolidar</option>
-                            <option value="CONFIRMED">Consolidado confirmado</option>
-                            <option value="DISPATCHED">En tránsito a Argentina</option>
-                            <option value="EN_TRANSITO">En tránsito a Argentina</option>
+                            <option value="RECIBIDO_EN_DEPOSITO">Recibido Miami</option>
+                            <option value="DISPONIBLE_PARA_CONSOLIDAR">Disp. consolidar</option>
+                            <option value="CONFIRMED">Confirmado</option>
+                            <option value="DISPATCHED">En tránsito AR</option>
+                            <option value="EN_TRANSITO">En tránsito AR</option>
                             <option value="DELIVERED">Entregado</option>
-                            <option value="CANCELLED">Cancelado / Anulado</option>
+                            <option value="CANCELLED">Cancelado</option>
                           </select>
                           {r.dispatchedAt && (
-                            <span className="text-[10px] text-[#146946] block mt-0.5 whitespace-nowrap font-mono">
-                              Despachado: {new Date(r.dispatchedAt).toLocaleDateString('es-AR')}
+                            <span className="text-[9px] text-[#146946] block mt-0.5 whitespace-nowrap font-mono">
+                              Desp: {new Date(r.dispatchedAt).toLocaleDateString('es-AR')}
                             </span>
                           )}
                         </td>
 
-                        <td className="py-2.5 px-2.5 align-top text-right whitespace-nowrap">
+                        <td className="py-1.5 px-2 align-top text-right whitespace-nowrap">
                           {r.isConsolidation && r.rawConsolidation && (
-                            <div className="flex items-center justify-end gap-1">
+                            <div className="flex items-center justify-end gap-0.5">
                               {!isLocked && !isCancelled && (
                                 <button
                                   onClick={() => openEditModal(r.rawConsolidation!)}
-                                  className="px-1.5 py-1 bg-white border border-[#cedbe1] hover:bg-[#edf6f8] text-[#146981] font-semibold text-[11px] rounded transition cursor-pointer"
+                                  className="px-1.5 py-0.5 bg-white border border-[#cedbe1] hover:bg-[#edf6f8] text-[#146981] font-semibold text-[10px] rounded transition cursor-pointer"
                                   title="Editar paquetes, pesos y zona"
                                 >
-                                  <Edit3 className="w-3 h-3 inline mr-0.5" />
+                                  <Edit3 className="w-2.5 h-2.5 inline mr-0.5" />
                                   Editar
                                 </button>
                               )}
@@ -657,7 +657,7 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                               {!isLocked && !isCancelled && (
                                 <button
                                   onClick={() => openUndoModal(r.rawConsolidation!)}
-                                  className="px-1.5 py-1 bg-white border border-red-200 hover:bg-red-50 text-red-600 font-semibold text-[11px] rounded transition cursor-pointer"
+                                  className="px-1.5 py-0.5 bg-white border border-red-200 hover:bg-red-50 text-red-600 font-semibold text-[10px] rounded transition cursor-pointer"
                                   title="Deshacer y liberar paquetes"
                                 >
                                   Deshacer
@@ -666,7 +666,7 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
 
                               <button
                                 onClick={() => openHistoryModal(r.rawConsolidation!)}
-                                className="px-1.5 py-1 bg-white border border-[#dce6eb] hover:bg-[#f0f4f7] text-[#617885] font-semibold text-[11px] rounded transition cursor-pointer"
+                                className="px-1.5 py-0.5 bg-white border border-[#dce6eb] hover:bg-[#f0f4f7] text-[#617885] font-semibold text-[10px] rounded transition cursor-pointer"
                                 title="Ver historial de cambios"
                               >
                                 Historial
@@ -676,49 +676,49 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                         </td>
                       </tr>
 
-                      {/* Expanded child detail */}
+                      {/* Expanded child detail — Compact */}
                       {isExpanded && (
                         <tr className="bg-[#f8fbfc] border-b border-[#edf1f4]">
-                          <td colSpan={9} className="p-4 pl-10">
-                            <div className="bg-white border border-[#dce6eb] rounded-lg p-3">
-                              <h4 className="text-[11px] font-bold text-[#182f3c] uppercase tracking-wider mb-2">
+                          <td colSpan={9} className="p-2.5 pl-6">
+                            <div className="bg-white border border-[#dce6eb] rounded-lg p-2.5">
+                              <h4 className="text-[10px] font-bold text-[#182f3c] uppercase tracking-wider mb-1.5">
                                 Detalle de Paquetes Integrantes ({r.children.length})
                               </h4>
-                              <table className="w-full text-[11px] text-left">
+                              <table className="w-full text-[10px] text-left">
                                 <thead>
                                   <tr className="border-b border-[#edf1f4] text-[#698190]">
-                                    <th className="py-1 px-2 font-semibold">Tracking Original</th>
-                                    <th className="py-1 px-2 font-semibold">Producto</th>
-                                    <th className="py-1 px-2 font-semibold">Peso Confirmado</th>
-                                    <th className="py-1 px-2 font-semibold">Valor FOB</th>
-                                    <th className="py-1 px-2 font-semibold">Estado</th>
-                                    <th className="py-1 px-2 font-semibold text-right">Comprobante</th>
+                                    <th className="py-1 px-1.5 font-semibold">Tracking Original</th>
+                                    <th className="py-1 px-1.5 font-semibold">Producto</th>
+                                    <th className="py-1 px-1.5 font-semibold">Peso Confirmado</th>
+                                    <th className="py-1 px-1.5 font-semibold">Valor FOB</th>
+                                    <th className="py-1 px-1.5 font-semibold">Estado</th>
+                                    <th className="py-1 px-1.5 font-semibold text-right">Comprobante</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-[#edf1f4]">
                                   {r.children.map((child) => (
                                     <tr key={child.id}>
-                                      <td className="py-1.5 px-2 font-mono font-medium text-[#182f3c]">
+                                      <td className="py-1 px-1.5 font-mono font-medium text-[#182f3c]">
                                         {child.original_tracking_number || child.order_number}
                                       </td>
-                                      <td className="py-1.5 px-2 text-[#182f3c]">
+                                      <td className="py-1 px-1.5 text-[#182f3c]">
                                         {child.product_title}
                                       </td>
-                                      <td className="py-1.5 px-2 text-[#617885]">
+                                      <td className="py-1 px-1.5 text-[#617885]">
                                         {(child.confirmed_weight_kg || child.estimated_weight_kg || 0.50).toFixed(2)} kg
                                       </td>
-                                      <td className="py-1.5 px-2 text-[#182f3c] font-medium">
+                                      <td className="py-1 px-1.5 text-[#182f3c] font-medium font-mono">
                                         USD {Number(child.fob_usd || 0).toFixed(2)}
                                       </td>
-                                      <td className="py-1.5 px-2">
-                                        <span className="px-1.5 py-0.2 rounded text-[10px] bg-[#edf3f5] text-[#146981] font-semibold">
+                                      <td className="py-1 px-1.5">
+                                        <span className="px-1 py-0.2 rounded text-[9px] bg-[#edf3f5] text-[#146981] font-semibold">
                                           {child.package_status}
                                         </span>
                                       </td>
-                                      <td className="py-1.5 px-2 text-right">
+                                      <td className="py-1 px-1.5 text-right">
                                         <button
                                           onClick={() => handleDownloadInvoice(child)}
-                                          className="text-[10px] text-[#146981] hover:underline font-semibold"
+                                          className="text-[9px] text-[#146981] hover:underline font-semibold"
                                         >
                                           Descargar
                                         </button>
@@ -740,17 +740,17 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
         </div>
       </div>
 
-      {/* Edit Consolidation Modal */}
+      {/* Edit Consolidation Modal — Compact */}
       {editingConsolidation && (
-        <div className="fixed inset-0 z-50 bg-[#123040]/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="max-w-2xl w-full bg-white border border-[#dce6eb] rounded-xl shadow-[0_8px_30px_rgba(18,48,64,0.15)] p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-[#edf1f4]">
+        <div className="fixed inset-0 z-50 bg-[#123040]/40 backdrop-blur-xs flex items-center justify-center p-3">
+          <div className="max-w-xl w-full bg-white border border-[#dce6eb] rounded-xl shadow-[0_8px_30px_rgba(18,48,64,0.15)] p-4 space-y-3 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-2.5 border-b border-[#edf1f4]">
               <div>
-                <h3 className="text-base font-bold text-[#182f3c] flex items-center gap-2">
-                  <Edit3 className="w-4 h-4 text-[#146981]" />
+                <h3 className="text-sm font-bold text-[#182f3c] flex items-center gap-1.5">
+                  <Edit3 className="w-3.5 h-3.5 text-[#146981]" />
                   Modificar Consolidado {editingConsolidation.consolidation_code}
                 </h3>
-                <span className="text-xs text-[#6b808d]">
+                <span className="text-[11px] text-[#6b808d]">
                   Comprador: <strong>{editingConsolidation.recipient_name}</strong> ({editingConsolidation.recipient_document})
                 </span>
               </div>
@@ -758,18 +758,18 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                 onClick={() => setEditingConsolidation(null)}
                 className="p-1 text-[#6b808d] hover:text-[#182f3c] cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {editError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+              <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs flex items-start gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 text-red-500 shrink-0 mt-0.5" />
                 <span>{editError}</span>
               </div>
             )}
 
-            <form onSubmit={handleSaveConsolidationEdit} className="space-y-4">
+            <form onSubmit={handleSaveConsolidationEdit} className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-[#182f3c] mb-1">
                   Zona de Destino (Logistic Pack)
@@ -777,7 +777,7 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                 <select
                   value={editZone}
                   onChange={(e) => setEditZone(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-white border border-[#cedbe1] rounded-lg text-[#182f3c]"
+                  className="w-full px-2.5 py-1.5 text-xs bg-white border border-[#cedbe1] rounded-lg text-[#182f3c]"
                 >
                   <option value="CABA">CABA (Logistic Pack USD 20.00)</option>
                   <option value="AMBA">AMBA (Logistic Pack USD 34.00)</option>
@@ -787,24 +787,24 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
 
               {/* Package selection and weight corrections */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center justify-between mb-1">
                   <label className="block text-xs font-semibold text-[#182f3c]">
                     Paquetes Integrantes & Pesos Confirmados (kg)
                   </label>
-                  <span className="text-[11px] text-[#6b808d]">
+                  <span className="text-[10px] text-[#6b808d]">
                     Tarifa: USD 19/kg exacto + LP
                   </span>
                 </div>
 
-                <div className="border border-[#edf1f4] rounded-lg divide-y divide-[#edf1f4] max-h-56 overflow-y-auto">
+                <div className="border border-[#edf1f4] rounded-lg divide-y divide-[#edf1f4] max-h-48 overflow-y-auto">
                   {/* Paquetes del comprador */}
                   {packages
                     .filter(p => p.user_id === editingConsolidation.user_id && (p.consolidation_id === editingConsolidation.id || p.is_available_for_consolidation))
                     .map(pkg => {
                       const isIncluded = editPackageIds.includes(pkg.id);
                       return (
-                        <div key={pkg.id} className="p-2.5 flex items-center justify-between gap-3 text-xs">
-                          <label className="flex items-center gap-2 cursor-pointer flex-1">
+                        <div key={pkg.id} className="p-2 flex items-center justify-between gap-2.5 text-xs">
+                          <label className="flex items-center gap-1.5 cursor-pointer flex-1 min-w-0">
                             <input
                               type="checkbox"
                               checked={isIncluded}
@@ -823,19 +823,19 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                               }}
                               className="rounded border-[#cedbe1] text-[#146981] focus:ring-[#146981]"
                             />
-                            <div>
-                              <strong className="block text-[#182f3c] font-mono text-[11px]">
+                            <div className="min-w-0 truncate">
+                              <strong className="block text-[#182f3c] font-mono text-[10px]">
                                 {pkg.original_tracking_number || pkg.order_number}
                               </strong>
-                              <span className="text-[11px] text-[#718795] block truncate max-w-[260px]">
+                              <span className="text-[10px] text-[#718795] block truncate max-w-[220px]">
                                 {pkg.product_title} · FOB USD {Number(pkg.fob_usd || 0).toFixed(2)}
                               </span>
                             </div>
                           </label>
 
                           {isIncluded && (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[11px] text-[#617885]">Peso kg:</span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <span className="text-[10px] text-[#617885]">Peso kg:</span>
                               <input
                                 type="number"
                                 step="0.01"
@@ -843,7 +843,7 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                                 max="50"
                                 value={editWeights[pkg.id] || ''}
                                 onChange={(e) => setEditWeights({ ...editWeights, [pkg.id]: e.target.value })}
-                                className="w-20 px-2 py-1 text-xs border border-[#cedbe1] rounded text-[#182f3c] text-right font-mono"
+                                className="w-16 px-1.5 py-0.5 text-xs border border-[#cedbe1] rounded text-[#182f3c] text-right font-mono"
                                 required
                               />
                             </div>
@@ -864,7 +864,7 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                   placeholder="Ej: Corrección de pesaje de báscula en Miami y agregado de paquete recibido hoy."
                   rows={2}
                   required
-                  className="w-full p-2.5 text-xs bg-white border border-[#cedbe1] rounded-lg text-[#182f3c] focus:outline-none focus:ring-2 focus:ring-[#146981]/20 focus:border-[#146981]"
+                  className="w-full p-2 text-xs bg-white border border-[#cedbe1] rounded-lg text-[#182f3c] focus:outline-none focus:ring-1 focus:ring-[#146981]"
                 />
               </div>
 
@@ -872,14 +872,14 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                 <button
                   type="button"
                   onClick={() => setEditingConsolidation(null)}
-                  className="px-4 py-2 bg-white border border-[#cedbe1] hover:bg-[#edf6f8] text-[#173846] text-xs font-semibold rounded-lg"
+                  className="px-3 py-1.5 bg-white border border-[#cedbe1] hover:bg-[#edf6f8] text-[#173846] text-xs font-semibold rounded-lg"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={editSubmitting}
-                  className="px-4 py-2 bg-[#146981] hover:bg-[#0e5266] text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+                  className="px-3 py-1.5 bg-[#146981] hover:bg-[#0e5266] text-white text-xs font-semibold rounded-lg shadow-xs flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {editSubmitting ? (
                     <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -894,34 +894,34 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
         </div>
       )}
 
-      {/* Undo Modal */}
+      {/* Undo Modal — Compact */}
       {undoConsolidation && (
-        <div className="fixed inset-0 z-50 bg-[#123040]/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-white border border-[#dce6eb] rounded-xl shadow-[0_8px_30px_rgba(18,48,64,0.15)] p-6 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#edf1f4]">
-              <h3 className="text-base font-bold text-[#182f3c] flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5 text-red-500" />
+        <div className="fixed inset-0 z-50 bg-[#123040]/40 backdrop-blur-xs flex items-center justify-center p-3">
+          <div className="max-w-md w-full bg-white border border-[#dce6eb] rounded-xl shadow-[0_8px_30px_rgba(18,48,64,0.15)] p-4 space-y-3">
+            <div className="flex items-center justify-between pb-2.5 border-b border-[#edf1f4]">
+              <h3 className="text-sm font-bold text-[#182f3c] flex items-center gap-1.5">
+                <AlertTriangle className="w-4 h-4 text-red-500" />
                 Deshacer Consolidado {undoConsolidation.consolidation_code}
               </h3>
               <button
                 onClick={() => setUndoConsolidation(null)}
                 className="p-1 text-[#6b808d] hover:text-[#182f3c] cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-xs text-[#617885]">
+            <p className="text-[11px] text-[#617885]">
               Al deshacer, los paquetes se liberan y vuelven a estar disponibles en Miami para consolidaciones futuras. Se registrará un asiento compensatorio inmutable en el historial contable.
             </p>
 
             {undoError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs">
+              <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs">
                 {undoError}
               </div>
             )}
 
-            <form onSubmit={handleConfirmUndo} className="space-y-4">
+            <form onSubmit={handleConfirmUndo} className="space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-[#182f3c] mb-1">
                   Motivo obligatorio de anulación <span className="text-red-500">*</span>
@@ -930,9 +930,9 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                   value={undoReason}
                   onChange={(e) => setUndoReason(e.target.value)}
                   placeholder="Ej: Solicitud expresa del cliente para esperar otra encomienda antes de despachar."
-                  rows={3}
+                  rows={2}
                   required
-                  className="w-full p-2.5 text-xs bg-white border border-[#cedbe1] rounded-lg text-[#182f3c] focus:outline-none focus:ring-2 focus:ring-[#146981]/20 focus:border-[#146981]"
+                  className="w-full p-2 text-xs bg-white border border-[#cedbe1] rounded-lg text-[#182f3c] focus:outline-none focus:ring-1 focus:ring-[#146981]"
                 />
               </div>
 
@@ -940,14 +940,14 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                 <button
                   type="button"
                   onClick={() => setUndoConsolidation(null)}
-                  className="px-4 py-2 bg-white border border-[#cedbe1] hover:bg-[#edf6f8] text-[#173846] text-xs font-semibold rounded-lg"
+                  className="px-3 py-1.5 bg-white border border-[#cedbe1] hover:bg-[#edf6f8] text-[#173846] text-xs font-semibold rounded-lg"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={undoSubmitting}
-                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg shadow-xs flex items-center gap-1.5 disabled:opacity-50"
                 >
                   {undoSubmitting ? (
                     <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -962,17 +962,17 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
         </div>
       )}
 
-      {/* History Modal */}
+      {/* History Modal — Compact */}
       {historyConsolidation && (
-        <div className="fixed inset-0 z-50 bg-[#123040]/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="max-w-2xl w-full bg-white border border-[#dce6eb] rounded-xl shadow-[0_8px_30px_rgba(18,48,64,0.15)] p-6 space-y-4 max-h-[85vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-[#edf1f4]">
+        <div className="fixed inset-0 z-50 bg-[#123040]/40 backdrop-blur-xs flex items-center justify-center p-3">
+          <div className="max-w-xl w-full bg-white border border-[#dce6eb] rounded-xl shadow-[0_8px_30px_rgba(18,48,64,0.15)] p-4 space-y-3 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-2.5 border-b border-[#edf1f4]">
               <div>
-                <h3 className="text-base font-bold text-[#182f3c] flex items-center gap-2">
-                  <RotateCcw className="w-4 h-4 text-[#146981]" />
+                <h3 className="text-sm font-bold text-[#182f3c] flex items-center gap-1.5">
+                  <RotateCcw className="w-3.5 h-3.5 text-[#146981]" />
                   Historial de Auditoría — {historyConsolidation.consolidation_code}
                 </h3>
-                <span className="text-xs text-[#6b808d]">
+                <span className="text-[11px] text-[#6b808d]">
                   Versión actual: v{historyConsolidation.version || 1}
                 </span>
               </div>
@@ -980,38 +980,38 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                 onClick={() => setHistoryConsolidation(null)}
                 className="p-1 text-[#6b808d] hover:text-[#182f3c] cursor-pointer"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {historyLoading ? (
-              <div className="py-8 text-center text-[#718895] text-xs">
+              <div className="py-6 text-center text-[#718895] text-xs">
                 Cargando historial de auditoría...
               </div>
             ) : historyItems.length === 0 ? (
-              <div className="py-8 text-center text-[#718895] text-xs">
+              <div className="py-6 text-center text-[#718895] text-xs">
                 No hay registros de cambios para esta consolidación.
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {historyItems.map((item) => (
-                  <div key={item.id} className="p-3 bg-[#f8fbfc] border border-[#e2edf1] rounded-lg text-xs space-y-1">
+                  <div key={item.id} className="p-2.5 bg-[#f8fbfc] border border-[#e2edf1] rounded-lg text-xs space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="font-bold text-[#146981] uppercase tracking-wide text-[10px]">
+                      <span className="font-bold text-[#146981] uppercase tracking-wide text-[9px]">
                         Acción: {item.action} (v{item.version_number})
                       </span>
-                      <span className="text-[10px] text-[#8fa5b1]">
+                      <span className="text-[9px] text-[#8fa5b1]">
                         {new Date(item.created_at).toLocaleString('es-AR')}
                       </span>
                     </div>
-                    <p className="text-[#182f3c] font-medium">
+                    <p className="text-[#182f3c] font-medium text-[11px]">
                       Motivo: {item.reason}
                     </p>
-                    <div className="text-[11px] text-[#718795] flex items-center justify-between pt-1">
+                    <div className="text-[10px] text-[#718795] flex items-center justify-between pt-0.5">
                       <span>Operador: {item.performer_email || 'Sistema'}</span>
                       {item.financial_delta_usd !== undefined && item.financial_delta_usd !== 0 && (
-                        <span className="font-semibold text-[#182f3c]">
-                          Delta logístico: USD {Number(item.financial_delta_usd).toFixed(2)}
+                        <span className="font-semibold text-[#182f3c] font-mono">
+                          Delta: USD {Number(item.financial_delta_usd).toFixed(2)}
                         </span>
                       )}
                     </div>
@@ -1023,7 +1023,7 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
             <div className="flex justify-end pt-2 border-t border-[#edf1f4]">
               <button
                 onClick={() => setHistoryConsolidation(null)}
-                className="px-4 py-2 bg-white border border-[#cedbe1] hover:bg-[#edf6f8] text-[#173846] text-xs font-semibold rounded-lg"
+                className="px-3 py-1.5 bg-white border border-[#cedbe1] hover:bg-[#edf6f8] text-[#173846] text-xs font-semibold rounded-lg"
               >
                 Cerrar
               </button>

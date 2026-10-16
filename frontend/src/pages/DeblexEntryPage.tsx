@@ -395,22 +395,22 @@ export default function DeblexEntryPage() {
         </div>
       )}
 
-      {/* Sidebar matching reference HTML */}
-      <aside className="w-full md:w-[230px] bg-[#123040] text-[#d7e8ef] p-6 flex flex-col justify-between shrink-0">
+      {/* Sidebar matching reference HTML — Compact ~190px */}
+      <aside className="w-full md:w-[190px] bg-[#123040] text-[#d7e8ef] p-4 flex flex-col justify-between shrink-0">
         <div>
-          <div className="border-b border-[#1f4559] pb-5">
-            <div className="text-xl font-extrabold text-white tracking-tight">
+          <div className="border-b border-[#1f4559] pb-3.5">
+            <div className="text-lg font-extrabold text-white tracking-tight">
               Envíos <span className="font-normal text-[#7bcede] italic">by Deblex</span>
             </div>
-            <div className="text-xs text-[#a5c0ce] mt-1 font-medium">
+            <div className="text-[11px] text-[#a5c0ce] mt-0.5 font-medium">
               Portal privado · {deblexRole === 'deblex_admin' ? 'Administrador' : 'Operador'}
             </div>
           </div>
 
-          <nav className="mt-6 flex flex-col gap-1.5">
+          <nav className="mt-4 flex flex-col gap-1">
             <button
               onClick={() => setActiveTab('shipments')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
+              className={`w-full text-left px-2.5 py-2 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
                 activeTab === 'shipments'
                   ? 'bg-[#2d5365] text-white shadow-sm font-bold'
                   : 'text-[#b7d0dc] hover:bg-[#1a3d50] hover:text-white'
@@ -424,7 +424,7 @@ export default function DeblexEntryPage() {
 
             <button
               onClick={() => setActiveTab('billing')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
+              className={`w-full text-left px-2.5 py-2 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
                 activeTab === 'billing'
                   ? 'bg-[#2d5365] text-white shadow-sm font-bold'
                   : 'text-[#b7d0dc] hover:bg-[#1a3d50] hover:text-white'
@@ -441,7 +441,7 @@ export default function DeblexEntryPage() {
             {deblexRole === 'deblex_admin' && (
               <button
                 onClick={() => setActiveTab('users')}
-                className={`w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
+                className={`w-full text-left px-2.5 py-2 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
                   activeTab === 'users'
                     ? 'bg-[#2d5365] text-white shadow-sm'
                     : 'text-[#b7d0dc] hover:bg-[#1a3d50] hover:text-white'
@@ -456,7 +456,7 @@ export default function DeblexEntryPage() {
 
             <button
               onClick={() => setActiveTab('profile')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
+              className={`w-full text-left px-2.5 py-2 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
                 activeTab === 'profile'
                   ? 'bg-[#2d5365] text-white shadow-sm font-bold'
                   : 'text-[#b7d0dc] hover:bg-[#1a3d50] hover:text-white'
@@ -468,79 +468,79 @@ export default function DeblexEntryPage() {
         </div>
 
         {/* User badge and logout in sidebar footer */}
-        <div className="mt-8 pt-5 border-t border-[#1f4559] flex items-center justify-between">
-          <div className="truncate pr-2">
-            <div className="text-xs font-semibold text-white truncate">{session.user?.email}</div>
-            <div className="text-[10px] text-[#7bcede] font-mono uppercase">
+        <div className="mt-6 pt-3.5 border-t border-[#1f4559] flex items-center justify-between">
+          <div className="truncate pr-1.5">
+            <div className="text-[11px] font-semibold text-white truncate">{session.user?.email}</div>
+            <div className="text-[9px] text-[#7bcede] font-mono uppercase">
               {deblexRole === 'deblex_admin' ? 'Admin Logístico' : 'Operador Miami'}
             </div>
           </div>
           <button
             onClick={handleSignOut}
             title="Cerrar Sesión"
-            className="p-2 rounded-lg bg-[#1a3d50] hover:bg-red-900/40 text-[#a5c0ce] hover:text-red-300 transition"
+            className="p-1.5 rounded-lg bg-[#1a3d50] hover:bg-red-900/40 text-[#a5c0ce] hover:text-red-300 transition shrink-0"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-3.5 h-3.5" />
           </button>
         </div>
       </aside>
 
       {/* Main Content Area — Full horizontal width without restrictive max-w */}
-      <main className="flex-1 p-5 md:p-8 w-full min-w-0 space-y-6">
+      <main className="flex-1 p-3.5 md:p-5 w-full min-w-0 space-y-4">
         {/* Top Header matching reference HTML */}
-        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#dce6eb]">
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-[#dce6eb]">
           <div>
-            <h1 className="text-2xl font-bold text-[#182f3c] tracking-tight">Gestión logística</h1>
-            <p className="text-xs text-[#6b808d] mt-0.5">
+            <h1 className="text-xl font-bold text-[#182f3c] tracking-tight">Gestión logística</h1>
+            <p className="text-[11px] text-[#6b808d] mt-0.5">
               Paquetes, consolidados cerrados por clientes, edición autorizada y cargos por envío
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="px-3 py-1.5 bg-white border border-[#d5e2e6] rounded-lg text-xs font-medium text-[#182f3c] shadow-sm flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <div className="flex items-center gap-2">
+            <div className="px-2.5 py-1 bg-white border border-[#d5e2e6] rounded-md text-[11px] font-medium text-[#182f3c] shadow-xs flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span>Acceso privado · Staging Online</span>
             </div>
             <button
               onClick={() => loadDeblexData()}
               disabled={loadingData}
               title="Recargar datos"
-              className="p-2 bg-white hover:bg-[#edf6f8] border border-[#cedbe1] rounded-lg text-[#173846] transition"
+              className="p-1.5 bg-white hover:bg-[#edf6f8] border border-[#cedbe1] rounded-md text-[#173846] transition"
             >
-              <RefreshCw className={`w-4 h-4 ${loadingData ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${loadingData ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </header>
 
-        {/* 4 KPI Metric Tiles matching reference HTML */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="bg-white border border-[#dce6eb] rounded-xl p-4 shadow-sm">
-            <span className="text-xs text-[#6b808d] font-medium">Unidades logísticas</span>
-            <b className="block text-2xl font-extrabold text-[#182f3c] my-1">{metrics.totalUnits}</b>
-            <span className="text-[11px] text-[#718795]">Individuales + consolidados</span>
+        {/* 4 KPI Metric Tiles — Compact height */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+          <div className="bg-white border border-[#dce6eb] rounded-lg p-3 shadow-xs">
+            <span className="text-[11px] text-[#6b808d] font-medium">Unidades logísticas</span>
+            <b className="block text-xl font-extrabold text-[#182f3c] my-0.5">{metrics.totalUnits}</b>
+            <span className="text-[10px] text-[#718795]">Individuales + consolidados</span>
           </div>
 
-          <div className="bg-white border border-[#dce6eb] rounded-xl p-4 shadow-sm">
-            <span className="text-xs text-[#6b808d] font-medium">En tránsito a Miami</span>
-            <b className="block text-2xl font-extrabold text-[#182f3c] my-1">{metrics.inTransitMiami}</b>
-            <span className="text-[11px] text-[#718795]">Vuelo / Courier internacional</span>
+          <div className="bg-white border border-[#dce6eb] rounded-lg p-3 shadow-xs">
+            <span className="text-[11px] text-[#6b808d] font-medium">En tránsito a Miami</span>
+            <b className="block text-xl font-extrabold text-[#182f3c] my-0.5">{metrics.inTransitMiami}</b>
+            <span className="text-[10px] text-[#718795]">Vuelo / Courier internacional</span>
           </div>
 
-          <div className="bg-white border border-[#dce6eb] rounded-xl p-4 shadow-sm">
-            <span className="text-xs text-[#6b808d] font-medium">Recibidos en Miami</span>
-            <b className="block text-2xl font-extrabold text-[#182f3c] my-1">{metrics.receivedMiami}</b>
-            <span className="text-[11px] text-[#718795]">En depósito Deblex</span>
+          <div className="bg-white border border-[#dce6eb] rounded-lg p-3 shadow-xs">
+            <span className="text-[11px] text-[#6b808d] font-medium">Recibidos en Miami</span>
+            <b className="block text-xl font-extrabold text-[#182f3c] my-0.5">{metrics.receivedMiami}</b>
+            <span className="text-[10px] text-[#718795]">En depósito Deblex</span>
           </div>
 
-          <div className="bg-white border border-[#dce6eb] rounded-xl p-4 shadow-sm">
-            <span className="text-xs text-[#6b808d] font-medium">Consolidados oficiales</span>
-            <b className="block text-2xl font-extrabold text-[#146981] my-1">{metrics.closedConsolidations}</b>
-            <span className="text-[11px] text-[#718795]">Consolidados vigentes en operación</span>
+          <div className="bg-white border border-[#dce6eb] rounded-lg p-3 shadow-xs">
+            <span className="text-[11px] text-[#6b808d] font-medium">Consolidados oficiales</span>
+            <b className="block text-xl font-extrabold text-[#146981] my-0.5">{metrics.closedConsolidations}</b>
+            <span className="text-[10px] text-[#718795]">Consolidados vigentes en operación</span>
           </div>
         </div>
 
-        {/* Banner informativo de consolidación */}
-        <div className="bg-[#e8f4f7] border border-[#cde5ed] rounded-xl p-3.5 text-xs text-[#2b6375] flex items-start gap-3">
-          <span className="text-base leading-none">ℹ️</span>
+        {/* Banner informativo de consolidación — Compact */}
+        <div className="bg-[#e8f4f7] border border-[#cde5ed] rounded-lg p-2.5 text-[11px] text-[#2b6375] flex items-start gap-2.5">
+          <span className="text-sm leading-none">ℹ️</span>
           <div>
             <b>Consolidados de compradores y edición autorizada:</b> El cliente agrupa y confirma sus pedidos desde su cuenta en Collectibles generando un código oficial único. Los operadores y administradores de Deblex pueden gestionar despachos, ajustar pesos confirmados y editar integrantes cuando sea necesario con auditoría completa.
           </div>
@@ -559,17 +559,17 @@ export default function DeblexEntryPage() {
 
         {/* Tab 2: Facturación Logística matching reference HTML */}
         {activeTab === 'billing' && (
-          <div className="bg-white border border-[#dce6eb] rounded-xl shadow-sm overflow-hidden">
-            <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#edf1f4]">
+          <div className="bg-white border border-[#dce6eb] rounded-xl shadow-xs overflow-hidden">
+            <div className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#edf1f4]">
               <div>
-                <h2 className="text-base font-bold text-[#182f3c]">Facturación de envíos</h2>
-                <p className="text-xs text-[#6b808d] mt-0.5">
+                <h2 className="text-sm font-bold text-[#182f3c]">Facturación de envíos</h2>
+                <p className="text-[11px] text-[#6b808d] mt-0.5">
                   Costos generados por período · USD 19/kg + Logistic Pack por despacho
                 </p>
               </div>
               <button
                 onClick={handleExportBillingCsv}
-                className="px-3.5 py-2 bg-white hover:bg-[#edf6f8] border border-[#cedbe1] rounded-lg text-xs font-semibold text-[#173846] transition flex items-center gap-1.5 self-start sm:self-auto"
+                className="px-3 py-1.5 bg-white hover:bg-[#edf6f8] border border-[#cedbe1] rounded-lg text-xs font-semibold text-[#173846] transition flex items-center gap-1.5 self-start sm:self-auto"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>↓ Exportar resumen CSV</span>
@@ -577,15 +577,15 @@ export default function DeblexEntryPage() {
             </div>
 
             {/* Range filters */}
-            <div className="p-5 pb-3 border-b border-[#edf1f4] flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-1.5 bg-[#f3f6f8] p-1 rounded-lg border border-[#dce6eb]">
+            <div className="p-3 pb-2.5 border-b border-[#edf1f4] flex flex-wrap items-center gap-2.5">
+              <div className="flex items-center gap-1 bg-[#f3f6f8] p-1 rounded-lg border border-[#dce6eb]">
                 {(['day', 'week', 'month', 'year', 'custom'] as const).map(p => (
                   <button
                     key={p}
                     onClick={() => setBillingPeriod(p)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+                    className={`px-2.5 py-1 rounded text-xs font-medium transition ${
                       billingPeriod === p
-                        ? 'bg-[#146981] text-white shadow-sm font-semibold'
+                        ? 'bg-[#146981] text-white shadow-xs font-semibold'
                         : 'text-[#6b808d] hover:text-[#182f3c]'
                     }`}
                   >
@@ -602,7 +602,7 @@ export default function DeblexEntryPage() {
                       type="date"
                       value={customFrom}
                       onChange={e => setCustomFrom(e.target.value)}
-                      className="border border-[#cddbe1] rounded-lg px-2.5 py-1 text-xs text-[#173846]"
+                      className="border border-[#cddbe1] rounded-lg px-2 py-1 text-xs text-[#173846]"
                     />
                   </label>
                   <label className="flex items-center gap-1.5">
@@ -611,7 +611,7 @@ export default function DeblexEntryPage() {
                       type="date"
                       value={customTo}
                       onChange={e => setCustomTo(e.target.value)}
-                      className="border border-[#cddbe1] rounded-lg px-2.5 py-1 text-xs text-[#173846]"
+                      className="border border-[#cddbe1] rounded-lg px-2 py-1 text-xs text-[#173846]"
                     />
                   </label>
                 </div>
@@ -619,28 +619,28 @@ export default function DeblexEntryPage() {
             </div>
 
             {/* Summary metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-5 bg-[#fafcfd] border-b border-[#edf1f4]">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3.5 bg-[#fafcfd] border-b border-[#edf1f4]">
               <div>
-                <small className="block text-[11px] text-[#718694] font-medium">Importe logístico generado (USD)</small>
-                <strong className="block text-2xl font-black text-[#146981] mt-1">
+                <small className="block text-[10px] text-[#718694] font-medium">Importe logístico generado (USD)</small>
+                <strong className="block text-xl font-black text-[#146981] mt-0.5">
                   USD {billingTotals.totalUsd.toFixed(2)}
                 </strong>
               </div>
               <div>
-                <small className="block text-[11px] text-[#718694] font-medium">Envíos facturables</small>
-                <strong className="block text-2xl font-black text-[#182f3c] mt-1">
+                <small className="block text-[10px] text-[#718694] font-medium">Envíos facturables</small>
+                <strong className="block text-xl font-black text-[#182f3c] mt-0.5">
                   {billingTotals.count}
                 </strong>
               </div>
               <div>
-                <small className="block text-[11px] text-[#718694] font-medium">Desglose flete / Logistic Pack</small>
-                <strong className="block text-base font-bold text-[#182f3c] mt-2">
+                <small className="block text-[10px] text-[#718694] font-medium">Desglose flete / Logistic Pack</small>
+                <strong className="block text-sm font-bold text-[#182f3c] mt-1">
                   USD {billingTotals.freightUsd.toFixed(2)} / USD {billingTotals.lpUsd.toFixed(2)}
                 </strong>
               </div>
             </div>
 
-            <div className="px-5 py-2.5 bg-white border-b border-[#edf1f4] text-xs text-[#758996]">
+            <div className="px-3.5 py-2 bg-white border-b border-[#edf1f4] text-[11px] text-[#758996]">
               Período: <b>{billingRange.label}</b> · Cargos computados al marcar «En tránsito a Argentina» (DISPATCHED)
             </div>
 
@@ -649,40 +649,40 @@ export default function DeblexEntryPage() {
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-[#f5f8fa] text-[#698190] border-b border-[#edf1f4]">
-                    <th className="py-3 px-4 font-semibold">Fecha despacho</th>
-                    <th className="py-3 px-4 font-semibold">ID / Código</th>
-                    <th className="py-3 px-4 font-semibold">Destinatario</th>
-                    <th className="py-3 px-4 font-semibold">Tipo</th>
-                    <th className="py-3 px-4 font-semibold">Peso kg</th>
-                    <th className="py-3 px-4 font-semibold">Flete USD</th>
-                    <th className="py-3 px-4 font-semibold">LP USD</th>
-                    <th className="py-3 px-4 font-semibold">Total USD</th>
+                    <th className="py-2.5 px-3 font-semibold text-[11px]">Fecha despacho</th>
+                    <th className="py-2.5 px-3 font-semibold text-[11px]">ID / Código</th>
+                    <th className="py-2.5 px-3 font-semibold text-[11px]">Destinatario</th>
+                    <th className="py-2.5 px-3 font-semibold text-[11px]">Tipo</th>
+                    <th className="py-2.5 px-3 font-semibold text-[11px]">Peso kg</th>
+                    <th className="py-2.5 px-3 font-semibold text-[11px]">Flete USD</th>
+                    <th className="py-2.5 px-3 font-semibold text-[11px]">LP USD</th>
+                    <th className="py-2.5 px-3 font-semibold text-[11px]">Total USD</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#edf1f4]">
                   {dispatchedItems.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-[#718895] text-xs">
+                      <td colSpan={8} className="py-8 text-center text-[#718895] text-xs">
                         No hay cargos logísticos generados en este período seleccionado.
                       </td>
                     </tr>
                   ) : (
                     dispatchedItems.map(item => (
                       <tr key={item.id} className="hover:bg-[#f8fbfc]">
-                        <td className="py-3 px-4 font-mono text-gray-600">{item.dispatchedAt}</td>
-                        <td className="py-3 px-4 font-mono font-bold text-[#146981]">{item.code}</td>
-                        <td className="py-3 px-4 font-medium text-[#182f3c]">{item.recipientName}</td>
-                        <td className="py-3 px-4">
-                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                        <td className="py-2.5 px-3 font-mono text-[11px] text-gray-600">{item.dispatchedAt}</td>
+                        <td className="py-2.5 px-3 font-mono font-bold text-[11px] text-[#146981]">{item.code}</td>
+                        <td className="py-2.5 px-3 font-medium text-[11px] text-[#182f3c]">{item.recipientName}</td>
+                        <td className="py-2.5 px-3">
+                          <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold ${
                             item.kind === 'Consolidado' ? 'bg-[#dff2e9] text-[#146946]' : 'bg-[#e7f3f7] text-[#125d77]'
                           }`}>
                             {item.kind}
                           </span>
                         </td>
-                        <td className="py-3 px-4 font-mono">{item.weight.toFixed(2)} kg</td>
-                        <td className="py-3 px-4 font-mono">USD {item.freightUsd.toFixed(2)}</td>
-                        <td className="py-3 px-4 font-mono">USD {item.lpUsd.toFixed(2)}</td>
-                        <td className="py-3 px-4 font-mono font-bold text-[#182f3c]">
+                        <td className="py-2.5 px-3 font-mono text-[11px]">{item.weight.toFixed(2)} kg</td>
+                        <td className="py-2.5 px-3 font-mono text-[11px]">USD {item.freightUsd.toFixed(2)}</td>
+                        <td className="py-2.5 px-3 font-mono text-[11px]">USD {item.lpUsd.toFixed(2)}</td>
+                        <td className="py-2.5 px-3 font-mono font-bold text-[11px] text-[#182f3c]">
                           USD {item.totalUsd.toFixed(2)}
                         </td>
                       </tr>
@@ -692,7 +692,7 @@ export default function DeblexEntryPage() {
               </table>
             </div>
 
-            <div className="p-4 bg-[#fafcfd] border-t border-[#e5edf0] text-xs text-[#617986]">
+            <div className="p-3 bg-[#fafcfd] border-t border-[#e5edf0] text-[11px] text-[#617986]">
               <b>Criterio operativo:</b> el cargo se contabiliza una sola vez cuando Deblex marca el envío «En tránsito a Argentina» (DISPATCHED), empleando la fecha de ese cambio y el peso facturable registrado. Los envíos en Miami no se consideran devengados.
             </div>
           </div>
@@ -709,29 +709,29 @@ export default function DeblexEntryPage() {
 
         {/* Tab 4: Mi Perfil & Contraseña */}
         {activeTab === 'profile' && (
-          <div className="max-w-md bg-white border border-[#dce6eb] rounded-2xl p-6 space-y-4 shadow-sm">
-            <div className="flex items-center gap-2 border-b border-[#edf1f4] pb-3">
-              <Key className="w-5 h-5 text-[#146981]" />
-              <h3 className="text-base font-bold text-[#182f3c]">Cambiar Contraseña</h3>
+          <div className="max-w-md bg-white border border-[#dce6eb] rounded-xl p-5 space-y-3.5 shadow-xs">
+            <div className="flex items-center gap-2 border-b border-[#edf1f4] pb-2.5">
+              <Key className="w-4 h-4 text-[#146981]" />
+              <h3 className="text-sm font-bold text-[#182f3c]">Cambiar Contraseña</h3>
             </div>
             <p className="text-xs text-[#6b808d]">
               Podés actualizar tu contraseña de acceso a Supabase Auth en cualquier momento.
             </p>
 
             {passwordSuccess && (
-              <div className="p-3 bg-[#dff2e9] border border-[#a3dcbe] text-[#146946] text-xs rounded-lg flex items-center gap-2 font-medium">
+              <div className="p-2.5 bg-[#dff2e9] border border-[#a3dcbe] text-[#146946] text-xs rounded-lg flex items-center gap-2 font-medium">
                 <CheckCircle className="w-4 h-4 text-[#146946]" />
                 <span>Contraseña actualizada exitosamente.</span>
               </div>
             )}
 
             {passwordError && (
-              <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg font-medium">
+              <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg font-medium">
                 {passwordError}
               </div>
             )}
 
-            <form onSubmit={handleChangePassword} className="space-y-4 text-xs">
+            <form onSubmit={handleChangePassword} className="space-y-3 text-xs">
               <div>
                 <label className="block text-[#617885] font-semibold mb-1">Nueva Contraseña</label>
                 <input
@@ -740,7 +740,7 @@ export default function DeblexEntryPage() {
                   onChange={e => setNewPassword(e.target.value)}
                   placeholder="Mínimo 8 caracteres"
                   required
-                  className="w-full bg-white border border-[#cddbe1] rounded-lg p-2.5 text-[#182f3c] focus:outline-none focus:border-[#146981]"
+                  className="w-full bg-white border border-[#cddbe1] rounded-lg p-2 text-xs text-[#182f3c] focus:outline-none focus:border-[#146981]"
                 />
               </div>
 
