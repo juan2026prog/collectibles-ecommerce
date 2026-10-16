@@ -138,6 +138,7 @@ export default function StorefrontLayout() {
   const { settings, loaded: settingsLoaded } = useSiteSettings();
   const { publicEnabled: intlPublicEnabled } = useInternationalSettings();
   const { isModuleVisible, canAccessCollectorPlugins, isPluginsAdminOnly } = useCollectorPermissions();
+  const isDedicatedPortal = ['/deblex', '/portal', '/account'].some(path => location.pathname.startsWith(path));
   // Meta Pixel is already tracked globally by MetaPixelTracker in App.tsx
 
   const getSocialUrl = (key: string, value: string) => {
@@ -1123,8 +1124,8 @@ export default function StorefrontLayout() {
       <WhatsAppFAB />
       <CookieConsent />
       <CartDrawer />
-      {isModuleVisible('compare') && <CompareTray />}
-      <CollectiblesAIAssistant />
+      {!isDedicatedPortal && isModuleVisible('compare') && <CompareTray />}
+      {!isDedicatedPortal && <CollectiblesAIAssistant />}
 
       <style dangerouslySetInnerHTML={{__html: `
         @keyframes marquee-header {

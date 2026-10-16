@@ -15,6 +15,13 @@ export async function sendMetaCapiEvent(
   customData: any = {},
   userData: any = {}
 ) {
+  // En staging/previews o cuando CAPI está desactivado, no emitir eventos publicitarios a Meta
+  const isCapiEnabled = import.meta.env.VITE_META_CAPI_ENABLED === 'true';
+  const isProduction = import.meta.env.PROD && !window.location.hostname.includes('vercel.app') && !window.location.hostname.includes('localhost');
+  if (!isCapiEnabled || !isProduction) {
+    return;
+  }
+
   try {
     const fbp = getCookie('_fbp');
     const fbc = getCookie('_fbc');

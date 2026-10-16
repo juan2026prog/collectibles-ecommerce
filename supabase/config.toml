@@ -113,3 +113,8 @@ verify_jwt = false
 [functions.smart-wishlist-cron]
 enabled = true
 verify_jwt = false
+
+[functions.deblex-manage-users]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/deblex-manage-users/index.ts"
