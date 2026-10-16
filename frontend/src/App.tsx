@@ -217,6 +217,11 @@ function App() {
                         <CustomerPortal />
                       </ProtectedRoute>
                     } />
+                    <Route path="/portal" element={
+                      <ProtectedRoute>
+                        <CustomerPortal />
+                      </ProtectedRoute>
+                    } />
                     <Route path="/wishlist" element={
                       <ProtectedRoute>
                         <Wishlist />

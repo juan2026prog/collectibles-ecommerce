@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 interface ProtectedRouteProps {
@@ -10,6 +10,7 @@ interface ProtectedRouteProps {
 
 export default function ProtectedRoute({ children, requireAdmin = false, requireVendor = false, requireSuperAdmin = false }: ProtectedRouteProps) {
   const { user, profile, loading, isSuperAdmin } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -23,7 +24,10 @@ export default function ProtectedRoute({ children, requireAdmin = false, require
     return <>{children}</>;
   }
 
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) {
+    const redirectPath = encodeURIComponent(`${location.pathname}${location.search}`);
+    return <Navigate to={`/login?redirect=${redirectPath}`} state={{ from: location }} replace />;
+  }
   if (requireAdmin && !profile?.is_admin) return <Navigate to="/" replace />;
   if (requireVendor && !profile?.is_vendor) return <Navigate to="/" replace />;
   if (requireSuperAdmin && !isSuperAdmin) return <Navigate to="/admin" replace />;

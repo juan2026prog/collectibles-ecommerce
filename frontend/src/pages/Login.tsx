@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -10,6 +10,8 @@ import { trackCompleteRegistration, generateMetaEventId } from '../lib/meta/meta
 export default function Login() {
   const { signIn, signUp, signInWithGoogle, signInWithOtp } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const redirectTarget = searchParams.get('redirect') ? decodeURIComponent(searchParams.get('redirect')!) : '/';
   const { settings, loaded: settingsLoaded } = useSiteSettings();
   const [isLogin, setIsLogin] = useState(true);
   const [isMagicLink, setIsMagicLink] = useState(false);
@@ -33,7 +35,7 @@ export default function Login() {
     } else if (isLogin) {
       const { error } = await signIn(email, password);
       if (error) setError(error.message);
-      else navigate('/');
+      else navigate(redirectTarget);
     } else {
       const { data, error } = await signUp(email, password);
       if (error) setError(error.message);

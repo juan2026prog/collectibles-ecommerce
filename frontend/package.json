@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run typecheck && vite build",
+    "build": "npm run validate-env && npm run typecheck && vite build",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -20,7 +20,8 @@
     "e2e:load": "playwright test tests/e2e/load.spec.ts",
     "e2e:basic": "playwright test tests/e2e/basic.spec.ts",
     "loadtest": "npx playwright test tests/e2e/load.spec.ts",
-    "test:all": "npm run test:integration && npm run e2e:basic"
+    "test:all": "npm run test:integration && npm run e2e:basic",
+    "validate-env": "node scripts/validate-env.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.1",
