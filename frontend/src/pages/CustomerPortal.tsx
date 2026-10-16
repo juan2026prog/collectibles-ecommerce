@@ -118,6 +118,12 @@ export default function CustomerPortal() {
   const [pwLoading, setPwLoading] = useState(false);
   const [pwMessage, setPwMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
 
+  // Argentina & Deblex state
+  const [argentinaPackages, setArgentinaPackages] = useState<any[]>([]);
+  const [argentinaShipments, setArgentinaShipments] = useState<any[]>([]);
+  const [argentinaZone, setArgentinaZone] = useState<'CABA' | 'AMBA' | 'INTERIOR'>('CABA');
+  const [loadingArgentina, setLoadingArgentina] = useState(false);
+
   const getTrackingMilestoneStep = (status: string) => {
     switch (status) {
       case 'pending_purchase':
@@ -323,10 +329,118 @@ export default function CustomerPortal() {
         console.error("Error loading international addresses in loadData:", err);
       }
 
+      // Load Argentina packages and shipments for authenticated user
+      await loadArgentinaData();
+
       setLoading(false);
     }
     loadData();
   }, [user]);
+
+  async function loadArgentinaData() {
+    if (!user) return;
+    setLoadingArgentina(true);
+    try {
+      // 1. Cargar perfil argentino para determinar la zona
+      const { data: arProfile } = await supabase
+        .from('customer_argentina_profiles')
+        .select('zone')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (arProfile?.zone) {
+        setArgentinaZone(arProfile.zone as any);
+      }
+
+      // 2. Cargar paquetes en suite central pertenecientes al usuario
+      const { data: pkgs, error: pkgsErr } = await supabase
+        .from('argentina_packages')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (!pkgsErr && pkgs) {
+        const formatted = pkgs.map(p => ({
+          id: p.id,
+          order_number: p.order_number || 'COL-AR-S/N',
+          product_title: p.product_title,
+          product_image: p.product_image,
+          original_tracking_number: p.original_tracking_number,
+          carrier: p.carrier,
+          fob_usd: Number(p.fob_usd || 0),
+          weight_kg: Number(p.confirmed_weight_kg || p.estimated_weight_kg || 0.5),
+          species_category: p.species_category,
+          units: p.units || 1,
+          package_status: p.package_status,
+          is_available_for_consolidation: !!p.is_available_for_consolidation,
+          logistics_paid_usd: Number(p.logistics_paid_usd || 0),
+        }));
+        setArgentinaPackages(formatted);
+      }
+
+      // 3. Cargar consolidaciones confirmadas del usuario (Mis Envíos)
+      const { data: consols, error: consolsErr } = await supabase
+        .from('argentina_consolidations')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (!consolsErr && consols) {
+        const formattedShipments = consols.map(c => ({
+          id: c.id,
+          tracking_number: c.consolidation_code,
+          carrier_guide: c.deblex_master_guide,
+          type: 'CONSOLIDATED' as const,
+          consolidation_code: c.consolidation_code,
+          package_count: c.package_count,
+          total_fob_usd: Number(c.total_fob_usd || 0),
+          total_weight_kg: Number(c.total_weight_kg || 0),
+          status: c.status === 'CONFIRMED' ? 'EN_TRANSITO' : c.status,
+          destination_city: arProfile?.zone || 'Argentina',
+          destination_province: 'Argentina',
+          created_at: c.created_at || c.confirmed_at,
+          dispatched_at: c.dispatched_at,
+          delivered_at: c.delivered_at,
+          history: [
+            {
+              date: new Date(c.created_at || c.confirmed_at).toLocaleString(),
+              status: 'CONSOLIDADO_CONFIRMADO',
+              description: `Consolidación cerrada exitosamente con ${c.package_count} paquetes y tarifa única aplicada.`
+            }
+          ]
+        }));
+        setArgentinaShipments(formattedShipments);
+      }
+    } catch (err) {
+      console.error("Error al cargar datos de Argentina/Deblex:", err);
+    } finally {
+      setLoadingArgentina(false);
+    }
+  }
+
+  async function handleConsolidatePackages(selectedIds: string[]) {
+    if (!user || selectedIds.length === 0) return;
+    const { data, error } = await supabase.rpc('close_consolidation_atomic', {
+      p_package_ids: selectedIds,
+      p_destination_zone: argentinaZone,
+      p_metadata: {
+        initiated_by_user_id: user.id,
+        user_agent: navigator.userAgent,
+      }
+    });
+
+    if (error) {
+      throw new Error(error.message || 'Error al ejecutar consolidación atómica');
+    }
+
+    if (data && !data.success) {
+      throw new Error(data.error || 'No se pudo consolidar los paquetes seleccionados');
+    }
+
+    // Refrescar datos y cambiar a la pestaña de envíos
+    await loadArgentinaData();
+    setActiveTab('argentina_shipments');
+  }
 
   const RESERVED_NICKNAMES = [
     'collectibles', 'admin', 'administrator', 'soporte', 'support', 
@@ -836,11 +950,9 @@ export default function CustomerPortal() {
           {activeTab === 'argentina_packages' && (
             <div className="space-y-6 max-w-5xl">
               <MyPackagesTab
-                packages={[]}
-                userZone="CABA"
-                onConsolidate={async (ids) => {
-                  console.log('Consolidando paquetes:', ids);
-                }}
+                packages={argentinaPackages}
+                userZone={argentinaZone}
+                onConsolidate={handleConsolidatePackages}
               />
             </div>
           )}
@@ -848,7 +960,7 @@ export default function CustomerPortal() {
           {/* ═══ TAB: Mis Envíos Argentina (Deblex) ═══ */}
           {activeTab === 'argentina_shipments' && (
             <div className="space-y-6 max-w-5xl">
-              <MyShipmentsTab shipments={[]} />
+              <MyShipmentsTab shipments={argentinaShipments} />
             </div>
           )}
 
