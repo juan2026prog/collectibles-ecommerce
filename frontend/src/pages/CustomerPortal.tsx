@@ -378,11 +378,12 @@ export default function CustomerPortal() {
         setArgentinaPackages(formatted);
       }
 
-      // 3. Cargar consolidaciones confirmadas del usuario (Mis Envíos)
+      // 3. Cargar consolidaciones confirmadas del usuario (Mis Envíos) excluyendo las anuladas
       const { data: consols, error: consolsErr } = await supabase
         .from('argentina_consolidations')
         .select('*')
         .eq('user_id', user.id)
+        .neq('status', 'CANCELLED')
         .order('created_at', { ascending: false });
 
       if (!consolsErr && consols) {

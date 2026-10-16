@@ -180,23 +180,24 @@ export default function DeblexEntryPage() {
 
   // Metrics computation for Header Tiles matching reference HTML
   const metrics = useMemo(() => {
-    const totalConsolidations = consolidations.length;
+    // Only active (non-cancelled) consolidations are considered operational units
+    const activeConsolidations = consolidations.filter(c => c.status !== 'CANCELLED');
     const standalonePackages = packages.filter(p => !p.consolidation_id);
-    const totalUnits = totalConsolidations + standalonePackages.length;
+    const totalUnits = activeConsolidations.length + standalonePackages.length;
 
     const inTransitMiamiCount = 
       packages.filter(p => !p.consolidation_id && (p.package_status === 'EN_TRANSITO_MIAMI' || !p.package_status)).length +
-      consolidations.filter(c => c.status === 'EN_TRANSITO_MIAMI').length;
+      activeConsolidations.filter(c => c.status === 'EN_TRANSITO_MIAMI').length;
 
     const receivedMiamiCount = 
       packages.filter(p => !p.consolidation_id && (p.package_status === 'RECIBIDO_EN_DEPOSITO' || p.package_status === 'DISPONIBLE_PARA_CONSOLIDAR')).length +
-      consolidations.filter(c => c.status === 'CONFIRMED' || c.status === 'RECIBIDO_EN_DEPOSITO').length;
+      activeConsolidations.filter(c => c.status === 'CONFIRMED' || c.status === 'RECIBIDO_EN_DEPOSITO').length;
 
     return {
       totalUnits,
       inTransitMiami: inTransitMiamiCount,
       receivedMiami: receivedMiamiCount,
-      closedConsolidations: totalConsolidations,
+      closedConsolidations: activeConsolidations.length,
     };
   }, [packages, consolidations]);
 
@@ -395,7 +396,7 @@ export default function DeblexEntryPage() {
       )}
 
       {/* Sidebar matching reference HTML */}
-      <aside className="w-full md:w-64 bg-[#123040] text-[#d7e8ef] p-6 flex flex-col justify-between shrink-0">
+      <aside className="w-full md:w-[230px] bg-[#123040] text-[#d7e8ef] p-6 flex flex-col justify-between shrink-0">
         <div>
           <div className="border-b border-[#1f4559] pb-5">
             <div className="text-xl font-extrabold text-white tracking-tight">
@@ -409,33 +410,27 @@ export default function DeblexEntryPage() {
           <nav className="mt-6 flex flex-col gap-1.5">
             <button
               onClick={() => setActiveTab('shipments')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-bold transition flex items-center justify-between ${
+              className={`w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
                 activeTab === 'shipments'
-                  ? 'bg-[#2d5365] text-white shadow-sm'
+                  ? 'bg-[#2d5365] text-white shadow-sm font-bold'
                   : 'text-[#b7d0dc] hover:bg-[#1a3d50] hover:text-white'
               }`}
             >
-              <div className="flex items-center gap-2.5">
-                <Package className="w-4 h-4" />
-                <span>📦 Envíos y Consolidados</span>
-              </div>
-              <span className="text-[10px] bg-[#1a3d50] px-1.5 py-0.5 rounded font-mono">
+              <span>Envíos y Consolidados</span>
+              <span className="text-[10px] bg-[#1a3d50] px-1.5 py-0.5 rounded font-mono text-[#7bcede]">
                 {metrics.totalUnits}
               </span>
             </button>
 
             <button
               onClick={() => setActiveTab('billing')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-bold transition flex items-center justify-between ${
+              className={`w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
                 activeTab === 'billing'
-                  ? 'bg-[#2d5365] text-white shadow-sm'
+                  ? 'bg-[#2d5365] text-white shadow-sm font-bold'
                   : 'text-[#b7d0dc] hover:bg-[#1a3d50] hover:text-white'
               }`}
             >
-              <div className="flex items-center gap-2.5">
-                <BarChart3 className="w-4 h-4" />
-                <span>📊 Facturación logística</span>
-              </div>
+              <span>Facturación logística</span>
               {dispatchedItems.length > 0 && (
                 <span className="text-[10px] bg-[#146981] text-white px-1.5 py-0.5 rounded font-mono">
                   {dispatchedItems.length}
@@ -446,17 +441,14 @@ export default function DeblexEntryPage() {
             {deblexRole === 'deblex_admin' && (
               <button
                 onClick={() => setActiveTab('users')}
-                className={`w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-bold transition flex items-center justify-between ${
+                className={`w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
                   activeTab === 'users'
                     ? 'bg-[#2d5365] text-white shadow-sm'
                     : 'text-[#b7d0dc] hover:bg-[#1a3d50] hover:text-white'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
-                  <Users className="w-4 h-4" />
-                  <span>👥 Gestión de Usuarios</span>
-                </div>
-                <span className="text-[10px] bg-[#1a3d50] px-1.5 py-0.5 rounded font-mono">
+                <span>Gestión de usuarios</span>
+                <span className="text-[10px] bg-[#1a3d50] px-1.5 py-0.5 rounded font-mono text-[#7bcede]">
                   {usersList.length}/8
                 </span>
               </button>
@@ -464,14 +456,13 @@ export default function DeblexEntryPage() {
 
             <button
               onClick={() => setActiveTab('profile')}
-              className={`w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-bold transition flex items-center gap-2.5 ${
+              className={`w-full text-left px-3.5 py-2.5 rounded-lg text-xs font-semibold transition flex items-center justify-between ${
                 activeTab === 'profile'
-                  ? 'bg-[#2d5365] text-white shadow-sm'
+                  ? 'bg-[#2d5365] text-white shadow-sm font-bold'
                   : 'text-[#b7d0dc] hover:bg-[#1a3d50] hover:text-white'
               }`}
             >
-              <Key className="w-4 h-4" />
-              <span>🔑 Mi Perfil y Contraseña</span>
+              <span>Mi Perfil y Contraseña</span>
             </button>
           </nav>
         </div>
@@ -494,8 +485,8 @@ export default function DeblexEntryPage() {
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 p-6 md:p-8 max-w-[1600px] w-full min-w-0 mx-auto space-y-6">
+      {/* Main Content Area — Full horizontal width without restrictive max-w */}
+      <main className="flex-1 p-5 md:p-8 w-full min-w-0 space-y-6">
         {/* Top Header matching reference HTML */}
         <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-[#dce6eb]">
           <div>
@@ -543,7 +534,7 @@ export default function DeblexEntryPage() {
           <div className="bg-white border border-[#dce6eb] rounded-xl p-4 shadow-sm">
             <span className="text-xs text-[#6b808d] font-medium">Consolidados oficiales</span>
             <b className="block text-2xl font-extrabold text-[#146981] my-1">{metrics.closedConsolidations}</b>
-            <span className="text-[11px] text-[#718795]">Formato CS#########AR</span>
+            <span className="text-[11px] text-[#718795]">Consolidados vigentes en operación</span>
           </div>
         </div>
 
