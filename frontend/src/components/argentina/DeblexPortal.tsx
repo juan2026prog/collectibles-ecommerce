@@ -493,19 +493,19 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
         </div>
 
         {/* Shipments Table — 100% width, flexible columns */}
-        <div className="mt-5 overflow-x-auto border border-[#edf1f4] rounded-lg w-full">
-          <table className="w-full text-xs text-left border-collapse min-w-[1050px]">
+        <div className="mt-5 overflow-x-auto border border-[#edf1f4] rounded-lg w-full bg-white">
+          <table className="w-full text-xs text-left border-collapse table-auto">
             <thead>
               <tr className="bg-[#f5f8fa] text-[#698190] border-b border-[#edf1f4]">
-                <th className="py-3 px-3.5 font-semibold whitespace-nowrap w-[180px]">ID / Tipo</th>
-                <th className="py-3 px-3.5 font-semibold whitespace-nowrap min-w-[150px]">Destinatario</th>
-                <th className="py-3 px-3.5 font-semibold whitespace-nowrap min-w-[170px]">Tracking Number(s)</th>
-                <th className="py-3 px-3.5 font-semibold whitespace-nowrap min-w-[160px]">Producto(s)</th>
-                <th className="py-3 px-3.5 font-semibold whitespace-nowrap w-[90px]">FOB Total</th>
-                <th className="py-3 px-3.5 font-semibold whitespace-nowrap min-w-[130px]">Logística</th>
-                <th className="py-3 px-3.5 font-semibold whitespace-nowrap min-w-[110px]">Facturas</th>
-                <th className="py-3 px-3.5 font-semibold whitespace-nowrap min-w-[150px]">Estado Logístico</th>
-                <th className="py-3 px-3.5 font-semibold text-right whitespace-nowrap w-[140px]">Acciones</th>
+                <th className="py-2.5 px-2.5 font-semibold whitespace-nowrap w-[150px]">ID / Tipo</th>
+                <th className="py-2.5 px-2.5 font-semibold whitespace-nowrap min-w-[130px]">Destinatario</th>
+                <th className="py-2.5 px-2.5 font-semibold whitespace-nowrap min-w-[140px]">Tracking Number(s)</th>
+                <th className="py-2.5 px-2.5 font-semibold whitespace-nowrap min-w-[130px]">Producto(s)</th>
+                <th className="py-2.5 px-2.5 font-semibold whitespace-nowrap w-[80px]">FOB Total</th>
+                <th className="py-2.5 px-2.5 font-semibold whitespace-nowrap min-w-[120px]">Logística</th>
+                <th className="py-2.5 px-2.5 font-semibold whitespace-nowrap min-w-[90px]">Facturas</th>
+                <th className="py-2.5 px-2.5 font-semibold whitespace-nowrap min-w-[140px]">Estado Logístico</th>
+                <th className="py-2.5 px-2.5 font-semibold text-right whitespace-nowrap w-[120px]">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#edf1f4]">
@@ -524,11 +524,11 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                   return (
                     <React.Fragment key={r.id}>
                       <tr className={`hover:bg-[#f8fbfc] transition ${isExpanded ? 'bg-[#f8fbfc]' : ''}`}>
-                        <td className="py-3 px-3.5 align-top">
-                          <div className="flex items-start gap-1.5">
+                        <td className="py-2.5 px-2.5 align-top">
+                          <div className="flex items-start gap-1">
                             <button
                               onClick={() => toggleExpand(r.id)}
-                              className="p-1 hover:bg-[#e2edf1] rounded text-[#6b808d] cursor-pointer mt-0.5 shrink-0"
+                              className="p-0.5 hover:bg-[#e2edf1] rounded text-[#6b808d] cursor-pointer mt-0.5 shrink-0"
                             >
                               {isExpanded ? (
                                 <ChevronDown className="w-3.5 h-3.5 text-[#146981]" />
@@ -546,11 +546,11 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                                 </span>
                               )}
                               {r.isConsolidation ? (
-                                <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#dff2e9] text-[#146946] whitespace-nowrap">
+                                <span className="inline-flex items-center gap-1 mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-[#dff2e9] text-[#146946] whitespace-nowrap">
                                   CONSOLIDADO (v{r.rawConsolidation?.version || 1})
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#f0f4f7] text-[#6b808d] mt-1 whitespace-nowrap">
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#f0f4f7] text-[#6b808d] mt-0.5 whitespace-nowrap">
                                   Individual
                                 </span>
                               )}
@@ -558,7 +558,7 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                           </div>
                         </td>
 
-                        <td className="py-3 px-3.5 align-top">
+                        <td className="py-2.5 px-2.5 align-top">
                           <strong className="block text-[#182f3c] font-semibold">
                             {r.recipientName}
                           </strong>
@@ -570,12 +570,12 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                           </span>
                         </td>
 
-                        <td className="py-3 px-3.5 align-top">
-                          <div className="flex flex-wrap gap-1 max-w-[260px]">
+                        <td className="py-2.5 px-2.5 align-top">
+                          <div className="flex flex-wrap gap-1 max-w-[200px]">
                             {r.children.map((c, i) => (
                               <span
                                 key={i}
-                                className="font-mono text-[11px] bg-[#edf3f5] px-1.5 py-0.5 rounded text-[#182f3c] border border-[#dbe6ec] whitespace-nowrap"
+                                className="font-mono text-[10px] bg-[#edf3f5] px-1.5 py-0.5 rounded text-[#182f3c] border border-[#dbe6ec] whitespace-nowrap"
                               >
                                 {c.original_tracking_number || c.order_number || 'N/A'}
                               </span>
@@ -583,27 +583,27 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                           </div>
                         </td>
 
-                        <td className="py-3 px-3.5 align-top text-[#182f3c]">
+                        <td className="py-2.5 px-2.5 align-top text-[#182f3c]">
                           <span className="font-semibold">{r.children.length} pieza(s)</span>
-                          <span className="block text-[11px] text-[#718795] truncate max-w-[220px]" title={r.children.map(c => c.product_title).join(' | ')}>
+                          <span className="block text-[11px] text-[#718795] truncate max-w-[180px]" title={r.children.map(c => c.product_title).join(' | ')}>
                             {r.children[0]?.product_title || 'Coleccionables'}
                           </span>
                         </td>
 
-                        <td className="py-3 px-3.5 align-top font-semibold text-[#182f3c] whitespace-nowrap font-mono">
+                        <td className="py-2.5 px-2.5 align-top font-semibold text-[#182f3c] whitespace-nowrap font-mono">
                           USD {r.fob.toFixed(2)}
                         </td>
 
-                        <td className="py-3 px-3.5 align-top whitespace-nowrap">
+                        <td className="py-2.5 px-2.5 align-top whitespace-nowrap">
                           <strong className="block text-[#182f3c] font-mono">
                             USD {r.totalLogistics.toFixed(2)}
                           </strong>
-                          <span className="text-[11px] text-[#718795] block font-mono">
+                          <span className="text-[10px] text-[#718795] block font-mono">
                             {r.weight.toFixed(2)} kg · LP USD {r.logisticPack.toFixed(2)}
                           </span>
                         </td>
 
-                        <td className="py-3 px-3.5 align-top">
+                        <td className="py-2.5 px-2.5 align-top">
                           <div className="flex flex-wrap gap-1">
                             {r.children.map((c, i) => (
                               <button
@@ -618,7 +618,7 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                           </div>
                         </td>
 
-                        <td className="py-3 px-3.5 align-top">
+                        <td className="py-2.5 px-2.5 align-top">
                           <select
                             value={r.status}
                             disabled={updatingStatusId === r.id}
@@ -640,16 +640,16 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                           )}
                         </td>
 
-                        <td className="py-3 px-3.5 align-top text-right whitespace-nowrap">
+                        <td className="py-2.5 px-2.5 align-top text-right whitespace-nowrap">
                           {r.isConsolidation && r.rawConsolidation && (
-                            <div className="flex items-center justify-end gap-1.5">
+                            <div className="flex items-center justify-end gap-1">
                               {!isLocked && !isCancelled && (
                                 <button
                                   onClick={() => openEditModal(r.rawConsolidation!)}
-                                  className="px-2 py-1 bg-white border border-[#cedbe1] hover:bg-[#edf6f8] text-[#146981] font-semibold text-[11px] rounded transition cursor-pointer"
+                                  className="px-1.5 py-1 bg-white border border-[#cedbe1] hover:bg-[#edf6f8] text-[#146981] font-semibold text-[11px] rounded transition cursor-pointer"
                                   title="Editar paquetes, pesos y zona"
                                 >
-                                  <Edit3 className="w-3 h-3 inline mr-1" />
+                                  <Edit3 className="w-3 h-3 inline mr-0.5" />
                                   Editar
                                 </button>
                               )}
@@ -657,7 +657,7 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
                               {!isLocked && !isCancelled && (
                                 <button
                                   onClick={() => openUndoModal(r.rawConsolidation!)}
-                                  className="px-2 py-1 bg-white border border-red-200 hover:bg-red-50 text-red-600 font-semibold text-[11px] rounded transition cursor-pointer"
+                                  className="px-1.5 py-1 bg-white border border-red-200 hover:bg-red-50 text-red-600 font-semibold text-[11px] rounded transition cursor-pointer"
                                   title="Deshacer y liberar paquetes"
                                 >
                                   Deshacer
@@ -666,7 +666,7 @@ export const DeblexPortal: React.FC<DeblexPortalProps> = ({
 
                               <button
                                 onClick={() => openHistoryModal(r.rawConsolidation!)}
-                                className="px-2 py-1 bg-white border border-[#dce6eb] hover:bg-[#f0f4f7] text-[#617885] font-semibold text-[11px] rounded transition cursor-pointer"
+                                className="px-1.5 py-1 bg-white border border-[#dce6eb] hover:bg-[#f0f4f7] text-[#617885] font-semibold text-[11px] rounded transition cursor-pointer"
                                 title="Ver historial de cambios"
                               >
                                 Historial

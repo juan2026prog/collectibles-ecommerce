@@ -255,8 +255,10 @@ function App() {
                     <Route path="/import-hub" element={<CollectorPluginGuard module="import_hub"><ImportHubPage /></CollectorPluginGuard>} />
                     <Route path="/importaciones" element={<Navigate to="/import-hub" replace />} />
                     <Route path="/franquicia" element={<Navigate to="/import-hub?tab=franchise" replace />} />
-                    <Route path="/deblex" element={<DeblexEntryPage />} />
                   </Route>
+
+                {/* Isolated Deblex Logistics Application without store header/footer */}
+                <Route path="/deblex" element={<DeblexEntryPage />} />
 
                 {/* Isolated Portals with Lateral Navigation */}
                 <Route path="/vendor" element={
