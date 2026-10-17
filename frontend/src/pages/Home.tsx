@@ -13,7 +13,7 @@ import { ResponsiveImage } from '../components/ResponsiveImage';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { useCollectorPermissions } from '../hooks/useCollectorPermissions';
 import HeroSlider from '../components/HeroSlider';
-import { resolveCartItemPrice } from '../lib/priceResolver';
+import { resolveProductPrice } from '../lib/priceResolver';
 import { trackClarityEvent } from '../lib/analyticsTracker';
 import SEO from '../components/SEO';
 import type { DynamicShelfConfig } from '../services/sourcing/personalizationEngine';
@@ -472,13 +472,17 @@ export default function Home() {
   function handleAddToCart(p: any) {
     const variant = p.variants?.[0];
     if (!variant) return;
-    const resolvedPrice = resolveCartItemPrice(p, variant);
+    const resolved = resolveProductPrice(p, variant);
+    const resolvedPrice = resolved.amount;
     cart.addItem({
       product_id: p.id,
       variant_id: variant.id,
       quantity: 1,
       title: p.title,
       price: resolvedPrice,
+      currency: resolved.currency,
+      is_international: resolved.isInternational,
+      base_price: resolved.basePrice,
       image: getProductImage(p),
       variant_name: variant.name,
       category_id: p.category_id,
