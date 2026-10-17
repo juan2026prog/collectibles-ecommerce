@@ -249,12 +249,18 @@ export function createCatalogRepository(client, now = Date.now) {
     try {
       let settingsQuery = client.rpc('get_international_public_status');
       if (typeof settingsQuery.abortSignal === 'function') settingsQuery = settingsQuery.abortSignal(signal);
-      let settings;
-      try { settings = await settingsQuery; }
-      catch (error) { throw catalogReadError('settings', 'international_status', error); }
-      const { data: status, error } = settings;
-      if (error) throw catalogReadError('settings', 'international_status', error);
-      const internationalEnabled = status?.international_public_enabled === true;
+      // International configuration must not take the Uruguay catalog offline.
+      // Fail closed for international visibility if the settings RPC is unavailable.
+      let internationalEnabled = false;
+      try {
+        const { data: status, error } = await settingsQuery;
+        if (error) throw error;
+        internationalEnabled = status?.international_public_enabled === true;
+      } catch (error) {
+        console.warn('[public-catalog] International status unavailable; serving local catalog only', {
+          ...catalogErrorMetadata(catalogReadError('settings', 'international_status', error)),
+        });
+      }
       const snapshotRows = (table, fields, configure, order = 'id') => readAll(table, fields, configure, order, signal, error => controller.abort(error));
       const [local, international, categories, brands, licenses, themes, licenseThemes, groups] = await Promise.all([
         snapshotRows('products', 'id,title,description,slug,base_price,created_at,status,is_active,brand_id,license_id,category_id,condition,vendor_id,vendor_store_id,badge,is_featured,product_categories(category_id),product_group_items(group_id)', q => q.eq('status','published').eq('is_active',true)),
