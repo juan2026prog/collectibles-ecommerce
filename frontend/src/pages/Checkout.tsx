@@ -132,12 +132,15 @@ export default function Checkout() {
   const { items, total, addItem, updateQuantity, removeItem } = useCartContext();
   const { settings, loaded: settingsLoaded } = useSiteSettings();
   const freeShippingThreshold = Number(settings['free_shipping_threshold'] || 4000);
-  const { formatCurrencyPrice, selectedCurrency, setSelectedCurrency, convertUSDToARS, convertARSToUSD, getFxRateUsdToArs } = useCurrency();
+  const { formatCurrencyPrice, formatProductPrice, selectedCurrency, setSelectedCurrency, convertUSDToARS, convertARSToUSD, getFxRateUsdToArs } = useCurrency();
   const { user } = useAuth();
   const [internationalShippingRate, setInternationalShippingRate] = useState<number>(0);
 
   // Inspección canónica de monedas en checkout
   const cartCurrencyInfo = useMemo(() => inspectCartCurrencies(items), [items]);
+  const formatCheckoutTotal = (amount: number) => cartCurrencyInfo.isMixed
+    ? 'Total sujeto a separación por moneda'
+    : formatProductPrice({ amount, sourceCurrency: cartCurrencyInfo.canonicalCurrency || 'UYU' });
 
   const [form, setForm] = useState({
     email: user?.email || '',
@@ -4373,7 +4376,7 @@ export default function Checkout() {
                 <div>
                   <h2 className="font-bold text-lg text-white">Resumen de orden</h2>
                   <p className="text-xs text-slate-400 lg:hidden mt-0.5">
-                    {items.length} {items.length === 1 ? 'producto' : 'productos'} · <span className="text-[#f00856] font-black">{formatCurrencyPrice(grandTotal)}</span>
+                    {items.length} {items.length === 1 ? 'producto' : 'productos'} · <span className="text-[#f00856] font-black">{formatCheckoutTotal(grandTotal)}</span>
                   </p>
                 </div>
                 <div className="lg:hidden flex items-center gap-1.5 text-xs font-bold text-[#f00856]">
@@ -4503,11 +4506,11 @@ export default function Checkout() {
                                   </div>
                                   <div className="flex flex-col items-end gap-0.5">
                                     <span className={`text-xs font-bold whitespace-nowrap ${(item.is_international || storeKey === 'international') ? 'text-sky-300' : 'text-white'}`}>
-                                      {(item.is_international || storeKey === 'international') ? formatUSD(displayPrice) : formatCurrencyPrice(displayPrice)}
+                                      {formatProductPrice({ amount: displayPrice, sourceCurrency: (item.currency === 'USD' || item.is_international) ? 'USD' : 'UYU' })}
                                     </span>
                                     {itemDiscount > 0 && (
                                       <span className="text-[10px] text-slate-500 line-through whitespace-nowrap">
-                                        {(item.is_international || storeKey === 'international') ? formatUSD(item.price * item.quantity) : formatCurrencyPrice(item.price * item.quantity)}
+                                        {formatProductPrice({ amount: item.price * item.quantity, sourceCurrency: (item.currency === 'USD' || item.is_international) ? 'USD' : 'UYU' })}
                                       </span>
                                     )}
                                   </div>
