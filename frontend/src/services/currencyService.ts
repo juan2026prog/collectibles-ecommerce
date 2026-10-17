@@ -49,6 +49,8 @@ export interface CountryCurrencyMeta {
 
 export interface FormatMoneyOptions {
   amountUsd: number;
+  /** Original currency of the supplied amount. Local catalog prices must pass UYU. */
+  sourceCurrency?: DisplayCurrency;
   displayCurrency?: DisplayCurrency;
   exchangeRate?: number | null;
   minimumFractionDigits?: number;
@@ -349,6 +351,7 @@ export function convertUsdToDisplayUyu(amountUsd: number, exchangeRate?: number 
 export function formatMoney(options: FormatMoneyOptions): string {
   const {
     amountUsd,
+    sourceCurrency = 'USD',
     displayCurrency = 'USD',
     exchangeRate,
     minimumFractionDigits,
@@ -358,6 +361,28 @@ export function formatMoney(options: FormatMoneyOptions): string {
   const safeUsd = Number(amountUsd);
   if (isNaN(safeUsd) || !isFinite(safeUsd)) {
     return 'US$ 0.00';
+  }
+
+  // Preserve original local prices; convert UYU via a verified USD/UYU rate.
+  if (sourceCurrency !== 'USD') {
+    if (sourceCurrency !== 'UYU') {
+      // Unsupported cross-currency conversion: never silently treat it as USD.
+      return `${safeUsd.toFixed(2)} ${sourceCurrency}`;
+    }
+    if (displayCurrency === 'UYU') {
+      const formatted = new Intl.NumberFormat('es-UY', {
+        minimumFractionDigits: minimumFractionDigits ?? 0,
+        maximumFractionDigits: maximumFractionDigits ?? 0
+      }).format(safeUsd);
+      return `$ ${formatted} UYU`;
+    }
+    const uyuPerUsd = getStoredExchangeRate('UYU').rate;
+    if (!Number.isFinite(uyuPerUsd) || uyuPerUsd <= 0) {
+      return formatMoney({ amountUsd: safeUsd, sourceCurrency: 'UYU', displayCurrency: 'UYU' });
+    }
+    const usdEquivalent = safeUsd / uyuPerUsd;
+    return formatMoney({ amountUsd: usdEquivalent, sourceCurrency: 'USD', displayCurrency,
+      exchangeRate, minimumFractionDigits, maximumFractionDigits });
   }
 
   if (displayCurrency === 'USD') {
