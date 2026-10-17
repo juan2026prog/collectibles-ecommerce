@@ -49,6 +49,8 @@ export interface CountryCurrencyMeta {
 
 export interface FormatMoneyOptions {
   amountUsd: number;
+  /** Original currency of the supplied amount. Local catalog prices must pass UYU. */
+  sourceCurrency?: DisplayCurrency;
   displayCurrency?: DisplayCurrency;
   exchangeRate?: number | null;
   minimumFractionDigits?: number;
@@ -349,6 +351,7 @@ export function convertUsdToDisplayUyu(amountUsd: number, exchangeRate?: number 
 export function formatMoney(options: FormatMoneyOptions): string {
   const {
     amountUsd,
+    sourceCurrency = 'USD',
     displayCurrency = 'USD',
     exchangeRate,
     minimumFractionDigits,
@@ -358,6 +361,72 @@ export function formatMoney(options: FormatMoneyOptions): string {
   const safeUsd = Number(amountUsd);
   if (isNaN(safeUsd) || !isFinite(safeUsd)) {
     return 'US$ 0.00';
+  }
+
+  // Local prices are already denominated in UYU. Never treat them as USD.
+  // Convert through USD only when the caller explicitly requests another currency.
+  if (sourceCurrency !== 'USD') {
+    if (sourceCurrency === displayCurrency) {
+      const digits = ['UYU', 'ARS', 'CLP'].includes(displayCurrency) ? 0 : 2;
+      const formatted = new Intl.NumberFormat(displayCurrency === 'USD' ? 'en-US' : 'es-UY', {
+        minimumFractionDigits: minimumFractionDigits ?? digits,
+        maximumFractionDigits: maximumFractionDigits ?? digits
+      }).format(safeUsd);
+      const symbol = COUNTRY_CURRENCY_CONFIG[displayCurrency]?.symbol ?? ' !== undefined ? minimumFractionDigits : 2;
+    const maxDec = maximumFractionDigits !== undefined ? maximumFractionDigits : 2;
+    const formattedUsd = new Intl.NumberFormat('en-US', {
+      minimumFractionDigits: minDec,
+      maximumFractionDigits: maxDec
+    }).format(safeUsd);
+    return `US$ ${formattedUsd}`;
+  }
+
+  const converted = convertUsdToDisplay(safeUsd, displayCurrency, exchangeRate);
+  if (converted === null) {
+    // Fail-closed fallback to USD if conversion unavailable
+    return formatMoney({ amountUsd: safeUsd, displayCurrency: 'USD' });
+  }
+
+  const meta = COUNTRY_CURRENCY_CONFIG[displayCurrency] || COUNTRY_CURRENCY_CONFIG.UYU;
+  
+  // Format depending on currency conventions
+  const isNoDecimalCurrency = ['UYU', 'CLP', 'ARS'].includes(displayCurrency);
+  const minDec = minimumFractionDigits !== undefined ? minimumFractionDigits : (isNoDecimalCurrency ? 0 : 2);
+  const maxDec = maximumFractionDigits !== undefined ? maximumFractionDigits : (isNoDecimalCurrency ? 0 : 2);
+
+  const locale = (displayCurrency === 'PEN' || displayCurrency === 'MXN') ? 'en-US' : 'es-UY';
+  const formatted = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: minDec,
+    maximumFractionDigits: maxDec
+  }).format(converted);
+
+  if (displayCurrency === 'PEN') {
+    return `S/ ${formatted}`;
+  }
+
+  return `${meta.symbol} ${formatted} ${displayCurrency}`;
+}
+
+export const CurrencyService = {
+  getStoredExchangeRate,
+  getAllStoredExchangeRates,
+  fetchLiveExchangeRate,
+  fetchLiveExchangeRates,
+  subscribeToCurrencyRates,
+  convertUsdToDisplay,
+  convertUsdToDisplayUyu,
+  formatMoney,
+  FALLBACK_USD_TO_UYU_RATE,
+  FALLBACK_RATES,
+  COUNTRY_CURRENCY_CONFIG
+};
+;
+      return displayCurrency === 'PEN' ? `S/ ${formatted}` : `${symbol} ${formatted} ${displayCurrency}`;
+    }
+    // Do not guess inverse/cross FX for local products. Display their original
+    // currency until an explicitly verified source-to-target rate is supplied.
+    return formatMoney({ amountUsd: safeUsd, sourceCurrency, displayCurrency: sourceCurrency,
+      minimumFractionDigits, maximumFractionDigits });
   }
 
   if (displayCurrency === 'USD') {
