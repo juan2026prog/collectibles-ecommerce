@@ -19,6 +19,13 @@ vi.mock('../../src/contexts/LocaleContext', () => ({
   useLocale: () => ({ language: 'es' }),
 }));
 
+vi.mock('../../src/contexts/CurrencyContext', () => ({
+  useCurrency: () => ({
+    formatProductPrice: ({ amount, sourceCurrency }: { amount: number; sourceCurrency?: string }) =>
+      `$ ${amount.toLocaleString('es-UY')} ${sourceCurrency || 'UYU'}`,
+  }),
+}));
+
 vi.mock('../../src/lib/analyticsTracker', () => ({
   trackGA4Event: vi.fn(),
   trackClarityEvent: vi.fn(),
@@ -86,7 +93,7 @@ describe('ProductGridCard CRO Mobile', () => {
         <ProductGridCard
           product={degradedProduct}
           onAddToCart={handleAdd}
-          formatPrice={(p) => `${p}`}
+          formatPrice={(p) => `$${p}`}
         />
       </MemoryRouter>
     );
