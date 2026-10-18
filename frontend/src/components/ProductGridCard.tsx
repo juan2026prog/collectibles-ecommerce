@@ -12,8 +12,8 @@ import { trackGA4Event, trackClarityEvent } from '../lib/analyticsTracker';
 import { getProductGroupBadge, getAllProductGroupBadges } from '../hooks/useData';
 import { useImageProtection } from '../hooks/useImageProtection';
 import { getConditionBadgeInfo } from '../config/conditionConfig';
-import { formatUSD } from '../lib/formatters';
-import { resolveProductPrice, formatProductMoney } from '../lib/priceResolver';
+import { resolveProductPrice } from '../lib/priceResolver';
+import { useCurrency } from '../contexts/CurrencyContext';
 
 interface ProductGridCardProps {
   product: any;
@@ -30,6 +30,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
   const { toggleWishlist, isInWishlist } = useWishlistContext();
   const { isAdminMode } = useAdminMode();
   const { language } = useLocale();
+  const { formatProductPrice } = useCurrency();
   const { getImageProps, handleDragStart } = useImageProtection({ isProduct: true });
   const [addState, setAddState] = useState<'idle' | 'loading' | 'added'>('idle');
 
@@ -269,11 +270,11 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
         <div className="mt-2.5 flex items-center justify-between gap-2">
           <div className="flex flex-wrap items-baseline gap-1.5">
             <span className={`font-black text-base md:text-lg leading-none ${isInternational ? 'text-sky-400' : 'text-[#f00856]'}`}>
-              {formatProductMoney({ amount: displayPrice, currency: productCurrency })}
+              {formatProductPrice({ amount: displayPrice, sourceCurrency: productCurrency })}
             </span>
             {hasDiscount && (
               <span className="text-[10px] text-slate-500 line-through leading-none">
-                {formatProductMoney({ amount: displayOldPrice, currency: productCurrency })}
+                {formatProductPrice({ amount: displayOldPrice, sourceCurrency: productCurrency })}
               </span>
             )}
           </div>
