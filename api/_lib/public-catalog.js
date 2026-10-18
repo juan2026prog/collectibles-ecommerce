@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { createPublicSupabase } from './public-supabase.js';
 
 export const normalize = (value = '') => String(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -187,10 +188,15 @@ export function selectCatalog(catalog, filters, collectionIds = null) {
 
 export function createCatalogRepository(client, now = Date.now) {
   let snapshot = null, loadedAt = 0, retryAt = 0, pending = null;
+  // Maximum staleness safety budget for catalog browsing fallback: 6 hours.
+  // Beyond 6 hours, refuse to serve outdated zombie catalogs and return 503 instead.
+  const MAX_FALLBACK_AGE_MS = 6 * 60 * 60 * 1000;
+  const DISK_SNAPSHOT_PATH = '/tmp/collectibles_catalog_snapshot.json';
+
   // Match the existing CDN freshness budget: 60s fresh + at most 120s grace.
   // A fallback never advances loadedAt, and cards are still hydrated afresh.
   const cached = stale => ({ catalog: snapshot, stale, age_ms: Math.max(0, now() - loadedAt) });
-  const usableFallback = () => snapshot && now() - loadedAt >= 0 && now() - loadedAt < 180000;
+  const usableFallback = () => Boolean(snapshot) && now() - loadedAt >= 0 && now() - loadedAt < MAX_FALLBACK_AGE_MS;
   let reading = 0;
   const queue = [];
   function pump() {
@@ -266,8 +272,12 @@ export function createCatalogRepository(client, now = Date.now) {
         snapshotRows('license_themes','license_id,theme_id',q=>q,'license_id,theme_id'),
         snapshotRows('product_groups','id,name,slug',q=>q.eq('is_active',true)),
       ]);
-      snapshot = prepareCatalog({ local, international, categories, brands, licenses, themes, licenseThemes, groups, internationalEnabled });
+      const raw = { local, international, categories, brands, licenses, themes, licenseThemes, groups, internationalEnabled };
+      snapshot = prepareCatalog(raw);
       loadedAt = now(); retryAt = 0;
+      try {
+        fs.promises.writeFile(DISK_SNAPSHOT_PATH, JSON.stringify({ raw, loadedAt })).catch(() => {});
+      } catch {}
       return snapshot;
     } catch (error) {
       // A failed snapshot is unusable. Cancel active siblings and queued pages
@@ -280,6 +290,20 @@ export function createCatalogRepository(client, now = Date.now) {
     client,
     readAll,
     async get() {
+      // Cold-start disk recovery: if RAM is empty, attempt to hydrate from verified /tmp disk snapshot
+      if (!snapshot) {
+        try {
+          if (fs.existsSync(DISK_SNAPSHOT_PATH)) {
+            const diskContent = fs.readFileSync(DISK_SNAPSHOT_PATH, 'utf8');
+            const saved = JSON.parse(diskContent);
+            if (saved?.raw && (now() - (saved.loadedAt || 0) < MAX_FALLBACK_AGE_MS)) {
+              snapshot = prepareCatalog(saved.raw);
+              loadedAt = saved.loadedAt;
+            }
+          }
+        } catch {}
+      }
+
       if (snapshot && now() - loadedAt >= 0 && now() - loadedAt < 60000) return cached(false);
       if (now() < retryAt) {
         if (usableFallback()) return cached(true);

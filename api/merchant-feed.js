@@ -1,9 +1,22 @@
-import { createClient } from '@supabase/supabase-js';
+import fs from 'node:fs';
+import { createPublicSupabase } from './_lib/public-supabase.js';
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+let cachedFeedXml = null;
+let cachedAt = 0;
+let feedPromise = null;
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes in-memory cache
+const DISK_FEED_PATH = '/tmp/collectibles_merchant_feed.xml';
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+export function resetMerchantFeedCache() {
+  cachedFeedXml = null;
+  cachedAt = 0;
+  feedPromise = null;
+  try {
+    if (fs.existsSync(DISK_FEED_PATH)) {
+      fs.unlinkSync(DISK_FEED_PATH);
+    }
+  } catch {}
+}
 
 function escapeXml(str) {
   if (!str) return '';
@@ -66,189 +79,246 @@ function resolveMerchantImageUrl(imgUrl) {
   return `https://cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/product-images/${trimmed}`;
 }
 
-export default async function handler(req, res) {
-  try {
-    const baseUrl = 'https://collectibles.uy';
-
-    // 1. Paginated fetch for ALL published active products
-    let allProducts = [];
-    let page = 0;
-    const pageSize = 1000;
-    let hasMore = true;
-
-    while (hasMore) {
-      const { data: batch, error } = await supabase
-        .from('products')
-        .select(`
-          id,
-          title,
-          slug,
-          description,
-          short_description,
-          base_price,
-          condition,
-          brand_id,
-          metadata
-        `)
-        .eq('is_active', true)
-        .eq('status', 'published')
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        console.error('Supabase query error in merchant-feed products:', error);
-        throw error;
-      }
-
-      if (batch && batch.length > 0) {
-        allProducts = allProducts.concat(batch);
-        if (batch.length < pageSize) {
-          hasMore = false;
-        } else {
-          page++;
-        }
-      } else {
+async function fetchAllPaged(queryBuilder, pageSize = 1000, maxTotal = 50000) {
+  let all = [];
+  let page = 0;
+  let hasMore = true;
+  while (hasMore && all.length < maxTotal) {
+    const { data: batch, error } = await queryBuilder(page * pageSize, (page + 1) * pageSize - 1);
+    if (error) throw error;
+    if (batch && batch.length > 0) {
+      all = all.concat(batch);
+      if (batch.length < pageSize) {
         hasMore = false;
+      } else {
+        page++;
       }
+    } else {
+      hasMore = false;
+    }
+  }
+  return all;
+}
+
+export async function generateMerchantFeedXml(supabase, baseUrl = 'https://collectibles.uy') {
+  // 1. Paginated fetch for ALL published active products
+  const allProducts = await fetchAllPaged((from, to) =>
+    supabase
+      .from('products')
+      .select(`
+        id,
+        title,
+        slug,
+        description,
+        short_description,
+        base_price,
+        condition,
+        brand_id,
+        metadata
+      `)
+      .eq('is_active', true)
+      .eq('status', 'published')
+      .range(from, to)
+  );
+
+  // 2. Paginated fetch for ALL product images
+  const allImages = await fetchAllPaged((from, to) =>
+    supabase
+      .from('product_images')
+      .select('product_id, url, is_primary')
+      .range(from, to)
+  );
+
+  // 3. Paginated fetch for ALL active brands
+  const allBrands = await fetchAllPaged((from, to) =>
+    supabase
+      .from('brands')
+      .select('id, name')
+      .eq('is_active', true)
+      .range(from, to)
+  );
+
+  const imageMap = {};
+  if (allImages) {
+    allImages.forEach(img => {
+      if (!imageMap[img.product_id] || img.is_primary) {
+        imageMap[img.product_id] = img.url;
+      }
+    });
+  }
+
+  const brandMap = {};
+  if (allBrands) {
+    allBrands.forEach(b => {
+      brandMap[b.id] = b.name;
+    });
+  }
+
+  let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+  xml += `<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">\n`;
+  xml += `  <channel>\n`;
+  xml += `    <title>Collectibles Uruguay - Google Merchant Feed</title>\n`;
+  xml += `    <link>${baseUrl}</link>\n`;
+  xml += `    <description>Feed dinámico oficial de productos de Collectibles Uruguay</description>\n`;
+
+  if (allProducts && allProducts.length > 0) {
+    allProducts.forEach(p => {
+      // STRICT MERCHANT ELIGIBILITY FILTERS
+      if (!p.slug || !p.title) return;
+
+      const priceNum = Number(p.base_price || 0);
+      if (isNaN(priceNum) || priceNum <= 0) return;
+
+      const rawImg = imageMap[p.id];
+      if (!rawImg) return;
+
+      const link = `${baseUrl}/producto/${p.slug}`;
+      const imageLink = resolveMerchantImageUrl(rawImg);
+      const rawDesc = p.description || p.short_description || p.title;
+      const description = cleanText(rawDesc);
+      const brandName = (p.brand_id && brandMap[p.brand_id]) ? brandMap[p.brand_id] : 'Collectibles';
+
+      let condition = 'new';
+      if (p.condition) {
+        const cLower = String(p.condition).toLowerCase();
+        if (cLower.includes('usad') || cLower.includes('used')) {
+          condition = 'used';
+        }
+      }
+
+      const priceFormatted = `${priceNum.toFixed(2)} UYU`;
+      const rawGtin = p.metadata?.gtin || p.metadata?.ean || p.gtin || p.ean;
+      const validGtin = validateGtin(rawGtin);
+      const mpn = p.metadata?.mpn || p.id;
+
+      xml += `    <item>\n`;
+      xml += `      <g:id>${escapeXml(p.id)}</g:id>\n`;
+      xml += `      <g:title>${escapeXml(p.title)}</g:title>\n`;
+      xml += `      <g:description>${escapeXml(description)}</g:description>\n`;
+      xml += `      <g:link>${escapeXml(link)}</g:link>\n`;
+      xml += `      <g:image_link>${escapeXml(imageLink)}</g:image_link>\n`;
+      xml += `      <g:availability>in_stock</g:availability>\n`;
+      xml += `      <g:price>${escapeXml(priceFormatted)}</g:price>\n`;
+      xml += `      <g:brand>${escapeXml(brandName)}</g:brand>\n`;
+      if (validGtin) {
+        xml += `      <g:gtin>${escapeXml(validGtin)}</g:gtin>\n`;
+      } else {
+        xml += `      <g:identifier_exists>no</g:identifier_exists>\n`;
+      }
+      xml += `      <g:mpn>${escapeXml(mpn)}</g:mpn>\n`;
+      xml += `      <g:condition>${escapeXml(condition)}</g:condition>\n`;
+      xml += `    </item>\n`;
+    });
+  }
+
+  xml += `  </channel>\n`;
+  xml += `</rss>`;
+
+  return xml;
+}
+
+export function createMerchantFeedHandler(clientFactory = createPublicSupabase) {
+  let client = null;
+  const getClient = () => {
+    if (!client) {
+      const env = {
+        VITE_SUPABASE_URL: process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co',
+        VITE_SUPABASE_ANON_KEY: process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY,
+      };
+      client = clientFactory(env);
+    }
+    return client;
+  };
+
+  return async function handler(req, res) {
+    const startedAt = Date.now();
+    const isHead = req.method === 'HEAD';
+
+    // Allow cache purging on demand (e.g. after catalog bulk update)
+    if (req.query?.purge === 'true' || req.headers?.['x-purge-feed'] === 'true') {
+      resetMerchantFeedCache();
     }
 
-    // 2. Paginated fetch for ALL product images
-    let allImages = [];
-    page = 0;
-    hasMore = true;
-
-    while (hasMore) {
-      const { data: batch, error } = await supabase
-        .from('product_images')
-        .select('product_id, url, is_primary')
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        console.error('Supabase query error in merchant-feed images:', error);
-        throw error;
-      }
-
-      if (batch && batch.length > 0) {
-        allImages = allImages.concat(batch);
-        if (batch.length < pageSize) {
-          hasMore = false;
-        } else {
-          page++;
-        }
-      } else {
-        hasMore = false;
-      }
+    // 1. In-memory cache hit
+    if (cachedFeedXml && (Date.now() - cachedAt < CACHE_TTL_MS)) {
+      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=14400');
+      res.setHeader('CDN-Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=14400');
+      res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=14400');
+      res.setHeader('X-Feed-Source', 'memory-cache');
+      res.setHeader('X-Feed-Age', String(Math.floor((Date.now() - cachedAt) / 1000)));
+      return res.status(200).send(isHead ? '' : cachedFeedXml);
     }
 
-    // 3. Paginated fetch for ALL active brands
-    let allBrands = [];
-    page = 0;
-    hasMore = true;
-
-    while (hasMore) {
-      const { data: batch, error } = await supabase
-        .from('brands')
-        .select('id, name')
-        .eq('is_active', true)
-        .range(page * pageSize, (page + 1) * pageSize - 1);
-
-      if (error) {
-        console.error('Supabase query error in merchant-feed brands:', error);
-        throw error;
-      }
-
-      if (batch && batch.length > 0) {
-        allBrands = allBrands.concat(batch);
-        if (batch.length < pageSize) {
-          hasMore = false;
-        } else {
-          page++;
-        }
-      } else {
-        hasMore = false;
-      }
-    }
-
-    const imageMap = {};
-    if (allImages) {
-      allImages.forEach(img => {
-        if (!imageMap[img.product_id] || img.is_primary) {
-          imageMap[img.product_id] = img.url;
-        }
+    // 2. In-flight promise deduplication
+    if (!feedPromise) {
+      feedPromise = (async () => {
+        const supabase = getClient();
+        return await generateMerchantFeedXml(supabase);
+      })().then(xml => {
+        cachedFeedXml = xml;
+        cachedAt = Date.now();
+        // Persist to disk for cold-start instance survival in the same microVM
+        try {
+          fs.promises.writeFile(DISK_FEED_PATH, xml, 'utf8').catch(() => {});
+        } catch {}
+        return xml;
+      }).finally(() => {
+        feedPromise = null;
       });
     }
 
-    const brandMap = {};
-    if (allBrands) {
-      allBrands.forEach(b => {
-        brandMap[b.id] = b.name;
-      });
-    }
+    try {
+      const xml = await feedPromise;
+      res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=1800, s-maxage=3600, stale-while-revalidate=14400');
+      res.setHeader('CDN-Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=14400');
+      res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=14400');
+      res.setHeader('X-Feed-Source', 'fresh');
+      res.setHeader('X-Feed-Generation-Time-Ms', String(Date.now() - startedAt));
+      return res.status(200).send(isHead ? '' : xml);
+    } catch (error) {
+      console.error('[merchant-feed] Generation failed, evaluating fallback:', error?.message || error);
 
-    let xml = `<?xml version="1.0" encoding="UTF-8"?>\n`;
-    xml += `<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">\n`;
-    xml += `  <channel>\n`;
-    xml += `    <title>Collectibles Uruguay - Google Merchant Feed</title>\n`;
-    xml += `    <link>${baseUrl}</link>\n`;
-    xml += `    <description>Feed dinámico oficial de productos de Collectibles Uruguay</description>\n`;
+      // Stale RAM cache fallback if previously generated in this container
+      if (cachedFeedXml) {
+        res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+        res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=600, stale-while-revalidate=1200');
+        res.setHeader('CDN-Cache-Control', 'public, s-maxage=600, stale-while-revalidate=1200');
+        res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=600, stale-while-revalidate=1200');
+        res.setHeader('X-Feed-Source', 'stale-cache-fallback');
+        res.setHeader('X-Feed-Age', String(Math.floor((Date.now() - cachedAt) / 1000)));
+        return res.status(200).send(isHead ? '' : cachedFeedXml);
+      }
 
-    if (allProducts && allProducts.length > 0) {
-      allProducts.forEach(p => {
-        // STRICT MERCHANT ELIGIBILITY FILTERS
-        if (!p.slug || !p.title) return;
-
-        const priceNum = Number(p.base_price || 0);
-        if (isNaN(priceNum) || priceNum <= 0) return;
-
-        const rawImg = imageMap[p.id];
-        if (!rawImg) return;
-
-        const link = `${baseUrl}/producto/${p.slug}`;
-        const imageLink = resolveMerchantImageUrl(rawImg);
-        const rawDesc = p.description || p.short_description || p.title;
-        const description = cleanText(rawDesc);
-        const brandName = (p.brand_id && brandMap[p.brand_id]) ? brandMap[p.brand_id] : 'Collectibles';
-        
-        let condition = 'new';
-        if (p.condition) {
-          const cLower = String(p.condition).toLowerCase();
-          if (cLower.includes('usad') || cLower.includes('used')) {
-            condition = 'used';
+      // Stale disk fallback if previously written to /tmp
+      try {
+        if (fs.existsSync(DISK_FEED_PATH)) {
+          const diskXml = fs.readFileSync(DISK_FEED_PATH, 'utf8');
+          if (diskXml && diskXml.includes('<rss')) {
+            cachedFeedXml = diskXml;
+            cachedAt = Date.now();
+            res.setHeader('Content-Type', 'application/xml; charset=utf-8');
+            res.setHeader('Cache-Control', 'public, max-age=300, s-maxage=600, stale-while-revalidate=1200');
+            res.setHeader('CDN-Cache-Control', 'public, s-maxage=600, stale-while-revalidate=1200');
+            res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=600, stale-while-revalidate=1200');
+            res.setHeader('X-Feed-Source', 'disk-cache-fallback');
+            return res.status(200).send(isHead ? '' : diskXml);
           }
         }
+      } catch {}
 
-        const priceFormatted = `${priceNum.toFixed(2)} UYU`;
-        const rawGtin = p.metadata?.gtin || p.metadata?.ean || p.gtin || p.ean;
-        const validGtin = validateGtin(rawGtin);
-        const mpn = p.metadata?.mpn || p.id;
-
-        xml += `    <item>\n`;
-        xml += `      <g:id>${escapeXml(p.id)}</g:id>\n`;
-        xml += `      <g:title>${escapeXml(p.title)}</g:title>\n`;
-        xml += `      <g:description>${escapeXml(description)}</g:description>\n`;
-        xml += `      <g:link>${escapeXml(link)}</g:link>\n`;
-        xml += `      <g:image_link>${escapeXml(imageLink)}</g:image_link>\n`;
-        xml += `      <g:availability>in_stock</g:availability>\n`;
-        xml += `      <g:price>${escapeXml(priceFormatted)}</g:price>\n`;
-        xml += `      <g:brand>${escapeXml(brandName)}</g:brand>\n`;
-        if (validGtin) {
-          xml += `      <g:gtin>${escapeXml(validGtin)}</g:gtin>\n`;
-        } else {
-          xml += `      <g:identifier_exists>no</g:identifier_exists>\n`;
-        }
-        xml += `      <g:mpn>${escapeXml(mpn)}</g:mpn>\n`;
-        xml += `      <g:condition>${escapeXml(condition)}</g:condition>\n`;
-        xml += `    </item>\n`;
-      });
+      // Cold-start failure with NO prior feed anywhere:
+      // Return HTTP 503 Service Unavailable so Google Merchant Center maintains
+      // the existing indexed product catalog instead of unindexing everything.
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.setHeader('CDN-Cache-Control', 'no-store');
+      res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
+      res.setHeader('Retry-After', '300');
+      return res.status(503).send('Merchant feed temporarily unavailable. Upstream database unreachable.');
     }
-
-    xml += `  </channel>\n`;
-    xml += `</rss>`;
-
-    res.setHeader('Content-Type', 'application/xml; charset=utf-8');
-    res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=43200');
-    res.status(200).send(xml);
-  } catch (error) {
-    console.error('Error generating merchant feed:', error);
-    res.status(500).json({ error: 'Error generating merchant feed' });
-  }
+  };
 }
+
+export default createMerchantFeedHandler();

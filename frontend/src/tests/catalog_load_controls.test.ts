@@ -110,7 +110,7 @@ describe('Snapshot cancellation and safe diagnostics', () => {
     await expect(repo.get()).resolves.toMatchObject({ stale: false });
     expect(dispatched.slice(3)).toHaveLength(7);
   });
-  it('cancels sibling card reads and records only controlled operational metadata', async () => {
+  it('cancels sibling card reads, logs safe telemetry, and degrades to fallback cards with 200 OK', async () => {
     const logger = vi.spyOn(console, 'error').mockImplementation(() => {});
     let cancelled = false;
     const catalog = prepareCatalog(fixture());
@@ -127,10 +127,79 @@ describe('Snapshot cancellation and safe diagnostics', () => {
     } };
     const response: any = { headers: {}, setHeader(k: string, v: string) { this.headers[k] = v; }, status(n: number) { this.statusCode = n; return this; }, json(body: any) { this.body = body; return this; } };
     await createCatalogHandler(() => ({ get: async () => ({ catalog }), client }))({ method: 'GET', query: { availability: 'all' } }, response);
-    expect(response.statusCode).toBe(503);
+    expect(response.statusCode).toBe(200);
     expect(cancelled).toBe(true);
-    expect(logger.mock.calls[0][1]).toMatchObject({ stage: 'cards', query_kind: 'products', class: 'QUERY_CANCELLED', code: '57014' });
+    expect(response.headers['X-Catalog-Degraded']).toBe('cards-fallback');
+    expect(response.body.products).toHaveLength(4);
+    expect(response.body.products[0]).toMatchObject({
+      is_degraded: true,
+      stock_verified: false,
+      base_price: 20,
+    });
+    expect(response.body.snapshot_meta).toMatchObject({
+      stale: false,
+      cards_degraded: true,
+      severity: 'fresh',
+    });
+    expect(logger.mock.calls[0][1]).toMatchObject({ stage: 'cards', query_kind: 'products', class: 'QUERY_CANCELLED', code: '57014', fallback_cards: true });
     expect(JSON.stringify(logger.mock.calls)).not.toContain('private SQL');
-    expect(response.headers['Vercel-CDN-Cache-Control']).toBe('no-store');
+    expect(response.headers['Vercel-CDN-Cache-Control']).toBe('public, s-maxage=30, stale-while-revalidate=60');
+  });
+
+  it('serves stale snapshot during extended outage (<6h), but rejects expired snapshot (>=6h) with 503', async () => {
+    let now = 1000;
+    let fail = false;
+    const client = {
+      rpc: async () => ({ data: { international_public_enabled: false }, error: null }),
+      from(table: string) {
+        const builder: any = { select: () => builder, eq: () => builder, order: () => builder,
+          range: () => builder,
+          then(resolve: any, reject: any) {
+            const promise = fail
+              ? Promise.resolve({ data: null, error: { code: '57014', message: 'timeout' } })
+              : Promise.resolve({ data: [], error: null });
+            return promise.then(resolve, reject);
+          } };
+        return builder;
+      },
+    };
+    const repo = createCatalogRepository(client, () => now);
+
+    // Initial successful load
+    const fresh = await repo.get();
+    expect(fresh.stale).toBe(false);
+
+    // 2 hours later, database experiences a severe outage (< 6h max budget)
+    now = 1000 + 7200 * 1000;
+    fail = true;
+
+    // Must return stale snapshot instead of throwing
+    const fallback = await repo.get();
+    expect(fallback.stale).toBe(true);
+    expect(fallback.catalog).toBe(fresh.catalog);
+    expect(fallback.age_ms).toBe(7200 * 1000);
+
+    // 7 hours later (> 6h MAX_FALLBACK_AGE_MS), refuse to serve zombie catalog
+    now = 1000 + 7 * 3600 * 1000;
+    await expect(repo.get()).rejects.toThrow(/Public catalog read unavailable|Catalog temporarily unavailable/);
+  });
+
+  it('recovers from /tmp disk snapshot on cold start when database is down, without inventing data', async () => {
+    const fs = await import('node:fs');
+    const diskPath = '/tmp/collectibles_catalog_snapshot.json';
+    const raw = fixture();
+    fs.writeFileSync(diskPath, JSON.stringify({ raw, loadedAt: 5000 }), 'utf8');
+
+    let now = 60000;
+    const failingClient = {
+      rpc: async () => { throw new Error('Database down'); },
+      from() { throw new Error('Database down'); },
+    };
+
+    const repo = createCatalogRepository(failingClient as any, () => now);
+    const recovered = await repo.get();
+    expect(recovered.stale).toBe(false);
+    expect(recovered.catalog.rows).toHaveLength(4);
+    expect(recovered.catalog.rows[0].title).toBe('First');
   });
 });

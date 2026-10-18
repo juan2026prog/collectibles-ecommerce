@@ -91,7 +91,7 @@
       ]
     },
     {
-      "source": "/((?!api|admin|vendor|artist|affiliate|star2fan|checkout|account|assets|images).*)",
+      "source": "/((?!api|admin|vendor|artist|affiliate|star2fan|checkout|account|assets|images|merchant-feed).*)",
       "headers": [
         {
           "key": "Cache-Control",
@@ -100,6 +100,40 @@
         {
           "key": "CDN-Cache-Control",
           "value": "public, s-maxage=3600, stale-while-revalidate=86400"
+        }
+      ]
+    },
+    {
+      "source": "/merchant-feed.xml",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=1800, s-maxage=3600, stale-while-revalidate=14400"
+        },
+        {
+          "key": "CDN-Cache-Control",
+          "value": "public, s-maxage=3600, stale-while-revalidate=14400"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "public, s-maxage=3600, stale-while-revalidate=14400"
+        }
+      ]
+    },
+    {
+      "source": "/api/merchant-feed",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=1800, s-maxage=3600, stale-while-revalidate=14400"
+        },
+        {
+          "key": "CDN-Cache-Control",
+          "value": "public, s-maxage=3600, stale-while-revalidate=14400"
+        },
+        {
+          "key": "Vercel-CDN-Cache-Control",
+          "value": "public, s-maxage=3600, stale-while-revalidate=14400"
         }
       ]
     }
