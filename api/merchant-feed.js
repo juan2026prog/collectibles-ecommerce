@@ -234,8 +234,12 @@ export function createMerchantFeedHandler(clientFactory = createPublicSupabase) 
     const startedAt = Date.now();
     const isHead = req.method === 'HEAD';
 
-    // Allow cache purging on demand (e.g. after catalog bulk update)
-    if (req.query?.purge === 'true' || req.headers?.['x-purge-feed'] === 'true') {
+    // Secure cache purging: strictly require authorization secret to prevent anonymous DoS hammering
+    const purgeSecret = process.env.CRON_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const providedSecret = req.headers?.['x-purge-secret'] || req.query?.secret || req.headers?.['authorization']?.replace(/^Bearer\s+/i, '');
+    const isAuthorizedPurge = Boolean(purgeSecret && providedSecret && providedSecret === purgeSecret);
+
+    if ((req.query?.purge === 'true' || req.headers?.['x-purge-feed'] === 'true') && isAuthorizedPurge) {
       resetMerchantFeedCache();
     }
 

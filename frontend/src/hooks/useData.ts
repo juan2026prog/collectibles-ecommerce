@@ -1159,6 +1159,11 @@ export function useCart() {
   }, [items]);
 
   const addItem = (item: CartItem) => {
+    if ((item as any).is_degraded || (item as any).stock_verified === false) {
+      console.warn('[Cart] Rejected degraded item awaiting stock verification:', item);
+      alert('La disponibilidad de este producto está en verificación. Por favor ingresá a la publicación para confirmar stock.');
+      return;
+    }
     const numericPrice = Number(item.price);
     if (isNaN(numericPrice) || item.price === null || item.price === undefined || numericPrice <= 0) {
       console.warn('[Cart] Rejected item with invalid price:', item);

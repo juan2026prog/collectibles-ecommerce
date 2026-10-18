@@ -55,10 +55,12 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
     });
   };
 
+  const isDegraded = Boolean(product?.is_degraded || product?.stock_verified === false);
+
   const handleAddCartAction = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (addState !== 'idle') return;
+    if (isDegraded || addState !== 'idle') return;
 
     setAddState('loading');
     trackClarityEvent('add_to_cart_click');
@@ -224,6 +226,12 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
           </div>
         )}
 
+        {isDegraded && (
+          <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[9px] text-amber-300 font-bold uppercase tracking-wider mb-1.5 shadow-sm">
+            <span>⚠️</span> DISPONIBILIDAD EN VERIFICACIÓN
+          </div>
+        )}
+
         {/* COMPACT VENDOR LINE */}
         <div className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mb-1 flex items-center flex-wrap gap-1 leading-tight">
           <span>
@@ -270,6 +278,16 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
             )}
           </div>
 
+          {isDegraded ? (
+            <Link
+              to={`/producto/${product.slug}`}
+              onClick={handleCardClick}
+              className="px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/50 hover:bg-amber-500/30 rounded transition-colors shrink-0 text-center"
+              title="Disponibilidad en verificación. Clic para consultar stock en tiempo real."
+            >
+              Verificar
+            </Link>
+          ) : (
           <button
             onClick={handleAddCartAction}
             disabled={addState !== 'idle'}
@@ -290,6 +308,7 @@ export function ProductGridCard({ product, onAddToCart, formatPrice, applicableP
               <Check className="w-5 h-5 text-white" />
             )}
           </button>
+          )}
         </div>
       </div>
     </article>

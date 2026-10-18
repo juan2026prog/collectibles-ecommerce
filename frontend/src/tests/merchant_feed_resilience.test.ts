@@ -294,33 +294,52 @@ describe('Merchant Feed Resilience and Circuit Breakers', () => {
     expect(res.body).toContain('Merchant feed temporarily unavailable');
   });
 
-  it('clears in-memory and disk cache when purge query parameter is passed', async () => {
-    const mockClient = {
-      from() {
-        const builder: any = {
-          select: () => builder,
-          eq: () => builder,
-          range: () => builder,
-          then(resolve: any) {
-            return resolve({
-              data: [{ id: 'p-fresh', title: 'Fresh Product', slug: 'p-fresh', base_price: 100 }],
-              error: null,
-            });
-          },
-        };
-        return builder;
-      },
-    };
+  it('rejects anonymous purge requests and preserves cache against DoS abuse', async () => {
+    process.env.CRON_SECRET = 'super-secret-token-123';
+    try {
+      let queryCount = 0;
+      const mockClient = {
+        from() {
+          queryCount++;
+          const builder: any = {
+            select: () => builder,
+            eq: () => builder,
+            range: () => builder,
+            then(resolve: any) {
+              return resolve({
+                data: [{ id: 'p-fresh', title: 'Fresh Product', slug: 'p-fresh', base_price: 100 }],
+                error: null,
+              });
+            },
+          };
+          return builder;
+        },
+      };
 
-    const handler = createMerchantFeedHandler(() => mockClient);
-    // 1. Initial request (populates memory cache)
-    await handler({ method: 'GET' }, createMockResponse());
+      const handler = createMerchantFeedHandler(() => mockClient);
+      // 1. Initial request (populates memory cache)
+      await handler({ method: 'GET' }, createMockResponse());
+      const queriesAfterFirst = queryCount;
 
-    // 2. Request with purge=true
-    const purgeRes = createMockResponse();
-    await handler({ method: 'GET', query: { purge: 'true' } }, purgeRes);
+      // 2. Anonymous request with purge=true (no secret provided)
+      const anonPurgeRes = createMockResponse();
+      await handler({ method: 'GET', query: { purge: 'true' } }, anonPurgeRes);
 
-    expect(purgeRes.statusCode).toBe(200);
-    expect(purgeRes.headers['X-Feed-Source']).toBe('fresh');
+      // Must NOT purge cache: served from memory cache, query count did not increase
+      expect(anonPurgeRes.statusCode).toBe(200);
+      expect(anonPurgeRes.headers['X-Feed-Source']).toBe('memory-cache');
+      expect(queryCount).toBe(queriesAfterFirst);
+
+      // 3. Authorized request with matching secret token
+      const authPurgeRes = createMockResponse();
+      await handler({ method: 'GET', query: { purge: 'true', secret: 'super-secret-token-123' } }, authPurgeRes);
+
+      // Must successfully purge and regenerate
+      expect(authPurgeRes.statusCode).toBe(200);
+      expect(authPurgeRes.headers['X-Feed-Source']).toBe('fresh');
+      expect(queryCount).toBeGreaterThan(queriesAfterFirst);
+    } finally {
+      delete process.env.CRON_SECRET;
+    }
   });
 });

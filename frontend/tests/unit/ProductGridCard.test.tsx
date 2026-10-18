@@ -72,4 +72,30 @@ describe('ProductGridCard CRO Mobile', () => {
     fireEvent.click(cartBtn);
     expect(handleAdd).toHaveBeenCalledWith(mockProduct);
   });
+
+  it('renders contingency badge and replaces add to cart with verification link when degraded', () => {
+    const handleAdd = vi.fn();
+    const degradedProduct = {
+      ...mockProduct,
+      is_degraded: true,
+      stock_verified: false,
+    };
+
+    render(
+      <MemoryRouter>
+        <ProductGridCard
+          product={degradedProduct}
+          onAddToCart={handleAdd}
+          formatPrice={(p) => `${p}`}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText(/DISPONIBILIDAD EN VERIFICACIÓN/i)).toBeInTheDocument();
+    expect(screen.queryByTitle('Agregar al carrito')).not.toBeInTheDocument();
+    const verifyLink = screen.getByTitle(/Disponibilidad en verificación/i);
+    expect(verifyLink).toBeInTheDocument();
+    expect(verifyLink.textContent).toContain('Verificar');
+    expect(handleAdd).not.toHaveBeenCalled();
+  });
 });
