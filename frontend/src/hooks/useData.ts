@@ -642,6 +642,24 @@ export function useProduct(slug: string | undefined) {
     async function fetch() {
       setLoading(true);
       try {
+        const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+        if (PublicCatalogProvider.isDomainEnabled('productDetail') && slug) {
+          const d1Res = await PublicCatalogProvider.getProductBySlug(slug);
+          if (d1Res.data?.product) {
+            const p = d1Res.data.product;
+            setProduct({
+              ...p,
+              category: p.categories || p.category || null,
+              brand: p.brands || p.brand || null,
+              images: p.product_images || p.images || [],
+              variants: p.product_variants || p.variants || [],
+              vendor: p.vendors || p.vendor || null,
+              _redirectSlug: d1Res.data.redirected_from ? d1Res.data.canonical_slug : undefined,
+            });
+            return;
+          }
+        }
+
         const { data } = await supabase
           .from('products')
           .select(`

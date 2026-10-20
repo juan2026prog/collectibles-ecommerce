@@ -26,7 +26,10 @@ export interface InternationalSettings {
 }
 
 
-const CACHE_TTL = 60000;
+import { PublicCatalogProvider } from '../lib/providers/PublicCatalogProvider';
+
+const ADMIN_CACHE_TTL = 60000;
+const PUBLIC_CACHE_TTL = 15 * 60 * 1000; // 15 minutos en navegación pública para evitar martillar Supabase
 const caches = new Map<string, { data: InternationalSettings; expires: number }>();
 const pending = new Map<string, Promise<InternationalSettings | null>>();
 const listeners = new Set<(scope: string, data: InternationalSettings | null) => void>();
@@ -35,7 +38,7 @@ let authRevision = 0;
 function formatSettings(data: any, publicOnly: boolean): InternationalSettings {
   return {
     ...(publicOnly ? {} : data), id: 1,
-    international_public_enabled: data.international_public_enabled === true,
+    international_public_enabled: data.international_public_enabled === true || data.international_enabled === true,
     international_purchases_enabled: data.international_purchases_enabled ?? true,
     international_capacity_enabled: publicOnly ? true : (data.international_capacity_enabled ?? true),
     target_margin_percent: publicOnly ? 15 : Number(data.target_margin_percent ?? 15),
@@ -50,19 +53,29 @@ export async function fetchInternationalSettings(forceRefresh = false, isAdminCo
   const session = isAdminContext ? (await supabase.auth.getSession()).data.session : null;
   if (isAdminContext && !session?.user?.id) return null;
   const scope = isAdminContext ? 'admin:' + session!.user.id : 'public';
+  const ttl = isAdminContext ? ADMIN_CACHE_TTL : PUBLIC_CACHE_TTL;
   const requestRevision = authRevision;
   const cached = caches.get(scope);
   if (!forceRefresh && cached && cached.expires > Date.now()) return cached.data;
   if (pending.has(scope)) return pending.get(scope)!;
   const operation = (async () => {
     try {
+      if (!isAdminContext && PublicCatalogProvider.isDomainEnabled('settings')) {
+        const bundle = await PublicCatalogProvider.getPublicSettingsBundle();
+        const statusData = bundle.data?.international_status || { international_enabled: true };
+        const data = formatSettings(statusData, true);
+        caches.set(scope, { data, expires: Date.now() + ttl });
+        listeners.forEach(listener => listener(scope, data));
+        return data;
+      }
+
       const result = isAdminContext
         ? await supabase.from('international_sync_settings').select('*').eq('id', 1).abortSignal(AbortSignal.timeout(5000)).maybeSingle()
         : await supabase.rpc('get_international_public_status').abortSignal(AbortSignal.timeout(5000));
       if (result.error || !result.data) throw new Error('Settings unavailable');
       if (isAdminContext && requestRevision !== authRevision) return null;
       const data = formatSettings(result.data, !isAdminContext);
-      caches.set(scope, { data, expires: Date.now() + CACHE_TTL });
+      caches.set(scope, { data, expires: Date.now() + ttl });
       listeners.forEach(listener => listener(scope, data));
       return data;
     } catch {
@@ -93,7 +106,8 @@ export function useInternationalSettings(enableRealtime = false, isAdminContext 
     };
     listeners.add(listener);
     refresh();
-    const timer = setInterval(() => refresh(), CACHE_TTL);
+    // Solo hacer polling periódico en contexto administrativo, jamás cada 60s en cada pestaña pública
+    const timer = isAdminContext ? setInterval(() => refresh(), ADMIN_CACHE_TTL) : null;
     const auth = isAdminContext ? supabase.auth.onAuthStateChange(() => {
       authRevision++; revision++; scope = ''; setSettings(null); setLoaded(false);
       for (const key of caches.keys()) if (key.startsWith('admin:')) caches.delete(key);
@@ -104,7 +118,7 @@ export function useInternationalSettings(enableRealtime = false, isAdminContext 
       .on('postgres_changes', { event: '*', schema: 'public', table: 'international_sync_settings', filter: 'id=eq.1' }, () => refresh(true))
       .subscribe() : null;
     return () => {
-      active = false; revision++; clearInterval(timer); listeners.delete(listener); auth?.unsubscribe();
+      active = false; revision++; if (timer) clearInterval(timer); listeners.delete(listener); auth?.unsubscribe();
       if (channel) supabase.removeChannel(channel);
     };
   }, [enableRealtime, isAdminContext]);

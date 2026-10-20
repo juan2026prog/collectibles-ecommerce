@@ -133,6 +133,21 @@ export default function StorefrontSearchBar({
       setMatchedLicenses(lMatches);
 
       try {
+        const { PublicCatalogProvider } = await import("../../lib/providers/PublicCatalogProvider");
+        if (PublicCatalogProvider.isDomainEnabled("search")) {
+          const { data: d1Search } = await PublicCatalogProvider.searchCatalog(trimmed, 5);
+          const mapped = (d1Search.products || []).map((p: any) => ({
+            id: p.id,
+            title: p.title,
+            slug: p.slug,
+            base_price: p.base_price,
+            product_images: p.product_images || [],
+            brand: p.brands ? { name: p.brands.name } : undefined,
+          }));
+          setProducts(mapped as unknown as ProductItem[]);
+          return;
+        }
+
         const tokens = await resolveSearchTokens(trimmed);
         const orClause = buildProductSearchOrClause(tokens);
 

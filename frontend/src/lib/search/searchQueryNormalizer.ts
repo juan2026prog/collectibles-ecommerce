@@ -1,5 +1,7 @@
 import { supabase } from '../supabase';
 
+const tokenLookupCache = new Map<string, { brandIds: string[]; licenseIds: string[]; expiresAt: number }>();
+
 export interface SearchTokens {
   raw: string;
   normalized: string;
@@ -99,34 +101,45 @@ export async function resolveSearchTokens(query: string): Promise<SearchTokens> 
     termSet.add(words.slice(0, 3).join(' '));
   }
 
-  // Query database brands and licenses asynchronously in parallel
+  // Query database brands and licenses asynchronously in parallel (with 5-min in-memory cache)
   let brandIds: string[] = [];
   let licenseIds: string[] = [];
 
   try {
     const sanitizedQuery = normalized.replace(/[%_,]/g, ' ').trim();
     if (sanitizedQuery.length >= 2) {
-      const [brandRes, licRes] = await Promise.all([
-        supabase
-          .from('brands')
-          .select('id, name')
-          .eq('status', 'approved')
-          .eq('is_active', true)
-          .ilike('name', `%${sanitizedQuery}%`)
-          .limit(10),
-        supabase
-          .from('licenses')
-          .select('id, name')
-          .eq('is_active', true)
-          .ilike('name', `%${sanitizedQuery}%`)
-          .limit(10)
-      ]);
+      const cachedTokens = tokenLookupCache.get(sanitizedQuery);
+      if (cachedTokens && cachedTokens.expiresAt > Date.now()) {
+        brandIds = cachedTokens.brandIds;
+        licenseIds = cachedTokens.licenseIds;
+      } else {
+        const [brandRes, licRes] = await Promise.all([
+          supabase
+            .from('brands')
+            .select('id, name')
+            .eq('status', 'approved')
+            .eq('is_active', true)
+            .ilike('name', `%${sanitizedQuery}%`)
+            .limit(10),
+          supabase
+            .from('licenses')
+            .select('id, name')
+            .eq('is_active', true)
+            .ilike('name', `%${sanitizedQuery}%`)
+            .limit(10)
+        ]);
 
-      if (brandRes.data) {
-        brandIds = brandRes.data.map(b => b.id);
-      }
-      if (licRes.data) {
-        licenseIds = licRes.data.map(l => l.id);
+        if (brandRes.data) {
+          brandIds = brandRes.data.map(b => b.id);
+        }
+        if (licRes.data) {
+          licenseIds = licRes.data.map(l => l.id);
+        }
+        tokenLookupCache.set(sanitizedQuery, {
+          brandIds,
+          licenseIds,
+          expiresAt: Date.now() + 5 * 60 * 1000,
+        });
       }
     }
   } catch (err) {

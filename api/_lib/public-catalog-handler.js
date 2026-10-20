@@ -23,6 +23,27 @@ export function createCatalogHandler(getRepository = getCatalogRepository) {
     if (filters.collection_id && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(filters.collection_id)) {
       return res.status(400).json({ error: 'Invalid collection' });
     }
+    if (process.env.CF_PUBLIC_CATALOG_ENABLED === 'true') {
+      try {
+        const cfBase = (process.env.CF_CATALOG_WORKER_URL || 'https://collectibles-catalog-api.pixelsncodes-uy.workers.dev').replace(/\/+$/, '');
+        const qs = new URLSearchParams(req.query || {}).toString();
+        const cfRes = await fetch(`${cfBase}/api/public-catalog${qs ? `?${qs}` : ''}`, {
+          method: 'GET',
+          headers: { Accept: 'application/json', 'X-Catalog-Client': 'vercel-public-catalog-proxy' },
+          signal: AbortSignal.timeout(4500),
+        });
+        if (cfRes.ok) {
+          const payload = await cfRes.json();
+          res.setHeader('X-Catalog-Source', 'cloudflare-d1');
+          res.setHeader('Cache-Control', 'public, max-age=0');
+          res.setHeader('CDN-Cache-Control', 'public, s-maxage=120, stale-while-revalidate=600');
+          res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=120, stale-while-revalidate=600');
+          return res.status(200).json(payload);
+        }
+      } catch (cfErr) {
+        console.warn('[public-catalog] Cloudflare D1 upstream fallback:', cfErr?.message || cfErr);
+      }
+    }
     try {
       const repo = getRepository();
       const { catalog, stale = false, age_ms = 0 } = await repo.get();

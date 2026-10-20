@@ -1,0 +1,23 @@
+name = "collectibles-catalog-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+workers_dev = true
+
+# D1 Binding ya existente en la cuenta de Cloudflare:
+# Base D1: collectibles-catalog
+# Binding: DB
+# NOTA: database_id se resuelve automáticamente en Cloudflare o mediante variable/config local sin exponer secretos.
+[[d1_databases]]
+binding = "DB"
+database_name = "collectibles-catalog"
+database_id = "REPLACE_OR_INHERIT_EXISTING_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[vars]
+ENVIRONMENT = "production"
+ALLOWED_ORIGINS = "https://collectibles.uy,https://www.collectibles.uy,http://localhost:5173,http://localhost:3000"
+DEFAULT_PAGE_SIZE = "24"
+MAX_PAGE_SIZE = "60"
+
+# Secretos requeridos (configurar vía `wrangler secret put` tras aprobación):
+# - CATALOG_SYNC_SECRET: Token HMAC/Bearer exclusivo para el canal privado POST /api/v1/internal/sync

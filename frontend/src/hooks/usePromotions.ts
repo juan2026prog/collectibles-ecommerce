@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { PublicCatalogProvider } from '../lib/providers/PublicCatalogProvider';
 
 export interface AutoPromo {
   id: string;
@@ -34,6 +35,29 @@ export function usePromotions() {
     if (!_promotionsPromise) {
       _promotionsPromise = (async () => {
         try {
+          if (PublicCatalogProvider.isDomainEnabled('promotions')) {
+            const { data } = await PublicCatalogProvider.getPromotions();
+            const d1Promos: AutoPromo[] = (data.promotions || []).map((p: any) => ({
+              id: p.id,
+              name: p.name,
+              discount_type: p.discount_type || p.type,
+              discount_value: Number(p.discount_value ?? p.value ?? 0),
+              min_quantity: p.min_quantity ?? null,
+              is_stackable: Boolean(p.is_stackable ?? p.stackable),
+              priority: Number(p.priority ?? 0),
+              badge_text: p.badge_text ?? null,
+              badge_color: p.badge_color ?? null,
+              badge_bg: p.badge_bg ?? null,
+              owner_vendor_id: p.owner_vendor_id ?? null,
+              targets: p.promotion_targets || p.targets || [],
+              exclusions: p.promotion_exclusions || p.exclusions || [],
+              tiers: p.promotion_tiers || p.tiers || [],
+            }));
+            _promotionsCache = d1Promos;
+            _promotionsPromise = null;
+            return d1Promos;
+          }
+
           const now = new Date().toISOString();
           const { data: promos, error } = await supabase
             .from('promotions')

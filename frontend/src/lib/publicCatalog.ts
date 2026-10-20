@@ -1,6 +1,31 @@
 import { registerMediaVariants } from './mediaVariants';
+import { PublicCatalogProvider } from './providers/PublicCatalogProvider';
 
 export async function fetchPublicCatalog(filters: Record<string, unknown>, signal: AbortSignal) {
+  const mode = String(filters.mode || 'cards');
+
+  if (mode === 'taxonomies' && PublicCatalogProvider.isDomainEnabled('taxonomies')) {
+    const { data } = await PublicCatalogProvider.getTaxonomies(
+      filters.brand_id ? String(filters.brand_id) : undefined
+    );
+    return data;
+  }
+
+  if (PublicCatalogProvider.isDomainEnabled('products')) {
+    const cleanFilters: Record<string, string | number | boolean> = {};
+    Object.keys(filters).sort().forEach(key => {
+      const value = filters[key];
+      if (value !== undefined && value !== null && value !== '') {
+        cleanFilters[key] = typeof value === 'boolean' || typeof value === 'number' ? value : String(value);
+      }
+    });
+    const { data } = await PublicCatalogProvider.getProducts(cleanFilters);
+    return {
+      ...data,
+      totalCount: data.pagination?.total ?? data.products?.length ?? 0,
+    };
+  }
+
   const params = new URLSearchParams();
   Object.keys(filters).sort().forEach(key => {
     const value = filters[key];
@@ -20,8 +45,11 @@ let taxonomyRequest: Promise<any> | null = null;
 export async function fetchPublicTaxonomies() {
   if (taxonomyCache && taxonomyCache.expires > Date.now()) return taxonomyCache.data;
   if (!taxonomyRequest) {
-    taxonomyRequest = fetchPublicCatalog({ mode: 'facets', availability: 'all', limit: 0 }, AbortSignal.timeout(15000))
-      .then(result => { taxonomyCache = { data: result, expires: Date.now() + 60000 }; return result; })
+    const loader = PublicCatalogProvider.isDomainEnabled('taxonomies')
+      ? PublicCatalogProvider.getTaxonomies().then(r => r.data)
+      : fetchPublicCatalog({ mode: 'facets', availability: 'all', limit: 0 }, AbortSignal.timeout(15000));
+    taxonomyRequest = loader
+      .then(result => { taxonomyCache = { data: result, expires: Date.now() + 300000 }; return result; })
       .finally(() => { taxonomyRequest = null; });
   }
   return taxonomyRequest;
