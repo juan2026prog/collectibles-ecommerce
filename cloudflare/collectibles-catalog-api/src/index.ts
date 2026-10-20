@@ -2309,6 +2309,46 @@ export default {
       );
     }
 
+    // Verificar activación granular por dominio
+    function getDomainForPath(p: string): keyof typeof runtimeCfg.domains | null {
+      if (p === '/api/v1/feeds/merchant.xml' || p === '/api/v1/feeds/meta.csv' || p === '/api/v1/sitemap.xml') return 'feeds';
+      if (p === '/api/v1/products' || p === '/api/public-catalog') return 'products';
+      if (p.startsWith('/api/v1/products/')) return 'productDetail';
+      if (
+        p === '/api/v1/categories' ||
+        p === '/api/v1/brands' ||
+        p === '/api/v1/taxonomies' ||
+        p === '/api/v1/facets' ||
+        p === '/api/v1/banners'
+      )
+        return 'taxonomies';
+      if (p === '/api/v1/search') return 'search';
+      if (p === '/api/v1/promotions') return 'promotions';
+      if (p.startsWith('/api/v1/radar')) return 'radar';
+      if (p === '/api/v1/settings') return 'settings';
+      return null;
+    }
+
+    const domain = getDomainForPath(pathname);
+    if (domain && runtimeCfg.domains && runtimeCfg.domains[domain] === false) {
+      return jsonResponse(
+        {
+          ok: false,
+          error: `Domain '${domain}' is currently disabled in Cloudflare catalog`,
+          domain,
+          runtime_mode: runtimeCfg.mode,
+        },
+        503,
+        CACHE_POLICIES.noStore,
+        corsHeaders,
+        {
+          'X-Catalog-Mode': runtimeCfg.mode,
+          'X-Catalog-Kill-Switch': 'active',
+          'X-Catalog-Domain': domain,
+        }
+      );
+    }
+
     // Verificar Cloudflare Edge Cache para peticiones GET públicas
     const edgeCache = (globalThis as any).caches?.default;
     const cacheKey = new Request(url.toString(), { method: 'GET' });
@@ -2349,6 +2389,14 @@ export default {
         pathname === '/api/v1/facets'
       ) {
         response = await handleTaxonomiesAndFacets(url, env, corsHeaders);
+      } else if (pathname === '/api/v1/banners') {
+        const bannersRes = await env.DB.prepare('SELECT * FROM public_banners WHERE is_active = 1 ORDER BY sort_order ASC').all<Record<string, any>>();
+        response = jsonResponse(
+          { ok: true, source: 'cloudflare-d1', banners: bannersRes?.results || [] },
+          200,
+          CACHE_POLICIES.promotions,
+          corsHeaders
+        );
       } else if (pathname === '/api/v1/search') {
         response = await handleSearch(url, env, corsHeaders);
       } else if (pathname === '/api/v1/promotions') {

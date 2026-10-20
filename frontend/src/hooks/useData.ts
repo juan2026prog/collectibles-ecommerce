@@ -1166,12 +1166,12 @@ export function useBanners() {
       _bannersPromise = (async () => {
         try {
           const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
-          if (PublicCatalogProvider.isDomainEnabled('settings')) {
-            const { data: bundle } = await PublicCatalogProvider.getPublicSettingsBundle();
-            if (Array.isArray(bundle?.banners) && bundle.banners.length > 0) {
-              _bannersCache = bundle.banners;
-              writeSessionCache('app_banners_cache', bundle.banners);
-              _bannerListeners.forEach(fn => fn(bundle.banners));
+          if (PublicCatalogProvider.isDomainEnabled('taxonomies') || PublicCatalogProvider.isDomainEnabled('settings')) {
+            const res = await PublicCatalogProvider.getBanners().catch(() => null);
+            if (Array.isArray(res?.data?.banners) && res.data.banners.length > 0) {
+              _bannersCache = res.data.banners;
+              writeSessionCache('app_banners_cache', res.data.banners);
+              _bannerListeners.forEach(fn => fn(res.data.banners));
               _bannersPromise = null;
               return _bannersCache;
             }

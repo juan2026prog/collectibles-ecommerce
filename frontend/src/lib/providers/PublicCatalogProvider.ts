@@ -511,6 +511,13 @@ export const PublicCatalogProvider = {
     }>(`/api/v1/radar/${encodeURIComponent(slug)}`, undefined, { ttlMs: 180_000, fetcher });
   },
 
+  async getBanners(fetcher?: typeof fetch) {
+    return fetchFromCloudflareCatalog<{
+      ok: boolean;
+      banners: any[];
+    }>('/api/v1/banners', undefined, { ttlMs: 180_000, fetcher });
+  },
+
   async getPublicSettingsBundle(fetcher?: typeof fetch) {
     return fetchFromCloudflareCatalog<{
       ok: boolean;
