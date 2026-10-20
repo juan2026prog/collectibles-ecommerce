@@ -20,12 +20,18 @@ import {
 import { CommerceOperationsProvider } from '../CommerceOperationsProvider';
 import { ExternalSourcingProvider } from '../ExternalSourcingProvider';
 import { resolveProductPrice, resolveProductNativeCurrency } from '../../priceResolver';
+import { resolveProductInventory } from '../../canonicalStock';
 import { createCheckoutOrder } from '../../payments';
 import {
   transformLocalProductForD1,
   transformInternationalProductForD1,
   buildKeysetHeaderQuery,
   buildHydrateProductsByPkQuery,
+  buildTenProductProbeQueries,
+  executeControlledTenProductReadProbe,
+  computeSyncSignatureHmac,
+  VERIFIED_LOCAL_PRODUCT_HYDRATE_COLS,
+  VERIFIED_INTL_PRODUCT_HYDRATE_COLS,
   SYNC_LIMITS,
 } from '../../../../../scripts/d1-sync/sync-supabase-to-d1.mjs';
 
@@ -167,7 +173,11 @@ function createMockD1Database(seedData?: {
         if (normSql.includes('FROM public_radar_releases')) {
           return { results: radar as unknown as T[], success: true };
         }
-        if (normSql.includes('INSERT INTO') || normSql.includes('UPDATE public_products')) {
+        if (
+          normSql.includes('INSERT INTO') ||
+          normSql.includes('INSERT OR IGNORE INTO') ||
+          normSql.includes('UPDATE public_products')
+        ) {
           syncedBatches.push({ sql: normSql, boundValues });
           return { results: [], success: true };
         }
@@ -822,4 +832,249 @@ describe('Migración Collectibles a Cloudflare D1 + Workers — Suite de Integra
     expect(createdOrder.currency).toBe('UYU');
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('Caso 9 (Etapa 2): Prueba local con datos ficticios de 10 productos (5 locales + 5 internacionales), stock canónico y correspondencia exacta con las 17 tablas D1', async () => {
+    // 1. Verificar que VERIFIED_LOCAL_PRODUCT_HYDRATE_COLS NO incluye columnas inexistentes en public.products (`stock`, `sku`, `ean`, `asin`)
+    expect(VERIFIED_LOCAL_PRODUCT_HYDRATE_COLS).not.toContain('stock');
+    expect(VERIFIED_LOCAL_PRODUCT_HYDRATE_COLS).not.toContain('sku');
+    expect(VERIFIED_LOCAL_PRODUCT_HYDRATE_COLS).not.toContain('ean');
+    expect(VERIFIED_LOCAL_PRODUCT_HYDRATE_COLS).not.toContain('asin');
+
+    // 2. Verificar que VERIFIED_INTL_PRODUCT_HYDRATE_COLS NO incluye costos internos ni raw_data
+    expect(VERIFIED_INTL_PRODUCT_HYDRATE_COLS).not.toContain('real_cost_usd');
+    expect(VERIFIED_INTL_PRODUCT_HYDRATE_COLS).not.toContain('expected_profit_usd');
+    expect(VERIFIED_INTL_PRODUCT_HYDRATE_COLS).not.toContain('raw_data');
+    expect(VERIFIED_INTL_PRODUCT_HYDRATE_COLS).not.toContain('product_url_external');
+
+    // 3. Simular respuestas PostgREST para la sonda acotada de 10 productos (5 locales + 5 internacionales)
+    const mockLocalProducts = Array.from({ length: 5 }, (_, i) => ({
+      id: `00000000-0000-4000-8000-00000000010${i + 1}`,
+      slug: `producto-local-ficticio-${i + 1}`,
+      title: `Figura Local Ficticia #${i + 1}`,
+      description: `Descripción completa del producto local #${i + 1}`,
+      short_description: `Resumen corto #${i + 1}`,
+      base_price: 1500 + i * 250,
+      compare_at_price: i === 0 ? 2200 : null,
+      badge: i === 1 ? 'preventa' : null,
+      is_featured: i === 0,
+      is_active: true,
+      status: 'published',
+      condition: 'new_sealed',
+      condition_notes: null,
+      category_id: 'cat-figuras',
+      brand_id: 'brand-banpresto',
+      license_id: 'lic-dbz',
+      vendor_id: 'vendor-uy-1',
+      vendor_store_id: 'store-uy-1',
+      weight_kg: 0.45,
+      dimensions: { length: 15, width: 10, height: 20 },
+      seo_title: `SEO Figura Local #${i + 1}`,
+      seo_description: `Meta descripción #${i + 1}`,
+      meta_title: null,
+      meta_description: null,
+      // El producto #5 no tiene fila en product_variants pero sí stock en metadata (MercadoLibre sync fallback)
+      metadata: i === 4 ? { initial_quantity: 10, sold_quantity: 3, sku: 'MLU-SKU-5' } : { ean: `77300000000${i + 1}` },
+      ml_item_id: `MLU600000${i + 1}`,
+      created_at: '2026-10-01T10:00:00Z',
+      updated_at: '2026-10-20T12:00:00Z',
+    }));
+
+    const mockLocalImages = mockLocalProducts.map((p, idx) => ({
+      id: `img-${idx + 1}`,
+      product_id: p.id,
+      url: `https://cdn.collectibles.uy/local-${idx + 1}.webp`,
+      alt_text: p.title,
+      is_primary: true,
+      sort_order: 0,
+    }));
+
+    // Primeros 4 productos tienen variantes en `product_variants`; el 5to usa fallback de `metadata`
+    const mockLocalVariants = mockLocalProducts.slice(0, 4).map((p, idx) => ({
+      id: `var-${idx + 1}`,
+      product_id: p.id,
+      sku: `COL-LOCAL-00${idx + 1}`,
+      legacy_sku: null,
+      name: 'Estándar',
+      price_adjustment: 0,
+      inventory_count: idx === 2 ? 0 : idx + 2, // Producto #3 sin stock (0), los demás con stock > 0
+      is_active: true,
+    }));
+
+    const mockIntlProducts = Array.from({ length: 5 }, (_, i) => ({
+      id: `00000000-0000-4000-8000-00000000020${i + 1}`,
+      source_provider: 'zinc',
+      source_retailer: 'amazon_us',
+      external_product_id: `B09INTL00${i + 1}`,
+      external_sku: `AMZ-SKU-${i + 1}`,
+      title: `S.H. Figuarts International #${i + 1}`,
+      description: `Imported figure description #${i + 1}`,
+      brand: 'Tamashii Nations',
+      category: 'Action Figures',
+      collectibles_category_id: 'cat-figuras',
+      collectibles_subcategory_id: null,
+      image_url: `https://m.media-amazon.com/images/I/mock-intl-${i + 1}.jpg`,
+      main_image_url_external: `https://m.media-amazon.com/images/I/mock-intl-${i + 1}.jpg`,
+      gallery_images: [`https://m.media-amazon.com/images/I/mock-intl-${i + 1}.jpg`],
+      base_price_usd: 54.99 + i * 5,
+      final_price_usd: 68.5 + i * 5,
+      final_price_uyu: 2945 + i * 215,
+      urubox_estimated_cost_usd: 13.51,
+      total_estimated_cost_usd: 68.5 + i * 5,
+      amazon_current_price_usd: 54.99 + i * 5,
+      amazon_list_price_usd: 64.99 + i * 5,
+      amazon_discount_percent: 15,
+      amazon_prime: true,
+      currency: 'USD',
+      availability: i === 4 ? 'out_of_stock' : 'in_stock',
+      rating: 4.8,
+      review_count: 142,
+      weight_grams: 380,
+      status: 'published',
+      last_synced_at: '2026-10-20T12:00:00Z',
+      created_at: '2026-10-01T10:00:00Z',
+      updated_at: '2026-10-20T12:00:00Z',
+    }));
+
+    const mockSupabaseFetcher: typeof fetch = async (input) => {
+      const urlStr = String(input);
+      if (urlStr.includes('/rest/v1/public_site_config?')) {
+        return new Response(JSON.stringify([{ key: 'general_config' }]), { status: 200 });
+      }
+      if (urlStr.includes('/rest/v1/products?')) {
+        return new Response(JSON.stringify(mockLocalProducts), { status: 200 });
+      }
+      if (urlStr.includes('/rest/v1/product_images?')) {
+        return new Response(JSON.stringify(mockLocalImages), { status: 200 });
+      }
+      if (urlStr.includes('/rest/v1/product_variants?')) {
+        return new Response(JSON.stringify(mockLocalVariants), { status: 200 });
+      }
+      if (urlStr.includes('/rest/v1/international_products?')) {
+        return new Response(JSON.stringify(mockIntlProducts), { status: 200 });
+      }
+      throw new Error(`Unexpected query in mock probe: ${urlStr}`);
+    };
+
+    const probeResult = await executeControlledTenProductReadProbe({
+      supabaseUrl: 'https://mock-supabase.collectibles.uy',
+      serviceKey: 'mock-service-key-not-real',
+      fetcher: mockSupabaseFetcher,
+    });
+
+    expect(probeResult.ok).toBe(true);
+    expect(probeResult.dryRun).toBe(true);
+    expect(probeResult.writtenToD1).toBe(0);
+    expect(probeResult.totalRead).toBe(10);
+    expect(probeResult.localCount).toBe(5);
+    expect(probeResult.internationalCount).toBe(5);
+    expect(probeResult.telemetry).toHaveLength(5);
+
+    // 4. Verificar resolución de stock canónico y precios UYU/USD en los 10 productos transformados
+    // Producto local #1: variante con inventory_count = 2, moneda UYU
+    const pLocal1 = probeResult.transformedLocal[0];
+    expect(pLocal1.currency).toBe('UYU');
+    expect(pLocal1.stock).toBe(2);
+    expect(pLocal1.sku).toBe('COL-LOCAL-001');
+    expect(resolveProductInventory(pLocal1).availableQuantity).toBe(2);
+    expect(resolveProductInventory(pLocal1).isAvailable).toBe(true);
+    expect(resolveProductPrice(pLocal1).currency).toBe('UYU');
+
+    // Producto local #3: variante con inventory_count = 0 -> out_of_stock
+    const pLocal3 = probeResult.transformedLocal[2];
+    expect(pLocal3.stock).toBe(0);
+    expect(pLocal3.stock_status).toBe('out_of_stock');
+    expect(resolveProductInventory(pLocal3).availableQuantity).toBe(0);
+    expect(resolveProductInventory(pLocal3).isAvailable).toBe(false);
+
+    // Producto local #5: sin fila en product_variants, resuelve stock desde metadata (10 - 3 = 7) y sintetiza variante
+    const pLocal5 = probeResult.transformedLocal[4];
+    expect(pLocal5.stock).toBe(7);
+    expect(pLocal5.sku).toBe('MLU-SKU-5');
+    expect(pLocal5.variants).toHaveLength(1);
+    expect(resolveProductInventory(pLocal5).availableQuantity).toBe(7);
+    expect(resolveProductInventory(pLocal5).isAvailable).toBe(true);
+
+    // Producto internacional #1: moneda USD + final_price_uyu + variante sintética con stock 1
+    const pIntl1 = probeResult.transformedIntl[0];
+    expect(pIntl1.currency).toBe('USD');
+    expect(pIntl1.is_international).toBe(true);
+    expect(pIntl1.stock).toBe(1);
+    expect(pIntl1.final_price_usd).toBe(68.5);
+    expect(pIntl1.final_price_uyu).toBe(2945);
+    expect(resolveProductInventory(pIntl1).availableQuantity).toBe(1);
+    expect(resolveProductInventory(pIntl1).isAvailable).toBe(true);
+
+    // 5. Verificar que handleInternalSync procesa las 17 tablas de D1 con firma HMAC-SHA256
+    const db = createMockD1Database();
+    const secret = 'super-secret-sync-token-minimum-24-chars';
+    const env: Env = { DB: db, CATALOG_SYNC_SECRET: secret };
+
+    const syncPayload = {
+      batch_id: 'batch-stage2-test',
+      upsert_products: [...probeResult.transformedLocal, ...probeResult.transformedIntl],
+      upsert_categories: [{ id: 'cat-figuras', name: 'Figuras', slug: 'figuras' }],
+      upsert_brands: [{ id: 'brand-banpresto', name: 'Banpresto', slug: 'banpresto' }],
+      upsert_licenses: [{ id: 'lic-dbz', name: 'Dragon Ball Z', slug: 'dragon-ball-z' }],
+      upsert_themes: [{ id: 'thm-shf', name: 'S.H. Figuarts', slug: 'sh-figuarts' }],
+      upsert_license_themes: [{ license_id: 'lic-dbz', theme_id: 'thm-shf' }],
+      upsert_product_groups: [{ id: 'grp-1', name: 'Destacados', slug: 'destacados', product_ids: [pLocal1.id] }],
+      upsert_vendor_stores: [{ id: 'store-uy-1', vendor_id: 'vendor-uy-1', store_name: 'Montevideo Toys', store_slug: 'montevideo-toys' }],
+      upsert_promotions: [{ id: 'promo-1', name: 'Promo Octubre', type: 'percentage', value: 10 }],
+      upsert_banners: [{ id: 'ban-1', title: 'Hero', image_url: 'https://cdn.collectibles.uy/hero.webp' }],
+      upsert_badges: [{ id: 'bdg-1', name: 'Preventa', slug: 'preventa' }],
+      upsert_radar_releases: [{ id: 'rad-1', title: 'Goku SSJ4', slug: 'goku-ssj4', release_date: '2026-12-01' }],
+      upsert_slug_redirects: [{ old_slug: 'viejo-slug', new_slug: pLocal1.slug, product_id: pLocal1.id }],
+      upsert_settings: { public_site_config: { maintenance_mode: false } },
+      cursor: { entity_type: 'stage2_mock_verify', last_id: pIntl1.id, last_updated_at: '2026-10-20T12:00:00Z' },
+    };
+
+    const rawBody = JSON.stringify(syncPayload);
+    const ts = String(Date.now());
+    const hmacSig = await computeSyncSignatureHmac(secret, ts, rawBody);
+
+    const syncRes = await workerApp.fetch(
+      new Request('https://collectibles-catalog-api.pixelsncodes-uy.workers.dev/api/v1/internal/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${secret}`,
+          'X-Catalog-Timestamp': ts,
+          'X-Catalog-Signature': hmacSig,
+        },
+        body: rawBody,
+      }),
+      env
+    );
+
+    expect(syncRes.status).toBe(200);
+    const syncJson = await syncRes.json();
+    expect(syncJson.ok).toBe(true);
+    expect(syncJson.records_affected).toBe(23);
+
+    // Confirmar que las sentencias SQL preparadas cubren las 17 tablas del esquema D1
+    const executedSql = db.syncedBatches.map((b) => b.sql).join('\n');
+    expect(executedSql).toContain('INSERT INTO public_products');
+    expect(executedSql).toContain('INSERT INTO public_product_categories');
+    expect(executedSql).toContain('INSERT INTO public_categories');
+    expect(executedSql).toContain('INSERT INTO public_brands');
+    expect(executedSql).toContain('INSERT INTO public_licenses');
+    expect(executedSql).toContain('INSERT INTO public_themes');
+    expect(executedSql).toContain('INSERT OR IGNORE INTO public_license_themes');
+    expect(executedSql).toContain('INSERT INTO public_product_groups');
+    expect(executedSql).toContain('INSERT INTO public_vendor_stores');
+    expect(executedSql).toContain('INSERT INTO public_promotions');
+    expect(executedSql).toContain('INSERT INTO public_banners');
+    expect(executedSql).toContain('INSERT INTO public_badges');
+    expect(executedSql).toContain('INSERT INTO public_radar_releases');
+    expect(executedSql).toContain('INSERT INTO public_slug_redirects');
+    expect(executedSql).toContain('INSERT INTO public_site_settings');
+    expect(executedSql).toContain('INSERT INTO sync_state');
+    expect(executedSql).toContain('INSERT INTO sync_audit_log');
+
+    // Verificar consulta generada para la prueba de 10 productos
+    const probeQueries = buildTenProductProbeQueries();
+    expect(probeQueries.localProducts5).toContain('limit=5');
+    expect(probeQueries.intlProducts5).toContain('limit=5');
+  });
 });
+

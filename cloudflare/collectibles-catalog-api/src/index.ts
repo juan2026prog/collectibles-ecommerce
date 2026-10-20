@@ -1777,6 +1777,21 @@ async function handleInternalSync(
           p.expires_at ?? null
         )
       );
+      const catIds: string[] = Array.isArray(p.category_ids) && p.category_ids.length > 0
+        ? p.category_ids.map(String)
+        : (p.category_id ? [String(p.category_id)] : []);
+      for (const catId of catIds) {
+        if (!catId) continue;
+        statements.push(
+          env.DB.prepare(
+            `INSERT INTO public_product_categories (product_id, category_id, brand_id, is_international)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT(product_id, category_id) DO UPDATE SET
+               brand_id = excluded.brand_id,
+               is_international = excluded.is_international`
+          ).bind(p.id, catId, p.brand_id ?? null, isIntl)
+        );
+      }
       affectedCount++;
     }
   }
@@ -1794,7 +1809,7 @@ async function handleInternalSync(
     }
   }
 
-  // 3. Upsert de Categorías, Marcas, Promociones, Radar y Configuración Pública
+  // 3. Upsert de Categorías, Marcas, Licencias, Temas, Grupos, Vendedores, Promociones, Banners, Badges, Radar, Redirecciones y Configuración Pública
   if (Array.isArray(payload.upsert_categories)) {
     for (const c of payload.upsert_categories) {
       if (!c?.id || !c?.slug) continue;
@@ -1848,6 +1863,322 @@ async function handleInternalSync(
           b.status || 'approved',
           Number(b.sort_order ?? 0),
           b.updated_at || new Date().toISOString()
+        )
+      );
+      affectedCount++;
+    }
+  }
+
+  if (Array.isArray(payload.upsert_licenses)) {
+    for (const l of payload.upsert_licenses) {
+      if (!l?.id || !l?.slug) continue;
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO public_licenses (id, name, slug, logo_url, banner_url, description, is_featured, is_active, sort_order, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name, slug = excluded.slug, logo_url = excluded.logo_url,
+             banner_url = excluded.banner_url, description = excluded.description,
+             is_featured = excluded.is_featured, is_active = excluded.is_active,
+             sort_order = excluded.sort_order, updated_at = excluded.updated_at`
+        ).bind(
+          l.id,
+          l.name,
+          l.slug,
+          l.logo_url ?? null,
+          l.banner_url ?? null,
+          l.description ?? null,
+          l.is_featured ? 1 : 0,
+          l.is_active === false ? 0 : 1,
+          Number(l.sort_order ?? 0),
+          l.updated_at || new Date().toISOString()
+        )
+      );
+      affectedCount++;
+    }
+  }
+
+  if (Array.isArray(payload.upsert_themes)) {
+    for (const t of payload.upsert_themes) {
+      if (!t?.id || !t?.slug) continue;
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO public_themes (id, name, slug, description, is_active, sort_order, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name, slug = excluded.slug, description = excluded.description,
+             is_active = excluded.is_active, sort_order = excluded.sort_order, updated_at = excluded.updated_at`
+        ).bind(
+          t.id,
+          t.name,
+          t.slug,
+          t.description ?? null,
+          t.is_active === false ? 0 : 1,
+          Number(t.sort_order ?? 0),
+          t.updated_at || new Date().toISOString()
+        )
+      );
+      affectedCount++;
+    }
+  }
+
+  if (Array.isArray(payload.upsert_license_themes)) {
+    for (const lt of payload.upsert_license_themes) {
+      if (!lt?.license_id || !lt?.theme_id) continue;
+      statements.push(
+        env.DB.prepare(
+          `INSERT OR IGNORE INTO public_license_themes (license_id, theme_id) VALUES (?, ?)`
+        ).bind(String(lt.license_id), String(lt.theme_id))
+      );
+      affectedCount++;
+    }
+  }
+
+  if (Array.isArray(payload.upsert_product_groups)) {
+    for (const g of payload.upsert_product_groups) {
+      if (!g?.id || !g?.slug) continue;
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO public_product_groups (id, name, slug, description, group_type, banner_url, is_active, sort_order, product_ids_json, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name, slug = excluded.slug, description = excluded.description,
+             group_type = excluded.group_type, banner_url = excluded.banner_url,
+             is_active = excluded.is_active, sort_order = excluded.sort_order,
+             product_ids_json = excluded.product_ids_json, updated_at = excluded.updated_at`
+        ).bind(
+          g.id,
+          g.name,
+          g.slug,
+          g.description ?? null,
+          g.group_type ?? null,
+          g.banner_url ?? null,
+          g.is_active === false ? 0 : 1,
+          Number(g.sort_order ?? 0),
+          JSON.stringify(Array.isArray(g.product_ids) ? g.product_ids : []),
+          g.updated_at || new Date().toISOString()
+        )
+      );
+      affectedCount++;
+    }
+  }
+
+  if (Array.isArray(payload.upsert_vendor_stores)) {
+    for (const vs of payload.upsert_vendor_stores) {
+      const storeSlug = vs?.store_slug || vs?.slug;
+      const storeName = vs?.store_name || vs?.name;
+      if (!vs?.id || !storeSlug || !storeName) continue;
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO public_vendor_stores (
+             id, vendor_id, store_name, store_slug, description, logo_url, banner_url,
+             status, is_active, ships_to_argentina, promotions_opt_in, badges_json,
+             rating, reviews_count, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             vendor_id = excluded.vendor_id, store_name = excluded.store_name, store_slug = excluded.store_slug,
+             description = excluded.description, logo_url = excluded.logo_url, banner_url = excluded.banner_url,
+             status = excluded.status, is_active = excluded.is_active, ships_to_argentina = excluded.ships_to_argentina,
+             promotions_opt_in = excluded.promotions_opt_in, badges_json = excluded.badges_json,
+             rating = excluded.rating, reviews_count = excluded.reviews_count, updated_at = excluded.updated_at`
+        ).bind(
+          vs.id,
+          vs.vendor_id || vs.id,
+          storeName,
+          storeSlug,
+          vs.description ?? null,
+          vs.logo_url ?? null,
+          vs.banner_url ?? null,
+          vs.status || 'active',
+          vs.is_active === false ? 0 : 1,
+          vs.ships_to_argentina ? 1 : 0,
+          vs.promotions_opt_in ? 1 : 0,
+          JSON.stringify(Array.isArray(vs.badges) ? vs.badges : []),
+          vs.rating != null ? Number(vs.rating) : null,
+          Number(vs.reviews_count ?? 0),
+          vs.updated_at || new Date().toISOString()
+        )
+      );
+      affectedCount++;
+    }
+  }
+
+  if (Array.isArray(payload.upsert_promotions)) {
+    for (const pr of payload.upsert_promotions) {
+      if (!pr?.id || !pr?.name) continue;
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO public_promotions (
+             id, name, description, type, value, min_purchase_amount, max_discount_amount,
+             starts_at, ends_at, is_active, priority, stackable, badge_text, applies_to_all,
+             targets_json, exclusions_json, tiers_json, group_items_json, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name, description = excluded.description, type = excluded.type,
+             value = excluded.value, min_purchase_amount = excluded.min_purchase_amount,
+             max_discount_amount = excluded.max_discount_amount, starts_at = excluded.starts_at,
+             ends_at = excluded.ends_at, is_active = excluded.is_active, priority = excluded.priority,
+             stackable = excluded.stackable, badge_text = excluded.badge_text,
+             applies_to_all = excluded.applies_to_all, targets_json = excluded.targets_json,
+             exclusions_json = excluded.exclusions_json, tiers_json = excluded.tiers_json,
+             group_items_json = excluded.group_items_json, updated_at = excluded.updated_at`
+        ).bind(
+          pr.id,
+          pr.name,
+          pr.description ?? null,
+          pr.type || 'percentage',
+          Number(pr.value ?? 0),
+          pr.min_purchase_amount != null ? Number(pr.min_purchase_amount) : null,
+          pr.max_discount_amount != null ? Number(pr.max_discount_amount) : null,
+          pr.starts_at ?? null,
+          pr.ends_at ?? null,
+          pr.is_active === false ? 0 : 1,
+          Number(pr.priority ?? 0),
+          pr.stackable ? 1 : 0,
+          pr.badge_text ?? null,
+          pr.applies_to_all ? 1 : 0,
+          JSON.stringify(pr.targets || []),
+          JSON.stringify(pr.exclusions || []),
+          JSON.stringify(pr.tiers || []),
+          JSON.stringify(pr.group_items || []),
+          pr.updated_at || new Date().toISOString()
+        )
+      );
+      affectedCount++;
+    }
+  }
+
+  if (Array.isArray(payload.upsert_banners)) {
+    for (const bn of payload.upsert_banners) {
+      if (!bn?.id || !bn?.image_url) continue;
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO public_banners (
+             id, title, subtitle, image_url, mobile_image_url, link_url, cta_text,
+             position, sort_order, is_active, starts_at, ends_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             title = excluded.title, subtitle = excluded.subtitle, image_url = excluded.image_url,
+             mobile_image_url = excluded.mobile_image_url, link_url = excluded.link_url,
+             cta_text = excluded.cta_text, position = excluded.position, sort_order = excluded.sort_order,
+             is_active = excluded.is_active, starts_at = excluded.starts_at, ends_at = excluded.ends_at,
+             updated_at = excluded.updated_at`
+        ).bind(
+          bn.id,
+          bn.title ?? null,
+          bn.subtitle ?? null,
+          bn.image_url,
+          bn.mobile_image_url ?? null,
+          bn.link_url ?? null,
+          bn.cta_text ?? null,
+          bn.position || 'home_hero',
+          Number(bn.sort_order ?? 0),
+          bn.is_active === false ? 0 : 1,
+          bn.starts_at ?? null,
+          bn.ends_at ?? null,
+          bn.updated_at || new Date().toISOString()
+        )
+      );
+      affectedCount++;
+    }
+  }
+
+  if (Array.isArray(payload.upsert_badges)) {
+    for (const bg of payload.upsert_badges) {
+      if (!bg?.id || !bg?.slug) continue;
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO public_badges (id, name, slug, label, bg_color, text_color, icon, is_active, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             name = excluded.name, slug = excluded.slug, label = excluded.label,
+             bg_color = excluded.bg_color, text_color = excluded.text_color,
+             icon = excluded.icon, is_active = excluded.is_active, updated_at = excluded.updated_at`
+        ).bind(
+          bg.id,
+          bg.name,
+          bg.slug,
+          bg.label ?? bg.name,
+          bg.bg_color ?? null,
+          bg.text_color ?? null,
+          bg.icon ?? null,
+          bg.is_active === false ? 0 : 1,
+          bg.updated_at || new Date().toISOString()
+        )
+      );
+      affectedCount++;
+    }
+  }
+
+  if (Array.isArray(payload.upsert_radar_releases)) {
+    for (const rd of payload.upsert_radar_releases) {
+      if (!rd?.id || !rd?.slug || !rd?.title) continue;
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO public_radar_releases (
+             id, title, slug, brand_id, brand_name, brand_slug, license_id, license_name, license_slug,
+             category, release_date, estimated_quarter, status, msrp_usd, currency, hero_image_url,
+             gallery_json, description, editorial_summary, hype_score, is_featured,
+             milestones_json, related_products_json, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             title = excluded.title, slug = excluded.slug, brand_id = excluded.brand_id,
+             brand_name = excluded.brand_name, brand_slug = excluded.brand_slug,
+             license_id = excluded.license_id, license_name = excluded.license_name,
+             license_slug = excluded.license_slug, category = excluded.category,
+             release_date = excluded.release_date, estimated_quarter = excluded.estimated_quarter,
+             status = excluded.status, msrp_usd = excluded.msrp_usd, currency = excluded.currency,
+             hero_image_url = excluded.hero_image_url, gallery_json = excluded.gallery_json,
+             description = excluded.description, editorial_summary = excluded.editorial_summary,
+             hype_score = excluded.hype_score, is_featured = excluded.is_featured,
+             milestones_json = excluded.milestones_json, related_products_json = excluded.related_products_json,
+             updated_at = excluded.updated_at`
+        ).bind(
+          rd.id,
+          rd.title,
+          rd.slug,
+          rd.brand_id ?? null,
+          rd.brand_name ?? null,
+          rd.brand_slug ?? null,
+          rd.license_id ?? null,
+          rd.license_name ?? null,
+          rd.license_slug ?? null,
+          rd.category ?? null,
+          rd.release_date ?? null,
+          rd.estimated_quarter ?? null,
+          rd.status || 'announced',
+          rd.msrp_usd != null ? Number(rd.msrp_usd) : null,
+          rd.currency || 'USD',
+          rd.hero_image_url ?? null,
+          JSON.stringify(rd.gallery || []),
+          rd.description ?? null,
+          rd.editorial_summary ?? null,
+          Number(rd.hype_score ?? 0),
+          rd.is_featured ? 1 : 0,
+          JSON.stringify(rd.milestones || []),
+          JSON.stringify(rd.related_products || []),
+          rd.created_at || new Date().toISOString(),
+          rd.updated_at || new Date().toISOString()
+        )
+      );
+      affectedCount++;
+    }
+  }
+
+  if (Array.isArray(payload.upsert_slug_redirects)) {
+    for (const sr of payload.upsert_slug_redirects) {
+      if (!sr?.old_slug || !sr?.new_slug) continue;
+      statements.push(
+        env.DB.prepare(
+          `INSERT INTO public_slug_redirects (old_slug, new_slug, product_id, updated_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(old_slug) DO UPDATE SET
+             new_slug = excluded.new_slug, product_id = excluded.product_id, updated_at = excluded.updated_at`
+        ).bind(
+          sr.old_slug,
+          sr.new_slug,
+          sr.product_id ?? null,
+          sr.updated_at || new Date().toISOString()
         )
       );
       affectedCount++;
