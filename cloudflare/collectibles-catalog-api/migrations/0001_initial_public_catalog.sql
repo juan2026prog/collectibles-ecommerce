@@ -8,8 +8,6 @@
 --   3. Stock es puramente informativo; Checkout siempre revalida contra Supabase.
 -- ============================================================================
 
-PRAGMA foreign_keys = ON;
-
 -- 1. Categorías públicas
 CREATE TABLE IF NOT EXISTS public_categories (
   id TEXT PRIMARY KEY,
@@ -385,3 +383,12 @@ CREATE TABLE IF NOT EXISTS sync_audit_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sync_audit_created ON sync_audit_log(created_at DESC);
+
+-- 18. Estado inicial seguro: catálogo público desactivado mientras D1 esté vacío
+INSERT OR IGNORE INTO public_site_settings (key, value_json, updated_at)
+VALUES (
+  'runtime_routing_config',
+  '{"enabled":false,"mode":"disabled","domains":{"products":false,"productDetail":false,"taxonomies":false,"search":false,"promotions":false,"radar":false,"settings":false,"feeds":false},"reason":"Initial D1 schema created; public catalog disabled while empty"}',
+  strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+);
+

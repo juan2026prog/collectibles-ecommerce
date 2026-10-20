@@ -2,19 +2,20 @@ name = "collectibles-catalog-api"
 main = "src/index.ts"
 compatibility_date = "2024-11-01"
 workers_dev = true
+account_id = "57d225800fa5a46a2c4c8111b2fdd878"
 
 # D1 Binding ya existente en la cuenta de Cloudflare:
 # Base D1: collectibles-catalog
 # Binding: DB
-# NOTA: database_id se resuelve automáticamente en Cloudflare o mediante variable/config local sin exponer secretos.
 [[d1_databases]]
 binding = "DB"
 database_name = "collectibles-catalog"
-database_id = "REPLACE_OR_INHERIT_EXISTING_D1_DATABASE_ID"
+database_id = "a04a0ad7-2619-43c0-befd-77560f1993d2"
 migrations_dir = "migrations"
 
 [vars]
 ENVIRONMENT = "production"
+CATALOG_RUNTIME_ENABLED = "false"
 ALLOWED_ORIGINS = "https://collectibles.uy,https://www.collectibles.uy,http://localhost:5173,http://localhost:3000"
 DEFAULT_PAGE_SIZE = "24"
 MAX_PAGE_SIZE = "60"

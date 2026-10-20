@@ -218,14 +218,6 @@ async function verifySecretConstantTime(provided: string, expected: string): Pro
 }
 
 async function getRuntimeRoutingConfig(env: Env): Promise<RuntimeRoutingConfig> {
-  if (env.CATALOG_RUNTIME_ENABLED === 'false' || env.CATALOG_RUNTIME_ENABLED === '0') {
-    return {
-      ...DEFAULT_RUNTIME_CONFIG,
-      enabled: false,
-      mode: 'disabled',
-      reason: 'Disabled via Worker environment variable CATALOG_RUNTIME_ENABLED',
-    };
-  }
   try {
     const row = await env.DB.prepare(
       "SELECT value_json, updated_at FROM public_site_settings WHERE key = 'runtime_routing_config' LIMIT 1"
@@ -241,7 +233,15 @@ async function getRuntimeRoutingConfig(env: Env): Promise<RuntimeRoutingConfig> 
       };
     }
   } catch {
-    // Si la tabla aún no existe o falla, usar configuración activa por defecto
+    // Si la tabla aún no existe o falla, evaluar variable de entorno o default
+  }
+  if (env.CATALOG_RUNTIME_ENABLED === 'false' || env.CATALOG_RUNTIME_ENABLED === '0') {
+    return {
+      ...DEFAULT_RUNTIME_CONFIG,
+      enabled: false,
+      mode: 'disabled',
+      reason: 'Disabled via Worker environment variable CATALOG_RUNTIME_ENABLED (empty catalog guard)',
+    };
   }
   return DEFAULT_RUNTIME_CONFIG;
 }
