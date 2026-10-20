@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+// #!/usr/bin/env node
 /**
  * Sincronizador Incremental y Carga Inicial Controlada: Supabase -> Cloudflare D1
  * (Arquitectura Zero-Write sobre Supabase Nano 500 MB RAM)
