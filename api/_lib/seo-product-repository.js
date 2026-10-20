@@ -30,6 +30,30 @@ export function createSeoProductRepository(client, staticMappings = {}) {
     resolve(slug, read) {
       if (typeof slug !== 'string' || !slug || slug.length > 512) return Promise.resolve(null);
       return together(`resolve:${slug}`, async () => {
+        if (process.env.CF_PUBLIC_CATALOG_ENABLED === 'true') {
+          try {
+            const cfBase = (process.env.CF_CATALOG_WORKER_URL || 'https://collectibles-catalog-api.pixelsncodes-uy.workers.dev').replace(/\/+$/, '');
+            const cfRes = await fetch(`${cfBase}/api/v1/products/${encodeURIComponent(slug)}`, {
+              headers: { Accept: 'application/json', 'X-Catalog-Client': 'vercel-seo-prerender' },
+              signal: AbortSignal.timeout(3500),
+            });
+            if (cfRes.ok && cfRes.headers.get('X-Catalog-Kill-Switch') !== 'active') {
+              const body = await cfRes.json();
+              if (body?.product) {
+                const p = body.product;
+                p._d1DetailsPreloaded = {
+                  images: p.product_images || p.images || [],
+                  category: p.categories || p.category || null,
+                  brand: p.brands || p.brand || null,
+                  related: body.wave_products || [],
+                };
+                return found(p, Boolean(body.redirected_from || (isUuid(slug) && p.slug !== slug)));
+              }
+            }
+          } catch {
+            // Fall through to Supabase fallback
+          }
+        }
         if (isUuid(slug)) {
           const { data } = await read(productQuery('id', slug), 3500, 'product_lookup_id');
           if (visible(data)) return found(data, true);
@@ -55,6 +79,15 @@ export function createSeoProductRepository(client, staticMappings = {}) {
       });
     },
     details(product, read) {
+      if (product?._d1DetailsPreloaded) {
+        const pre = product._d1DetailsPreloaded;
+        return Promise.resolve([
+          { data: pre.images },
+          { data: pre.category },
+          { data: pre.brand },
+          { data: pre.related },
+        ]);
+      }
       if (!isUuid(product?.id)) throw Object.assign(new Error('Invalid product identifier'), { code: '22P02', stage: 'product_details' });
       return together(`details:${product.id}:${product.category_id || ''}:${product.brand_id || ''}`, async () => {
         const essential = read(async signal => {

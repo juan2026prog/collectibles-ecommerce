@@ -92,6 +92,35 @@ export class RadarIntegrationService {
     if (!term) return { localCatalog: [], internationalProducts: [], canonicalProducts: [], totalFound: 0 };
 
     try {
+      const { PublicCatalogProvider } = await import('../../lib/providers/PublicCatalogProvider');
+      if (PublicCatalogProvider.isDomainEnabled('radar') || PublicCatalogProvider.isDomainEnabled('products')) {
+        const { data } = await PublicCatalogProvider.getProducts({ search: term, availability: 'all', limit: 20 });
+        if (Array.isArray(data?.products)) {
+          const local = data.products.filter((p: any) => !p.is_international);
+          const intl = data.products
+            .filter((p: any) => p.is_international)
+            .map((p: any) => ({
+              id: p.id,
+              title: p.title,
+              brand: p.brand?.name || p.brand_name || 'Importado',
+              final_price_usd: p.final_price_usd || p.base_price,
+              image_url: p.image_url,
+              source_retailer: p.source_provider || 'Amazon',
+              status: p.status,
+            }));
+          return {
+            localCatalog: local,
+            internationalProducts: intl,
+            canonicalProducts: [],
+            totalFound: local.length + intl.length,
+          };
+        }
+      }
+    } catch {
+      // Fall through to Supabase fallback
+    }
+
+    try {
       const [localRes, intlRes, canRes] = await Promise.all([
         supabase.from('products').select('id, title, slug, base_price, image_url, brand:brands(name)').ilike('title', `%${term}%`).limit(20),
         supabase.from('international_products').select('id, title, brand, final_price_usd, image_url, source_retailer, status').ilike('title', `%${term}%`).limit(20),

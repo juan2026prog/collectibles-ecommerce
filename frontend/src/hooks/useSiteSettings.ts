@@ -73,38 +73,62 @@ export function fetchSettings(force: boolean = false): Promise<Record<string, st
   if (_promise) return _promise;
 
   // Stale-While-Revalidate: If we have stale cache, trigger background fetch
-  _promise = Promise.resolve(
-    supabase
+  _promise = (async () => {
+    try {
+      const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+      if (PublicCatalogProvider.isDomainEnabled('settings')) {
+        const { data: bundle } = await PublicCatalogProvider.getPublicSettingsBundle();
+        if (bundle?.site_config && Object.keys(bundle.site_config).length > 0) {
+          const s: Record<string, string> = {};
+          for (const [k, v] of Object.entries(bundle.site_config)) {
+            s[k] = typeof v === 'string' ? v : JSON.stringify(v);
+          }
+          _cache = s;
+          _cachedAt = Date.now();
+          try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+              localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(s));
+              localStorage.setItem(SETTINGS_TIMESTAMP_KEY, String(_cachedAt));
+            }
+          } catch (e) {}
+          _listeners.forEach((fn) => fn(s));
+          _promise = null;
+          return s;
+        }
+      }
+    } catch {
+      // Fall through to Supabase fallback if D1 kill-switch is active or unreachable
+    }
+
+    const { data, error } = await supabase
       .from('public_site_config')
-      .select('*')
-  )
-    .then(({ data, error }) => {
-      if (error) throw error;
-      const s: Record<string, string> = {};
-      data?.forEach((d: any) => {
-        if (d && d.key) {
-          s[d.key] = d.value;
-        }
-      });
-      _cache = s;
-      _cachedAt = Date.now();
+      .select('*');
 
-      try {
-        if (typeof window !== 'undefined' && window.localStorage) {
-          localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(s));
-          localStorage.setItem(SETTINGS_TIMESTAMP_KEY, String(_cachedAt));
-        }
-      } catch (e) {}
-
-      _listeners.forEach((fn) => fn(s));
-      _promise = null;
-      return s;
-    })
-    .catch((err) => {
-      console.warn('Failed to refresh site settings from Supabase, serving cached fallback:', err);
-      _promise = null;
-      return _cache || {};
+    if (error) throw error;
+    const s: Record<string, string> = {};
+    data?.forEach((d: any) => {
+      if (d && d.key) {
+        s[d.key] = d.value;
+      }
     });
+    _cache = s;
+    _cachedAt = Date.now();
+
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(s));
+        localStorage.setItem(SETTINGS_TIMESTAMP_KEY, String(_cachedAt));
+      }
+    } catch (e) {}
+
+    _listeners.forEach((fn) => fn(s));
+    _promise = null;
+    return s;
+  })().catch((err) => {
+    console.warn('Failed to refresh site settings, serving cached fallback:', err);
+    _promise = null;
+    return _cache || {};
+  });
 
   return _promise;
 }

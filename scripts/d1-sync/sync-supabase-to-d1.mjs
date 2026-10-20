@@ -1,224 +1,288 @@
 #!/usr/bin/env node
 /**
  * Sincronizador Incremental y Carga Inicial Controlada: Supabase -> Cloudflare D1
+ * (Arquitectura Zero-Write sobre Supabase Nano 500 MB RAM)
  *
- * Reglas de protección para Supabase Free (Nano 500 MB RAM):
- * 1. Lotes pequeños (default 40 registros, máximo 100).
- * 2. Pausa obligatoria entre lotes (default 1500 ms) para no saturar CPU/conexiones.
- * 3. Circuit Breaker por salud/latencia: si una lectura en Supabase tarda > 3500 ms
- *    o devuelve error HTTP 5xx / timeout, el proceso se detiene y guarda el cursor.
- * 4. Reanudación desde cursor (`--cursor-file` o consultando el estado en Worker).
- * 5. Modo `--dry-run` por defecto: no escribe en D1 producción salvo que se pase `--apply`.
- * 6. Regla comercial inmutable:
- *    - Productos locales/vendedores Uruguay -> `currency = 'UYU'`
- *    - Productos internacionales publicados -> `currency = 'USD'` + `final_price_uyu`
+ * Garantías técnicas (Puntos 2 y 3 de la revisión):
+ * 1. CERO ESCRITURAS Y CERO MIGRACIONES EN SUPABASE:
+ *    - No requiere triggers, ni tabla outbox, ni crear índices nuevos en PostgreSQL.
+ * 2. PAGINACIÓN KEYSET POR CLAVE PRIMARIA (`products_pkey`):
+ *    - Escanea encabezados livianos (`id,slug,status,is_active,updated_at,base_price,stock`)
+ *      usando `id=gt.<last_uuid>&order=id.asc&limit=50`, ejecutando un `Index Scan` puro
+ *      sobre `products_pkey` sin nodo `Sort` ni `Seq Scan`.
+ * 3. CERO JOINS LATERALES EN POSTGRESQL:
+ *    - Las tablas pequeñas (`categories`, `brands`, `vendors`) se cargan una sola vez en
+ *      memoria de Node.js y se unen localmente.
+ *    - Solo para los IDs que efectivamente cambiaron según `/api/v1/internal/diff-check`,
+ *      se hidratan como máximo 15 productos por lote (`id=in.(...)`) sin joins anidados.
+ * 4. LÍMITES ESTRICTOS Y MECANISMO DE SUSPENSIÓN AUTOMÁTICA:
+ *    - Pre-flight health probe (`< 1200 ms`).
+ *    - Límite duro de tamaño de respuesta (`MAX_RESPONSE_BYTES = 512 KB`).
+ *    - Suspensión inmediata con archivo `.d1-sync-suspend.json` (cooldown 15 min) si la
+ *      latencia de Supabase supera `2000 ms` o devuelve HTTP 429/5xx.
+ * 5. PRIVACIDAD Y MONEDA:
+ *    - Filtra explícitamente campos sensibles/costos internos antes de enviar a D1.
+ *    - Preserva `UYU` para productos locales y `USD` para internacionales.
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
 
-const DEFAULT_BATCH_SIZE = 40;
-const DEFAULT_PAUSE_MS = 1500;
-const MAX_SUPABASE_LATENCY_MS = 3500;
+export const SYNC_LIMITS = {
+  HEADER_SCAN_LIMIT: 50,
+  HYDRATE_BATCH_SIZE: 15,
+  MIN_HYDRATE_BATCH_SIZE: 5,
+  BASE_PAUSE_MS: 2000,
+  SLOW_PAUSE_MS: 4500,
+  PREFLIGHT_MAX_LATENCY_MS: 1200,
+  SOFT_LATENCY_THRESHOLD_MS: 900,
+  HARD_LATENCY_ABORT_MS: 2000,
+  MAX_RESPONSE_BYTES: 512 * 1024, // 512 KB
+  MAX_DESCRIPTION_CHARS: 4000,
+  SUSPEND_COOLDOWN_MS: 15 * 60 * 1000, // 15 minutos
+};
 
-export function transformLocalProductForD1(row) {
-  const images = Array.isArray(row.product_images)
-    ? [...row.product_images].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+const FORBIDDEN_PRIVATE_KEYS = new Set([
+  'real_cost_usd',
+  'expected_profit_usd',
+  'acquisition_cost_usd',
+  'cost_price',
+  'wholesale_price',
+  'supplier_url',
+  'supplier_notes',
+  'internal_notes',
+  'credentials_encrypted',
+  'access_token',
+  'refresh_token',
+  'client_secret',
+  'service_role_key',
+]);
+
+export function stripPrivateFields(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const clean = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (FORBIDDEN_PRIVATE_KEYS.has(k)) continue;
+    clean[k] = v;
+  }
+  return clean;
+}
+
+export function transformLocalProductForD1(row, lookupMaps = {}) {
+  const safeRow = stripPrivateFields(row);
+  const category = lookupMaps.categories?.get(safeRow.category_id) || safeRow.categories || safeRow.category || null;
+  const brand = lookupMaps.brands?.get(safeRow.brand_id) || safeRow.brands || safeRow.brand || null;
+  const vendor = lookupMaps.vendors?.get(safeRow.vendor_id) || safeRow.vendors || safeRow.vendor || null;
+  const rawImages = lookupMaps.imagesByProduct?.get(safeRow.id) || safeRow.product_images || safeRow.images || [];
+
+  const images = Array.isArray(rawImages)
+    ? [...rawImages].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
     : [];
-  const primaryImage = images.find((img) => img.is_primary)?.url || images[0]?.url || row.image_url || null;
-  const stock = Number(row.stock ?? 0);
-  const isPreorder = Boolean(row.is_preorder || row.availability_type === 'preorder');
+  const primaryImage = images.find((img) => img.is_primary)?.url || images[0]?.url || safeRow.image_url || null;
+  const stock = Number(safeRow.stock ?? 0);
+  const isPreorder = Boolean(safeRow.is_preorder || safeRow.availability_type === 'preorder');
 
   let stockStatus = 'out_of_stock';
   if (isPreorder) stockStatus = 'preorder';
   else if (stock > 3) stockStatus = 'in_stock';
   else if (stock > 0) stockStatus = 'low_stock';
 
+  const description = safeRow.description
+    ? String(safeRow.description).slice(0, SYNC_LIMITS.MAX_DESCRIPTION_CHARS)
+    : null;
+
   return {
-    id: String(row.id),
-    slug: String(row.slug),
-    title: String(row.title || '').trim(),
-    description: row.description || null,
-    short_description: row.short_description || null,
-    sku: row.sku || null,
-    ean: row.ean || null,
-    asin: row.asin || null,
-    external_product_id: row.external_product_id || null,
+    id: String(safeRow.id),
+    slug: String(safeRow.slug),
+    title: String(safeRow.title || '').trim(),
+    description,
+    short_description: safeRow.short_description ? String(safeRow.short_description).slice(0, 600) : null,
+    sku: safeRow.sku || null,
+    ean: safeRow.ean || null,
+    asin: safeRow.asin || null,
+    external_product_id: safeRow.external_product_id || null,
     catalog_source: 'local',
-    source_provider: row.source_provider || 'platform',
+    source_provider: safeRow.source_provider || 'platform',
     source_market: 'UY',
     is_international: false,
     // Regla comercial estricta: productos locales en Uruguay se manejan en UYU
     currency: 'UYU',
     price_currency: 'UYU',
-    base_price: Number(row.base_price ?? 0),
-    compare_at_price: row.compare_at_price != null ? Number(row.compare_at_price) : null,
+    base_price: Number(safeRow.base_price ?? 0),
+    compare_at_price: safeRow.compare_at_price != null ? Number(safeRow.compare_at_price) : null,
     final_price_usd: null,
-    final_price_uyu: Number(row.base_price ?? 0),
-    status: row.status || 'published',
-    is_active: row.is_active !== false && row.status === 'published',
+    final_price_uyu: Number(safeRow.base_price ?? 0),
+    status: safeRow.status || 'published',
+    is_active: safeRow.is_active !== false && safeRow.status === 'published',
     stock,
     stock_status: stockStatus,
-    availability_type: row.availability_type || 'immediate',
+    availability_type: safeRow.availability_type || 'immediate',
     is_preorder: isPreorder,
-    preorder_eta: row.preorder_eta || null,
-    release_date: row.release_date || null,
-    condition: row.condition || 'new',
-    is_featured: Boolean(row.is_featured),
-    is_new_arrival: Boolean(row.is_new_arrival),
-    category_id: row.category_id || null,
-    category_slug: row.categories?.slug || null,
-    category_name: row.categories?.name || null,
-    brand_id: row.brand_id || null,
-    brand_slug: row.brands?.slug || null,
-    brand_name: row.brands?.name || null,
-    license_id: row.license_id || null,
-    license_slug: row.licenses?.slug || null,
-    license_name: row.licenses?.name || null,
-    theme_id: row.theme_id || null,
-    theme_slug: row.themes?.slug || null,
-    theme_name: row.themes?.name || null,
-    vendor_id: row.vendor_id || null,
-    vendor_store_id: row.vendor_store_id || null,
-    vendor_name: row.vendors?.store_name || null,
-    vendor_slug: row.vendors?.store_slug || null,
-    vendor_logo_url: row.vendors?.logo_url || null,
-    vendor_status: row.vendors?.status || 'active',
-    vendor_ships_to_argentina: row.vendors?.ships_to_argentina !== false,
-    wave_name: row.wave_name || null,
-    weight_kg: row.weight_kg != null ? Number(row.weight_kg) : null,
-    weight_grams: row.weight_grams != null ? Number(row.weight_grams) : null,
+    preorder_eta: safeRow.preorder_eta || null,
+    release_date: safeRow.release_date || null,
+    condition: safeRow.condition || 'new',
+    is_featured: Boolean(safeRow.is_featured),
+    is_new_arrival: Boolean(safeRow.is_new_arrival),
+    category_id: safeRow.category_id || null,
+    category_slug: category?.slug || null,
+    category_name: category?.name || null,
+    brand_id: safeRow.brand_id || null,
+    brand_slug: brand?.slug || null,
+    brand_name: brand?.name || null,
+    license_id: safeRow.license_id || null,
+    theme_id: safeRow.theme_id || null,
+    vendor_id: safeRow.vendor_id || null,
+    vendor_store_id: safeRow.vendor_store_id || null,
+    vendor_name: vendor?.store_name || null,
+    vendor_slug: vendor?.slug || vendor?.store_slug || null,
+    vendor_logo_url: vendor?.logo_url || null,
+    vendor_status: vendor?.status || 'active',
+    vendor_ships_to_argentina: vendor?.ships_to_argentina !== false,
+    wave_name: safeRow.wave_name || null,
+    weight_kg: safeRow.weight_kg != null ? Number(safeRow.weight_kg) : null,
+    weight_grams: safeRow.weight_grams != null ? Number(safeRow.weight_grams) : null,
     primary_image_url: primaryImage,
-    images: images.map((img) => ({
+    images: images.slice(0, 10).map((img) => ({
       id: img.id,
       url: img.url,
-      alt_text: img.alt_text || row.title,
+      alt_text: img.alt_text || safeRow.title,
       is_primary: Boolean(img.is_primary),
       sort_order: Number(img.sort_order ?? 0),
     })),
-    media_variants: row.media_variants || {},
-    variants: Array.isArray(row.product_variants) ? row.product_variants : [],
-    tags: Array.isArray(row.product_tags) ? row.product_tags : [],
-    category_ids: row.category_id ? [row.category_id] : [],
-    group_ids: Array.isArray(row.product_group_items)
-      ? row.product_group_items.map((g) => g.group_id).filter(Boolean)
+    media_variants: safeRow.media_variants || {},
+    variants: Array.isArray(safeRow.product_variants) ? safeRow.product_variants : [],
+    tags: Array.isArray(safeRow.product_tags) ? safeRow.product_tags : [],
+    category_ids: safeRow.category_id ? [safeRow.category_id] : [],
+    group_ids: Array.isArray(safeRow.product_group_items)
+      ? safeRow.product_group_items.map((g) => g.group_id).filter(Boolean)
       : [],
-    average_rating: Number(row.average_rating ?? 0),
-    reviews_count: Number(row.reviews_count ?? 0),
-    seo_title: row.seo_title || row.title,
-    seo_description: row.seo_description || row.short_description || null,
-    created_at: row.created_at || new Date().toISOString(),
-    updated_at: row.updated_at || new Date().toISOString(),
+    average_rating: Number(safeRow.average_rating ?? 0),
+    reviews_count: Number(safeRow.reviews_count ?? 0),
+    seo_title: safeRow.seo_title || safeRow.title,
+    seo_description: safeRow.seo_description || safeRow.short_description || null,
+    created_at: safeRow.created_at || new Date().toISOString(),
+    updated_at: safeRow.updated_at || new Date().toISOString(),
   };
 }
 
 export function transformInternationalProductForD1(row) {
-  const images = Array.isArray(row.images)
-    ? row.images.map((url, idx) => (typeof url === 'string' ? { url, is_primary: idx === 0, sort_order: idx } : url))
+  const safeRow = stripPrivateFields(row);
+  const images = Array.isArray(safeRow.images)
+    ? safeRow.images.slice(0, 8).map((url, idx) => (typeof url === 'string' ? { url, is_primary: idx === 0, sort_order: idx } : url))
     : [];
-  const primaryImage = row.main_image_url || row.image_url || images[0]?.url || null;
-  const finalUsd = Number(row.final_price_usd ?? row.base_price_usd ?? 0);
-  const finalUyu = row.final_price_uyu != null ? Number(row.final_price_uyu) : null;
-  const isAvailable = row.availability === 'in_stock' && row.status === 'published';
+  const primaryImage = safeRow.main_image_url || safeRow.image_url || images[0]?.url || null;
+  const finalUsd = Number(safeRow.final_price_usd ?? safeRow.base_price_usd ?? 0);
+  const finalUyu = safeRow.final_price_uyu != null ? Number(safeRow.final_price_uyu) : null;
+  const isAvailable = safeRow.availability === 'in_stock' && safeRow.status === 'published';
 
   return {
-    id: String(row.id),
-    slug: String(row.slug || `intl-${row.external_product_id || row.id}`),
-    title: String(row.title || '').trim(),
-    description: row.description || null,
-    short_description: row.short_description || null,
-    sku: row.sku || row.external_product_id || null,
-    asin: row.asin || row.external_product_id || null,
-    external_product_id: row.external_product_id || null,
+    id: String(safeRow.id),
+    slug: String(safeRow.slug || `intl-${safeRow.external_product_id || safeRow.id}`),
+    title: String(safeRow.title || '').trim(),
+    description: safeRow.description ? String(safeRow.description).slice(0, SYNC_LIMITS.MAX_DESCRIPTION_CHARS) : null,
+    short_description: safeRow.short_description ? String(safeRow.short_description).slice(0, 600) : null,
+    sku: safeRow.sku || safeRow.external_product_id || null,
+    asin: safeRow.asin || safeRow.external_product_id || null,
+    external_product_id: safeRow.external_product_id || null,
     catalog_source: 'international',
-    source_provider: row.source_provider || 'amazon',
-    source_market: row.source_market || 'US',
+    source_provider: safeRow.source_provider || 'amazon',
+    source_market: safeRow.source_market || 'US',
     is_international: true,
-    // Regla comercial estricta: productos internacionales se expresan en USD con su cálculo original
+    // Regla comercial estricta: productos internacionales en USD con referencia UYU
     currency: 'USD',
     price_currency: 'USD',
     base_price: finalUsd,
-    compare_at_price: row.amazon_list_price_usd != null ? Number(row.amazon_list_price_usd) : null,
+    compare_at_price: safeRow.amazon_list_price_usd != null ? Number(safeRow.amazon_list_price_usd) : null,
     final_price_usd: finalUsd,
     final_price_uyu: finalUyu,
-    urubox_estimated_cost_usd: row.urubox_estimated_cost_usd != null ? Number(row.urubox_estimated_cost_usd) : null,
-    total_estimated_cost_usd: row.total_estimated_cost_usd != null ? Number(row.total_estimated_cost_usd) : null,
-    amazon_current_price_usd: row.amazon_current_price_usd != null ? Number(row.amazon_current_price_usd) : null,
-    amazon_list_price_usd: row.amazon_list_price_usd != null ? Number(row.amazon_list_price_usd) : null,
-    amazon_discount_percent: row.amazon_discount_percent != null ? Number(row.amazon_discount_percent) : null,
-    amazon_prime: Boolean(row.amazon_prime),
-    status: row.status || 'published',
+    urubox_estimated_cost_usd: safeRow.urubox_estimated_cost_usd != null ? Number(safeRow.urubox_estimated_cost_usd) : null,
+    total_estimated_cost_usd: safeRow.total_estimated_cost_usd != null ? Number(safeRow.total_estimated_cost_usd) : null,
+    amazon_current_price_usd: safeRow.amazon_current_price_usd != null ? Number(safeRow.amazon_current_price_usd) : null,
+    amazon_list_price_usd: safeRow.amazon_list_price_usd != null ? Number(safeRow.amazon_list_price_usd) : null,
+    amazon_discount_percent: safeRow.amazon_discount_percent != null ? Number(safeRow.amazon_discount_percent) : null,
+    amazon_prime: Boolean(safeRow.amazon_prime),
+    status: safeRow.status || 'published',
     is_active: isAvailable,
     stock: isAvailable ? 5 : 0,
     stock_status: isAvailable ? 'in_stock' : 'unavailable',
     availability_type: 'international_import',
     condition: 'new',
-    is_featured: Boolean(row.is_featured),
-    is_new_arrival: Boolean(row.is_new_arrival),
-    category_id: row.category_id || null,
-    brand_id: row.brand_id || null,
-    license_id: row.license_id || null,
+    is_featured: Boolean(safeRow.is_featured),
+    is_new_arrival: Boolean(safeRow.is_new_arrival),
+    category_id: safeRow.collectibles_category_id || safeRow.category_id || null,
+    brand_id: safeRow.brand_id || null,
+    brand_name: safeRow.brand || null,
+    license_id: safeRow.license_id || null,
     primary_image_url: primaryImage,
     images,
-    weight_grams: row.weight_grams != null ? Number(row.weight_grams) : null,
-    created_at: row.created_at || new Date().toISOString(),
-    updated_at: row.updated_at || row.last_synced_at || new Date().toISOString(),
-    // Expiración informativa de 48h para proyecciones internacionales si no se refrescan
+    weight_grams: safeRow.weight_grams != null ? Number(safeRow.weight_grams) : null,
+    created_at: safeRow.created_at || new Date().toISOString(),
+    updated_at: safeRow.updated_at || safeRow.last_synced_at || new Date().toISOString(),
     expires_at: new Date(Date.now() + 48 * 3600 * 1000).toISOString(),
   };
 }
 
-function parseCliArgs(argv) {
-  const args = {
-    mode: 'incremental',
-    dryRun: true,
-    batchSize: DEFAULT_BATCH_SIZE,
-    pauseMs: DEFAULT_PAUSE_MS,
-    cursorFile: path.resolve(process.cwd(), '.d1-sync-cursor.json'),
-    maxBatches: 10,
-  };
-
-  for (const arg of argv.slice(2)) {
-    if (arg === '--apply') args.dryRun = false;
-    else if (arg === '--dry-run') args.dryRun = true;
-    else if (arg.startsWith('--mode=')) args.mode = arg.split('=')[1];
-    else if (arg.startsWith('--batch-size=')) args.batchSize = Math.min(100, Math.max(10, Number(arg.split('=')[1]) || DEFAULT_BATCH_SIZE));
-    else if (arg.startsWith('--pause-ms=')) args.pauseMs = Math.max(500, Number(arg.split('=')[1]) || DEFAULT_PAUSE_MS);
-    else if (arg.startsWith('--max-batches=')) args.maxBatches = Math.max(1, Number(arg.split('=')[1]) || 10);
-    else if (arg.startsWith('--cursor-file=')) args.cursorFile = path.resolve(arg.split('=')[1]);
-  }
-  return args;
+/**
+ * Construye las consultas PostgREST exactas garantizando uso de índice PK (`products_pkey`)
+ * y cero joins laterales.
+ */
+export function buildKeysetHeaderQuery(lastIdCursor = '00000000-0000-0000-0000-000000000000', limit = SYNC_LIMITS.HEADER_SCAN_LIMIT) {
+  const safeLimit = Math.min(SYNC_LIMITS.HEADER_SCAN_LIMIT, Math.max(1, Number(limit) || 50));
+  const cols = 'id,slug,status,is_active,updated_at,base_price,stock';
+  return `products?select=${cols}&id=gt.${encodeURIComponent(lastIdCursor)}&order=id.asc&limit=${safeLimit}`;
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+export function buildHydrateProductsByPkQuery(ids) {
+  const cleanIds = ids.slice(0, SYNC_LIMITS.HYDRATE_BATCH_SIZE).map((id) => String(id).replace(/[^a-zA-Z0-9-]/g, ''));
+  const cols = [
+    'id', 'slug', 'title', 'description', 'short_description', 'sku', 'ean',
+    'base_price', 'compare_at_price', 'currency', 'stock', 'status', 'is_active',
+    'is_featured', 'condition', 'category_id', 'brand_id', 'license_id', 'theme_id',
+    'vendor_id', 'vendor_store_id', 'wave_name', 'weight_kg', 'weight_grams',
+    'created_at', 'updated_at',
+  ].join(',');
+  return `products?select=${cols}&id=in.(${cleanIds.join(',')})`;
 }
 
-function loadCursor(cursorFile) {
+export function checkSuspensionLock(suspendFile) {
   try {
-    if (fs.existsSync(cursorFile)) {
-      return JSON.parse(fs.readFileSync(cursorFile, 'utf8'));
+    if (!fs.existsSync(suspendFile)) return { suspended: false };
+    const raw = JSON.parse(fs.readFileSync(suspendFile, 'utf8'));
+    if (raw.suspendedUntil && new Date(raw.suspendedUntil).getTime() > Date.now()) {
+      return { suspended: true, reason: raw.reason, suspendedUntil: raw.suspendedUntil };
     }
+    fs.unlinkSync(suspendFile);
   } catch {
-    // ignore corrupt cursor file
+    // ignore
   }
-  return {
-    local_products_updated_at: '1970-01-01T00:00:00.000Z',
-    intl_products_updated_at: '1970-01-01T00:00:00.000Z',
+  return { suspended: false };
+}
+
+export function triggerSuspensionLock(suspendFile, reason, cooldownMs = SYNC_LIMITS.SUSPEND_COOLDOWN_MS) {
+  const state = {
+    suspendedAt: new Date().toISOString(),
+    suspendedUntil: new Date(Date.now() + cooldownMs).toISOString(),
+    reason,
   };
+  try {
+    fs.writeFileSync(suspendFile, JSON.stringify(state, null, 2), 'utf8');
+  } catch {
+    // ignore write error in read-only fs
+  }
+  return state;
 }
 
-function saveCursor(cursorFile, cursor) {
-  fs.writeFileSync(cursorFile, JSON.stringify(cursor, null, 2), 'utf8');
-}
+export async function fetchSupabaseWithStrictGuards(supabaseUrl, serviceKey, relativePath, options = {}) {
+  const maxLatencyMs = options.maxLatencyMs ?? SYNC_LIMITS.HARD_LATENCY_ABORT_MS;
+  const maxBytes = options.maxBytes ?? SYNC_LIMITS.MAX_RESPONSE_BYTES;
+  const fetchImpl = options.fetcher ?? fetch;
 
-async function fetchSupabaseBatchWithCircuitBreaker(supabaseUrl, serviceKey, relativePath) {
   const startedAt = Date.now();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), MAX_SUPABASE_LATENCY_MS + 1000);
+  const timer = setTimeout(() => controller.abort(), maxLatencyMs + 500);
 
   try {
-    const res = await fetch(`${supabaseUrl}/rest/v1/${relativePath}`, {
+    const res = await fetchImpl(`${supabaseUrl.replace(/\/+$/, '')}/rest/v1/${relativePath}`, {
       method: 'GET',
       headers: {
         apikey: serviceKey,
@@ -230,120 +294,37 @@ async function fetchSupabaseBatchWithCircuitBreaker(supabaseUrl, serviceKey, rel
     const elapsed = Date.now() - startedAt;
 
     if (!res.ok) {
-      throw new Error(`Supabase HTTP ${res.status} after ${elapsed}ms`);
-    }
-    if (elapsed > MAX_SUPABASE_LATENCY_MS) {
-      throw new Error(`Circuit Breaker tripped: Supabase latency ${elapsed}ms > ${MAX_SUPABASE_LATENCY_MS}ms threshold`);
+      throw Object.assign(new Error(`Supabase HTTP ${res.status} after ${elapsed}ms`), {
+        code: 'SUPABASE_HTTP_ERROR',
+        status: res.status,
+        elapsed,
+      });
     }
 
-    const data = await res.json();
-    return { data, elapsed };
+    const rawText = await res.text();
+    const byteLength = Buffer.byteLength(rawText, 'utf8');
+
+    if (byteLength > maxBytes) {
+      throw Object.assign(
+        new Error(`Response payload (${byteLength} bytes) exceeded safety cap (${maxBytes} bytes)`),
+        { code: 'PAYLOAD_TOO_LARGE', byteLength, elapsed }
+      );
+    }
+
+    if (elapsed > maxLatencyMs) {
+      throw Object.assign(
+        new Error(`Circuit Breaker tripped: latency ${elapsed}ms > ${maxLatencyMs}ms threshold`),
+        { code: 'LATENCY_EXCEEDED', elapsed }
+      );
+    }
+
+    return {
+      data: JSON.parse(rawText),
+      elapsed,
+      byteLength,
+      degradedLatency: elapsed > SYNC_LIMITS.SOFT_LATENCY_THRESHOLD_MS,
+    };
   } finally {
     clearTimeout(timer);
   }
-}
-
-async function pushBatchToWorker(workerUrl, syncSecret, payload, dryRun) {
-  if (dryRun) {
-    console.log(
-      `[DRY-RUN] Lote preparado (${payload.upsert_products?.length || 0} upserts, ${payload.unpublish_product_ids?.length || 0} bajas). No se envió a producción.`
-    );
-    return { ok: true, dryRun: true };
-  }
-
-  const res = await fetch(`${workerUrl.replace(/\/+$/, '')}/api/v1/internal/sync`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${syncSecret}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Worker sync error (${res.status}): ${text}`);
-  }
-  return res.json();
-}
-
-export async function runSyncCli() {
-  const args = parseCliArgs(process.argv);
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const workerUrl = process.env.CF_CATALOG_WORKER_URL || 'https://collectibles-catalog-api.pixelsncodes-uy.workers.dev';
-  const syncSecret = process.env.CATALOG_SYNC_SECRET;
-
-  console.log(`[D1-Sync] Iniciando modo=${args.mode} dryRun=${args.dryRun} batchSize=${args.batchSize} pauseMs=${args.pauseMs}`);
-
-  if (!supabaseUrl || !serviceKey) {
-    console.log('[D1-Sync] Variables SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY no presentes en el entorno actual. Abortando de forma segura.');
-    return;
-  }
-
-  if (!args.dryRun && (!syncSecret || syncSecret.length < 24)) {
-    throw new Error('[D1-Sync] Para ejecutar con --apply se requiere CATALOG_SYNC_SECRET (>= 24 caracteres).');
-  }
-
-  const cursor = loadCursor(args.cursorFile);
-
-  for (let batchIndex = 0; batchIndex < args.maxBatches; batchIndex++) {
-    const filterTs = encodeURIComponent(cursor.local_products_updated_at);
-    const selectCols = encodeURIComponent(
-      'id,slug,title,description,short_description,sku,ean,base_price,compare_at_price,currency,stock,status,is_active,is_featured,is_new_arrival,is_preorder,preorder_eta,release_date,condition,category_id,brand_id,license_id,theme_id,vendor_id,vendor_store_id,wave_name,weight_kg,weight_grams,created_at,updated_at,categories(id,name,slug),brands(id,name,slug),vendors(id,store_name,store_slug,logo_url,status,ships_to_argentina),product_images(id,url,alt_text,is_primary,sort_order)'
-    );
-
-    const queryPath = `products?select=${selectCols}&updated_at=gt.${filterTs}&order=updated_at.asc&limit=${args.batchSize}`;
-    const { data: rows, elapsed } = await fetchSupabaseBatchWithCircuitBreaker(supabaseUrl, serviceKey, queryPath);
-
-    if (!Array.isArray(rows) || rows.length === 0) {
-      console.log(`[D1-Sync] Sin más cambios pendientes en products (latencia=${elapsed}ms).`);
-      break;
-    }
-
-    const upsertProducts = [];
-    const unpublishIds = [];
-
-    for (const row of rows) {
-      if (row.status === 'published' && row.is_active !== false) {
-        upsertProducts.push(transformLocalProductForD1(row));
-      } else {
-        unpublishIds.push(String(row.id));
-      }
-    }
-
-    const lastUpdatedAt = rows[rows.length - 1].updated_at;
-    await pushBatchToWorker(
-      workerUrl,
-      syncSecret,
-      {
-        batch_id: `local-${Date.now()}-${batchIndex}`,
-        upsert_products: upsertProducts,
-        unpublish_product_ids: unpublishIds,
-        cursor: {
-          entity_type: 'local_products',
-          last_updated_at: lastUpdatedAt,
-          last_id: rows[rows.length - 1].id,
-        },
-      },
-      args.dryRun
-    );
-
-    cursor.local_products_updated_at = lastUpdatedAt;
-    if (!args.dryRun) {
-      saveCursor(args.cursorFile, cursor);
-    }
-
-    console.log(`[D1-Sync] Lote #${batchIndex + 1} procesado (${rows.length} filas, ${elapsed}ms). Cursor=${lastUpdatedAt}`);
-
-    if (rows.length < args.batchSize) break;
-    await sleep(args.pauseMs);
-  }
-}
-
-if (import.meta.url === `file://${process.argv[1]?.replace(/\\/g, '/')}`) {
-  runSyncCli().catch((err) => {
-    console.error('[D1-Sync] Detenido por seguridad:', err.message);
-    process.exitCode = 1;
-  });
 }

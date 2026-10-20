@@ -178,6 +178,25 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
 
     async function searchStores() {
       try {
+        try {
+          const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+          if (PublicCatalogProvider.isDomainEnabled('search')) {
+            const { data: res } = await PublicCatalogProvider.searchCatalog(searchQ, 4);
+            if (Array.isArray(res?.stores) && res.stores.length > 0) {
+              const store = res.stores[0];
+              setMatchedStore({
+                ...store,
+                badges: store.badges || [],
+              });
+            } else {
+              setMatchedStore(null);
+            }
+            return;
+          }
+        } catch {
+          // Fall through to Supabase fallback
+        }
+
         const { data } = await supabase
           .from('vendor_stores')
           .select('id, store_name, slug, logo_url, description, vendor_store_badge_assignments(status, approved_by, approved_at, vendor_store_badges(*))')

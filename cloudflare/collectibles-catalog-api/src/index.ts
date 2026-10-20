@@ -2,12 +2,15 @@
  * Collectibles Public Catalog API — Cloudflare Worker + D1
  *
  * Responsabilidad:
- * - Atender el 100% de las lecturas públicas (listados, fichas, taxonomías, filtros,
- *   búsqueda, promociones, radar, configuración pública, sitemaps y feeds SEO/Merchant/Meta).
- * - Utilizar Cloudflare Edge Cache (caches.default) + D1 parametrizado.
- * - Exponer un canal privado autenticado (POST /api/v1/internal/sync) para recibir
- *   actualizaciones incrementales idempotentes desde Supabase.
- * - NUNCA consultar Supabase directamente en rutas públicas.
+ * 1. Atender el 100% de las lecturas públicas (listados, facetas, fichas, taxonomías,
+ *    búsqueda, promociones, radar, configuración pública, sitemaps y feeds SEO/Merchant/Meta).
+ * 2. Exponer control de activación y rollback en tiempo de ejecución (`/api/v1/runtime-config`
+ *    y `POST /api/v1/internal/runtime-mode`) para conmutar en < 1s sin reconstruir el bundle Vite.
+ * 3. Blindar el canal privado de sincronización (`POST /api/v1/internal/sync` y
+ *    `POST /api/v1/internal/diff-check`) con comparación criptográfica en tiempo constante,
+ *    ventana anti-replay, límite de lote y filtro estricto anti-datos privados/PII.
+ * 4. Preservar la regla comercial inmutable: UYU para stock local/vendedores Uruguay,
+ *    USD para catálogo internacional publicado.
  */
 
 export interface D1PreparedStatement {
@@ -30,14 +33,49 @@ export interface Env {
   DEFAULT_PAGE_SIZE?: string;
   MAX_PAGE_SIZE?: string;
   ENVIRONMENT?: string;
+  CATALOG_RUNTIME_ENABLED?: string;
 }
 
 export interface ExecutionContextLike {
   waitUntil(promise: Promise<unknown>): void;
 }
 
+export interface RuntimeRoutingConfig {
+  enabled: boolean;
+  mode: 'active' | 'disabled' | 'degraded';
+  domains: {
+    products: boolean;
+    productDetail: boolean;
+    taxonomies: boolean;
+    search: boolean;
+    promotions: boolean;
+    radar: boolean;
+    settings: boolean;
+    feeds: boolean;
+  };
+  updated_at: string;
+  reason?: string;
+}
+
+const DEFAULT_RUNTIME_CONFIG: RuntimeRoutingConfig = {
+  enabled: true,
+  mode: 'active',
+  domains: {
+    products: true,
+    productDetail: true,
+    taxonomies: true,
+    search: true,
+    promotions: true,
+    radar: true,
+    settings: true,
+    feeds: true,
+  },
+  updated_at: '2026-10-20T00:00:00.000Z',
+};
+
 const CACHE_POLICIES = {
-  health: 'public, max-age=15, s-maxage=30',
+  health: 'public, max-age=10, s-maxage=20',
+  runtimeConfig: 'public, max-age=5, s-maxage=10, stale-while-revalidate=30',
   productsList: 'public, max-age=30, s-maxage=120, stale-while-revalidate=600',
   productDetail: 'public, max-age=30, s-maxage=180, stale-while-revalidate=900',
   taxonomies: 'public, max-age=120, s-maxage=600, stale-while-revalidate=3600',
@@ -48,6 +86,47 @@ const CACHE_POLICIES = {
   feeds: 'public, max-age=300, s-maxage=1800, stale-while-revalidate=7200',
   noStore: 'no-store, no-cache, must-revalidate',
 } as const;
+
+const MAX_SYNC_PAYLOAD_BYTES = 1_048_576; // 1 MB max por lote
+const MAX_SYNC_ITEMS_PER_BATCH = 50;
+const REPLAY_WINDOW_MS = 5 * 60 * 1000; // 5 minutos
+
+/**
+ * Lista negra de campos privados, financieros internos o PII que JAMÁS pueden almacenarse en D1.
+ */
+export const FORBIDDEN_PRIVATE_FIELDS = new Set([
+  'real_cost_usd',
+  'expected_profit_usd',
+  'acquisition_cost_usd',
+  'cost_price',
+  'wholesale_price',
+  'supplier_url',
+  'supplier_notes',
+  'internal_notes',
+  'credentials_encrypted',
+  'access_token',
+  'refresh_token',
+  'client_secret',
+  'service_role_key',
+  'customer_email',
+  'customer_phone',
+  'buyer_email',
+  'tax_id',
+  'shipping_address',
+  'ci',
+  'dni',
+  'cuit',
+]);
+
+export function sanitizePublicRecord<T extends Record<string, any>>(record: T): T {
+  if (!record || typeof record !== 'object') return record;
+  const clean: Record<string, any> = {};
+  for (const [k, v] of Object.entries(record)) {
+    if (FORBIDDEN_PRIVATE_FIELDS.has(k)) continue;
+    clean[k] = v;
+  }
+  return clean as T;
+}
 
 function parseJsonSafe<T>(raw: unknown, fallback: T): T {
   if (raw === null || raw === undefined) return fallback;
@@ -91,7 +170,8 @@ function buildCorsHeaders(request: Request, env: Env): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Catalog-Client, If-None-Match',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Catalog-Client, X-Sync-Timestamp, If-None-Match',
+    'Access-Control-Expose-Headers': 'X-Catalog-Mode, X-Catalog-Kill-Switch, X-Catalog-Cache, X-Catalog-Source',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
   };
@@ -117,26 +197,109 @@ function jsonResponse(
   });
 }
 
-function timingSafeEqualString(a: string, b: string): boolean {
-  if (!a || !b || a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+/**
+ * Comparación criptográfica en tiempo constante sobre hashes SHA-256 para evitar
+ * filtración de longitud o ataques de timing en el canal privado de sincronización.
+ */
+async function verifySecretConstantTime(provided: string, expected: string): Promise<boolean> {
+  if (!provided || !expected || expected.length < 24) return false;
+  const encoder = new TextEncoder();
+  const [hashA, hashB] = await Promise.all([
+    crypto.subtle.digest('SHA-256', encoder.encode(provided)),
+    crypto.subtle.digest('SHA-256', encoder.encode(expected)),
+  ]);
+  const viewA = new Uint8Array(hashA);
+  const viewB = new Uint8Array(hashB);
+  let diff = provided.length === expected.length ? 0 : 1;
+  for (let i = 0; i < viewA.length; i++) {
+    diff |= viewA[i] ^ viewB[i];
   }
   return diff === 0;
 }
 
+async function getRuntimeRoutingConfig(env: Env): Promise<RuntimeRoutingConfig> {
+  if (env.CATALOG_RUNTIME_ENABLED === 'false' || env.CATALOG_RUNTIME_ENABLED === '0') {
+    return {
+      ...DEFAULT_RUNTIME_CONFIG,
+      enabled: false,
+      mode: 'disabled',
+      reason: 'Disabled via Worker environment variable CATALOG_RUNTIME_ENABLED',
+    };
+  }
+  try {
+    const row = await env.DB.prepare(
+      "SELECT value_json, updated_at FROM public_site_settings WHERE key = 'runtime_routing_config' LIMIT 1"
+    ).first<{ value_json: string; updated_at: string }>();
+    if (row?.value_json) {
+      const parsed = parseJsonSafe<Partial<RuntimeRoutingConfig>>(row.value_json, {});
+      return {
+        enabled: parsed.enabled !== false,
+        mode: parsed.enabled === false ? 'disabled' : (parsed.mode || 'active'),
+        domains: { ...DEFAULT_RUNTIME_CONFIG.domains, ...(parsed.domains || {}) },
+        updated_at: row.updated_at || DEFAULT_RUNTIME_CONFIG.updated_at,
+        reason: parsed.reason,
+      };
+    }
+  } catch {
+    // Si la tabla aún no existe o falla, usar configuración activa por defecto
+  }
+  return DEFAULT_RUNTIME_CONFIG;
+}
+
 /**
  * Transforma una fila de `public_products` en D1 al formato exacto esperado por el frontend
- * de Collectibles (`Product` / `ProductCard`), preservando estrictamente `UYU` vs `USD`.
+ * y las funciones de Collectibles (`ProductCard`, `ProductDetail`, `useProducts`, `StorefrontSearchBar`).
+ * Preserva estrictamente `UYU` para productos locales y `USD` para internacionales.
  */
 export function mapD1RowToPublicProduct(row: Record<string, any>, detailed = false) {
   const isIntl = Boolean(row.is_international);
-  const canonicalCurrency = isIntl ? 'USD' : (row.currency === 'USD' ? 'USD' : 'UYU');
+  const canonicalCurrency: 'UYU' | 'USD' = isIntl ? 'USD' : (row.currency === 'USD' ? 'USD' : 'UYU');
   const images = parseJsonSafe<any[]>(row.images_json, []);
+  const primaryImg = row.primary_image_url || images.find((i: any) => i?.is_primary)?.url || images[0]?.url || null;
+  const normalizedImages = images.length > 0
+    ? images
+    : primaryImg
+      ? [{ id: `${row.id}-img0`, url: primaryImg, is_primary: true, sort_order: 0 }]
+      : [];
   const mediaVariants = parseJsonSafe<Record<string, any>>(row.media_variants_json, {});
+  const variants = parseJsonSafe<any[]>(row.variants_json, []);
   const categoryIds = parseJsonSafe<string[]>(row.category_ids_json, row.category_id ? [row.category_id] : []);
   const groupIds = parseJsonSafe<string[]>(row.group_ids_json, []);
+
+  const categoryObj = row.category_id
+    ? { id: row.category_id, name: row.category_name || '', slug: row.category_slug || '' }
+    : null;
+  const brandObj = row.brand_id
+    ? { id: row.brand_id, name: row.brand_name || '', slug: row.brand_slug || '', logo_url: null }
+    : isIntl
+      ? { id: 'intl', name: row.brand_name || 'Importado', slug: row.brand_slug || 'importado', logo_url: null }
+      : null;
+  const vendorObj = row.vendor_id
+    ? {
+        id: row.vendor_id,
+        store_name: row.vendor_name || 'Vendedor',
+        slug: row.vendor_slug || '',
+        store_slug: row.vendor_slug || '',
+        logo_url: row.vendor_logo_url || null,
+        status: row.vendor_status || 'active',
+        ships_to_argentina: Boolean(row.vendor_ships_to_argentina),
+      }
+    : null;
+  const vendorStoreObj = row.vendor_store_id
+    ? {
+        id: row.vendor_store_id,
+        store_name: row.vendor_name || 'Tienda Oficial',
+        slug: row.vendor_slug || '',
+        store_slug: row.vendor_slug || '',
+        logo_url: row.vendor_logo_url || null,
+        status: row.vendor_status || 'active',
+        is_official: true,
+      }
+    : null;
+
+  const basePrice = Number(row.base_price ?? 0);
+  const finalPriceUsd = row.final_price_usd != null ? Number(row.final_price_usd) : (isIntl ? basePrice : null);
+  const finalPriceUyu = row.final_price_uyu != null ? Number(row.final_price_uyu) : (!isIntl ? basePrice : null);
 
   const baseCard: Record<string, any> = {
     id: row.id,
@@ -149,13 +312,14 @@ export function mapD1RowToPublicProduct(row: Record<string, any>, detailed = fal
     source_provider: row.source_provider || (isIntl ? 'amazon' : 'platform'),
     source_market: row.source_market || (isIntl ? 'US' : 'UY'),
     is_international: isIntl,
-    // Regla comercial inmutable: UYU para productos locales/vendedores Uruguay, USD para internacionales
+    // Regla comercial inmutable: UYU para local Uruguay, USD para internacional
     currency: canonicalCurrency,
     price_currency: canonicalCurrency,
-    base_price: Number(row.base_price ?? 0),
+    base_price: basePrice,
+    price: basePrice,
     compare_at_price: row.compare_at_price != null ? Number(row.compare_at_price) : null,
-    final_price_usd: row.final_price_usd != null ? Number(row.final_price_usd) : (isIntl ? Number(row.base_price ?? 0) : null),
-    final_price_uyu: row.final_price_uyu != null ? Number(row.final_price_uyu) : (!isIntl ? Number(row.base_price ?? 0) : null),
+    final_price_usd: finalPriceUsd,
+    final_price_uyu: finalPriceUyu,
     urubox_estimated_cost_usd: row.urubox_estimated_cost_usd != null ? Number(row.urubox_estimated_cost_usd) : null,
     total_estimated_cost_usd: row.total_estimated_cost_usd != null ? Number(row.total_estimated_cost_usd) : null,
     amazon_current_price_usd: row.amazon_current_price_usd != null ? Number(row.amazon_current_price_usd) : null,
@@ -182,27 +346,46 @@ export function mapD1RowToPublicProduct(row: Record<string, any>, detailed = fal
     vendor_id: row.vendor_id || null,
     vendor_store_id: row.vendor_store_id || null,
     wave_name: row.wave_name || null,
-    primary_image_url: row.primary_image_url || (images[0]?.url ?? null),
-    product_images: images,
+    primary_image_url: primaryImg,
+    image_url: primaryImg,
+    // Alias duales para compatibilidad total con todos los componentes de React
+    images: normalizedImages,
+    product_images: normalizedImages,
+    variants: variants,
+    product_variants: variants,
     media_variants: mediaVariants,
     average_rating: Number(row.average_rating ?? 0),
     reviews_count: Number(row.reviews_count ?? 0),
-    categories: row.category_id
-      ? { id: row.category_id, name: row.category_name || '', slug: row.category_slug || '' }
-      : null,
-    brands: row.brand_id
-      ? { id: row.brand_id, name: row.brand_name || '', slug: row.brand_slug || '' }
-      : null,
-    vendors: row.vendor_id
+    category: categoryObj,
+    categories: categoryObj,
+    brand: brandObj,
+    brands: brandObj,
+    vendor: vendorObj,
+    vendors: vendorObj,
+    vendor_store: vendorStoreObj,
+    ...(isIntl
       ? {
-          id: row.vendor_id,
-          store_name: row.vendor_name || 'Vendedor',
-          store_slug: row.vendor_slug || '',
-          logo_url: row.vendor_logo_url || null,
-          status: row.vendor_status || 'active',
-          ships_to_argentina: Boolean(row.vendor_ships_to_argentina),
+          raw_international_data: {
+            id: row.id,
+            title: row.title,
+            final_price_usd: finalPriceUsd,
+            final_price_uyu: finalPriceUyu,
+            amazon_list_price_usd: row.amazon_list_price_usd,
+            image_url: primaryImg,
+            status: row.status || 'published',
+          },
+          international_products: [
+            {
+              id: row.id,
+              title: row.title,
+              final_price_usd: finalPriceUsd,
+              final_price_uyu: finalPriceUyu,
+              image_url: primaryImg,
+              status: row.status || 'published',
+            },
+          ],
         }
-      : null,
+      : {}),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -218,7 +401,6 @@ export function mapD1RowToPublicProduct(row: Record<string, any>, detailed = fal
     ean: row.ean || null,
     weight_kg: row.weight_kg != null ? Number(row.weight_kg) : null,
     weight_grams: row.weight_grams != null ? Number(row.weight_grams) : null,
-    product_variants: parseJsonSafe<any[]>(row.variants_json, []),
     product_tags: parseJsonSafe<any[]>(row.tags_json, []),
     buybox: parseJsonSafe<any[]>(row.buybox_json, []),
     payment_restrictions: parseJsonSafe<any[]>(row.payment_restrictions_json, []),
@@ -235,12 +417,24 @@ function buildProductsFilterSql(params: URLSearchParams) {
   const whereClauses: string[] = ['p.is_active = 1', "p.status = 'published'"];
   const bindings: unknown[] = [];
 
-  // Filtro local vs internacional
-  const isIntlParam = params.get('is_international') ?? params.get('international');
+  // Filtro local vs internacional (soporta `availability=local|international|all` y `is_international`)
+  const availabilityParam = params.get('availability');
+  const isIntlParam = params.get('is_international') ?? params.get('international') ?? params.get('isInternational');
   const catalogSource = params.get('catalog_source') ?? params.get('source');
-  if (catalogSource === 'international' || isIntlParam === 'true' || isIntlParam === '1') {
+
+  if (
+    availabilityParam === 'international' ||
+    catalogSource === 'international' ||
+    isIntlParam === 'true' ||
+    isIntlParam === '1'
+  ) {
     whereClauses.push('p.is_international = 1');
-  } else if (catalogSource === 'local' || isIntlParam === 'false' || isIntlParam === '0') {
+  } else if (
+    availabilityParam === 'local' ||
+    catalogSource === 'local' ||
+    isIntlParam === 'false' ||
+    isIntlParam === '0'
+  ) {
     whereClauses.push('p.is_international = 0');
   }
 
@@ -264,8 +458,8 @@ function buildProductsFilterSql(params: URLSearchParams) {
     );
     bindings.push(categoryId, categoryId);
   } else if (categorySlug) {
-    whereClauses.push('p.category_slug = ?');
-    bindings.push(categorySlug);
+    whereClauses.push('(p.category_slug = ? OR p.category_id = ?)');
+    bindings.push(categorySlug, categorySlug);
   }
 
   // Marca
@@ -275,8 +469,8 @@ function buildProductsFilterSql(params: URLSearchParams) {
     whereClauses.push('p.brand_id = ?');
     bindings.push(brandId);
   } else if (brandSlug) {
-    whereClauses.push('p.brand_slug = ?');
-    bindings.push(brandSlug);
+    whereClauses.push('(p.brand_slug = ? OR p.brand_id = ?)');
+    bindings.push(brandSlug, brandSlug);
   }
 
   // Licencia y Tema
@@ -286,8 +480,8 @@ function buildProductsFilterSql(params: URLSearchParams) {
     whereClauses.push('p.license_id = ?');
     bindings.push(licenseId);
   } else if (licenseSlug) {
-    whereClauses.push('p.license_slug = ?');
-    bindings.push(licenseSlug);
+    whereClauses.push('(p.license_slug = ? OR p.license_id = ?)');
+    bindings.push(licenseSlug, licenseSlug);
   }
 
   const themeId = params.get('theme_id') || params.get('themeId');
@@ -296,8 +490,8 @@ function buildProductsFilterSql(params: URLSearchParams) {
     whereClauses.push('p.theme_id = ?');
     bindings.push(themeId);
   } else if (themeSlug) {
-    whereClauses.push('p.theme_slug = ?');
-    bindings.push(themeSlug);
+    whereClauses.push('(p.theme_slug = ? OR p.theme_id = ?)');
+    bindings.push(themeSlug, themeSlug);
   }
 
   // Vendedor / Tienda
@@ -324,7 +518,7 @@ function buildProductsFilterSql(params: URLSearchParams) {
     bindings.push(waveName);
   }
 
-  const groupId = params.get('group_id') || params.get('groupId');
+  const groupId = params.get('group_id') || params.get('groupId') || params.get('group');
   if (groupId) {
     whereClauses.push('p.group_ids_json LIKE ?');
     bindings.push(`%"${groupId.replace(/["%_]/g, '')}"%`);
@@ -338,6 +532,16 @@ function buildProductsFilterSql(params: URLSearchParams) {
   }
   if (params.get('in_stock') === 'true' || params.get('only_in_stock') === 'true') {
     whereClauses.push("(p.stock > 0 OR p.stock_status IN ('in_stock', 'low_stock', 'preorder'))");
+  }
+
+  // Condición
+  const conditionParam = params.get('condition');
+  if (conditionParam === 'new') {
+    whereClauses.push("(p.condition LIKE 'new%' OR p.condition IS NULL)");
+  } else if (conditionParam === 'used') {
+    whereClauses.push("p.condition LIKE 'used%'");
+  } else if (conditionParam === 'loose') {
+    whereClauses.push("p.condition LIKE 'loose%'");
   }
 
   // Rango de precios
@@ -368,26 +572,29 @@ function buildProductsFilterSql(params: URLSearchParams) {
   if (qNorm) {
     const tokens = qNorm.split(' ').filter((t) => t.length >= 2).slice(0, 6);
     for (const token of tokens) {
-      whereClauses.push('(p.search_text LIKE ? OR LOWER(p.title) LIKE ? OR LOWER(COALESCE(p.brand_name, \'\')) LIKE ?)');
+      whereClauses.push("(p.search_text LIKE ? OR LOWER(p.title) LIKE ? OR LOWER(COALESCE(p.brand_name, '')) LIKE ?)");
       const pattern = `%${token}%`;
       bindings.push(pattern, pattern, pattern);
     }
   }
 
-  // Ordenamiento seguro (whitelist)
-  const sort = params.get('sort') || params.get('order_by') || 'newest';
-  let orderBySql = 'p.is_featured DESC, p.created_at DESC';
+  // Ordenamiento seguro (whitelist compatible con `sortBy` de useData.ts y `sort` de API v1)
+  const sort = params.get('sort') || params.get('sortBy') || params.get('order_by') || 'default';
+  let orderBySql = 'p.is_international ASC, p.is_featured DESC, p.created_at DESC';
   switch (sort) {
     case 'price_asc':
     case 'price-asc':
+    case 'price-low':
       orderBySql = 'p.base_price ASC, p.created_at DESC';
       break;
     case 'price_desc':
     case 'price-desc':
+    case 'price-high':
       orderBySql = 'p.base_price DESC, p.created_at DESC';
       break;
     case 'title_asc':
     case 'name_asc':
+    case 'name':
       orderBySql = 'p.title COLLATE NOCASE ASC';
       break;
     case 'rating_desc':
@@ -397,8 +604,12 @@ function buildProductsFilterSql(params: URLSearchParams) {
       orderBySql = 'p.updated_at DESC';
       break;
     case 'newest':
-    default:
       orderBySql = 'p.created_at DESC';
+      break;
+    case 'default':
+    case 'relevance':
+    default:
+      orderBySql = 'p.is_international ASC, p.is_featured DESC, p.created_at DESC';
       break;
   }
 
@@ -411,6 +622,7 @@ function buildProductsFilterSql(params: URLSearchParams) {
 
 async function handleHealth(env: Env, corsHeaders: Record<string, string>): Promise<Response> {
   const startedAt = Date.now();
+  const runtimeCfg = await getRuntimeRoutingConfig(env);
   try {
     const countRow = await env.DB.prepare(
       "SELECT COUNT(*) as total_products FROM public_products WHERE is_active = 1 AND status = 'published'"
@@ -425,6 +637,9 @@ async function handleHealth(env: Env, corsHeaders: Record<string, string>): Prom
         ok: true,
         service: 'collectibles-catalog-api',
         storage: 'cloudflare-d1',
+        runtime_mode: runtimeCfg.mode,
+        runtime_enabled: runtimeCfg.enabled,
+        domains: runtimeCfg.domains,
         latency_ms: Date.now() - startedAt,
         published_products: Number(countRow?.total_products ?? 0),
         last_sync: syncRow || null,
@@ -432,25 +647,46 @@ async function handleHealth(env: Env, corsHeaders: Record<string, string>): Prom
       },
       200,
       CACHE_POLICIES.health,
-      corsHeaders
+      corsHeaders,
+      { 'X-Catalog-Mode': runtimeCfg.mode }
     );
-  } catch (err: any) {
-    // Incluso si la tabla aún no fue migrada en producción, /health informa estado claro
+  } catch {
     return jsonResponse(
       {
         ok: true,
         service: 'collectibles-catalog-api',
         storage: 'cloudflare-d1',
         schema_initialized: false,
+        runtime_mode: runtimeCfg.mode,
+        runtime_enabled: runtimeCfg.enabled,
         latency_ms: Date.now() - startedAt,
         note: 'D1 reachable; awaiting initial schema migration.',
         timestamp: new Date().toISOString(),
       },
       200,
       CACHE_POLICIES.noStore,
-      corsHeaders
+      corsHeaders,
+      { 'X-Catalog-Mode': runtimeCfg.mode }
     );
   }
+}
+
+async function handleRuntimeConfigGet(env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  const cfg = await getRuntimeRoutingConfig(env);
+  return jsonResponse(
+    {
+      ok: true,
+      source: 'cloudflare-d1',
+      ...cfg,
+    },
+    200,
+    CACHE_POLICIES.runtimeConfig,
+    corsHeaders,
+    {
+      'X-Catalog-Mode': cfg.mode,
+      ...(cfg.enabled ? {} : { 'X-Catalog-Kill-Switch': 'active' }),
+    }
+  );
 }
 
 async function handleProductsList(
@@ -460,11 +696,11 @@ async function handleProductsList(
 ): Promise<Response> {
   const defaultLimit = Number.parseInt(env.DEFAULT_PAGE_SIZE || '24', 10) || 24;
   const maxLimit = Number.parseInt(env.MAX_PAGE_SIZE || '60', 10) || 60;
-  const limit = clampInt(url.searchParams.get('limit') || url.searchParams.get('pageSize'), defaultLimit, 1, maxLimit);
+  const limit = clampInt(url.searchParams.get('limit') || url.searchParams.get('pageSize'), defaultLimit, 0, maxLimit);
   const page = clampInt(url.searchParams.get('page'), 1, 1, 1000);
   const offset = url.searchParams.has('offset')
     ? clampInt(url.searchParams.get('offset'), 0, 0, 50000)
-    : (page - 1) * limit;
+    : (page - 1) * Math.max(1, limit);
 
   const { whereSql, bindings, orderBySql } = buildProductsFilterSql(url.searchParams);
 
@@ -485,37 +721,48 @@ async function handleProductsList(
       p.theme_id, p.theme_slug, p.theme_name,
       p.vendor_id, p.vendor_store_id, p.vendor_name, p.vendor_slug, p.vendor_logo_url,
       p.vendor_status, p.vendor_ships_to_argentina, p.wave_name,
-      p.primary_image_url, p.images_json, p.media_variants_json,
+      p.primary_image_url, p.images_json, p.media_variants_json, p.variants_json,
       p.category_ids_json, p.group_ids_json,
       p.average_rating, p.reviews_count, p.created_at, p.updated_at
      FROM public_products p
      WHERE ${whereSql}
      ORDER BY ${orderBySql}
      LIMIT ? OFFSET ?`
-  ).bind(...bindings, limit, offset);
+  ).bind(...bindings, Math.max(1, limit), offset);
 
   const [countRes, rowsRes] = await env.DB.batch<any>([countStmt, rowsStmt]);
   const total = Number(countRes?.results?.[0]?.total ?? 0);
-  const products = (rowsRes?.results || []).map((r) => mapD1RowToPublicProduct(r, false));
+  const products = limit === 0 ? [] : (rowsRes?.results || []).map((r) => mapD1RowToPublicProduct(r, false));
 
   return jsonResponse(
     {
       ok: true,
       source: 'cloudflare-d1',
+      count: total,
+      totalCount: total,
       products,
       items: products,
+      image_variants: [],
+      snapshot_meta: {
+        stale: false,
+        age_seconds: 0,
+        severity: 'fresh',
+        checkout_revalidation_required: false,
+        cards_degraded: false,
+      },
       pagination: {
         total,
         page,
         limit,
         offset,
-        total_pages: Math.ceil(total / limit),
+        total_pages: limit > 0 ? Math.ceil(total / limit) : 1,
         has_more: offset + products.length < total,
       },
     },
     200,
     CACHE_POLICIES.productsList,
-    corsHeaders
+    corsHeaders,
+    { 'X-Catalog-Source': 'cloudflare-d1', 'X-Catalog-Mode': 'active' }
   );
 }
 
@@ -572,12 +819,12 @@ async function handleProductDetail(
 
   const product = mapD1RowToPublicProduct(row, true);
 
-  // Productos de la misma wave si corresponde
   let waveProducts: any[] = [];
   if (row.wave_name) {
     const waveRes = await env.DB.prepare(
       `SELECT id, slug, title, currency, price_currency, base_price, final_price_usd, final_price_uyu,
-              is_international, primary_image_url, images_json, media_variants_json, stock, stock_status
+              is_international, primary_image_url, images_json, media_variants_json, stock, stock_status,
+              brand_id, brand_name, brand_slug, category_id, category_name, category_slug
        FROM public_products
        WHERE wave_name = ? AND id != ? AND is_active = 1 AND status = 'published'
        ORDER BY created_at DESC LIMIT 8`
@@ -600,7 +847,11 @@ async function handleProductDetail(
   );
 }
 
-async function handleTaxonomies(
+/**
+ * Devuelve taxonomías completas Y facetas compatibles con `/api/public-catalog?mode=facets`
+ * (`taxonomies` + `facets`: `categoryFacets`, `brandFacets`, `licenseFacets`, `themeFacets`, `availabilityCounts`, `conditionCounts`).
+ */
+async function handleTaxonomiesAndFacets(
   url: URL,
   env: Env,
   corsHeaders: Record<string, string>
@@ -614,6 +865,9 @@ async function handleTaxonomies(
     env.DB.prepare('SELECT * FROM public_themes WHERE is_active = 1 ORDER BY sort_order ASC, name ASC'),
     env.DB.prepare('SELECT license_id, theme_id FROM public_license_themes'),
     env.DB.prepare('SELECT * FROM public_product_groups WHERE is_active = 1 ORDER BY sort_order ASC, name ASC'),
+    env.DB.prepare(
+      "SELECT id, category_id, brand_id, license_id, theme_id, is_international, condition FROM public_products WHERE is_active = 1 AND status = 'published'"
+    ),
   ];
 
   if (brandIdFilter) {
@@ -633,14 +887,82 @@ async function handleTaxonomies(
     ...g,
     product_ids: parseJsonSafe<string[]>(g.product_ids_json, []),
   }));
+  const activeProducts = batchResults[6]?.results || [];
   const brandCategoryIds = brandIdFilter
-    ? (batchResults[6]?.results || []).map((r: any) => r.category_id)
+    ? (batchResults[7]?.results || []).map((r: any) => r.category_id)
     : undefined;
+
+  // Calcular facetas en memoria sobre las filas proyectadas
+  const categoryCounts: Record<string, number> = {};
+  const brandCounts = new Map<string, number>();
+  const licenseCounts = new Map<string, number>();
+  const themeCounts = new Map<string, number>();
+  const availabilityCounts = { all: 0, local: 0, international: 0 };
+  const conditionCounts = { all: 0, new: 0, used: 0, loose: 0 };
+
+  for (const c of categories) {
+    categoryCounts[c.id] = Number(c.product_count_local ?? 0) + Number(c.product_count_intl ?? 0);
+  }
+
+  for (const p of activeProducts) {
+    availabilityCounts.all += 1;
+    if (p.is_international) availabilityCounts.international += 1;
+    else availabilityCounts.local += 1;
+
+    const cond = String(p.condition || 'new');
+    conditionCounts.all += 1;
+    if (cond.startsWith('used')) conditionCounts.used += 1;
+    else if (cond.startsWith('loose')) conditionCounts.loose += 1;
+    else conditionCounts.new += 1;
+
+    if (p.category_id) {
+      categoryCounts[p.category_id] = (categoryCounts[p.category_id] || 0) + 1;
+    }
+    if (p.brand_id) {
+      brandCounts.set(p.brand_id, (brandCounts.get(p.brand_id) || 0) + 1);
+    }
+    if (p.license_id) {
+      licenseCounts.set(p.license_id, (licenseCounts.get(p.license_id) || 0) + 1);
+    }
+    if (p.theme_id) {
+      themeCounts.set(p.theme_id, (themeCounts.get(p.theme_id) || 0) + 1);
+    }
+  }
+
+  const facets = {
+    categoryFacets: categoryCounts,
+    brandFacets: brands
+      .map((b: any) => ({
+        brand_id: b.id,
+        brand_name: b.name,
+        brand_slug: b.slug,
+        product_count: brandCounts.get(b.id) || 0,
+      }))
+      .filter((b: any) => b.product_count > 0),
+    licenseFacets: licenses
+      .map((l: any) => ({
+        ...l,
+        published_product_count: licenseCounts.get(l.id) || 0,
+      }))
+      .filter((l: any) => l.published_product_count > 0),
+    themeFacets: themes
+      .map((t: any) => ({
+        ...t,
+        published_product_count: themeCounts.get(t.id) || 0,
+      }))
+      .filter((t: any) => t.published_product_count > 0),
+    availabilityCounts,
+    conditionCounts,
+    totalCatalogProducts: availabilityCounts.all,
+  };
 
   return jsonResponse(
     {
       ok: true,
       source: 'cloudflare-d1',
+      count: availabilityCounts.all,
+      products: [],
+      image_variants: [],
       categories,
       brands,
       licenses,
@@ -648,6 +970,15 @@ async function handleTaxonomies(
       license_themes: licenseThemes,
       product_groups: productGroups,
       brand_category_ids: brandCategoryIds,
+      taxonomies: {
+        categories,
+        brands,
+        licenses,
+        themes,
+        license_themes: licenseThemes,
+        product_groups: productGroups,
+      },
+      facets,
     },
     200,
     CACHE_POLICIES.taxonomies,
@@ -689,11 +1020,11 @@ async function handleSearch(
        LIMIT ?`
     ).bind(...bindings, limit),
     env.DB.prepare(
-      `SELECT id, vendor_id, store_name, store_slug, logo_url, banner_url, badges_json, rating
+      `SELECT id, vendor_id, store_name, store_slug, description, logo_url, banner_url, badges_json, rating
        FROM public_vendor_stores
-       WHERE is_active = 1 AND status = 'active' AND LOWER(store_name) LIKE ?
+       WHERE is_active = 1 AND status = 'active' AND (LOWER(store_name) LIKE ? OR LOWER(store_slug) LIKE ?)
        LIMIT 4`
-    ).bind(likePattern),
+    ).bind(likePattern, likePattern),
     env.DB.prepare(
       `SELECT id, name, slug, logo_url
        FROM public_brands
@@ -716,6 +1047,7 @@ async function handleSearch(
       products: (prodRes?.results || []).map((r) => mapD1RowToPublicProduct(r, false)),
       stores: (storeRes?.results || []).map((s) => ({
         ...s,
+        slug: s.store_slug,
         badges: parseJsonSafe<any[]>(s.badges_json, []),
       })),
       brands: brandRes?.results || [],
@@ -744,7 +1076,9 @@ async function handlePromotions(env: Env, corsHeaders: Record<string, string>): 
     name: p.name,
     description: p.description,
     type: p.type,
+    discount_type: p.type,
     value: Number(p.value ?? 0),
+    discount_value: Number(p.value ?? 0),
     min_purchase_amount: p.min_purchase_amount != null ? Number(p.min_purchase_amount) : null,
     max_discount_amount: p.max_discount_amount != null ? Number(p.max_discount_amount) : null,
     starts_at: p.starts_at,
@@ -752,6 +1086,7 @@ async function handlePromotions(env: Env, corsHeaders: Record<string, string>): 
     is_active: Boolean(p.is_active),
     priority: Number(p.priority ?? 0),
     stackable: Boolean(p.stackable),
+    is_stackable: Boolean(p.stackable),
     badge_text: p.badge_text,
     applies_to_all: Boolean(p.applies_to_all),
     promotion_targets: parseJsonSafe<any[]>(p.targets_json, []),
@@ -766,6 +1101,27 @@ async function handlePromotions(env: Env, corsHeaders: Record<string, string>): 
     CACHE_POLICIES.promotions,
     corsHeaders
   );
+}
+
+function mapD1RadarRow(row: Record<string, any>) {
+  return {
+    ...row,
+    official_image_url: row.hero_image_url || row.official_image_url || null,
+    release_date_start: row.release_date || row.release_date_start || null,
+    date_display_text: row.estimated_quarter || row.release_date || null,
+    expected_price_usd: row.msrp_usd != null ? Number(row.msrp_usd) : null,
+    msrp: row.msrp_usd != null ? Number(row.msrp_usd) : null,
+    summary: row.editorial_summary || row.description || null,
+    radar_why: row.editorial_summary || null,
+    is_published: true,
+    is_featured: Boolean(row.is_featured),
+    brand: row.brand_id ? { id: row.brand_id, name: row.brand_name || '', slug: row.brand_slug || '' } : null,
+    license: row.license_id ? { id: row.license_id, name: row.license_name || '', slug: row.license_slug || '' } : null,
+    gallery: parseJsonSafe<any[]>(row.gallery_json, []),
+    milestones: parseJsonSafe<any[]>(row.milestones_json, []),
+    release_milestones: parseJsonSafe<any[]>(row.milestones_json, []),
+    related_products: parseJsonSafe<any[]>(row.related_products_json, []),
+  };
 }
 
 async function handleRadar(
@@ -790,13 +1146,7 @@ async function handleRadar(
       {
         ok: true,
         source: 'cloudflare-d1',
-        release: {
-          ...row,
-          is_featured: Boolean(row.is_featured),
-          gallery: parseJsonSafe<any[]>(row.gallery_json, []),
-          release_milestones: parseJsonSafe<any[]>(row.milestones_json, []),
-          related_products: parseJsonSafe<any[]>(row.related_products_json, []),
-        },
+        release: mapD1RadarRow(row),
       },
       200,
       CACHE_POLICIES.radar,
@@ -811,13 +1161,7 @@ async function handleRadar(
     .bind(limit)
     .all<Record<string, any>>();
 
-  const releases = (res.results || []).map((row) => ({
-    ...row,
-    is_featured: Boolean(row.is_featured),
-    gallery: parseJsonSafe<any[]>(row.gallery_json, []),
-    release_milestones: parseJsonSafe<any[]>(row.milestones_json, []),
-    related_products: parseJsonSafe<any[]>(row.related_products_json, []),
-  }));
+  const releases = (res.results || []).map(mapD1RadarRow);
 
   return jsonResponse(
     { ok: true, source: 'cloudflare-d1', releases },
@@ -850,6 +1194,7 @@ async function handleSettings(env: Env, corsHeaders: Record<string, string>): Pr
         pause_message: null,
       },
       international_markets: settingsMap['international_markets'] || [],
+      runtime_routing_config: settingsMap['runtime_routing_config'] || DEFAULT_RUNTIME_CONFIG,
       banners: bannersRes?.results || [],
       badges: badgesRes?.results || [],
     },
@@ -915,6 +1260,7 @@ ${itemsXml}
     headers: {
       'Content-Type': 'application/xml; charset=utf-8',
       'Cache-Control': CACHE_POLICIES.feeds,
+      'X-Feed-Source': 'cloudflare-d1',
       ...corsHeaders,
     },
   });
@@ -958,6 +1304,7 @@ async function handleMetaFeedCsv(env: Env, corsHeaders: Record<string, string>):
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
       'Cache-Control': CACHE_POLICIES.feeds,
+      'X-Feed-Source': 'cloudflare-d1',
       ...corsHeaders,
     },
   });
@@ -966,26 +1313,36 @@ async function handleMetaFeedCsv(env: Env, corsHeaders: Record<string, string>):
 /**
  * Genera datos de Sitemap XML desde D1 sin consultar Supabase.
  */
-async function handleSitemapXml(env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+async function handleSitemapXml(url: URL, env: Env, corsHeaders: Record<string, string>): Promise<Response> {
+  const typeParam = (url.searchParams.get('type') || '').toLowerCase();
   const [prods, cats, brands] = await env.DB.batch<any>([
     env.DB.prepare("SELECT slug, updated_at FROM public_products WHERE is_active = 1 AND status = 'published' ORDER BY updated_at DESC LIMIT 10000"),
     env.DB.prepare('SELECT slug, updated_at FROM public_categories WHERE is_active = 1'),
     env.DB.prepare("SELECT slug, updated_at FROM public_brands WHERE is_active = 1 AND status = 'approved'"),
   ]);
 
-  const urls: string[] = [
-    '  <url><loc>https://collectibles.uy/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>',
-    '  <url><loc>https://collectibles.uy/tienda</loc><changefreq>daily</changefreq><priority>0.9</priority></url>',
-  ];
+  const urls: string[] = [];
 
-  for (const c of cats?.results || []) {
-    urls.push(`  <url><loc>https://collectibles.uy/categoria/${encodeURIComponent(c.slug)}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`);
+  if (!typeParam || typeParam === 'pages' || typeParam === 'all') {
+    urls.push(
+      '  <url><loc>https://collectibles.uy/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>',
+      '  <url><loc>https://collectibles.uy/tienda</loc><changefreq>daily</changefreq><priority>0.9</priority></url>'
+    );
   }
-  for (const b of brands?.results || []) {
-    urls.push(`  <url><loc>https://collectibles.uy/marca/${encodeURIComponent(b.slug)}</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>`);
+  if (!typeParam || typeParam === 'categories' || typeParam === 'all') {
+    for (const c of cats?.results || []) {
+      urls.push(`  <url><loc>https://collectibles.uy/categoria/${encodeURIComponent(c.slug)}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`);
+    }
   }
-  for (const p of prods?.results || []) {
-    urls.push(`  <url><loc>https://collectibles.uy/producto/${encodeURIComponent(p.slug)}</loc><changefreq>daily</changefreq><priority>0.8</priority></url>`);
+  if (!typeParam || typeParam === 'brands' || typeParam === 'all') {
+    for (const b of brands?.results || []) {
+      urls.push(`  <url><loc>https://collectibles.uy/marca/${encodeURIComponent(b.slug)}</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>`);
+    }
+  }
+  if (!typeParam || typeParam === 'products' || typeParam === 'all') {
+    for (const p of prods?.results || []) {
+      urls.push(`  <url><loc>https://collectibles.uy/producto/${encodeURIComponent(p.slug)}</loc><changefreq>daily</changefreq><priority>0.8</priority></url>`);
+    }
   }
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -998,9 +1355,172 @@ ${urls.join('\n')}
     headers: {
       'Content-Type': 'application/xml; charset=utf-8',
       'Cache-Control': CACHE_POLICIES.feeds,
+      'X-Sitemap-Source': 'cloudflare-d1',
       ...corsHeaders,
     },
   });
+}
+
+async function authorizeInternalRequest(request: Request, env: Env): Promise<{ ok: boolean; error?: string }> {
+  const expectedSecret = env.CATALOG_SYNC_SECRET || '';
+  const authHeader = request.headers.get('Authorization') || '';
+  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+
+  const isValidSecret = await verifySecretConstantTime(bearerToken, expectedSecret);
+  if (!isValidSecret) {
+    return { ok: false, error: 'Unauthorized internal request' };
+  }
+
+  // Protección anti-replay opcional por cabecera X-Sync-Timestamp
+  const tsHeader = request.headers.get('X-Sync-Timestamp');
+  if (tsHeader) {
+    const tsMs = Number(tsHeader);
+    if (!Number.isFinite(tsMs) || Math.abs(Date.now() - tsMs) > REPLAY_WINDOW_MS) {
+      return { ok: false, error: 'Sync timestamp expired or outside replay window' };
+    }
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Endpoint privado de reconciliación ligera (`POST /api/v1/internal/diff-check`):
+ * Recibe cabeceras `{ id, updated_at, status, is_active, base_price, stock }` leídas por PK
+ * desde Supabase y devuelve únicamente los IDs que cambiaron o deben despublicarse en D1.
+ */
+async function handleInternalDiffCheck(
+  request: Request,
+  env: Env,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  const auth = await authorizeInternalRequest(request, env);
+  if (!auth.ok) {
+    return jsonResponse({ ok: false, error: auth.error }, 401, CACHE_POLICIES.noStore, corsHeaders);
+  }
+
+  let body: any;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ ok: false, error: 'Invalid JSON' }, 400, CACHE_POLICIES.noStore, corsHeaders);
+  }
+
+  const candidates: Array<{
+    id: string;
+    updated_at?: string;
+    status?: string;
+    is_active?: boolean;
+    base_price?: number;
+    stock?: number;
+  }> = Array.isArray(body?.items) ? body.items.slice(0, 100) : [];
+
+  if (candidates.length === 0) {
+    return jsonResponse({ ok: true, changed_ids: [], unpublish_ids: [] }, 200, CACHE_POLICIES.noStore, corsHeaders);
+  }
+
+  const ids = candidates.map((c) => String(c.id)).filter(Boolean);
+  const placeholders = ids.map(() => '?').join(', ');
+  const existingRes = await env.DB.prepare(
+    `SELECT id, updated_at, status, is_active, base_price, stock FROM public_products WHERE id IN (${placeholders})`
+  )
+    .bind(...ids)
+    .all<Record<string, any>>();
+
+  const d1Map = new Map<string, Record<string, any>>();
+  for (const row of existingRes.results || []) {
+    d1Map.set(String(row.id), row);
+  }
+
+  const changedIds: string[] = [];
+  const unpublishIds: string[] = [];
+
+  for (const item of candidates) {
+    const id = String(item.id);
+    const isPublishedInSource = item.status === 'published' && item.is_active !== false;
+    const existing = d1Map.get(id);
+
+    if (!isPublishedInSource) {
+      if (existing && (existing.is_active === 1 || existing.status === 'published')) {
+        unpublishIds.push(id);
+      }
+      continue;
+    }
+
+    if (
+      !existing ||
+      existing.is_active !== 1 ||
+      existing.status !== 'published' ||
+      existing.updated_at !== item.updated_at ||
+      Math.abs(Number(existing.base_price ?? 0) - Number(item.base_price ?? 0)) > 0.01 ||
+      Number(existing.stock ?? 0) !== Number(item.stock ?? 0)
+    ) {
+      changedIds.push(id);
+    }
+  }
+
+  return jsonResponse(
+    {
+      ok: true,
+      checked: candidates.length,
+      changed_ids: changedIds,
+      unpublish_ids: unpublishIds,
+    },
+    200,
+    CACHE_POLICIES.noStore,
+    corsHeaders
+  );
+}
+
+/**
+ * Endpoint privado para cambiar el modo de ejecución y rollback en caliente (< 1s):
+ * `POST /api/v1/internal/runtime-mode`
+ */
+async function handleInternalRuntimeMode(
+  request: Request,
+  env: Env,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  const auth = await authorizeInternalRequest(request, env);
+  if (!auth.ok) {
+    return jsonResponse({ ok: false, error: auth.error }, 401, CACHE_POLICIES.noStore, corsHeaders);
+  }
+
+  let body: Partial<RuntimeRoutingConfig>;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonResponse({ ok: false, error: 'Invalid JSON' }, 400, CACHE_POLICIES.noStore, corsHeaders);
+  }
+
+  const current = await getRuntimeRoutingConfig(env);
+  const nextConfig: RuntimeRoutingConfig = {
+    enabled: typeof body.enabled === 'boolean' ? body.enabled : current.enabled,
+    mode: body.enabled === false ? 'disabled' : (body.mode || (body.enabled === true ? 'active' : current.mode)),
+    domains: {
+      ...current.domains,
+      ...(body.domains || {}),
+    },
+    updated_at: new Date().toISOString(),
+    reason: body.reason || current.reason,
+  };
+
+  await env.DB.prepare(
+    `INSERT INTO public_site_settings (key, value_json, updated_at)
+     VALUES ('runtime_routing_config', ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`
+  )
+    .bind(JSON.stringify(nextConfig), nextConfig.updated_at)
+    .run();
+
+  return jsonResponse(
+    {
+      ok: true,
+      runtime_config: nextConfig,
+    },
+    200,
+    CACHE_POLICIES.noStore,
+    corsHeaders
+  );
 }
 
 /**
@@ -1013,31 +1533,47 @@ async function handleInternalSync(
   corsHeaders: Record<string, string>
 ): Promise<Response> {
   const startedAt = Date.now();
-  const expectedSecret = env.CATALOG_SYNC_SECRET || '';
-  const authHeader = request.headers.get('Authorization') || '';
-  const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  const auth = await authorizeInternalRequest(request, env);
+  if (!auth.ok) {
+    return jsonResponse({ ok: false, error: auth.error }, 401, CACHE_POLICIES.noStore, corsHeaders);
+  }
 
-  if (!expectedSecret || expectedSecret.length < 24 || !timingSafeEqualString(bearerToken, expectedSecret)) {
-    return jsonResponse({ ok: false, error: 'Unauthorized sync request' }, 401, CACHE_POLICIES.noStore, corsHeaders);
+  const rawBody = await request.text();
+  if (rawBody.length > MAX_SYNC_PAYLOAD_BYTES) {
+    return jsonResponse(
+      { ok: false, error: `Payload size ${rawBody.length} exceeds limit of ${MAX_SYNC_PAYLOAD_BYTES} bytes` },
+      413,
+      CACHE_POLICIES.noStore,
+      corsHeaders
+    );
   }
 
   let payload: any;
   try {
-    payload = await request.json();
+    payload = JSON.parse(rawBody);
   } catch {
     return jsonResponse({ ok: false, error: 'Invalid JSON payload' }, 400, CACHE_POLICIES.noStore, corsHeaders);
+  }
+
+  if (Array.isArray(payload.upsert_products) && payload.upsert_products.length > MAX_SYNC_ITEMS_PER_BATCH) {
+    return jsonResponse(
+      { ok: false, error: `Batch exceeds maximum of ${MAX_SYNC_ITEMS_PER_BATCH} products` },
+      400,
+      CACHE_POLICIES.noStore,
+      corsHeaders
+    );
   }
 
   const batchId = String(payload.batch_id || crypto.randomUUID());
   const statements: D1PreparedStatement[] = [];
   let affectedCount = 0;
 
-  // 1. Upsert de productos públicos (idempotente)
+  // 1. Upsert de productos públicos (sanitizando cualquier campo privado/financiero interno)
   if (Array.isArray(payload.upsert_products)) {
-    for (const p of payload.upsert_products) {
+    for (const rawProd of payload.upsert_products) {
+      const p = sanitizePublicRecord(rawProd);
       if (!p?.id || !p?.slug || !p?.title) continue;
       const isIntl = p.is_international ? 1 : 0;
-      // Regla estricta: UYU para local, USD para internacional
       const currency = isIntl ? 'USD' : (p.currency === 'USD' ? 'USD' : 'UYU');
       const searchText = normalizeSearchQuery(
         [p.title, p.sku, p.asin, p.brand_name, p.category_name, p.license_name, p.wave_name]
@@ -1166,8 +1702,8 @@ async function handleInternalSync(
           p.id,
           p.slug,
           p.title,
-          p.description ?? null,
-          p.short_description ?? null,
+          p.description ? String(p.description).slice(0, 4000) : null,
+          p.short_description ? String(p.short_description).slice(0, 600) : null,
           p.sku ?? null,
           p.ean ?? null,
           p.asin ?? null,
@@ -1245,9 +1781,9 @@ async function handleInternalSync(
     }
   }
 
-  // 2. Despublicación / baja inmediata de productos (borradores, eliminados o pausados)
+  // 2. Despublicación / baja inmediata de productos
   if (Array.isArray(payload.unpublish_product_ids)) {
-    for (const id of payload.unpublish_product_ids) {
+    for (const id of payload.unpublish_product_ids.slice(0, 100)) {
       if (!id) continue;
       statements.push(
         env.DB.prepare(
@@ -1258,7 +1794,7 @@ async function handleInternalSync(
     }
   }
 
-  // 3. Upsert de Categorías, Marcas, Licencias, Temas y Configuración Pública
+  // 3. Upsert de Categorías, Marcas, Promociones, Radar y Configuración Pública
   if (Array.isArray(payload.upsert_categories)) {
     for (const c of payload.upsert_categories) {
       if (!c?.id || !c?.slug) continue;
@@ -1320,18 +1856,18 @@ async function handleInternalSync(
 
   if (payload.upsert_settings && typeof payload.upsert_settings === 'object') {
     for (const [key, val] of Object.entries(payload.upsert_settings)) {
+      const cleanVal = typeof val === 'object' && val !== null ? sanitizePublicRecord(val as any) : val;
       statements.push(
         env.DB.prepare(
           `INSERT INTO public_site_settings (key, value_json, updated_at)
            VALUES (?, ?, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
            ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`
-        ).bind(key, JSON.stringify(val ?? {}))
+        ).bind(key, JSON.stringify(cleanVal ?? {}))
       );
       affectedCount++;
     }
   }
 
-  // Registrar estado de sincronización y auditoría
   if (payload.cursor?.entity_type) {
     statements.push(
       env.DB.prepare(
@@ -1388,7 +1924,7 @@ export default {
     const url = new URL(request.url);
     const pathname = url.pathname.replace(/\/+$/, '') || '/';
 
-    // Canal privado de sincronización incremental (único endpoint POST permitido)
+    // Canales privados autenticados (POST)
     if (pathname === '/api/v1/internal/sync') {
       if (request.method !== 'POST') {
         return jsonResponse({ ok: false, error: 'Method Not Allowed' }, 405, CACHE_POLICIES.noStore, corsHeaders);
@@ -1396,15 +1932,56 @@ export default {
       return handleInternalSync(request, env, corsHeaders);
     }
 
+    if (pathname === '/api/v1/internal/diff-check') {
+      if (request.method !== 'POST') {
+        return jsonResponse({ ok: false, error: 'Method Not Allowed' }, 405, CACHE_POLICIES.noStore, corsHeaders);
+      }
+      return handleInternalDiffCheck(request, env, corsHeaders);
+    }
+
+    if (pathname === '/api/v1/internal/runtime-mode') {
+      if (request.method !== 'POST') {
+        return jsonResponse({ ok: false, error: 'Method Not Allowed' }, 405, CACHE_POLICIES.noStore, corsHeaders);
+      }
+      return handleInternalRuntimeMode(request, env, corsHeaders);
+    }
+
     // Todos los endpoints públicos son estrictamente de lectura (GET o HEAD)
     if (request.method !== 'GET' && request.method !== 'HEAD') {
       return jsonResponse({ ok: false, error: 'Method Not Allowed on public catalog API' }, 405, CACHE_POLICIES.noStore, corsHeaders);
     }
 
+    if (pathname === '/' || pathname === '/api/v1/health') {
+      return handleHealth(env, corsHeaders);
+    }
+
+    if (pathname === '/api/v1/runtime-config') {
+      return handleRuntimeConfigGet(env, corsHeaders);
+    }
+
+    // Verificar Kill-Switch / Runtime Mode antes de servir rutas de datos
+    const runtimeCfg = await getRuntimeRoutingConfig(env);
+    if (!runtimeCfg.enabled) {
+      return jsonResponse(
+        {
+          ok: false,
+          error: 'Cloudflare public catalog disabled via runtime switch',
+          runtime_mode: 'disabled',
+        },
+        503,
+        CACHE_POLICIES.noStore,
+        corsHeaders,
+        {
+          'X-Catalog-Mode': 'disabled',
+          'X-Catalog-Kill-Switch': 'active',
+        }
+      );
+    }
+
     // Verificar Cloudflare Edge Cache para peticiones GET públicas
     const edgeCache = (globalThis as any).caches?.default;
     const cacheKey = new Request(url.toString(), { method: 'GET' });
-    if (edgeCache && request.method === 'GET' && pathname !== '/api/v1/health') {
+    if (edgeCache && request.method === 'GET') {
       try {
         const cached = await edgeCache.match(cacheKey);
         if (cached) {
@@ -1413,22 +1990,21 @@ export default {
             hitHeaders.set(k, v);
           }
           hitHeaders.set('X-Catalog-Cache', 'HIT');
+          hitHeaders.set('X-Catalog-Mode', runtimeCfg.mode);
           return new Response(cached.body, { status: cached.status, headers: hitHeaders });
         }
       } catch {
-        // Si falla la lectura de caché edge, continuar con D1 sin interrumpir
+        // Si falla la lectura de caché edge, continuar con D1
       }
     }
 
     try {
       let response: Response;
 
-      if (pathname === '/' || pathname === '/api/v1/health') {
-        response = await handleHealth(env, corsHeaders);
-      } else if (pathname === '/api/v1/products' || pathname === '/api/public-catalog') {
+      if (pathname === '/api/v1/products' || pathname === '/api/public-catalog') {
         const mode = url.searchParams.get('mode');
-        if (mode === 'taxonomies') {
-          response = await handleTaxonomies(url, env, corsHeaders);
+        if (mode === 'taxonomies' || mode === 'facets') {
+          response = await handleTaxonomiesAndFacets(url, env, corsHeaders);
         } else {
           response = await handleProductsList(url, env, corsHeaders);
         }
@@ -1438,9 +2014,10 @@ export default {
       } else if (
         pathname === '/api/v1/categories' ||
         pathname === '/api/v1/brands' ||
-        pathname === '/api/v1/taxonomies'
+        pathname === '/api/v1/taxonomies' ||
+        pathname === '/api/v1/facets'
       ) {
-        response = await handleTaxonomies(url, env, corsHeaders);
+        response = await handleTaxonomiesAndFacets(url, env, corsHeaders);
       } else if (pathname === '/api/v1/search') {
         response = await handleSearch(url, env, corsHeaders);
       } else if (pathname === '/api/v1/promotions') {
@@ -1457,19 +2034,18 @@ export default {
       } else if (pathname === '/api/v1/feeds/meta.csv') {
         response = await handleMetaFeedCsv(env, corsHeaders);
       } else if (pathname === '/api/v1/sitemap.xml') {
-        response = await handleSitemapXml(env, corsHeaders);
+        response = await handleSitemapXml(url, env, corsHeaders);
       } else {
         response = jsonResponse({ ok: false, error: 'Endpoint not found' }, 404, CACHE_POLICIES.noStore, corsHeaders);
       }
 
-      // Almacenar en Edge Cache si fue 200 OK
-      if (edgeCache && request.method === 'GET' && response.status === 200 && pathname !== '/api/v1/health') {
+      if (edgeCache && request.method === 'GET' && response.status === 200) {
         const clone = response.clone();
         ctx?.waitUntil(edgeCache.put(cacheKey, clone).catch(() => {}));
       }
 
       return response;
-    } catch (error: any) {
+    } catch {
       return jsonResponse(
         {
           ok: false,

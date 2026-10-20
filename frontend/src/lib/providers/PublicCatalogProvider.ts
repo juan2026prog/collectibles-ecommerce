@@ -2,12 +2,16 @@
  * PublicCatalogProvider — Capa de Lectura Pública (Cloudflare Worker + D1 + Caché Local)
  *
  * Reglas arquitectónicas:
- * 1. Lee exclusivamente desde Cloudflare Worker (`collectibles-catalog-api`) cuando el flag
- *    correspondiente está activo.
- * 2. Almacena snapshots ligeros en memoria + sessionStorage/localStorage para resiliencia.
- * 3. PROHIBIDO el fallback en estampida desde el navegador hacia Supabase: si el Worker
- *    falla o está en mantenimiento, devuelve el último snapshot cacheado válido o degrada
- *    controladamente sin disparar consultas masivas a PostgreSQL.
+ * 1. Lee desde Cloudflare Worker (`collectibles-catalog-api`) cuando el dominio está activo
+ *    (por configuración en runtime o por default de build).
+ * 2. Soporta ACTIVACIÓN Y ROLLBACK REAL EN RUNTIME (< 1 segundo) sin requerir rebuild de Vite:
+ *    - Si el Worker responde HTTP 503 o header `X-Catalog-Kill-Switch: active` (controlado vía
+ *      `POST /api/v1/internal/runtime-mode` o secret `CATALOG_RUNTIME_ENABLED=false`), este
+ *      proveedor desactiva inmediatamente (`runtimeKillSwitchActive = true`) el enrutamiento a D1
+ *      en memoria y `sessionStorage`, ignorando cualquier constante `VITE_*` compilada en el bundle.
+ *    - También permite activar/desactivar dominios en caliente vía `syncRuntimeConfig()` o
+ *      `setRuntimeCatalogOverride()`.
+ * 3. Almacena snapshots ligeros en memoria + localStorage para resiliencia ante fallos transitorios.
  */
 
 export type CatalogDomainFlag =
@@ -22,18 +26,122 @@ export type CatalogDomainFlag =
 export interface PublicCatalogConfig {
   workerBaseUrl: string;
   enabledGlobal: boolean;
+  runtimeKillSwitchActive: boolean;
+  runtimeOverrideGlobal: boolean | null;
   domains: Record<CatalogDomainFlag, boolean>;
   timeoutMs: number;
 }
 
+export class CatalogKillSwitchError extends Error {
+  public readonly killSwitchActive = true;
+  constructor(message = 'Cloudflare D1 runtime kill-switch is active') {
+    super(message);
+    this.name = 'CatalogKillSwitchError';
+  }
+}
+
 const DEFAULT_WORKER_URL = 'https://collectibles-catalog-api.pixelsncodes-uy.workers.dev';
 const SNAPSHOT_PREFIX = 'collectibles_d1_snap_v1:';
+const RUNTIME_CTRL_STORAGE_KEY = 'collectibles_d1_runtime_ctrl_v1';
+const RUNTIME_KILL_SWITCH_TTL_MS = 5 * 60 * 1000; // 5 min cooldown before re-probing
+
 const memoryCache = new Map<string, { data: any; expiresAt: number; staleUntil: number }>();
 
 let consecutiveWorkerFailures = 0;
 let circuitOpenUntil = 0;
 const MAX_FAILURES_BEFORE_CIRCUIT = 3;
 const CIRCUIT_COOLDOWN_MS = 30_000;
+
+interface RuntimeControlState {
+  killSwitchActive: boolean;
+  killSwitchExpiresAt: number;
+  killSwitchReason?: string;
+  overrideGlobal: boolean | null;
+  domainOverrides: Partial<Record<CatalogDomainFlag, boolean>>;
+  updatedAt: number;
+}
+
+let runtimeState: RuntimeControlState = loadRuntimeControlState();
+
+function loadRuntimeControlState(): RuntimeControlState {
+  const initial: RuntimeControlState = {
+    killSwitchActive: false,
+    killSwitchExpiresAt: 0,
+    overrideGlobal: null,
+    domainOverrides: {},
+    updatedAt: 0,
+  };
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      const raw = window.sessionStorage.getItem(RUNTIME_CTRL_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          const now = Date.now();
+          const killActive = Boolean(parsed.killSwitchActive) && Number(parsed.killSwitchExpiresAt || 0) > now;
+          return {
+            killSwitchActive: killActive,
+            killSwitchExpiresAt: killActive ? Number(parsed.killSwitchExpiresAt) : 0,
+            killSwitchReason: parsed.killSwitchReason,
+            overrideGlobal: typeof parsed.overrideGlobal === 'boolean' ? parsed.overrideGlobal : null,
+            domainOverrides: parsed.domainOverrides && typeof parsed.domainOverrides === 'object' ? parsed.domainOverrides : {},
+            updatedAt: Number(parsed.updatedAt || 0),
+          };
+        }
+      }
+    }
+  } catch {
+    // ignore storage errors
+  }
+  return initial;
+}
+
+function persistRuntimeControlState(): void {
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.setItem(RUNTIME_CTRL_STORAGE_KEY, JSON.stringify(runtimeState));
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
+export function setRuntimeKillSwitch(active: boolean, reason = 'manual-runtime-rollback', ttlMs = RUNTIME_KILL_SWITCH_TTL_MS): void {
+  runtimeState = {
+    ...runtimeState,
+    killSwitchActive: active,
+    killSwitchExpiresAt: active ? Date.now() + ttlMs : 0,
+    killSwitchReason: active ? reason : undefined,
+    updatedAt: Date.now(),
+  };
+  persistRuntimeControlState();
+}
+
+export function isRuntimeKillSwitchActive(): boolean {
+  if (!runtimeState.killSwitchActive) return false;
+  if (runtimeState.killSwitchExpiresAt > 0 && Date.now() > runtimeState.killSwitchExpiresAt) {
+    runtimeState.killSwitchActive = false;
+    runtimeState.killSwitchExpiresAt = 0;
+    persistRuntimeControlState();
+    return false;
+  }
+  return true;
+}
+
+export function setRuntimeCatalogOverride(
+  enabledGlobal: boolean | null,
+  domainOverrides: Partial<Record<CatalogDomainFlag, boolean>> = {}
+): void {
+  runtimeState = {
+    ...runtimeState,
+    killSwitchActive: enabledGlobal === false ? true : false,
+    killSwitchExpiresAt: enabledGlobal === false ? Date.now() + RUNTIME_KILL_SWITCH_TTL_MS : 0,
+    overrideGlobal: enabledGlobal,
+    domainOverrides: { ...domainOverrides },
+    updatedAt: Date.now(),
+  };
+  persistRuntimeControlState();
+}
 
 function getEnvVar(key: string): string | undefined {
   try {
@@ -59,25 +167,46 @@ function parseBoolFlag(val: string | undefined, defaultVal: boolean): boolean {
 
 export function getPublicCatalogConfig(): PublicCatalogConfig {
   const workerBaseUrl = (getEnvVar('VITE_CF_CATALOG_API_URL') || DEFAULT_WORKER_URL).replace(/\/+$/, '');
-  const enabledGlobal = parseBoolFlag(getEnvVar('VITE_USE_CF_PUBLIC_CATALOG'), false);
+  const buildEnabledGlobal = parseBoolFlag(getEnvVar('VITE_USE_CF_PUBLIC_CATALOG'), false);
+  const killActive = isRuntimeKillSwitchActive();
+
+  const effectiveGlobal = killActive
+    ? false
+    : runtimeState.overrideGlobal !== null
+      ? runtimeState.overrideGlobal
+      : buildEnabledGlobal;
+
+  const resolveDomain = (domain: CatalogDomainFlag, envKey: string): boolean => {
+    if (killActive) return false;
+    if (domain in runtimeState.domainOverrides && typeof runtimeState.domainOverrides[domain] === 'boolean') {
+      return Boolean(runtimeState.domainOverrides[domain]);
+    }
+    if (runtimeState.overrideGlobal !== null) {
+      return runtimeState.overrideGlobal;
+    }
+    return parseBoolFlag(getEnvVar(envKey), effectiveGlobal);
+  };
 
   return {
     workerBaseUrl,
-    enabledGlobal,
+    enabledGlobal: effectiveGlobal,
+    runtimeKillSwitchActive: killActive,
+    runtimeOverrideGlobal: runtimeState.overrideGlobal,
     domains: {
-      products: parseBoolFlag(getEnvVar('VITE_CF_CATALOG_PRODUCTS'), enabledGlobal),
-      productDetail: parseBoolFlag(getEnvVar('VITE_CF_CATALOG_PRODUCT_DETAIL'), enabledGlobal),
-      taxonomies: parseBoolFlag(getEnvVar('VITE_CF_CATALOG_TAXONOMIES'), enabledGlobal),
-      search: parseBoolFlag(getEnvVar('VITE_CF_CATALOG_SEARCH'), enabledGlobal),
-      promotions: parseBoolFlag(getEnvVar('VITE_CF_CATALOG_PROMOTIONS'), enabledGlobal),
-      radar: parseBoolFlag(getEnvVar('VITE_CF_CATALOG_RADAR'), enabledGlobal),
-      settings: parseBoolFlag(getEnvVar('VITE_CF_CATALOG_SETTINGS'), enabledGlobal),
+      products: resolveDomain('products', 'VITE_CF_CATALOG_PRODUCTS'),
+      productDetail: resolveDomain('productDetail', 'VITE_CF_CATALOG_PRODUCT_DETAIL'),
+      taxonomies: resolveDomain('taxonomies', 'VITE_CF_CATALOG_TAXONOMIES'),
+      search: resolveDomain('search', 'VITE_CF_CATALOG_SEARCH'),
+      promotions: resolveDomain('promotions', 'VITE_CF_CATALOG_PROMOTIONS'),
+      radar: resolveDomain('radar', 'VITE_CF_CATALOG_RADAR'),
+      settings: resolveDomain('settings', 'VITE_CF_CATALOG_SETTINGS'),
     },
     timeoutMs: Number(getEnvVar('VITE_CF_CATALOG_TIMEOUT_MS') || 4500),
   };
 }
 
 export function isCatalogDomainEnabled(domain: CatalogDomainFlag): boolean {
+  if (isRuntimeKillSwitchActive()) return false;
   const cfg = getPublicCatalogConfig();
   return Boolean(cfg.domains[domain]);
 }
@@ -121,6 +250,55 @@ export function resetPublicCatalogCircuitBreaker(): void {
   consecutiveWorkerFailures = 0;
   circuitOpenUntil = 0;
   memoryCache.clear();
+  runtimeState = {
+    killSwitchActive: false,
+    killSwitchExpiresAt: 0,
+    overrideGlobal: null,
+    domainOverrides: {},
+    updatedAt: 0,
+  };
+  try {
+    if (typeof window !== 'undefined' && window.sessionStorage) {
+      window.sessionStorage.removeItem(RUNTIME_CTRL_STORAGE_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Consulta `/api/v1/runtime-config` en el Worker para sincronizar el estado de activación/rollback
+ * en caliente sin necesidad de recompilar variables `VITE_*`.
+ */
+export async function syncRuntimeConfig(fetcher: typeof fetch = fetch): Promise<{
+  enabled: boolean;
+  mode: string;
+  domains: Partial<Record<CatalogDomainFlag, boolean>>;
+}> {
+  const cfg = getPublicCatalogConfig();
+  const res = await fetcher(`${cfg.workerBaseUrl}/api/v1/runtime-config`, {
+    method: 'GET',
+    headers: { Accept: 'application/json', 'X-Catalog-Client': 'collectibles-web-v1' },
+  });
+
+  const killHeader = res.headers?.get?.('X-Catalog-Kill-Switch');
+  const json = await res.json().catch(() => ({} as any));
+
+  if (killHeader === 'active' || json?.enabled === false || res.status === 503) {
+    setRuntimeKillSwitch(true, json?.reason || 'worker-runtime-config-disabled');
+    return { enabled: false, mode: 'disabled', domains: {} };
+  }
+
+  if (typeof json?.enabled === 'boolean') {
+    setRuntimeCatalogOverride(json.enabled, json.domains || {});
+    return {
+      enabled: json.enabled,
+      mode: json.mode || (json.enabled ? 'active' : 'disabled'),
+      domains: json.domains || {},
+    };
+  }
+
+  return { enabled: cfg.enabledGlobal, mode: cfg.enabledGlobal ? 'active' : 'disabled', domains: cfg.domains };
 }
 
 export async function fetchFromCloudflareCatalog<T>(
@@ -128,6 +306,10 @@ export async function fetchFromCloudflareCatalog<T>(
   params?: Record<string, string | number | boolean | undefined | null>,
   options?: { ttlMs?: number; staleMs?: number; fetcher?: typeof fetch }
 ): Promise<{ data: T; fromCache: boolean; staleFallback: boolean }> {
+  if (isRuntimeKillSwitchActive()) {
+    throw new CatalogKillSwitchError();
+  }
+
   const cfg = getPublicCatalogConfig();
   const ttlMs = options?.ttlMs ?? 60_000;
   const staleMs = options?.staleMs ?? 3_600_000; // 1h stale snapshot protection
@@ -172,6 +354,24 @@ export async function fetchFromCloudflareCatalog<T>(
       signal: controller.signal,
     });
 
+    // Detección instantánea de Kill-Switch en runtime (< 1s):
+    // Si el Worker devuelve X-Catalog-Kill-Switch: active o HTTP 503 con kill_switch_active,
+    // apagamos inmediatamente el enrutamiento en memoria/sessionStorage y lanzamos CatalogKillSwitchError
+    const killSwitchHeader = res.headers?.get?.('X-Catalog-Kill-Switch');
+    const catalogModeHeader = res.headers?.get?.('X-Catalog-Mode');
+    if (killSwitchHeader === 'active' || catalogModeHeader === 'disabled') {
+      setRuntimeKillSwitch(true, 'worker-kill-switch-header');
+      throw new CatalogKillSwitchError('Cloudflare D1 deactivated at runtime via X-Catalog-Kill-Switch');
+    }
+
+    if (res.status === 503) {
+      const errBody = await res.json().catch(() => ({} as any));
+      if (errBody?.kill_switch_active || errBody?.mode === 'disabled') {
+        setRuntimeKillSwitch(true, errBody?.reason || 'worker-503-disabled');
+        throw new CatalogKillSwitchError('Cloudflare D1 deactivated at runtime via 503 response');
+      }
+    }
+
     if (!res.ok) {
       throw new Error(`Cloudflare Catalog API responded with HTTP ${res.status}`);
     }
@@ -183,12 +383,18 @@ export async function fetchFromCloudflareCatalog<T>(
 
     return { data: json, fromCache: false, staleFallback: false };
   } catch (error) {
+    // Si es un rollback deliberado por kill-switch en runtime, no servir caché vieja de D1:
+    // propagar inmediatamente para que el caller use el canal de fallback controlado.
+    if (error instanceof CatalogKillSwitchError) {
+      throw error;
+    }
+
     consecutiveWorkerFailures += 1;
     if (consecutiveWorkerFailures >= MAX_FAILURES_BEFORE_CIRCUIT) {
       circuitOpenUntil = Date.now() + CIRCUIT_COOLDOWN_MS;
     }
 
-    // Servir snapshot previo si existe (jamás hacer estampida directa a Supabase)
+    // Servir snapshot previo si existe ante errores de red/timeout transitorios (jamás hacer estampida directa a Supabase)
     const fallback = (memEntry && memEntry.staleUntil > now ? memEntry.data : null) ?? readPersistentSnapshot<T>(cacheKey);
     if (fallback !== null) {
       return { data: fallback as T, fromCache: true, staleFallback: true };
@@ -201,6 +407,10 @@ export async function fetchFromCloudflareCatalog<T>(
 
 export const PublicCatalogProvider = {
   isDomainEnabled: isCatalogDomainEnabled,
+  isRuntimeKillSwitchActive,
+  setRuntimeKillSwitch,
+  setRuntimeCatalogOverride,
+  syncRuntimeConfig,
 
   async getProducts(
     filters: Record<string, string | number | boolean | undefined | null> = {},
@@ -208,9 +418,27 @@ export const PublicCatalogProvider = {
   ) {
     return fetchFromCloudflareCatalog<{
       ok: boolean;
+      count: number;
+      totalCount: number;
       products: any[];
+      image_variants?: any[];
       pagination: { total: number; page: number; limit: number; total_pages: number; has_more: boolean };
     }>('/api/v1/products', filters, { ttlMs: 45_000, fetcher });
+  },
+
+  async getPublicCatalogCompatible(
+    filters: Record<string, string | number | boolean | undefined | null> = {},
+    fetcher?: typeof fetch
+  ) {
+    return fetchFromCloudflareCatalog<{
+      ok: boolean;
+      products: any[];
+      image_variants: any[];
+      count: number;
+      facets: any;
+      taxonomies?: any;
+      snapshot_meta: any;
+    }>('/api/public-catalog', filters, { ttlMs: 45_000, fetcher });
   },
 
   async getProductBySlug(slug: string, fetcher?: typeof fetch) {
@@ -233,6 +461,21 @@ export const PublicCatalogProvider = {
       license_themes: any[];
       product_groups: any[];
       brand_category_ids?: string[];
+      facets: {
+        categoryFacets: Record<string, number>;
+        brandFacets: any[];
+        licenseFacets: any[];
+        themeFacets: any[];
+        availabilityCounts: { all: number; local: number; international: number };
+        conditionCounts: { all: number; new: number; used: number; loose: number };
+        totalCatalogProducts: number;
+      };
+      taxonomies: {
+        categories: any[];
+        brands: any[];
+        licenses: any[];
+        themes: any[];
+      };
     }>('/api/v1/taxonomies', brandId ? { brand_id: brandId } : undefined, { ttlMs: 300_000, fetcher });
   },
 

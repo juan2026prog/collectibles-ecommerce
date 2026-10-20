@@ -27,6 +27,21 @@ export default function ReleaseCalendarPage() {
   const loadCalendar = async () => {
     try {
       setLoading(true);
+      try {
+        const { PublicCatalogProvider } = await import('../../lib/providers/PublicCatalogProvider');
+        if (PublicCatalogProvider.isDomainEnabled('radar')) {
+          const { data } = await PublicCatalogProvider.getRadarReleases(100);
+          if (Array.isArray(data?.releases)) {
+            const validWithImage = (data.releases as any[]).filter(r => safeRadarImage(r.official_image_url));
+            setReleases(validWithImage);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // Fall through to Supabase fallback
+      }
+
       const { data, error } = await supabase
         .from('release_events')
         .select(`

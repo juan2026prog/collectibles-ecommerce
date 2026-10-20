@@ -418,8 +418,24 @@ export default function Home() {
     let isMounted = true;
     setManualLoading(true);
 
-    import('../lib/supabase').then(({ supabase }) => {
-      supabase
+    (async () => {
+      try {
+        const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+        if (PublicCatalogProvider.isDomainEnabled('products')) {
+          const { data } = await PublicCatalogProvider.getProducts({ ids: ids.join(','), limit: ids.length });
+          if (isMounted && Array.isArray(data?.products)) {
+            const sorted = [...data.products].sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+            setManualNewArrivals(sorted);
+            setManualLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // Fall through to Supabase fallback
+      }
+
+      const { supabase } = await import('../lib/supabase');
+      const { data, error } = await supabase
         .from('products')
         .select(`
           *,
@@ -430,16 +446,15 @@ export default function Home() {
         `)
         .eq('status', 'published')
         .eq('is_active', true)
-        .in('id', ids)
-        .then(({ data, error }) => {
-          if (!isMounted) return;
-          setManualLoading(false);
-          if (!error && data) {
-            const sorted = [...data].sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
-            setManualNewArrivals(sorted);
-          }
-        });
-    });
+        .in('id', ids);
+
+      if (!isMounted) return;
+      setManualLoading(false);
+      if (!error && data) {
+        const sorted = [...data].sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+        setManualNewArrivals(sorted);
+      }
+    })();
 
     return () => {
       isMounted = false;

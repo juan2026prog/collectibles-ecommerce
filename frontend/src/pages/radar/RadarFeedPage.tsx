@@ -281,6 +281,20 @@ export default function RadarFeedPage() {
   const loadRadarReleases = async () => {
     try {
       setLoading(true);
+      try {
+        const { PublicCatalogProvider } = await import('../../lib/providers/PublicCatalogProvider');
+        if (PublicCatalogProvider.isDomainEnabled('radar')) {
+          const { data } = await PublicCatalogProvider.getRadarReleases(80);
+          if (Array.isArray(data?.releases)) {
+            setReleases(data.releases as any);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // Fall through to Supabase fallback
+      }
+
       const { data, error } = await supabase
         .from('release_events')
         .select(`

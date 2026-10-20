@@ -257,6 +257,24 @@ export function createMerchantFeedHandler(clientFactory = createPublicSupabase) 
     // 2. In-flight promise deduplication
     if (!feedPromise) {
       feedPromise = (async () => {
+        if (process.env.CF_PUBLIC_CATALOG_ENABLED === 'true') {
+          try {
+            const cfBase = (process.env.CF_CATALOG_WORKER_URL || 'https://collectibles-catalog-api.pixelsncodes-uy.workers.dev').replace(/\/+$/, '');
+            const cfRes = await fetch(`${cfBase}/api/v1/feeds/merchant.xml`, {
+              method: 'GET',
+              headers: { Accept: 'application/xml', 'X-Catalog-Client': 'vercel-merchant-feed' },
+              signal: AbortSignal.timeout(5000),
+            });
+            if (cfRes.ok && cfRes.headers.get('X-Catalog-Kill-Switch') !== 'active') {
+              const xmlText = await cfRes.text();
+              if (xmlText && xmlText.includes('<rss')) {
+                return xmlText;
+              }
+            }
+          } catch (cfErr) {
+            console.warn('[merchant-feed] Cloudflare D1 upstream fallback:', cfErr?.message || cfErr);
+          }
+        }
         const supabase = getClient();
         return await generateMerchantFeedXml(supabase);
       })().then(xml => {

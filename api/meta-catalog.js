@@ -69,6 +69,30 @@ export default async function handler(req, res) {
   // Keep both public catalog formats in one Vercel function (Hobby permits twelve).
   if (req.query?.__public_catalog === '1') return publicCatalogHandler(req, res);
   try {
+    if (process.env.CF_PUBLIC_CATALOG_ENABLED === 'true') {
+      try {
+        const cfBase = (process.env.CF_CATALOG_WORKER_URL || 'https://collectibles-catalog-api.pixelsncodes-uy.workers.dev').replace(/\/+$/, '');
+        const cfRes = await fetch(`${cfBase}/api/v1/feeds/meta.csv`, {
+          method: 'GET',
+          headers: { Accept: 'text/csv', 'X-Catalog-Client': 'vercel-meta-feed' },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (cfRes.ok && cfRes.headers.get('X-Catalog-Kill-Switch') !== 'active') {
+          const csvText = await cfRes.text();
+          if (csvText && csvText.includes('id,title')) {
+            res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+            res.setHeader('Content-Disposition', 'inline; filename="meta-catalog.csv"');
+            res.setHeader('X-Feed-Source', 'cloudflare-d1');
+            res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
+            res.setHeader('CDN-Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
+            res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
+            return res.status(200).send('\uFEFF' + csvText.replace(/^\uFEFF/, ''));
+          }
+        }
+      } catch (cfErr) {
+        console.warn('[meta-catalog] Cloudflare D1 upstream fallback:', cfErr?.message || cfErr);
+      }
+    }
     supabase ||= createPublicSupabase();
     let allProducts = [];
     let page = 0;

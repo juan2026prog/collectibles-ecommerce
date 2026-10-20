@@ -35,16 +35,35 @@ export default function ReleaseDetailPage() {
   const loadRelease = async (releaseSlug: string) => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('release_events')
-        .select(`
-          *,
-          brand:brands(id, name),
-          license:licenses(id, name),
-          milestones:release_milestones(*)
-        `)
-        .eq('slug', releaseSlug)
-        .maybeSingle();
+      let data: any = null;
+      let error: any = null;
+
+      try {
+        const { PublicCatalogProvider } = await import('../../lib/providers/PublicCatalogProvider');
+        if (PublicCatalogProvider.isDomainEnabled('radar')) {
+          const d1Res = await PublicCatalogProvider.getRadarReleaseBySlug(releaseSlug);
+          if (d1Res.data?.release) {
+            data = d1Res.data.release;
+          }
+        }
+      } catch {
+        // Fall through to Supabase fallback
+      }
+
+      if (!data) {
+        const sbRes = await supabase
+          .from('release_events')
+          .select(`
+            *,
+            brand:brands(id, name),
+            license:licenses(id, name),
+            milestones:release_milestones(*)
+          `)
+          .eq('slug', releaseSlug)
+          .maybeSingle();
+        data = sbRes.data;
+        error = sbRes.error;
+      }
 
       if (!error && data) {
         setRelease(data as any);
@@ -128,11 +147,31 @@ export default function ReleaseDetailPage() {
 
         // Si tiene catalog_product_id, consultar el producto en tienda
         if (data.catalog_product_id) {
-          const { data: prod } = await supabase
-            .from('products')
-            .select('id, title, slug, base_price')
-            .eq('id', data.catalog_product_id)
-            .maybeSingle();
+          let prod: any = null;
+          try {
+            const { PublicCatalogProvider } = await import('../../lib/providers/PublicCatalogProvider');
+            if (PublicCatalogProvider.isDomainEnabled('productDetail') || PublicCatalogProvider.isDomainEnabled('products')) {
+              const d1Prod = await PublicCatalogProvider.getProductBySlug(data.catalog_product_id);
+              if (d1Prod.data?.product) {
+                prod = {
+                  id: d1Prod.data.product.id,
+                  title: d1Prod.data.product.title,
+                  slug: d1Prod.data.product.slug,
+                  base_price: d1Prod.data.product.base_price,
+                };
+              }
+            }
+          } catch {
+            // Fall through
+          }
+          if (!prod) {
+            const sbProd = await supabase
+              .from('products')
+              .select('id, title, slug, base_price')
+              .eq('id', data.catalog_product_id)
+              .maybeSingle();
+            prod = sbProd.data;
+          }
           if (prod) {
             setLinkedProduct(prod);
           }

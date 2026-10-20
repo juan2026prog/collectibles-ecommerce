@@ -55,6 +55,19 @@ function WaveProductsSection({ currentProductId, waveName }: { currentProductId:
     }
     const loadWave = async () => {
       try {
+        const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+        if (PublicCatalogProvider.isDomainEnabled('products') || PublicCatalogProvider.isDomainEnabled('productDetail')) {
+          const { data } = await PublicCatalogProvider.getProducts({ search: trimmed, limit: 8 });
+          if (Array.isArray(data?.products)) {
+            setWaveProducts(data.products.filter((p: any) => p.id !== currentProductId && (!p.wave_name || p.wave_name === trimmed)));
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // Fall through to Supabase fallback
+      }
+      try {
         const { data, error } = await supabase
           .from('products')
           .select(`

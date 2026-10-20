@@ -32,7 +32,7 @@ export function createCatalogHandler(getRepository = getCatalogRepository) {
           headers: { Accept: 'application/json', 'X-Catalog-Client': 'vercel-public-catalog-proxy' },
           signal: AbortSignal.timeout(4500),
         });
-        if (cfRes.ok) {
+        if (cfRes.ok && cfRes.headers?.get?.('X-Catalog-Kill-Switch') !== 'active') {
           const payload = await cfRes.json();
           res.setHeader('X-Catalog-Source', 'cloudflare-d1');
           res.setHeader('Cache-Control', 'public, max-age=0');

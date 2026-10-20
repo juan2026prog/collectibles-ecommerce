@@ -56,24 +56,38 @@ export function ProductBadge({
 
     if (!cachedBadges) {
       if (!badgesPromise) {
-        badgesPromise = Promise.resolve(supabase.from('badges').select('*')).then(({ data }) => {
+        badgesPromise = (async () => {
           const map: Record<string, BadgeData> = { ...DEFAULT_BADGES };
-          if (data) {
-            data.forEach((b: any) => {
-              const id = b.slug || b.id;
-              map[id] = {
-                id,
-                label: b.label,
-                bg_color: b.bg_color,
-                text_color: b.text_color,
-                custom_image: b.custom_image,
-                config: parseBadgeConfig(b.custom_image)
-              };
-            });
+          let badgeRows: any[] | null = null;
+          try {
+            const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+            if (PublicCatalogProvider.isDomainEnabled('settings')) {
+              const { data: bundle } = await PublicCatalogProvider.getPublicSettingsBundle();
+              if (Array.isArray(bundle?.badges)) {
+                badgeRows = bundle.badges;
+              }
+            }
+          } catch {
+            // Fall through to Supabase
           }
+          if (!badgeRows) {
+            const { data } = await supabase.from('badges').select('*');
+            badgeRows = data || [];
+          }
+          badgeRows.forEach((b: any) => {
+            const id = b.slug || b.id;
+            map[id] = {
+              id,
+              label: b.label,
+              bg_color: b.bg_color,
+              text_color: b.text_color,
+              custom_image: b.custom_image,
+              config: parseBadgeConfig(b.custom_image)
+            };
+          });
           cachedBadges = map;
           return map;
-        });
+        })();
       }
       badgesPromise.then(map => {
         setAllBadges(map);

@@ -73,6 +73,37 @@ export function FeatureToggleProvider({ children }: { children: React.ReactNode 
 
   const loadConfig = useCallback(async () => {
     try {
+      try {
+        const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+        if (PublicCatalogProvider.isDomainEnabled('settings')) {
+          const { data: bundle } = await PublicCatalogProvider.getPublicSettingsBundle();
+          if (bundle?.feature_toggles && Object.keys(bundle.feature_toggles).length > 0) {
+            const ft = bundle.feature_toggles;
+            const loaded: FeatureToggles = {
+              marketplaceEnabled: ft['marketplace'] ?? defaultFeatures.marketplaceEnabled,
+              affiliatesEnabled: ft['affiliates'] ?? defaultFeatures.affiliatesEnabled,
+              artistCameoEnabled: ft['cameo'] ?? defaultFeatures.artistCameoEnabled,
+              mercadoLibreSyncEnabled: ft['mercadolibre'] ?? defaultFeatures.mercadoLibreSyncEnabled,
+              aiSearchEnabled: ft['ai_search'] ?? defaultFeatures.aiSearchEnabled,
+              radarEnabled: ft['radar'] ?? defaultFeatures.radarEnabled,
+              releaseCalendarEnabled: ft['radar'] ?? defaultFeatures.releaseCalendarEnabled,
+              collectorVaultEnabled: ft['vault'] ?? defaultFeatures.collectorVaultEnabled,
+              collectorVaultUserPhotosEnabled: ft['vault_user_photos'] ?? defaultFeatures.collectorVaultUserPhotosEnabled,
+              collectorVaultCatalogSearchEnabled: ft['vault_catalog_search'] ?? defaultFeatures.collectorVaultCatalogSearchEnabled,
+              collectorCompareEnabled: ft['compare'] ?? defaultFeatures.collectorCompareEnabled,
+              collectorAcademyEnabled: ft['academy'] ?? defaultFeatures.collectorAcademyEnabled,
+              customsFranchiseEnabled: ft['customs'] ?? ft['import_hub'] ?? defaultFeatures.customsFranchiseEnabled,
+              importHubEnabled: ft['import_hub'] ?? ft['customs'] ?? defaultFeatures.importHubEnabled,
+            };
+            setFeatures(loaded);
+            setCachedFeatures(loaded);
+            return;
+          }
+        }
+      } catch {
+        // Fall through to Supabase fallback if D1 kill-switch is active or unreachable
+      }
+
       // Try dedicated feature_toggles table first (authoritative source)
       const { data: toggleData, error: toggleError } = await supabase
         .from('feature_toggles')

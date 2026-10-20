@@ -644,19 +644,24 @@ export function useProduct(slug: string | undefined) {
       try {
         const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
         if (PublicCatalogProvider.isDomainEnabled('productDetail') && slug) {
-          const d1Res = await PublicCatalogProvider.getProductBySlug(slug);
-          if (d1Res.data?.product) {
-            const p = d1Res.data.product;
-            setProduct({
-              ...p,
-              category: p.categories || p.category || null,
-              brand: p.brands || p.brand || null,
-              images: p.product_images || p.images || [],
-              variants: p.product_variants || p.variants || [],
-              vendor: p.vendors || p.vendor || null,
-              _redirectSlug: d1Res.data.redirected_from ? d1Res.data.canonical_slug : undefined,
-            });
-            return;
+          try {
+            const d1Res = await PublicCatalogProvider.getProductBySlug(slug);
+            if (d1Res.data?.product) {
+              const p = d1Res.data.product;
+              setProduct({
+                ...p,
+                category: p.categories || p.category || null,
+                brand: p.brands || p.brand || null,
+                images: p.product_images || p.images || [],
+                variants: p.product_variants || p.variants || [],
+                vendor: p.vendors || p.vendor || null,
+                _waveProducts: d1Res.data.wave_products || [],
+                _redirectSlug: d1Res.data.redirected_from ? d1Res.data.canonical_slug : undefined,
+              });
+              return;
+            }
+          } catch {
+            // If runtime kill-switch or 404/error, fall through to fallback
           }
         }
 
@@ -779,6 +784,15 @@ export function useProductBuyBox(productId: string | undefined) {
     async function fetch() {
       setLoading(true);
       try {
+        const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+        if (PublicCatalogProvider.isDomainEnabled('productDetail')) {
+          // ProductDetail resolves vendor winner from D1's projected vendor/vendor_store fields;
+          // authoritative Buy Box / stock validation runs via CommerceOperationsProvider at checkout.
+          setBuyBox(null);
+          setLoading(false);
+          return;
+        }
+
         const { data, error } = await supabase.rpc('get_product_buybox', { p_product_id: productId });
         if (error) {
           console.error('Error fetching buy box:', error);
@@ -953,6 +967,28 @@ export function useBrandFacets(filters: BrandFacetFilters = {}) {
     async function fetchFacets() {
       setLoading(true);
       try {
+        const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+        if (PublicCatalogProvider.isDomainEnabled('taxonomies')) {
+          try {
+            const { data } = await PublicCatalogProvider.getPublicCatalogCompatible({
+              mode: 'facets',
+              category: filters.category,
+              search: filters.search,
+              vendor_store_id: filters.vendor_store_id,
+              group: filters.group,
+              availability: filters.isInternational ? 'international' : 'local',
+              limit: 0,
+            });
+            if (active && Array.isArray(data?.facets?.brandFacets)) {
+              setBrandFacets(data.facets.brandFacets);
+              setLoading(false);
+              return;
+            }
+          } catch {
+            // Fall through to Supabase fallback
+          }
+        }
+
         const { data, error } = await supabase.rpc('get_brand_facets', {
           p_category_slug: filters.category || null,
           p_search_query: filters.search || null,
@@ -1012,6 +1048,40 @@ export function useInternationalCategoryFacets(filters: IntlCategoryFacetFilters
     async function fetchFacets() {
       setLoading(true);
       try {
+        const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+        if (PublicCatalogProvider.isDomainEnabled('taxonomies')) {
+          try {
+            const { data } = await PublicCatalogProvider.getPublicCatalogCompatible({
+              mode: 'facets',
+              availability: 'international',
+              brand: filters.brand,
+              search: filters.search,
+              minPrice: filters.minPrice,
+              maxPrice: filters.maxPrice,
+              limit: 0,
+            });
+            const catFacets = data?.facets?.categoryFacets || {};
+            const cats = data?.taxonomies?.categories || [];
+            if (active && cats.length > 0) {
+              const mapped = cats
+                .map((c: any) => ({
+                  category_id: c.id,
+                  parent_id: c.parent_id,
+                  name: c.name,
+                  slug: c.slug,
+                  sort_order: c.sort_order,
+                  product_count: Number(catFacets[c.id] || 0),
+                }))
+                .filter((c: any) => c.product_count > 0);
+              setFacets(mapped);
+              setLoading(false);
+              return;
+            }
+          } catch {
+            // Fall through to Supabase fallback
+          }
+        }
+
         const { data, error } = await supabase.rpc('get_international_category_facets', {
           p_brand_slug: filters.brand || null,
           p_search_query: filters.search || null,
@@ -1088,26 +1158,40 @@ export function useBanners() {
     const hasValidCache = cacheObj && !cacheObj.isStale && cacheObj.data.length > 0;
 
     if (!hasValidCache && !_bannersPromise) {
-      _bannersPromise = Promise.resolve(
-        supabase
+      _bannersPromise = (async () => {
+        try {
+          const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+          if (PublicCatalogProvider.isDomainEnabled('settings')) {
+            const { data: bundle } = await PublicCatalogProvider.getPublicSettingsBundle();
+            if (Array.isArray(bundle?.banners) && bundle.banners.length > 0) {
+              _bannersCache = bundle.banners;
+              writeSessionCache('app_banners_cache', bundle.banners);
+              _bannerListeners.forEach(fn => fn(bundle.banners));
+              _bannersPromise = null;
+              return _bannersCache;
+            }
+          }
+        } catch {
+          // Fall through to Supabase fallback
+        }
+
+        const { data, error } = await supabase
           .from('banners')
           .select('*')
           .eq('is_active', true)
-          .order('sort_order')
-      )
-        .then(({ data, error }) => {
-          if (!error && data && data.length > 0) {
-            _bannersCache = data;
-            writeSessionCache('app_banners_cache', data);
-            _bannerListeners.forEach(fn => fn(data));
-          }
-          _bannersPromise = null;
-          return _bannersCache;
-        })
-        .catch(() => {
-          _bannersPromise = null;
-          return _bannersCache;
-        });
+          .order('sort_order');
+
+        if (!error && data && data.length > 0) {
+          _bannersCache = data;
+          writeSessionCache('app_banners_cache', data);
+          _bannerListeners.forEach(fn => fn(data));
+        }
+        _bannersPromise = null;
+        return _bannersCache;
+      })().catch(() => {
+        _bannersPromise = null;
+        return _bannersCache;
+      });
     }
 
     return () => {
@@ -1235,6 +1319,28 @@ export function useProductGroups() {
 
   useEffect(() => {
     async function fetch() {
+      try {
+        const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+        if (PublicCatalogProvider.isDomainEnabled('taxonomies')) {
+          const { data: tax } = await PublicCatalogProvider.getTaxonomies();
+          if (Array.isArray(tax?.product_groups)) {
+            const activeHomeGroups = tax.product_groups
+              .filter((g: any) => g.is_active !== false && Boolean(g.show_on_home ?? true))
+              .map((g: any) => ({
+                ...g,
+                product_group_items: Array.isArray(g.product_ids_json)
+                  ? g.product_ids_json.map((pid: string) => ({ group_id: g.id, product_id: pid }))
+                  : (g.product_group_items || []),
+              }));
+            setGroups(activeHomeGroups);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // Fall through to Supabase fallback
+      }
+
       const { data } = await supabase
         .from('product_groups')
         .select(`
@@ -1267,6 +1373,25 @@ export function useProductGroup(slug: string | undefined) {
     if (!slug) return;
     async function fetch() {
       setLoading(true);
+      try {
+        const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+        if (PublicCatalogProvider.isDomainEnabled('taxonomies') && PublicCatalogProvider.isDomainEnabled('products')) {
+          const [taxRes, prodsRes] = await Promise.all([
+            PublicCatalogProvider.getTaxonomies(),
+            PublicCatalogProvider.getProducts({ group: slug, limit: 60 }),
+          ]);
+          const foundGroup = (taxRes.data?.product_groups || []).find((g: any) => g.slug === slug);
+          if (foundGroup) {
+            setGroup(foundGroup);
+            setProducts(prodsRes.data?.products || []);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // Fall through to Supabase fallback
+      }
+
       const { data, error } = await supabase
         .from('product_groups')
         .select(`
@@ -1318,6 +1443,21 @@ export function useProductGroupMetadata(slug: string | undefined) {
     }
     async function fetch() {
       setLoading(true);
+      try {
+        const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+        if (PublicCatalogProvider.isDomainEnabled('taxonomies')) {
+          const { data: tax } = await PublicCatalogProvider.getTaxonomies();
+          const foundGroup = (tax?.product_groups || []).find((g: any) => g.slug === slug);
+          if (foundGroup) {
+            setGroup(foundGroup);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // Fall through to Supabase fallback
+      }
+
       const { data } = await supabase
         .from('product_groups')
         .select('id, name, slug, description, is_active, show_on_home, badge_image_url, badge_storage_path, badge_alt_text, badge_updated_at')
@@ -1345,6 +1485,24 @@ export function useFilterMappings(brandId?: string) {
     }
 
     async function fetchMappings() {
+      try {
+        const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+        if (PublicCatalogProvider.isDomainEnabled('taxonomies')) {
+          const { data: tax } = await PublicCatalogProvider.getTaxonomies(brandId);
+          if (Array.isArray(tax?.brand_category_ids)) {
+            setMappings(
+              tax.brand_category_ids.map((category_id: string) => ({
+                category_id,
+                brand_id: brandId!,
+              }))
+            );
+            return;
+          }
+        }
+      } catch {
+        // Fall through to Supabase fallback
+      }
+
       const { data } = await supabase
         .from('product_categories')
         .select('category_id, products!inner(brand_id)')
@@ -1714,6 +1872,22 @@ export function useLicense(slug?: string) {
     }
     async function fetch() {
       setLoading(true);
+      try {
+        const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+        if (PublicCatalogProvider.isDomainEnabled('taxonomies')) {
+          const taxRes = await fetchPublicTaxonomies();
+          const list = taxRes?.taxonomies?.licenses || taxRes?.licenses || [];
+          const found = list.find((l: any) => l.slug === slug);
+          if (found) {
+            setLicense(found);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // Fall through to Supabase fallback
+      }
+
       const { data } = await supabase
         .from('licenses')
         .select('*')
@@ -1741,6 +1915,22 @@ export function useTheme(slug?: string) {
     }
     async function fetch() {
       setLoading(true);
+      try {
+        const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+        if (PublicCatalogProvider.isDomainEnabled('taxonomies')) {
+          const taxRes = await fetchPublicTaxonomies();
+          const list = taxRes?.taxonomies?.themes || taxRes?.themes || [];
+          const found = list.find((t: any) => t.slug === slug);
+          if (found) {
+            setTheme(found);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {
+        // Fall through to Supabase fallback
+      }
+
       const { data } = await supabase
         .from('themes')
         .select('*')
