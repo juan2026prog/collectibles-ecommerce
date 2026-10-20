@@ -1,7 +1,12 @@
+import fs from 'node:fs';
 import { createPublicSupabase } from './_lib/public-supabase.js';
 import publicCatalogHandler from './_lib/public-catalog-handler.js';
 
 let supabase;
+let cachedMetaCsv = null;
+let cachedMetaAt = 0;
+const META_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const DISK_META_CSV_PATH = '/tmp/collectibles_meta_catalog.csv';
 
 const BASE_SITE_URL = 'https://collectibles.uy';
 
@@ -93,6 +98,34 @@ export default async function handler(req, res) {
         console.warn('[meta-catalog] Cloudflare D1 upstream fallback:', cfErr?.message || cfErr);
       }
     }
+
+    if (cachedMetaCsv && Date.now() - cachedMetaAt < META_CACHE_TTL_MS) {
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'inline; filename="meta-catalog.csv"');
+      res.setHeader('X-Feed-Cache', 'HIT-MEMORY');
+      res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
+      res.setHeader('CDN-Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
+      res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
+      return res.status(200).send(cachedMetaCsv);
+    }
+
+    try {
+      if (fs.existsSync(DISK_META_CSV_PATH)) {
+        const stat = fs.statSync(DISK_META_CSV_PATH);
+        if (Date.now() - stat.mtimeMs < META_CACHE_TTL_MS) {
+          cachedMetaCsv = fs.readFileSync(DISK_META_CSV_PATH, 'utf8');
+          cachedMetaAt = stat.mtimeMs;
+          res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+          res.setHeader('Content-Disposition', 'inline; filename="meta-catalog.csv"');
+          res.setHeader('X-Feed-Cache', 'HIT-DISK');
+          res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
+          res.setHeader('CDN-Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
+          res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
+          return res.status(200).send(cachedMetaCsv);
+        }
+      }
+    } catch {}
+
     supabase ||= createPublicSupabase();
     let allProducts = [];
     let page = 0;
@@ -252,9 +285,15 @@ export default async function handler(req, res) {
 
     // UTF-8 BOM + CSV string
     const csvContent = '\uFEFF' + csvRows.join('\n');
+    cachedMetaCsv = csvContent;
+    cachedMetaAt = Date.now();
+    try {
+      fs.promises.writeFile(DISK_META_CSV_PATH, csvContent, 'utf8').catch(() => {});
+    } catch {}
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'inline; filename="meta-catalog.csv"');
+    res.setHeader('X-Feed-Cache', 'MISS');
     res.setHeader('Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
     res.setHeader('CDN-Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');
     res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=900, stale-while-revalidate=3600');

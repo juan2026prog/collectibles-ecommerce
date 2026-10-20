@@ -784,6 +784,11 @@ export function useProductBuyBox(productId: string | undefined) {
     async function fetch() {
       setLoading(true);
       try {
+        if (typeof navigator !== 'undefined' && /(meta-externalagent|facebookexternalhit|facebot|Googlebot|AdsBot-Google|Mediapartners-Google|bingbot|Applebot|Linespider|ByteSpider|PetalBot|SemrushBot|AhrefsBot|MJ12bot|YandexBot|DuckDuckBot|Twitterbot|LinkedInBot|Slackbot|WhatsApp|Discordbot|HeadlessChrome|PhantomJS|Prerender)/i.test(navigator.userAgent || '')) {
+          setBuyBox(null);
+          setLoading(false);
+          return;
+        }
         const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
         if (PublicCatalogProvider.isDomainEnabled('productDetail')) {
           // ProductDetail resolves vendor winner from D1's projected vendor/vendor_store fields;

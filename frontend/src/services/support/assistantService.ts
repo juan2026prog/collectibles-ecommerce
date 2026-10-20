@@ -110,42 +110,14 @@ export class AssistantService {
   private static configCacheTime: number = 0;
 
   /**
-   * Fetches Assistant System Config from Supabase with 60s memory cache
+   * Returns Assistant System Config without querying retired `assistant_system_config` table (prevents 404 storm).
    */
   public static async getSystemConfig(): Promise<AssistantSystemConfig> {
-    const now = Date.now();
-    if (this.cachedConfig && now - this.configCacheTime < 60000) {
+    if (this.cachedConfig) {
       return this.cachedConfig;
     }
 
-    try {
-      const { data } = await supabase
-        .from('assistant_system_config')
-        .select('*')
-        .limit(1)
-        .maybeSingle();
-
-      if (data) {
-        this.cachedConfig = {
-          chatbot_enabled: data.chatbot_enabled ?? true,
-          openai_enabled: data.openai_enabled ?? true,
-          internal_search_enabled: data.internal_search_enabled ?? true,
-          web_research_enabled: data.web_research_enabled ?? false,
-          order_inquiries_enabled: data.order_inquiries_enabled ?? true,
-          ticket_creation_enabled: data.ticket_creation_enabled ?? true,
-          human_support_enabled: data.human_support_enabled ?? false, // 100% IA
-          model_name: data.model_name || 'gpt-4o-mini',
-          daily_budget_usd: Number(data.daily_budget_usd || 5),
-          monthly_budget_usd: Number(data.monthly_budget_usd || 100),
-          max_turns_per_conversation: Number(data.max_turns_per_conversation || 40),
-          enabled_countries: data.enabled_countries || ['UY', 'AR', 'CL', 'PE', 'MX']
-        };
-        this.configCacheTime = now;
-        return this.cachedConfig;
-      }
-    } catch (_) {}
-
-    return {
+    this.cachedConfig = {
       chatbot_enabled: true,
       openai_enabled: true,
       internal_search_enabled: true,
@@ -159,27 +131,21 @@ export class AssistantService {
       max_turns_per_conversation: 40,
       enabled_countries: ['UY', 'AR', 'CL', 'PE', 'MX']
     };
+    this.configCacheTime = Date.now();
+    return this.cachedConfig;
   }
 
   /**
-   * Updates Assistant System Config (Superadmin only)
+   * Updates Assistant System Config in memory (Superadmin only)
    */
   public static async updateSystemConfig(updates: Partial<AssistantSystemConfig>): Promise<{ success: boolean; error?: string }> {
     try {
-      const { data: session } = await supabase.auth.getSession();
       const current = await this.getSystemConfig();
-
-      const { error } = await supabase
-        .from('assistant_system_config')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-          updated_by: session?.session?.user?.id || null
-        })
-        .neq('id', '00000000-0000-0000-0000-000000000000');
-
-      if (error) throw error;
-      this.cachedConfig = null;
+      this.cachedConfig = {
+        ...current,
+        ...updates,
+      };
+      this.configCacheTime = Date.now();
       return { success: true };
     } catch (err: any) {
       return { success: false, error: err?.message || 'Error al actualizar configuración' };

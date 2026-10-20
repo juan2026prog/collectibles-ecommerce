@@ -1,7 +1,9 @@
 import { createPublicReadContext } from './public-supabase.js';
 
-export function createSitemapRepository(client) {
+export function createSitemapRepository(client, now = Date.now) {
   const pending = new Map();
+  const cache = new Map();
+  const SITEMAP_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes in-memory cache to avoid rebuilding sitemaps on bot bursts
   async function readAll(context, table, fields, configure) {
     const rows = [];
     for (let offset = 0; offset < 50000; offset += 1000) {
@@ -15,6 +17,10 @@ export function createSitemapRepository(client) {
   }
   return {
     get(type) {
+      const hit = cache.get(type);
+      if (hit && now() - hit.loadedAt < SITEMAP_CACHE_TTL_MS) {
+        return Promise.resolve(hit.data);
+      }
       if (pending.has(type)) return pending.get(type);
       const context = createPublicReadContext();
       const task = Promise.resolve().then(async () => {
@@ -28,7 +34,10 @@ export function createSitemapRepository(client) {
               });
               if (cfRes.ok && cfRes.headers.get('X-Catalog-Kill-Switch') !== 'active') {
                 const body = await cfRes.json();
-                if (Array.isArray(body?.products)) return body.products;
+                if (Array.isArray(body?.products)) {
+                  cache.set(type, { data: body.products, loadedAt: now() });
+                  return body.products;
+                }
               }
             } else if (type === 'brands' || type === 'categories') {
               const cfRes = await fetch(`${cfBase}/api/v1/taxonomies`, {
@@ -37,9 +46,14 @@ export function createSitemapRepository(client) {
               });
               if (cfRes.ok && cfRes.headers.get('X-Catalog-Kill-Switch') !== 'active') {
                 const body = await cfRes.json();
-                if (type === 'brands' && Array.isArray(body?.brands)) return body.brands;
+                if (type === 'brands' && Array.isArray(body?.brands)) {
+                  cache.set(type, { data: body.brands, loadedAt: now() });
+                  return body.brands;
+                }
                 if (type === 'categories' && Array.isArray(body?.categories)) {
-                  return [body.categories, body.licenses || [], body.themes || []];
+                  const resTuple = [body.categories, body.licenses || [], body.themes || []];
+                  cache.set(type, { data: resTuple, loadedAt: now() });
+                  return resTuple;
                 }
               }
             }
@@ -47,14 +61,17 @@ export function createSitemapRepository(client) {
             // Fall through to Supabase fallback
           }
         }
-        if (type === 'products') return readAll(context, 'products', 'slug,updated_at,created_at', q => q.eq('status', 'published').eq('is_active', true));
-        if (type === 'brands') return readAll(context, 'brands', 'slug,created_at', q => q.eq('is_active', true).eq('is_public', true).eq('status', 'approved'));
-        if (type === 'categories') return Promise.all([
+        let result;
+        if (type === 'products') result = await readAll(context, 'products', 'slug,updated_at,created_at', q => q.eq('status', 'published').eq('is_active', true));
+        else if (type === 'brands') result = await readAll(context, 'brands', 'slug,created_at', q => q.eq('is_active', true).eq('is_public', true).eq('status', 'approved'));
+        else if (type === 'categories') result = await Promise.all([
           readAll(context, 'categories', 'slug,status,is_active', q => q.eq('is_active', true).eq('status', 'approved')),
           readAll(context, 'licenses', 'slug', q => q.eq('is_active', true)),
           readAll(context, 'themes', 'slug', q => q.eq('is_active', true)),
         ]);
-        throw new Error('Invalid sitemap type');
+        else throw new Error('Invalid sitemap type');
+        cache.set(type, { data: result, loadedAt: now() });
+        return result;
       }).finally(() => { context.close(); pending.delete(type); });
       pending.set(type, task);
       return task;

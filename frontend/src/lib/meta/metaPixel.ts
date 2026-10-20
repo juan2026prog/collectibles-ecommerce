@@ -21,12 +21,19 @@ declare global {
   }
 }
 
+export function isAutomatedBotUserAgent(): boolean {
+  if (typeof navigator === 'undefined') return true;
+  const ua = navigator.userAgent || '';
+  return /(meta-externalagent|facebookexternalhit|facebot|Googlebot|AdsBot-Google|Mediapartners-Google|bingbot|Applebot|Linespider|ByteSpider|PetalBot|SemrushBot|AhrefsBot|MJ12bot|YandexBot|DuckDuckBot|Twitterbot|LinkedInBot|Slackbot|WhatsApp|Discordbot|HeadlessChrome|PhantomJS|Prerender)/i.test(ua);
+}
+
 /**
  * Validates if Meta Tracking is allowed.
- * Respects user cookie consent (declined = Solo Esenciales).
+ * Respects user cookie consent (declined = Solo Esenciales) and blocks automated crawlers.
  */
 export function canTrackMeta(): boolean {
   if (!PIXEL_ID) return false;
+  if (isAutomatedBotUserAgent()) return false;
   try {
     const consent = typeof localStorage !== 'undefined' ? localStorage.getItem('cookieSettings') : null;
     if (consent === 'declined') return false;

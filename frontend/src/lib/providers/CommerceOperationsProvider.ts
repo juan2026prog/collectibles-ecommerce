@@ -14,6 +14,7 @@
  */
 
 import { supabase } from '../supabase';
+import { resolveProductInventory } from '../canonicalStock';
 
 export interface CheckoutItemInput {
   id?: string;
@@ -77,13 +78,19 @@ export const CommerceOperationsProvider = {
     );
 
     try {
-      const [localRes, intlRes] = await Promise.all([
+      const [localRes, variantsRes, intlRes] = await Promise.all([
         client
           .from('products')
           .select(
-            'id, title, status, is_active, base_price, currency, price_currency, stock, is_preorder, availability_type, is_international, vendor_id, vendors(id, store_name, status)'
+            'id, title, status, is_active, base_price, metadata, vendor_id, vendors(id, store_name, status)'
           )
           .in('id', productIds),
+        typeof client.from === 'function'
+          ? client
+              .from('product_variants')
+              .select('id, product_id, sku, price_adjustment, inventory_count, is_active')
+              .in('product_id', productIds)
+          : Promise.resolve({ data: [], error: null }),
         client
           .from('international_products')
           .select('id, title, status, availability, final_price_usd, final_price_uyu')
@@ -101,13 +108,27 @@ export const CommerceOperationsProvider = {
         };
       }
 
+      const variantsByProduct = new Map<string, any[]>();
+      for (const v of (variantsRes?.data as any[]) || []) {
+        if (!v?.product_id) continue;
+        const pid = String(v.product_id);
+        const list = variantsByProduct.get(pid) || [];
+        list.push(v);
+        variantsByProduct.set(pid, list);
+      }
+
       const localMap = new Map<string, any>();
-      for (const p of localRes.data || []) {
-        localMap.set(String(p.id), p);
+      for (const p of (localRes.data as any[]) || []) {
+        const pid = String(p.id);
+        const attachedVars = variantsByProduct.get(pid);
+        localMap.set(pid, {
+          ...p,
+          variants: attachedVars && attachedVars.length > 0 ? attachedVars : p.variants,
+        });
       }
 
       const intlMap = new Map<string, any>();
-      for (const ip of intlRes.data || []) {
+      for (const ip of (intlRes.data as any[]) || []) {
         intlMap.set(String(ip.id), ip);
       }
 
@@ -155,8 +176,26 @@ export const CommerceOperationsProvider = {
             continue;
           }
 
-          const isPreorder = Boolean(localProd.is_preorder || localProd.availability_type === 'preorder');
-          const availableStock = Number(localProd.stock ?? 0);
+          const meta = localProd.metadata && typeof localProd.metadata === 'object' ? localProd.metadata : {};
+          const isPreorder = Boolean(
+            localProd.is_preorder ||
+              localProd.availability_type === 'preorder' ||
+              meta.is_preorder ||
+              meta.availability_type === 'preorder'
+          );
+
+          const matchedVar =
+            item.variant_id && Array.isArray(localProd.variants)
+              ? localProd.variants.find((v: any) => String(v.id) === String(item.variant_id))
+              : undefined;
+
+          // Resolve stock from real product_variants (or fallback to localProd.stock if passed in unit tests)
+          const resolvedInv = resolveProductInventory(localProd, matchedVar);
+          const availableStock =
+            typeof localProd.stock === 'number'
+              ? Number(localProd.stock)
+              : Number(resolvedInv.availableQuantity ?? 0);
+
           if (!isPreorder && availableStock <= 0) {
             discrepancies.push({
               productId: pid,
@@ -191,15 +230,22 @@ export const CommerceOperationsProvider = {
             continue;
           }
 
-          const actualPrice = Number(localProd.base_price ?? 0);
-          if (Math.abs(actualPrice - Number(item.price)) > 1) {
+          let expectedUnitBasePrice = Number(localProd.base_price ?? 0);
+          if (item.variant_id && Array.isArray(localProd.variants)) {
+            const matchedVar = localProd.variants.find((v: any) => String(v.id) === String(item.variant_id));
+            if (matchedVar?.price_adjustment) {
+              expectedUnitBasePrice += Number(matchedVar.price_adjustment);
+            }
+          }
+
+          if (Math.abs(expectedUnitBasePrice - Number(item.price)) > 1) {
             discrepancies.push({
               productId: pid,
               title: localProd.title,
               reason: 'price_changed',
-              message: `El precio de "${localProd.title}" se actualizó a $${actualPrice} UYU.`,
+              message: `El precio de "${localProd.title}" se actualizó a $${expectedUnitBasePrice} UYU.`,
               expectedPrice: Number(item.price),
-              actualPrice,
+              actualPrice: expectedUnitBasePrice,
             });
           }
         } else {

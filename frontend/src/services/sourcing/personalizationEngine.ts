@@ -7,8 +7,6 @@
  * NO dependence on OpenAI for ranking calculations.
  */
 
-import { supabase } from '../../lib/supabase';
-
 // Signal Event Types & Default Weights
 export type SignalEventType =
   | 'VIEW'
@@ -172,10 +170,20 @@ export function getOrCreateSessionId(): string {
 const memoryProfileCache = new Map<string, UserInterestProfile>();
 
 /**
- * Record a behavioral signal into local memory and Supabase.
+ * Detect automated crawlers/bots so they never pollute personalization profiles or trigger background calls.
+ */
+export function isAutomatedCrawler(): boolean {
+  if (typeof navigator === 'undefined') return true;
+  const ua = navigator.userAgent || '';
+  return /(meta-externalagent|facebookexternalhit|facebot|Googlebot|AdsBot-Google|Mediapartners-Google|bingbot|Applebot|Linespider|ByteSpider|PetalBot|SemrushBot|AhrefsBot|MJ12bot|YandexBot|DuckDuckBot|Twitterbot|LinkedInBot|Slackbot|WhatsApp|Discordbot|HeadlessChrome|PhantomJS|Prerender)/i.test(ua);
+}
+
+/**
+ * Record a behavioral signal into local memory (zero Supabase load; `sourcing_user_signals` table is retired).
  */
 export async function recordSignal(payload: SignalPayload): Promise<void> {
   try {
+    if (isAutomatedCrawler()) return;
     const userId = payload.userId || null;
     const sessionId = payload.sessionId || getOrCreateSessionId();
     const eventType = payload.eventType;
@@ -229,21 +237,6 @@ export async function recordSignal(payload: SignalPayload): Promise<void> {
     }
     profile.totalSignals += 1;
     profile.lastUpdated = nowIso;
-
-    // 2. Async non-blocking push to Supabase (catch any errors quietly)
-    if (typeof window !== 'undefined') {
-      supabase.from('sourcing_user_signals').insert({
-        user_id: userId,
-        session_id: sessionId,
-        event_type: eventType,
-        product_id: payload.productId || null,
-        entity_type: payload.entities ? Object.keys(payload.entities)[0] : null,
-        entity_name: payload.entities ? String(Object.values(payload.entities)[0] || '') : null,
-        weight,
-        source: payload.source || 'storefront',
-        metadata: payload.metadata || {}
-      }).then();
-    }
   } catch (err) {
     if (import.meta.env?.DEV) {
       console.warn('[PersonalizationEngine] Signal record error:', err);

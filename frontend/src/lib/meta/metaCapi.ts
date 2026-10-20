@@ -16,9 +16,13 @@ export async function sendMetaCapiEvent(
   userData: any = {}
 ) {
   try {
+    if (typeof navigator === 'undefined') return;
+    const client_user_agent = navigator.userAgent || '';
+    if (/(meta-externalagent|facebookexternalhit|facebot|Googlebot|AdsBot-Google|Mediapartners-Google|bingbot|Applebot|Linespider|ByteSpider|PetalBot|SemrushBot|AhrefsBot|MJ12bot|YandexBot|DuckDuckBot|Twitterbot|LinkedInBot|Slackbot|WhatsApp|Discordbot|HeadlessChrome|PhantomJS|Prerender)/i.test(client_user_agent)) {
+      return;
+    }
     const fbp = getCookie('_fbp');
     const fbc = getCookie('_fbc');
-    const client_user_agent = navigator.userAgent;
     const event_source_url = window.location.href;
 
     const payload = {

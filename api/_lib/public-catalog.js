@@ -310,7 +310,9 @@ export function createCatalogRepository(client, now = Date.now) {
         } catch {}
       }
 
-      if (snapshot && now() - loadedAt >= 0 && now() - loadedAt < 60000) return cached(false);
+      // Keep verified snapshot fresh for 15 minutes (900,000 ms) per serverless instance
+      // to prevent repeated 9-query full catalog rebuilds on every minute of traffic.
+      if (snapshot && now() - loadedAt >= 0 && now() - loadedAt < 900000) return cached(false);
       if (now() < retryAt) {
         if (usableFallback()) return cached(true);
         throw new Error('Catalog temporarily unavailable');

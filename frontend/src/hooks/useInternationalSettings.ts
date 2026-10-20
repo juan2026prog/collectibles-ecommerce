@@ -49,14 +49,42 @@ function formatSettings(data: any, publicOnly: boolean): InternationalSettings {
   };
 }
 
+const SESSION_CACHE_KEY = 'collectibles_intl_public_settings_v1';
+
+function isAutomatedCrawlerAgent(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return /(meta-externalagent|facebookexternalhit|facebot|Googlebot|AdsBot-Google|Mediapartners-Google|bingbot|Applebot|Linespider|ByteSpider|PetalBot|SemrushBot|AhrefsBot|MJ12bot|YandexBot|DuckDuckBot|Twitterbot|LinkedInBot|Slackbot|WhatsApp|Discordbot|HeadlessChrome|PhantomJS|Prerender)/i.test(ua);
+}
+
 export async function fetchInternationalSettings(forceRefresh = false, isAdminContext = false): Promise<InternationalSettings | null> {
-  const session = isAdminContext ? (await supabase.auth.getSession()).data.session : null;
+  if (!isAdminContext && isAutomatedCrawlerAgent()) {
+    const safeBotDefault = formatSettings({ international_public_enabled: false, international_purchases_enabled: false }, true);
+    caches.set('public', { data: safeBotDefault, expires: Date.now() + PUBLIC_CACHE_TTL });
+    return safeBotDefault;
+  }
+  const sessionRes = isAdminContext ? await supabase.auth?.getSession?.().catch(() => null) : null;
+  const session = sessionRes?.data?.session || null;
   if (isAdminContext && !session?.user?.id) return null;
   const scope = isAdminContext ? 'admin:' + session!.user.id : 'public';
   const ttl = isAdminContext ? ADMIN_CACHE_TTL : PUBLIC_CACHE_TTL;
   const requestRevision = authRevision;
   const cached = caches.get(scope);
   if (!forceRefresh && cached && cached.expires > Date.now()) return cached.data;
+  if (!forceRefresh && !isAdminContext && typeof sessionStorage !== 'undefined') {
+    try {
+      const rawSession = sessionStorage.getItem(SESSION_CACHE_KEY);
+      if (rawSession) {
+        const parsed = JSON.parse(rawSession);
+        if (parsed?.data && parsed?.expires > Date.now()) {
+          caches.set(scope, parsed);
+          return parsed.data;
+        }
+      }
+    } catch {
+      // Ignore storage error
+    }
+  }
   if (pending.has(scope)) return pending.get(scope)!;
   const operation = (async () => {
     try {
@@ -64,7 +92,11 @@ export async function fetchInternationalSettings(forceRefresh = false, isAdminCo
         const bundle = await PublicCatalogProvider.getPublicSettingsBundle();
         const statusData = bundle.data?.international_status || { international_enabled: true };
         const data = formatSettings(statusData, true);
-        caches.set(scope, { data, expires: Date.now() + ttl });
+        const entry = { data, expires: Date.now() + ttl };
+        caches.set(scope, entry);
+        if (typeof sessionStorage !== 'undefined') {
+          try { sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(entry)); } catch {}
+        }
         listeners.forEach(listener => listener(scope, data));
         return data;
       }
@@ -75,7 +107,11 @@ export async function fetchInternationalSettings(forceRefresh = false, isAdminCo
       if (result.error || !result.data) throw new Error('Settings unavailable');
       if (isAdminContext && requestRevision !== authRevision) return null;
       const data = formatSettings(result.data, !isAdminContext);
-      caches.set(scope, { data, expires: Date.now() + ttl });
+      const entry = { data, expires: Date.now() + ttl };
+      caches.set(scope, entry);
+      if (!isAdminContext && typeof sessionStorage !== 'undefined') {
+        try { sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(entry)); } catch {}
+      }
       listeners.forEach(listener => listener(scope, data));
       return data;
     } catch {
@@ -95,8 +131,10 @@ export function useInternationalSettings(enableRealtime = false, isAdminContext 
     async function refresh(force = false) {
       const current = ++revision;
       if (isAdminContext) {
-        const { data } = await supabase.auth.getSession();
-        scope = data.session?.user?.id ? 'admin:' + data.session.user.id : '';
+        try {
+          const sessionRes = await supabase.auth?.getSession?.();
+          scope = sessionRes?.data?.session?.user?.id ? 'admin:' + sessionRes.data.session.user.id : '';
+        } catch {}
       }
       const data = await fetchInternationalSettings(force, isAdminContext);
       if (active && current === revision) { setSettings(data); setLoaded(true); }
@@ -108,18 +146,18 @@ export function useInternationalSettings(enableRealtime = false, isAdminContext 
     refresh();
     // Solo hacer polling periódico en contexto administrativo, jamás cada 60s en cada pestaña pública
     const timer = isAdminContext ? setInterval(() => refresh(), ADMIN_CACHE_TTL) : null;
-    const auth = isAdminContext ? supabase.auth.onAuthStateChange(() => {
+    const auth = isAdminContext && supabase.auth?.onAuthStateChange ? supabase.auth.onAuthStateChange(() => {
       authRevision++; revision++; scope = ''; setSettings(null); setLoaded(false);
       for (const key of caches.keys()) if (key.startsWith('admin:')) caches.delete(key);
       for (const key of pending.keys()) if (key.startsWith('admin:')) pending.delete(key);
       setTimeout(() => { if (active) refresh(true); }, 0);
-    }).data.subscription : null;
-    const channel = enableRealtime && isAdminContext ? supabase.channel('international-settings-admin')
+    })?.data?.subscription : null;
+    const channel = enableRealtime && isAdminContext && typeof supabase.channel === 'function' ? supabase.channel('international-settings-admin')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'international_sync_settings', filter: 'id=eq.1' }, () => refresh(true))
       .subscribe() : null;
     return () => {
       active = false; revision++; if (timer) clearInterval(timer); listeners.delete(listener); auth?.unsubscribe();
-      if (channel) supabase.removeChannel(channel);
+      if (channel && typeof supabase.removeChannel === 'function') supabase.removeChannel(channel);
     };
   }, [enableRealtime, isAdminContext]);
   return {
