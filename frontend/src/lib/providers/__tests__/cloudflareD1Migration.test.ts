@@ -1076,5 +1076,179 @@ describe('Migración Collectibles a Cloudflare D1 + Workers — Suite de Integra
     expect(probeQueries.localProducts5).toContain('limit=5');
     expect(probeQueries.intlProducts5).toContain('limit=5');
   });
+
+  it('Caso 10 (Etapa 5): Fichas de producto individuales (productDetail) en D1 + Ordenación de precios UYU/USD normalizada + Redirección de slugs', async () => {
+    const mockDb = createMockD1Database({
+      settings: {
+        runtime_routing_config: JSON.stringify({
+          enabled: true,
+          mode: 'active',
+          domains: {
+            products: true,
+            productDetail: true,
+            taxonomies: true,
+            search: false,
+            promotions: false,
+            radar: false,
+            settings: false,
+            feeds: true,
+          },
+        }),
+      },
+      products: [
+        {
+          id: '00049697-546f-4e67-bf3e-04cee864341a',
+          slug: 'zeddemore-ghostbusters-kenner',
+          title: 'Zeddemore The Real Ghostbusters',
+          description: 'Figura de acción coleccionable Kenner Classics',
+          short_description: 'Figura retro 15cm',
+          currency: 'UYU',
+          price_currency: 'UYU',
+          base_price: 2990,
+          compare_at_price: null,
+          final_price_usd: null,
+          final_price_uyu: 2990,
+          stock: 3,
+          stock_status: 'in_stock',
+          availability_type: 'immediate',
+          is_active: 1,
+          status: 'published',
+          is_international: 0,
+          primary_image_url: 'https://images.collectibles.uy/ghostbusters-zeddemore.jpg',
+          images_json: JSON.stringify([
+            { id: 'img-1', url: 'https://images.collectibles.uy/ghostbusters-zeddemore.jpg', alt_text: 'Front', sort_order: 0, is_primary: true },
+          ]),
+          variants_json: JSON.stringify([
+            { id: '524ab3d4-ebe1-49c6-b3f3-ddbea56db1b7', sku: 'COL-000517', name: 'Standard', price_adjustment: 0, inventory_count: 3, is_active: true },
+          ]),
+          category_id: 'cat-figuras',
+          category_name: 'Figuras de Acción',
+          category_slug: 'figuras',
+          brand_id: 'brand-hasbro',
+          brand_name: 'Hasbro',
+          brand_slug: 'hasbro',
+          created_at: '2026-04-10T10:00:00Z',
+          updated_at: '2026-04-10T10:00:00Z',
+        },
+        {
+          id: '8f5d4eeb-a31c-4b84-b2e2-67794ee5f7c5',
+          slug: 'neca-phantom-of-the-opera',
+          title: 'NECA Phantom of the Opera 7" Figure',
+          description: 'Figura importada USA',
+          currency: 'USD',
+          price_currency: 'USD',
+          base_price: 34.99,
+          final_price_usd: 34.99,
+          final_price_uyu: 1469.58,
+          stock: 1,
+          stock_status: 'in_stock',
+          availability_type: 'express',
+          is_active: 1,
+          status: 'published',
+          is_international: 1,
+          primary_image_url: 'https://images.collectibles.uy/neca-phantom.jpg',
+          images_json: '[]',
+          variants_json: '[]',
+          created_at: '2026-04-12T10:00:00Z',
+          updated_at: '2026-04-12T10:00:00Z',
+        },
+        {
+          id: 'out-of-stock-card-id',
+          slug: 'ultra-pro-paginas-9-bolsillos',
+          title: 'Ultra Pro Páginas Silver 9 Bolsillos',
+          currency: 'UYU',
+          base_price: 120,
+          final_price_uyu: 120,
+          stock: 0,
+          stock_status: 'out_of_stock',
+          availability_type: 'immediate',
+          is_active: 1,
+          status: 'published',
+          is_international: 0,
+          primary_image_url: 'https://images.collectibles.uy/ultra-pro.jpg',
+          images_json: '[]',
+          variants_json: '[]',
+          created_at: '2026-04-13T10:00:00Z',
+          updated_at: '2026-04-13T10:00:00Z',
+        },
+      ],
+      redirects: [
+        {
+          old_slug: 'mercadolibre-MLU615896308',
+          new_slug: 'zeddemore-ghostbusters-kenner',
+          product_id: '00049697-546f-4e67-bf3e-04cee864341a',
+        },
+      ],
+    });
+
+    const env: Env = {
+      DB: mockDb,
+      CATALOG_SYNC_SECRET: 'test-secret-at-least-32-chars-long-12345',
+      PUBLIC_SITE_URL: 'https://collectibles.uy',
+    };
+
+    // 1. Lectura de ficha local en UYU
+    const localRes = await workerApp.fetch(
+      new Request('https://catalog.worker.internal/api/v1/products/zeddemore-ghostbusters-kenner'),
+      env
+    );
+    expect(localRes.status).toBe(200);
+    const localData = await localRes.json();
+    expect(localData.ok).toBe(true);
+    expect(localData.source).toBe('cloudflare-d1');
+    expect(localData.product.slug).toBe('zeddemore-ghostbusters-kenner');
+    expect(localData.product.currency).toBe('UYU');
+    expect(localData.product.base_price).toBe(2990);
+    expect(localData.product.category.name).toBe('Figuras de Acción');
+    expect(localData.product.variants[0].id).toBe('524ab3d4-ebe1-49c6-b3f3-ddbea56db1b7');
+
+    // 2. Lectura de ficha internacional en USD con final_price_uyu
+    const intlRes = await workerApp.fetch(
+      new Request('https://catalog.worker.internal/api/v1/products/neca-phantom-of-the-opera'),
+      env
+    );
+    expect(intlRes.status).toBe(200);
+    const intlData = await intlRes.json();
+    expect(intlData.product.currency).toBe('USD');
+    expect(intlData.product.base_price).toBe(34.99);
+    expect(intlData.product.final_price_uyu).toBe(1469.58);
+    expect(intlData.product.is_international).toBe(true);
+
+    // 3. Lectura de producto agotado
+    const oosRes = await workerApp.fetch(
+      new Request('https://catalog.worker.internal/api/v1/products/ultra-pro-paginas-9-bolsillos'),
+      env
+    );
+    expect(oosRes.status).toBe(200);
+    const oosData = await oosRes.json();
+    expect(oosData.product.stock).toBe(0);
+    expect(oosData.product.stock_status).toBe('out_of_stock');
+
+    // 4. Redirección de slug legacy
+    const redirRes = await workerApp.fetch(
+      new Request('https://catalog.worker.internal/api/v1/products/mercadolibre-MLU615896308'),
+      env
+    );
+    expect(redirRes.status).toBe(200);
+    const redirData = await redirRes.json();
+    expect(redirData.redirected_from).toBe('mercadolibre-MLU615896308');
+    expect(redirData.canonical_slug).toBe('zeddemore-ghostbusters-kenner');
+    expect(redirData.product.title).toBe('Zeddemore The Real Ghostbusters');
+
+    // 5. Producto inexistente devuelve 404
+    const notFoundRes = await workerApp.fetch(
+      new Request('https://catalog.worker.internal/api/v1/products/non-existent-product-slug'),
+      env
+    );
+    expect(notFoundRes.status).toBe(404);
+
+    // 6. Dominio search sigue desactivado (503)
+    const searchRes = await workerApp.fetch(
+      new Request('https://catalog.worker.internal/api/v1/search?q=ghostbusters'),
+      env
+    );
+    expect(searchRes.status).toBe(503);
+  });
 });
+
 

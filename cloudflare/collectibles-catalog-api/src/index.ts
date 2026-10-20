@@ -544,15 +544,15 @@ function buildProductsFilterSql(params: URLSearchParams) {
     whereClauses.push("p.condition LIKE 'loose%'");
   }
 
-  // Rango de precios
+  // Rango de precios normalizado a la moneda de mercado (UYU)
   const minPrice = Number(params.get('min_price') || params.get('minPrice'));
   if (Number.isFinite(minPrice) && minPrice > 0) {
-    whereClauses.push('p.base_price >= ?');
+    whereClauses.push('COALESCE(p.final_price_uyu, p.base_price) >= ?');
     bindings.push(minPrice);
   }
   const maxPrice = Number(params.get('max_price') || params.get('maxPrice'));
   if (Number.isFinite(maxPrice) && maxPrice > 0) {
-    whereClauses.push('p.base_price <= ?');
+    whereClauses.push('COALESCE(p.final_price_uyu, p.base_price) <= ?');
     bindings.push(maxPrice);
   }
 
@@ -585,12 +585,12 @@ function buildProductsFilterSql(params: URLSearchParams) {
     case 'price_asc':
     case 'price-asc':
     case 'price-low':
-      orderBySql = 'p.base_price ASC, p.created_at DESC';
+      orderBySql = 'COALESCE(p.final_price_uyu, p.base_price) ASC, p.created_at DESC';
       break;
     case 'price_desc':
     case 'price-desc':
     case 'price-high':
-      orderBySql = 'p.base_price DESC, p.created_at DESC';
+      orderBySql = 'COALESCE(p.final_price_uyu, p.base_price) DESC, p.created_at DESC';
       break;
     case 'title_asc':
     case 'name_asc':
