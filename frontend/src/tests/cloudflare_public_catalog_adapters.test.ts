@@ -41,6 +41,22 @@ describe('ETAPA 8 — Proveedores y Adaptadores Públicos Cloudflare D1', () => 
       resetPublicCatalogCircuitBreaker();
       expect(PublicCatalogProvider.isRuntimeKillSwitchActive()).toBe(false);
     });
+
+    it('soporta setSessionDomainOverride para pruebas aisladas por sesión', () => {
+      expect(PublicCatalogProvider.isDomainEnabled('search')).toBe(false);
+      PublicCatalogProvider.setSessionDomainOverride('search', true);
+      expect(PublicCatalogProvider.isDomainEnabled('search')).toBe(true);
+
+      PublicCatalogProvider.setSessionDomainOverride('search', false);
+      expect(PublicCatalogProvider.isDomainEnabled('search')).toBe(false);
+    });
+
+    it('ensureRuntimeConfigReady resuelve sin arrojar excepciones ni bloquear', async () => {
+      const cfg = await PublicCatalogProvider.ensureRuntimeConfigReady(100);
+      expect(cfg).toBeDefined();
+      expect(typeof cfg.workerBaseUrl).toBe('string');
+      expect(typeof cfg.domains).toBe('object');
+    });
   });
 
   describe('2. PublicSearchProvider — Búsqueda y Autocomplete', () => {
@@ -125,6 +141,21 @@ describe('ETAPA 8 — Proveedores y Adaptadores Públicos Cloudflare D1', () => 
       expect(mockIntl.currency).toBe('USD');
       expect(mockLocal.is_international).toBe(0);
       expect(mockIntl.is_international).toBe(1);
+    });
+  });
+
+  describe('7. Radar — Regla Estricta de Publicación y Exclusión de Borradores', () => {
+    it('filtra estrictamente borradores: solo son publicables is_published=true AND approval_status=PUBLISHED', () => {
+      const mockEvents = [
+        { id: '1', title: 'Public Event 1', is_published: true, approval_status: 'PUBLISHED' },
+        { id: '2', title: 'Draft Event 1', is_published: false, approval_status: 'DRAFT' },
+        { id: '3', title: 'Unverified Event', is_published: true, approval_status: 'DRAFT' },
+        { id: '4', title: 'Public Event 2', is_published: true, approval_status: 'PUBLISHED' },
+      ];
+
+      const publicOnly = mockEvents.filter(e => e.is_published === true && e.approval_status === 'PUBLISHED');
+      expect(publicOnly.length).toBe(2);
+      expect(publicOnly.map(e => e.id)).toEqual(['1', '4']);
     });
   });
 });

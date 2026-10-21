@@ -73,6 +73,15 @@ function loadRuntimeControlState(): RuntimeControlState {
     updatedAt: 0,
   };
   try {
+    if (typeof window !== 'undefined' && window.location && window.location.search) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const testDom = urlParams.get('cf_test_domain') || urlParams.get('cf_enable');
+      if (testDom && ['products', 'productDetail', 'taxonomies', 'search', 'promotions', 'radar', 'settings'].includes(testDom)) {
+        initial.domainOverrides[testDom as CatalogDomainFlag] = true;
+      }
+    }
+  } catch {}
+  try {
     if (typeof window !== 'undefined' && window.sessionStorage) {
       const raw = window.sessionStorage.getItem(RUNTIME_CTRL_STORAGE_KEY);
       if (raw) {
@@ -274,49 +283,95 @@ export function resetPublicCatalogCircuitBreaker(): void {
  * Consulta `/api/v1/runtime-config` en el Worker para sincronizar el estado de activación/rollback
  * en caliente sin necesidad de recompilar variables `VITE_*`.
  */
-export async function syncRuntimeConfig(fetcher: typeof fetch = fetch): Promise<{
+let activeSyncPromise: Promise<{
+  enabled: boolean;
+  mode: string;
+  domains: Partial<Record<CatalogDomainFlag, boolean>>;
+}> | null = null;
+
+export function syncRuntimeConfig(fetcher: typeof fetch = fetch): Promise<{
   enabled: boolean;
   mode: string;
   domains: Partial<Record<CatalogDomainFlag, boolean>>;
 }> {
-  const cfg = getPublicCatalogConfig();
-  try {
-    const res = await fetcher(`${cfg.workerBaseUrl}/api/v1/runtime-config`, {
-      method: 'GET',
-      headers: { Accept: 'application/json', 'X-Catalog-Client': 'collectibles-web-v1' },
-    });
-
-    const killHeader = res.headers?.get?.('X-Catalog-Kill-Switch');
-    const json = await res.json().catch(() => ({} as any));
-
-    if (killHeader === 'active' || json?.enabled === false || res.status === 503) {
-      setRuntimeKillSwitch(true, json?.reason || 'worker-runtime-config-disabled');
-      return { enabled: false, mode: 'disabled', domains: {} };
-    }
-
-    if (typeof json?.enabled === 'boolean') {
-      const liveDomains: Partial<Record<CatalogDomainFlag, boolean>> = {
-        products: Boolean(json.domains?.products),
-        productDetail: Boolean(json.domains?.productDetail),
-        taxonomies: Boolean(json.domains?.taxonomies),
-        search: Boolean(json.domains?.search),
-        radar: Boolean(json.domains?.radar),
-        promotions: Boolean(json.domains?.promotions),
-        settings: Boolean(json.domains?.settings),
-      };
-      setRuntimeCatalogOverride(json.enabled, liveDomains);
-      return {
-        enabled: json.enabled,
-        mode: json.mode || (json.enabled ? 'active' : 'disabled'),
-        domains: liveDomains,
-      };
-    }
-  } catch (err) {
-    // Fail-safe silencioso: si el worker no responde o hay error transitorio de red, no romper la app
-    console.warn('[PublicCatalogProvider] syncRuntimeConfig caught error; using current state:', err);
+  if (activeSyncPromise) {
+    return activeSyncPromise;
   }
 
-  return { enabled: cfg.enabledGlobal, mode: cfg.enabledGlobal ? 'active' : 'disabled', domains: cfg.domains };
+  activeSyncPromise = (async () => {
+    const cfg = getPublicCatalogConfig();
+    try {
+      const res = await fetcher(`${cfg.workerBaseUrl}/api/v1/runtime-config`, {
+        method: 'GET',
+        headers: { Accept: 'application/json', 'X-Catalog-Client': 'collectibles-web-v1' },
+      });
+
+      const killHeader = res.headers?.get?.('X-Catalog-Kill-Switch');
+      const json = await res.json().catch(() => ({} as any));
+
+      if (killHeader === 'active' || json?.enabled === false || res.status === 503) {
+        setRuntimeKillSwitch(true, json?.reason || 'worker-runtime-config-disabled');
+        return { enabled: false, mode: 'disabled', domains: {} };
+      }
+
+      if (typeof json?.enabled === 'boolean') {
+        const liveDomains: Partial<Record<CatalogDomainFlag, boolean>> = {
+          products: Boolean(json.domains?.products),
+          productDetail: Boolean(json.domains?.productDetail),
+          taxonomies: Boolean(json.domains?.taxonomies),
+          search: Boolean(json.domains?.search),
+          radar: Boolean(json.domains?.radar),
+          promotions: Boolean(json.domains?.promotions),
+          settings: Boolean(json.domains?.settings),
+        };
+        setRuntimeCatalogOverride(json.enabled, liveDomains);
+        return {
+          enabled: json.enabled,
+          mode: json.mode || (json.enabled ? 'active' : 'disabled'),
+          domains: liveDomains,
+        };
+      }
+    } catch (err) {
+      console.warn('[PublicCatalogProvider] syncRuntimeConfig caught error; using current state:', err);
+    } finally {
+      setTimeout(() => {
+        activeSyncPromise = null;
+      }, 30_000);
+    }
+
+    return { enabled: cfg.enabledGlobal, mode: cfg.enabledGlobal ? 'active' : 'disabled', domains: cfg.domains };
+  })();
+
+  return activeSyncPromise;
+}
+
+/**
+ * Espera la sincronización del enrutamiento de runtime para evitar carreras en el montaje en frío.
+ */
+export async function ensureRuntimeConfigReady(timeoutMs = 1200): Promise<PublicCatalogConfig> {
+  const promise = activeSyncPromise || syncRuntimeConfig();
+  try {
+    await Promise.race([
+      promise,
+      new Promise((resolve) => setTimeout(resolve, timeoutMs)),
+    ]);
+  } catch {}
+  return getPublicCatalogConfig();
+}
+
+/**
+ * Activa un dominio exclusivamente para la sesión actual del usuario/tester (sessionStorage).
+ */
+export function setSessionDomainOverride(domain: CatalogDomainFlag, enabled: boolean): void {
+  runtimeState = {
+    ...runtimeState,
+    domainOverrides: {
+      ...runtimeState.domainOverrides,
+      [domain]: enabled,
+    },
+    updatedAt: Date.now(),
+  };
+  persistRuntimeControlState();
 }
 
 // Auto-inicialización silenciosa al cargar el script en el navegador
@@ -449,6 +504,8 @@ export async function fetchFromCloudflareCatalog<T>(
 
 export const PublicCatalogProvider = {
   isDomainEnabled: isCatalogDomainEnabled,
+  ensureRuntimeConfigReady,
+  setSessionDomainOverride,
   isRuntimeKillSwitchActive,
   setRuntimeKillSwitch,
   setRuntimeCatalogOverride,

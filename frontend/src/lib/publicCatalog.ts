@@ -2,6 +2,7 @@ import { registerMediaVariants } from './mediaVariants';
 import { PublicCatalogProvider, CatalogKillSwitchError } from './providers/PublicCatalogProvider';
 
 export async function fetchPublicCatalog(filters: Record<string, unknown>, signal: AbortSignal) {
+  await PublicCatalogProvider.ensureRuntimeConfigReady();
   const mode = String(filters.mode || 'cards');
 
   if ((mode === 'taxonomies' || mode === 'facets') && PublicCatalogProvider.isDomainEnabled('taxonomies')) {

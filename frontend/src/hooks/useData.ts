@@ -643,6 +643,7 @@ export function useProduct(slug: string | undefined) {
       setLoading(true);
       try {
         const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+        await PublicCatalogProvider.ensureRuntimeConfigReady();
         if (PublicCatalogProvider.isDomainEnabled('productDetail') && slug) {
           try {
             const d1Res = await PublicCatalogProvider.getProductBySlug(slug);
@@ -790,6 +791,7 @@ export function useProductBuyBox(productId: string | undefined) {
           return;
         }
         const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+        await PublicCatalogProvider.ensureRuntimeConfigReady();
         if (PublicCatalogProvider.isDomainEnabled('productDetail')) {
           // ProductDetail resolves vendor winner from D1's projected vendor/vendor_store fields;
           // authoritative Buy Box / stock validation runs via CommerceOperationsProvider at checkout.
