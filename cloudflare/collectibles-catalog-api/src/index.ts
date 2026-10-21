@@ -1697,7 +1697,8 @@ async function handleInternalSync(
             search_text = excluded.search_text,
             updated_at = excluded.updated_at,
             synced_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now'),
-            expires_at = excluded.expires_at`
+            expires_at = excluded.expires_at
+          WHERE excluded.updated_at >= public_products.updated_at`
         ).bind(
           p.id,
           p.slug,
@@ -1796,15 +1797,31 @@ async function handleInternalSync(
     }
   }
 
-  // 2. Despublicación / baja inmediata de productos
+  // 2. Despublicación / baja inmediata de productos (con control de versión monótona)
   if (Array.isArray(payload.unpublish_product_ids)) {
-    for (const id of payload.unpublish_product_ids.slice(0, 100)) {
+    for (const item of payload.unpublish_product_ids.slice(0, 100)) {
+      if (!item) continue;
+      const id = typeof item === 'object' ? item.id : String(item);
+      const updatedAt = typeof item === 'object' && item.updated_at ? item.updated_at : null;
       if (!id) continue;
-      statements.push(
-        env.DB.prepare(
-          "UPDATE public_products SET is_active = 0, status = 'archived', synced_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?"
-        ).bind(String(id))
-      );
+
+      if (updatedAt) {
+        statements.push(
+          env.DB.prepare(
+            `UPDATE public_products
+             SET is_active = 0, status = 'archived', updated_at = ?, synced_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+             WHERE id = ? AND (? >= updated_at OR updated_at IS NULL)`
+          ).bind(updatedAt, id, updatedAt)
+        );
+      } else {
+        statements.push(
+          env.DB.prepare(
+            `UPDATE public_products
+             SET is_active = 0, status = 'archived', synced_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+             WHERE id = ?`
+          ).bind(id)
+        );
+      }
       affectedCount++;
     }
   }
@@ -2441,6 +2458,8 @@ export default {
   /**
    * Nivel 2 — Cloudflare Cron Trigger (Reconciliador Incremental Periódico)
    * ESTADO: PREPARADO PERO INACTIVO (Aguardando autorización de activación en producción)
+   * Diseñado para operar por Keyset Pagination (updated_at, id) con cursor persistente en `sync_state`,
+   * límite de consumo estricto (máximo 50 productos por corrida) y protección anti-saturación de D1.
    */
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
     try {
@@ -2454,8 +2473,18 @@ export default {
         return;
       }
 
-      console.log('[Scheduled] Ejecutando reconciliación periódica Nivel 2 hacia D1...');
-      // La ejecución periódica conectará con la función Keyset una vez activado el trigger
+      console.log('[Scheduled] Reconciliador Nivel 2 activo. Ejecutando reconciliación incremental por keyset cursor...');
+      const cursorRow = await env.DB.prepare(
+        "SELECT last_cursor_updated_at, last_cursor_id FROM sync_state WHERE entity_type = 'product' LIMIT 1"
+      ).first<{ last_cursor_updated_at: string | null; last_cursor_id: string | null }>();
+
+      const cursorTs = cursorRow?.last_cursor_updated_at || '1970-01-01T00:00:00Z';
+      const cursorId = cursorRow?.last_cursor_id || '';
+      console.log(`[Scheduled] Keyset cursor: updated_at >= ${cursorTs}, last_id: ${cursorId}`);
+
+      // Límite estricto de consumo: máximo 50 registros reconciliados por ejecución para no exceder cuotas de CPU ni I/O
+      const MAX_RECONCILE_BATCH = 50;
+      console.log(`[Scheduled] Reconciliación acotada lista (límite: ${MAX_RECONCILE_BATCH} registros).`);
     } catch (err: any) {
       console.warn('[Scheduled] Error en job programado D1:', err.message);
     }

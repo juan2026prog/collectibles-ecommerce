@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, handleOptions } from "../_shared/cors.ts";
 import { verifyAdmin } from "../_shared/auth.ts";
+import { syncProductsToCloudflareD1 } from "../_shared/cloudflareCatalogSync.ts";
 
 Deno.serve(async (req: Request) => {
   const options = handleOptions(req);
@@ -543,6 +544,8 @@ Deno.serve(async (req: Request) => {
           .eq("id", orderId);
 
         // Restore Stock for Suborder Items ONLY if BEFORE dispatch (Fase 3)
+        const restoredProductIds: string[] = [];
+
         if (!hasDispatchedShipment && !hasLabelCreatedShipment) {
           const { data: subItems } = await supabaseAdmin
             .from("order_items")
@@ -551,6 +554,9 @@ Deno.serve(async (req: Request) => {
 
           if (subItems) {
             for (const item of subItems) {
+              if (item.product_id) {
+                restoredProductIds.push(item.product_id);
+              }
               if (item.variant_id) {
                 const { data: v } = await supabaseAdmin.from('product_variants').select('inventory_count').eq('id', item.variant_id).single();
                 if (v) {
@@ -616,6 +622,9 @@ Deno.serve(async (req: Request) => {
 
           if (orderItems) {
             for (const item of orderItems) {
+              if (item.product_id) {
+                restoredProductIds.push(item.product_id);
+              }
               if (item.variant_id) {
                 const { data: v } = await supabaseAdmin.from('product_variants').select('inventory_count').eq('id', item.variant_id).single();
                 if (v) {
@@ -648,6 +657,23 @@ Deno.serve(async (req: Request) => {
                 }
               }
             }
+          }
+        }
+      }
+
+      // Sincronización comercial no bloqueante de stock restaurado hacia Cloudflare D1
+      if (restoredProductIds.length > 0) {
+        const uniqueRestoredIds = Array.from(new Set(restoredProductIds.filter(Boolean)));
+        if (uniqueRestoredIds.length > 0) {
+          const syncPromise = syncProductsToCloudflareD1(uniqueRestoredIds, supabaseAdmin, {
+            eventType: 'order_refunded',
+            useOutbox: true,
+          }).catch((err) => {
+            console.warn('[D1-Sync-Refund] Error no-bloqueante al sincronizar stock reembolsado:', err?.message || err);
+          });
+
+          if (typeof (globalThis as any).EdgeRuntime?.waitUntil === 'function') {
+            (globalThis as any).EdgeRuntime.waitUntil(syncPromise);
           }
         }
       }

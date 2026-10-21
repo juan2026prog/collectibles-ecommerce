@@ -1853,7 +1853,10 @@ function sanitizePayloadForLogging(data: any) {
         ? payload.items.map((it: any) => it.product_id || it.id).filter(Boolean)
         : [];
       if (affectedProductIds.length > 0) {
-        const syncPromise = syncProductsToCloudflareD1(affectedProductIds, supabase).catch((err) => {
+        const syncPromise = syncProductsToCloudflareD1(affectedProductIds, supabase, {
+          eventType: 'order_created',
+          useOutbox: true,
+        }).catch((err) => {
           console.warn('[D1-Sync-N1] Error no-bloqueante en sync D1:', err?.message || err);
         });
 

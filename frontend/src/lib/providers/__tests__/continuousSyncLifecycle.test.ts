@@ -13,6 +13,11 @@ import {
   pushBatchToD1Worker,
   stripPrivateFields,
 } from '../../../../../scripts/d1-sync/sync-supabase-to-d1.mjs';
+import {
+  calculateNextBackoff,
+  enqueueOutboxEvents,
+  processOutboxBatch,
+} from '../../../../../supabase/functions/_shared/cloudflareCatalogSync';
 
 /**
  * Mock D1 Database con capacidades completas para pruebas de ciclo de vida de sincronización continua
@@ -61,6 +66,16 @@ function createSyncLifecycleMockDb(): D1Database & {
 
         if (normSql.includes('INSERT INTO public_products')) {
           const id = String(boundValues[0]);
+          const incomingUpdatedAt = String(boundValues[74] || '');
+          const existing = productsMap.get(id);
+
+          // Simular SQLite WHERE excluded.updated_at >= public_products.updated_at
+          if (normSql.includes('WHERE excluded.updated_at >= public_products.updated_at')) {
+            if (existing && existing.updated_at && incomingUpdatedAt && incomingUpdatedAt < existing.updated_at) {
+              return { success: true, results: [] as T[] };
+            }
+          }
+
           const slug = String(boundValues[1]);
           const title = String(boundValues[2]);
           const currency = String(boundValues[13]);
@@ -86,22 +101,37 @@ function createSyncLifecycleMockDb(): D1Database & {
             variants_json: String(boundValues[61] || '[]'),
             primary_image_url: boundValues[58] ? String(boundValues[58]) : null,
             images_json: String(boundValues[59] || '[]'),
-            created_at: boundValues[74] || new Date().toISOString(),
-            updated_at: boundValues[75] || new Date().toISOString(),
+            created_at: boundValues[73] || new Date().toISOString(),
+            updated_at: boundValues[74] || new Date().toISOString(),
           };
           productsMap.set(id, record);
           return { success: true, results: [] as T[] };
         }
 
         if (normSql.includes('UPDATE public_products SET is_active = 0, status = \'archived\'')) {
-          const id = String(boundValues[0]);
-          const prod = productsMap.get(id);
-          if (prod) {
-            prod.is_active = 0;
-            prod.status = 'archived';
-            productsMap.set(id, prod);
+          if (normSql.includes('AND (? >= updated_at OR updated_at IS NULL)')) {
+            const updatedAt = String(boundValues[0]);
+            const id = String(boundValues[1]);
+            const prod = productsMap.get(id);
+            if (prod) {
+              if (!prod.updated_at || updatedAt >= prod.updated_at) {
+                prod.is_active = 0;
+                prod.status = 'archived';
+                prod.updated_at = updatedAt;
+                productsMap.set(id, prod);
+              }
+            }
+            return { success: true, results: [] as T[] };
+          } else {
+            const id = String(boundValues[0]);
+            const prod = productsMap.get(id);
+            if (prod) {
+              prod.is_active = 0;
+              prod.status = 'archived';
+              productsMap.set(id, prod);
+            }
+            return { success: true, results: [] as T[] };
           }
-          return { success: true, results: [] as T[] };
         }
 
         if (normSql.includes('INSERT INTO public_slug_redirects')) {
@@ -499,5 +529,335 @@ describe('ETAPA 6: Ciclo de Vida Completo de Sincronización Continua Supabase �
     expect(redirData.redirected_from).toBe('figura-coleccionable-test-cyberpunk');
     expect(redirData.canonical_slug).toBe('cyberpunk-figura-edicion-definitiva');
     expect(redirData.product.title).toBe('Cyberpunk Figura Edición Definitiva');
+  });
+
+  it('7. MONOTONIC VERSIONING EN UPSERT: Evento tardío/desfasado con updated_at menor es descartado sin sobreescribir', async () => {
+    // Estado inicial en D1 con versión T2 (12:00:00Z) y precio 5000 UYU
+    const initialProduct = {
+      id: 'test-monotonic-prod-007',
+      slug: 'figura-coleccionable-test-monotonic',
+      title: 'Figura Monotonic Test',
+      currency: 'UYU',
+      base_price: 5000,
+      final_price_uyu: 5000,
+      stock: 3,
+      stock_status: 'in_stock',
+      status: 'published',
+      is_active: true,
+      updated_at: '2026-10-21T12:00:00.000Z',
+    };
+
+    await pushBatchToD1Worker({
+      workerUrl: 'https://catalog.worker.internal',
+      syncSecret: SYNC_SECRET,
+      dryRun: false,
+      payload: {
+        batch_id: 'batch-monotonic-t2',
+        upsert_products: [initialProduct],
+      },
+      fetcher: ((url: string, init: any) =>
+        workerApp.fetch(new Request(url, init), env)) as any,
+    });
+
+    // 1. Llega un reintento tardío desfasado con versión anterior T1 (11:00:00Z) y precio obsoleto 3000 UYU
+    const staleProduct = {
+      ...initialProduct,
+      base_price: 3000,
+      final_price_uyu: 3000,
+      updated_at: '2026-10-21T11:00:00.000Z', // Timestamp ANTERIOR
+    };
+
+    await pushBatchToD1Worker({
+      workerUrl: 'https://catalog.worker.internal',
+      syncSecret: SYNC_SECRET,
+      dryRun: false,
+      payload: {
+        batch_id: 'batch-monotonic-stale-t1',
+        upsert_products: [staleProduct],
+      },
+      fetcher: ((url: string, init: any) =>
+        workerApp.fetch(new Request(url, init), env)) as any,
+    });
+
+    // El precio debe PERMANECER en 5000 (el update desfasado fue ignorado por SQLite WHERE)
+    let pdpRes = await workerApp.fetch(
+      new Request('https://catalog.worker.internal/api/v1/products/figura-coleccionable-test-monotonic'),
+      env
+    );
+    let pdpData = await pdpRes.json();
+    expect(pdpData.product.base_price).toBe(5000);
+
+    // 2. Llega un evento posterior válido T3 (13:00:00Z) con nuevo precio 6000 UYU
+    const newerProduct = {
+      ...initialProduct,
+      base_price: 6000,
+      final_price_uyu: 6000,
+      updated_at: '2026-10-21T13:00:00.000Z', // Timestamp POSTERIOR
+    };
+
+    await pushBatchToD1Worker({
+      workerUrl: 'https://catalog.worker.internal',
+      syncSecret: SYNC_SECRET,
+      dryRun: false,
+      payload: {
+        batch_id: 'batch-monotonic-newer-t3',
+        upsert_products: [newerProduct],
+      },
+      fetcher: ((url: string, init: any) =>
+        workerApp.fetch(new Request(url, init), env)) as any,
+    });
+
+    // Ahora sí se actualiza a 6000
+    pdpRes = await workerApp.fetch(
+      new Request('https://catalog.worker.internal/api/v1/products/figura-coleccionable-test-monotonic'),
+      env
+    );
+    pdpData = await pdpRes.json();
+    expect(pdpData.product.base_price).toBe(6000);
+  });
+
+  it('8. MONOTONIC VERSIONING EN DESPUBLICACIÓN: Despublicación con versión obsoleta no anula publicación más reciente', async () => {
+    // Producto publicado a las 12:00:00Z
+    mockDb.productsMap.set('test-unpub-prod-008', {
+      id: 'test-unpub-prod-008',
+      slug: 'figura-unpub-test',
+      title: 'Figura Unpublish Test',
+      is_active: 1,
+      status: 'published',
+      updated_at: '2026-10-21T12:00:00.000Z',
+    });
+
+    // 1. Intento de despublicación con timestamp obsoleto (11:00:00Z)
+    await pushBatchToD1Worker({
+      workerUrl: 'https://catalog.worker.internal',
+      syncSecret: SYNC_SECRET,
+      dryRun: false,
+      payload: {
+        batch_id: 'batch-unpub-stale',
+        unpublish_product_ids: [
+          { id: 'test-unpub-prod-008', updated_at: '2026-10-21T11:00:00.000Z' },
+        ],
+      },
+      fetcher: ((url: string, init: any) =>
+        workerApp.fetch(new Request(url, init), env)) as any,
+    });
+
+    // Sigue activo porque la versión despublicada era más vieja que la publicación actual
+    let pdpRes = await workerApp.fetch(
+      new Request('https://catalog.worker.internal/api/v1/products/figura-unpub-test'),
+      env
+    );
+    expect(pdpRes.status).toBe(200);
+
+    // 2. Despublicación con timestamp posterior (13:00:00Z)
+    await pushBatchToD1Worker({
+      workerUrl: 'https://catalog.worker.internal',
+      syncSecret: SYNC_SECRET,
+      dryRun: false,
+      payload: {
+        batch_id: 'batch-unpub-valid',
+        unpublish_product_ids: [
+          { id: 'test-unpub-prod-008', updated_at: '2026-10-21T13:00:00.000Z' },
+        ],
+      },
+      fetcher: ((url: string, init: any) =>
+        workerApp.fetch(new Request(url, init), env)) as any,
+    });
+
+    // Ahora sí queda archivado y devuelve 404
+    pdpRes = await workerApp.fetch(
+      new Request('https://catalog.worker.internal/api/v1/products/figura-unpub-test'),
+      env
+    );
+    expect(pdpRes.status).toBe(404);
+  });
+
+  it('9. OUTBOX EXPONENTIAL BACKOFF Y DEAD LETTER QUEUE: Escalamiento seguro a 5 intentos', async () => {
+    // 1. Comprobar progresión exponencial del calculador de retroceso
+    const t0 = Date.now();
+    const b1 = new Date(calculateNextBackoff(1, 15)).getTime() - t0;
+    const b2 = new Date(calculateNextBackoff(2, 15)).getTime() - t0;
+    const b3 = new Date(calculateNextBackoff(3, 15)).getTime() - t0;
+    const b4 = new Date(calculateNextBackoff(4, 15)).getTime() - t0;
+    const b5 = new Date(calculateNextBackoff(5, 15)).getTime() - t0;
+
+    expect(Math.round(b1 / 1000)).toBe(15);
+    expect(Math.round(b2 / 1000)).toBe(30);
+    expect(Math.round(b3 / 1000)).toBe(60);
+    expect(Math.round(b4 / 1000)).toBe(120);
+    expect(Math.round(b5 / 1000)).toBe(240);
+
+    // 2. Simulación de mock Supabase client con tabla outbox
+    const outboxStore: any[] = [
+      {
+        id: 'outbox-uuid-1',
+        event_type: 'stock_adjusted',
+        entity_id: 'prod-fail-001',
+        version_timestamp: '2026-10-21T12:00:00Z',
+        attempts: 4,
+        max_attempts: 5,
+        status: 'failed',
+        next_attempt_at: new Date(Date.now() - 1000).toISOString(),
+      },
+    ];
+
+    const mockSupabase = {
+      from: (table: string) => {
+        if (table === 'd1_catalog_outbox') {
+          return {
+            select: () => ({
+              in: () => ({
+                lte: () => ({
+                  order: () => ({
+                    limit: () => Promise.resolve({ data: outboxStore, error: null }),
+                  }),
+                }),
+              }),
+            }),
+            update: (patch: any) => ({
+              eq: (col: string, val: any) => {
+                const row = outboxStore.find((r) => r.id === val);
+                if (row) Object.assign(row, patch);
+                return Promise.resolve({ data: row, error: null });
+              },
+              in: (col: string, vals: any[]) => {
+                for (const row of outboxStore) {
+                  if (vals.includes(row.id)) Object.assign(row, patch);
+                }
+                return Promise.resolve({ data: outboxStore, error: null });
+              },
+            }),
+          };
+        }
+        if (table === 'products') {
+          return {
+            select: () => ({
+              in: () => Promise.resolve({ data: [], error: { message: 'Network Timeout' } }),
+            }),
+          };
+        }
+        return { select: () => ({ in: () => Promise.resolve({ data: [], error: null }) }) };
+      },
+    };
+
+    // Procesar lote con fallo simulado
+    const batchRes = await processOutboxBatch(mockSupabase as any, { batchSize: 10 });
+    expect(batchRes.ok).toBe(false);
+    expect(batchRes.deadLetters).toBe(1);
+
+    // El registro debe haber pasado a dead_letter porque attempts alcanzó max_attempts (5)
+    expect(outboxStore[0].status).toBe('dead_letter');
+    expect(outboxStore[0].attempts).toBe(5);
+  });
+
+  it('10. DEDUPLICACIÓN DE EVENTOS EN LOTE OUTBOX: Múltiples eventos para un producto se unifican', async () => {
+    // 3 eventos en rápida sucesión para el mismo producto ID
+    const outboxEvents = [
+      {
+        id: 'ev-1',
+        event_type: 'stock_adjusted',
+        entity_id: 'prod-dedup-001',
+        version_timestamp: '2026-10-21T12:00:00Z',
+        attempts: 0,
+        max_attempts: 5,
+        status: 'pending',
+        next_attempt_at: new Date(Date.now() - 1000).toISOString(),
+      },
+      {
+        id: 'ev-2',
+        event_type: 'stock_adjusted',
+        entity_id: 'prod-dedup-001',
+        version_timestamp: '2026-10-21T12:00:05Z',
+        attempts: 0,
+        max_attempts: 5,
+        status: 'pending',
+        next_attempt_at: new Date(Date.now() - 1000).toISOString(),
+      },
+      {
+        id: 'ev-3',
+        event_type: 'price_changed',
+        entity_id: 'prod-dedup-001',
+        version_timestamp: '2026-10-21T12:00:10Z', // Más reciente
+        attempts: 0,
+        max_attempts: 5,
+        status: 'pending',
+        next_attempt_at: new Date(Date.now() - 1000).toISOString(),
+      },
+    ];
+
+    let queriedProductIds: string[] = [];
+
+    const mockSupabase = {
+      from: (table: string) => {
+        if (table === 'd1_catalog_outbox') {
+          return {
+            select: () => ({
+              in: () => ({
+                lte: () => ({
+                  order: () => ({
+                    limit: () => Promise.resolve({ data: outboxEvents, error: null }),
+                  }),
+                }),
+              }),
+            }),
+            update: (patch: any) => ({
+              in: (col: string, vals: any[]) => {
+                for (const row of outboxEvents) {
+                  if (vals.includes(row.id)) Object.assign(row, patch);
+                }
+                return Promise.resolve({ data: outboxEvents, error: null });
+              },
+              eq: (col: string, val: any) => {
+                const row = outboxEvents.find((r) => r.id === val);
+                if (row) Object.assign(row, patch);
+                return Promise.resolve({ data: row, error: null });
+              },
+            }),
+          };
+        }
+        if (table === 'products') {
+          return {
+            select: () => ({
+              in: (col: string, ids: string[]) => {
+                queriedProductIds = ids;
+                return Promise.resolve({
+                  data: [
+                    {
+                      id: 'prod-dedup-001',
+                      slug: 'prod-dedup-slug',
+                      title: 'Producto Deduplicado',
+                      base_price: 4500,
+                      status: 'published',
+                      is_active: true,
+                      updated_at: '2026-10-21T12:00:10Z',
+                    },
+                  ],
+                  error: null,
+                });
+              },
+            }),
+          };
+        }
+        if (table === 'product_variants' || table === 'product_images') {
+          return {
+            select: () => ({ in: () => Promise.resolve({ data: [], error: null }) }),
+          };
+        }
+        return { select: () => ({ in: () => Promise.resolve({ data: [], error: null }) }) };
+      },
+    };
+
+    const res = await processOutboxBatch(mockSupabase as any, {
+      batchSize: 10,
+      workerUrl: 'https://catalog.worker.internal',
+      syncSecret: SYNC_SECRET,
+      fetcher: ((url: string, init: any) =>
+        workerApp.fetch(new Request(url, init), env)) as any,
+    });
+
+    // Se procesaron los 3 eventos en el lote outbox
+    expect(res.processed).toBe(3);
+    // Pero en la base se consultó el producto una sola vez (deduplicación efectiva)
+    expect(queriedProductIds).toEqual(['prod-dedup-001']);
   });
 });
