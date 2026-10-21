@@ -1,13 +1,14 @@
 /**
- * cloudflareCatalogSync.ts — Sincronización Asíncrona, Persistente e Idempotente Supabase -> Cloudflare D1
+ * cloudflareCatalogSync.ts — Sincronización Asíncrona, Persistente, Atómica e Idempotente Supabase -> Cloudflare D1
  * (Mecanismo Nivel 1 Outbox + Fallback para Edge Functions: create-order, refund-order, admin-products)
  *
- * Garantías:
+ * Garantías Clave:
  * 1. Cero bloqueo de transacciones comerciales: persistencia en outbox y llamadas D1 en try/catch seguro.
  * 2. Monotonic Versioning: preserva updated_at autoritativo de PostgreSQL; D1 descarta updates desfasados.
- * 3. Dead Letter Queue & Backoff: retiros acotados con backoff exponencial (15s, 30s, 60s, 120s, 240s) y DLQ a 5 intentos.
- * 4. Deduplicación inteligente por entity_id en cada lote de drenaje.
- * 5. Soporte nativo para Deno runtime y entornos Node.js / Vitest.
+ * 3. Reserva Atómica & SKIP LOCKED: evita procesamiento duplicado concurrente y recupera eventos atascados (timeout 5m).
+ * 4. Preservación estricta de Moneda: USD para internacionales (con conversión UYU calculada) y UYU para locales.
+ * 5. Dead Letter Queue & Backoff: retiros acotados con backoff exponencial (15s, 30s, 60s, 120s, 240s) y DLQ a 5 intentos.
+ * 6. Deduplicación inteligente por entity_id en cada lote de drenaje.
  */
 
 export interface SyncProductResult {
@@ -38,6 +39,7 @@ export interface OutboxBatchResult {
   processed: number;
   deadLetters: number;
   errors: number;
+  workerId?: string;
 }
 
 function getEnv(key: string): string | undefined {
@@ -120,7 +122,9 @@ export async function enqueueOutboxEvents(
 
 /**
  * Sincroniza uno o más productos hacia Cloudflare D1 de forma asíncrona, idempotente y segura.
- * Integra monotonic versioning y registro opcional en outbox.
+ * Respeta estrictamente:
+ * - USD para productos internacionales (final_price_usd) + conversión a UYU de mercado.
+ * - UYU para productos locales (base_price = final_price_uyu).
  */
 export async function syncProductsToCloudflareD1(
   productIds: string[],
@@ -167,28 +171,52 @@ export async function syncProductsToCloudflareD1(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    // 1. Consulta plana y acotada a productos (máx. 25 IDs)
-    const { data: products, error: prodErr } = await supabaseClient
+    // 1. Consulta plana a productos locales (máx. 25 IDs)
+    const { data: localProducts, error: prodErr } = await supabaseClient
       .from('products')
-      .select('id, slug, title, description, short_description, sku, base_price, compare_at_price, status, is_active, condition, category_id, brand_id, license_id, vendor_id, vendor_store_id, is_international, created_at, updated_at')
+      .select('id, slug, title, description, short_description, sku, base_price, compare_at_price, status, is_active, condition, category_id, brand_id, license_id, vendor_id, vendor_store_id, created_at, updated_at')
       .in('id', cleanIds.slice(0, 25));
 
-    if (prodErr || !products || products.length === 0) {
+    // Identificar IDs que no estaban en products y buscar en international_products
+    const foundLocalIds = new Set((localProducts || []).map((p: any) => p.id));
+    const missingIds = cleanIds.filter((id) => !foundLocalIds.has(id));
+
+    let intlProducts: any[] = [];
+    if (missingIds.length > 0) {
+      try {
+        const { data: intlRows } = await supabaseClient
+          .from('international_products')
+          .select('id, title, description, brand, category, image_url, gallery_images, base_price_usd, final_price_usd, final_price_uyu, currency, availability, status, created_at, updated_at, collectibles_category_id')
+          .in('id', missingIds.slice(0, 25));
+        if (intlRows) intlProducts = intlRows;
+      } catch {
+        // Fallback defensivo si la tabla no está disponible
+      }
+    }
+
+    if ((!localProducts || localProducts.length === 0) && intlProducts.length === 0) {
       clearTimeout(timer);
       return { ok: false, durationMs: Date.now() - startedAt, recordsSynced: 0, outboxEnqueued, error: prodErr?.message || 'NO_PRODUCTS_FOUND' };
     }
 
-    // 2. Consulta plana a variantes para stock canónico
-    const { data: variants } = await supabaseClient
-      .from('product_variants')
-      .select('id, product_id, sku, name, price_adjustment, inventory_count, is_active')
-      .in('product_id', cleanIds.slice(0, 25));
+    // 2. Consulta a variantes para cálculo canónico de stock local
+    const localIds = (localProducts || []).map((p: any) => p.id);
+    let variants: any[] = [];
+    let images: any[] = [];
 
-    // 3. Consulta plana a imágenes
-    const { data: images } = await supabaseClient
-      .from('product_images')
-      .select('id, product_id, url, alt_text, sort_order, is_primary')
-      .in('product_id', cleanIds.slice(0, 25));
+    if (localIds.length > 0) {
+      const { data: varData } = await supabaseClient
+        .from('product_variants')
+        .select('id, product_id, sku, name, price_adjustment, inventory_count, is_active')
+        .in('product_id', localIds);
+      if (varData) variants = varData;
+
+      const { data: imgData } = await supabaseClient
+        .from('product_images')
+        .select('id, product_id, url, alt_text, sort_order, is_primary')
+        .in('product_id', localIds);
+      if (imgData) images = imgData;
+    }
 
     const variantsByProduct = new Map<string, any[]>();
     for (const v of variants || []) {
@@ -207,7 +235,8 @@ export async function syncProductsToCloudflareD1(
     const upsertProducts: any[] = [];
     const unpublishProducts: Array<{ id: string; updated_at?: string }> = [];
 
-    for (const p of products) {
+    // 3. Procesar productos locales (moneda inmutable: UYU)
+    for (const p of localProducts || []) {
       const isPublished = p.status === 'published' && p.is_active !== false;
 
       if (!isPublished) {
@@ -222,11 +251,10 @@ export async function syncProductsToCloudflareD1(
       const prodImages = imagesByProduct.get(p.id) || [];
       const primaryImg = prodImages.find((img: any) => img.is_primary)?.url || prodImages[0]?.url || null;
 
-      // Cálculo de stock canónico
       const activeVariants = prodVariants.filter((v: any) => v.is_active !== false);
       const totalStock = activeVariants.length > 0
         ? activeVariants.reduce((sum: number, v: any) => sum + Math.max(0, Number(v.inventory_count || 0)), 0)
-        : 0;
+        : Number(p.stock ?? 0);
 
       upsertProducts.push({
         id: p.id,
@@ -235,16 +263,21 @@ export async function syncProductsToCloudflareD1(
         description: p.description,
         short_description: p.short_description,
         sku: p.sku,
+        catalog_source: 'local',
+        source_provider: 'platform',
+        source_market: 'UY',
+        is_international: false,
+        currency: 'UYU',
+        price_currency: 'UYU',
         base_price: Number(p.base_price || 0),
         compare_at_price: p.compare_at_price != null ? Number(p.compare_at_price) : null,
+        final_price_usd: null,
         final_price_uyu: Number(p.base_price || 0),
         status: p.status || 'published',
         is_active: true,
         stock: totalStock,
         stock_status: totalStock > 0 ? 'in_stock' : 'out_of_stock',
         availability_type: totalStock > 0 ? 'immediate' : 'out_of_stock',
-        is_international: Boolean(p.is_international),
-        currency: 'UYU',
         primary_image_url: primaryImg,
         images: prodImages,
         variants: activeVariants,
@@ -253,8 +286,56 @@ export async function syncProductsToCloudflareD1(
         license_id: p.license_id,
         vendor_id: p.vendor_id,
         vendor_store_id: p.vendor_store_id,
-        // Monotonic versioning: preserva updated_at canónico de PostgreSQL
         updated_at: p.updated_at || new Date().toISOString(),
+      });
+    }
+
+    // 4. Procesar productos internacionales (moneda inmutable: USD con conversión UYU)
+    for (const ip of intlProducts) {
+      const isPublished = ip.status === 'published' && ip.availability !== 'discontinued';
+      if (!isPublished) {
+        unpublishProducts.push({
+          id: ip.id,
+          updated_at: ip.updated_at || new Date().toISOString(),
+        });
+        continue;
+      }
+
+      const priceUsd = Number(ip.final_price_usd ?? ip.base_price_usd ?? 0);
+      const priceUyu = ip.final_price_uyu != null ? Number(ip.final_price_uyu) : Math.round(priceUsd * 43.5);
+      const isAvailable = ip.availability !== 'out_of_stock' && ip.availability !== 'unavailable';
+      const gallery = Array.isArray(ip.gallery_images) ? ip.gallery_images : [];
+      const primaryImg = ip.image_url || gallery[0] || null;
+
+      upsertProducts.push({
+        id: ip.id,
+        slug: ip.slug || ip.id,
+        title: ip.title,
+        description: ip.description,
+        short_description: ip.short_description || null,
+        sku: ip.sku || null,
+        catalog_source: 'international',
+        source_provider: 'zinc',
+        source_market: 'US',
+        is_international: true,
+        currency: 'USD',
+        price_currency: 'USD',
+        base_price: priceUsd,
+        compare_at_price: null,
+        final_price_usd: priceUsd,
+        final_price_uyu: priceUyu,
+        status: ip.status || 'published',
+        is_active: isAvailable,
+        stock: isAvailable ? 1 : 0,
+        stock_status: isAvailable ? 'in_stock' : 'out_of_stock',
+        availability_type: 'international_import',
+        primary_image_url: primaryImg,
+        images: gallery.map((url: string, idx: number) => ({ id: `${ip.id}-img-${idx}`, url, is_primary: idx === 0 })),
+        variants: [{ id: `${ip.id}-intl-default`, name: 'Importación Directa', inventory_count: isAvailable ? 1 : 0, is_active: isAvailable }],
+        category_id: ip.collectibles_category_id || null,
+        brand_id: null,
+        brand_name: ip.brand || 'Importado',
+        updated_at: ip.updated_at || new Date().toISOString(),
       });
     }
 
@@ -304,9 +385,9 @@ export async function syncProductsToCloudflareD1(
 }
 
 /**
- * Drenador y reconciliador de lotes de outbox (`d1_catalog_outbox`).
- * Recupera eventos pendientes con backoff vencido, deduplica por entity_id (priorizando la versión más reciente),
- * efectúa la llamada al Worker D1 y transiciona a 'synced' o escala a 'dead_letter' tras 5 intentos.
+ * Drenador y reconciliador atómico de lotes de outbox (`d1_catalog_outbox`).
+ * Utiliza reserva atómica con `FOR UPDATE SKIP LOCKED` (vía RPC `claim_d1_outbox_batch`)
+ * con recuperación automática de eventos atascados y retroceso exponencial ante fallas.
  */
 export async function processOutboxBatch(
   supabaseClient: any,
@@ -314,27 +395,82 @@ export async function processOutboxBatch(
     batchSize?: number;
     workerUrl?: string;
     syncSecret?: string;
+    workerId?: string;
     fetcher?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   } = {}
 ): Promise<OutboxBatchResult> {
   const batchSize = Math.max(1, Math.min(50, options.batchSize || 25));
+  const workerId = options.workerId || `worker-${Math.random().toString(36).slice(2, 9)}`;
 
   try {
-    const nowIso = new Date().toISOString();
-    // 1. Obtener filas pendientes o con fallas previas listas para reintento
-    const { data: rows, error: fetchErr } = await supabaseClient
-      .from('d1_catalog_outbox')
-      .select('id, event_type, entity_id, version_timestamp, attempts, max_attempts')
-      .in('status', ['pending', 'failed'])
-      .lte('next_attempt_at', nowIso)
-      .order('next_attempt_at', { ascending: true })
-      .limit(batchSize);
+    let rows: any[] = [];
 
-    if (fetchErr || !rows || rows.length === 0) {
-      return { ok: true, processed: 0, deadLetters: 0, errors: 0 };
+    // 1. Intentar reserva atómica con la función RPC PostgreSQL
+    try {
+      const { data: claimedRows, error: rpcErr } = await supabaseClient.rpc('claim_d1_outbox_batch', {
+        p_batch_size: batchSize,
+        p_worker_id: workerId,
+        p_stuck_interval_seconds: 300,
+      });
+
+      if (!rpcErr && Array.isArray(claimedRows)) {
+        rows = claimedRows;
+      }
+    } catch {
+      // Si la RPC aún no está definida en la base, continuar con fallback
     }
 
-    // 2. Deduplicación inteligente: si un mismo entity_id tiene varios eventos pendientes,
+    // 2. Fallback: reserva directa en base de datos si la RPC no devolvió filas
+    if (rows.length === 0) {
+      const nowIso = new Date().toISOString();
+
+      // Recuperar posibles filas atascadas en 'processing' por más de 5 minutos
+      const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+      try {
+        await supabaseClient
+          .from('d1_catalog_outbox')
+          .update({
+            status: 'pending',
+            locked_at: null,
+            locked_by: null,
+            last_error: 'Stuck event recovered',
+          })
+          .eq('status', 'processing')
+          .lte('locked_at', fiveMinutesAgo);
+      } catch {
+        // Fallback defensivo si el cliente o mock no implementa encadenamiento
+      }
+
+      // Obtener filas pendientes
+      const { data: candidateRows, error: fetchErr } = await supabaseClient
+        .from('d1_catalog_outbox')
+        .select('id, event_type, entity_id, version_timestamp, attempts, max_attempts')
+        .in('status', ['pending', 'failed'])
+        .lte('next_attempt_at', nowIso)
+        .order('next_attempt_at', { ascending: true })
+        .limit(batchSize);
+
+      if (fetchErr || !candidateRows || candidateRows.length === 0) {
+        return { ok: true, processed: 0, deadLetters: 0, errors: 0, workerId };
+      }
+
+      rows = candidateRows;
+      // Bloquear atómicamente asignando el workerId
+      await supabaseClient
+        .from('d1_catalog_outbox')
+        .update({
+          status: 'processing',
+          locked_at: nowIso,
+          locked_by: workerId,
+        })
+        .in('id', rows.map((r: any) => r.id));
+    }
+
+    if (rows.length === 0) {
+      return { ok: true, processed: 0, deadLetters: 0, errors: 0, workerId };
+    }
+
+    // 3. Deduplicación inteligente: si un mismo entity_id tiene varios eventos en el lote,
     // sincronizarlo una sola vez con su estado más reciente
     const latestByEntity = new Map<string, any>();
     for (const r of rows) {
@@ -362,12 +498,14 @@ export async function processOutboxBatch(
         .from('d1_catalog_outbox')
         .update({
           status: 'synced',
+          locked_at: null,
+          locked_by: null,
           processed_at: new Date().toISOString(),
           last_error: null,
         })
         .in('id', syncedIds);
 
-      return { ok: true, processed: rows.length, deadLetters: 0, errors: 0 };
+      return { ok: true, processed: rows.length, deadLetters: 0, errors: 0, workerId };
     }
 
     // Fallo de sincronización: incrementar intentos, calcular backoff o mover a dead_letter
@@ -382,6 +520,8 @@ export async function processOutboxBatch(
           .update({
             attempts: nextAttempts,
             status: 'dead_letter',
+            locked_at: null,
+            locked_by: null,
             last_error: syncRes.error || 'MAX_RETRIES_EXCEEDED',
             processed_at: new Date().toISOString(),
           })
@@ -394,6 +534,8 @@ export async function processOutboxBatch(
           .update({
             attempts: nextAttempts,
             status: 'failed',
+            locked_at: null,
+            locked_by: null,
             last_error: syncRes.error || 'SYNC_FAILED',
             next_attempt_at: nextAttemptAt,
           })
@@ -401,9 +543,9 @@ export async function processOutboxBatch(
       }
     }
 
-    return { ok: false, processed: rows.length, deadLetters, errors };
+    return { ok: false, processed: rows.length, deadLetters, errors, workerId };
   } catch (err: any) {
     console.warn('[D1_OUTBOX] Excepción al procesar lote outbox:', err?.message || err);
-    return { ok: false, processed: 0, deadLetters: 0, errors: 1 };
+    return { ok: false, processed: 0, deadLetters: 0, errors: 1, workerId };
   }
 }

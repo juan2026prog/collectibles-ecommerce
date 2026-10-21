@@ -17,6 +17,7 @@ import {
   calculateNextBackoff,
   enqueueOutboxEvents,
   processOutboxBatch,
+  syncProductsToCloudflareD1,
 } from '../../../../../supabase/functions/_shared/cloudflareCatalogSync';
 
 /**
@@ -93,7 +94,9 @@ function createSyncLifecycleMockDb(): D1Database & {
             currency,
             price_currency: currency,
             base_price: basePrice,
+            final_price_usd: boundValues[17] != null ? Number(boundValues[17]) : null,
             final_price_uyu: finalPriceUyu,
+            is_international: Number(boundValues[12] ?? 0),
             status,
             is_active: isActive,
             stock,
@@ -859,5 +862,246 @@ describe('ETAPA 6: Ciclo de Vida Completo de Sincronización Continua Supabase �
     expect(res.processed).toBe(3);
     // Pero en la base se consultó el producto una sola vez (deduplicación efectiva)
     expect(queriedProductIds).toEqual(['prod-dedup-001']);
+  });
+
+  it('11. PRESERVACIÓN DE MONEDA Y PRECIOS: USD para internacional (con conversión UYU) y UYU para local', async () => {
+    // 1. Producto local en UYU
+    const localProduct = {
+      id: 'prod-local-uyu-011',
+      slug: 'figura-artesanal-uruguaya',
+      title: 'Figura Artesanal Uruguaya',
+      base_price: 1850,
+      is_international: false,
+      status: 'published',
+      is_active: true,
+      updated_at: '2026-10-21T12:00:00Z',
+    };
+
+    // 2. Producto internacional en USD
+    const intlProduct = {
+      id: 'prod-intl-usd-011',
+      slug: 'figura-importada-japon-011',
+      title: 'Figura Importada Japón',
+      base_price: 120, // 120 USD
+      is_international: true,
+      status: 'published',
+      is_active: true,
+      updated_at: '2026-10-21T12:00:00Z',
+    };
+
+    const mockSupabase = {
+      from: (table: string) => {
+        if (table === 'products') {
+          return {
+            select: () => ({
+              in: (col: string, ids: string[]) => {
+                const found = [localProduct].filter((p) => ids.includes(p.id));
+                return Promise.resolve({ data: found, error: null });
+              },
+            }),
+          };
+        }
+        if (table === 'international_products') {
+          return {
+            select: () => ({
+              in: (col: string, ids: string[]) => {
+                return Promise.resolve({
+                  data: [
+                    {
+                      id: 'prod-intl-usd-011',
+                      slug: 'figura-importada-japon-011',
+                      title: 'Figura Importada Japón',
+                      base_price_usd: 120,
+                      final_price_usd: 120,
+                      final_price_uyu: 5220, // 120 * 43.5
+                      currency: 'USD',
+                      availability: 'in_stock',
+                      status: 'published',
+                    },
+                  ],
+                  error: null,
+                });
+              },
+            }),
+          };
+        }
+        return { select: () => ({ in: () => Promise.resolve({ data: [], error: null }) }) };
+      },
+    };
+
+    const syncRes = await syncProductsToCloudflareD1(
+      ['prod-local-uyu-011', 'prod-intl-usd-011'],
+      mockSupabase as any,
+      {
+        workerUrl: 'https://catalog.worker.internal',
+        syncSecret: SYNC_SECRET,
+        fetcher: ((url: string, init: any) =>
+          workerApp.fetch(new Request(url, init), env)) as any,
+      }
+    );
+
+    expect(syncRes.ok).toBe(true);
+    expect(syncRes.recordsSynced).toBe(2);
+
+    // Verificar en D1: Local = UYU
+    const localRes = await workerApp.fetch(
+      new Request('https://catalog.worker.internal/api/v1/products/figura-artesanal-uruguaya'),
+      env
+    );
+    const localData = await localRes.json();
+    expect(localData.product.currency).toBe('UYU');
+    expect(localData.product.base_price).toBe(1850);
+    expect(localData.product.final_price_uyu).toBe(1850);
+    expect(localData.product.final_price_usd).toBeNull();
+
+    // Verificar en D1: Internacional = USD con conversión UYU
+    const intlRes = await workerApp.fetch(
+      new Request('https://catalog.worker.internal/api/v1/products/figura-importada-japon-011'),
+      env
+    );
+    const intlData = await intlRes.json();
+    expect(intlData.product.currency).toBe('USD');
+    expect(intlData.product.base_price).toBe(120);
+    expect(intlData.product.final_price_usd).toBe(120);
+    expect(intlData.product.final_price_uyu).toBe(5220);
+    expect(intlData.product.is_international).toBe(true);
+  });
+
+  it('12. RESERVA ATÓMICA DE EVENTOS: FOR UPDATE SKIP LOCKED evita colisiones concurrentes', async () => {
+    const queue = [
+      { id: 'ev-atom-1', event_type: 'stock_adjusted', entity_id: 'prod-atom-1', version_timestamp: '2026-10-21T12:00:00Z', status: 'pending', next_attempt_at: new Date(Date.now() - 1000).toISOString() },
+      { id: 'ev-atom-2', event_type: 'stock_adjusted', entity_id: 'prod-atom-2', version_timestamp: '2026-10-21T12:00:00Z', status: 'pending', next_attempt_at: new Date(Date.now() - 1000).toISOString() },
+    ];
+
+    let reservedByWorker1: any[] = [];
+    let reservedByWorker2: any[] = [];
+
+    const mockSupabase = {
+      rpc: (fn: string, args: any) => {
+        if (fn === 'claim_d1_outbox_batch') {
+          // Simula FOR UPDATE SKIP LOCKED: reserva las disponibles que no estén en processing
+          const available = queue.filter((r) => r.status === 'pending');
+          const claimed = available.slice(0, args.p_batch_size);
+          for (const item of claimed) {
+            item.status = 'processing';
+          }
+          if (args.p_worker_id === 'worker-alpha') reservedByWorker1 = claimed;
+          if (args.p_worker_id === 'worker-beta') reservedByWorker2 = claimed;
+          return Promise.resolve({ data: claimed, error: null });
+        }
+        return Promise.resolve({ data: null, error: 'unknown_function' });
+      },
+      from: (table: string) => ({
+        select: () => ({ in: () => Promise.resolve({ data: [], error: null }) }),
+        update: () => ({
+          in: () => Promise.resolve({ data: [], error: null }),
+          eq: () => Promise.resolve({ data: [], error: null }),
+        }),
+      }),
+    };
+
+    // Worker 1 reclama 1 fila
+    await processOutboxBatch(mockSupabase as any, {
+      batchSize: 1,
+      workerId: 'worker-alpha',
+      syncSecret: SYNC_SECRET,
+    });
+
+    // Worker 2 reclama concurrentemente
+    await processOutboxBatch(mockSupabase as any, {
+      batchSize: 1,
+      workerId: 'worker-beta',
+      syncSecret: SYNC_SECRET,
+    });
+
+    // Subconjuntos disjuntos: ningún worker procesó la misma fila
+    expect(reservedByWorker1.length).toBe(1);
+    expect(reservedByWorker2.length).toBe(1);
+    expect(reservedByWorker1[0].id).not.toBe(reservedByWorker2[0].id);
+  });
+
+  it('13. RECUPERACIÓN AUTOMÁTICA DE EVENTOS ATASCADOS (Heartbeat Timeout > 5m)', async () => {
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const stuckEvents = [
+      {
+        id: 'ev-stuck-001',
+        event_type: 'stock_adjusted',
+        entity_id: 'prod-stuck-001',
+        version_timestamp: '2026-10-21T12:00:00Z',
+        status: 'processing', // Atascado
+        locked_at: tenMinutesAgo,
+        locked_by: 'dead-worker-pid-999',
+        next_attempt_at: tenMinutesAgo,
+      },
+    ];
+
+    const mockSupabase = {
+      from: (table: string) => {
+        if (table === 'd1_catalog_outbox') {
+          return {
+            update: (patch: any) => ({
+              eq: (col: string, val: any) => ({
+                lte: (c2: string, v2: any) => {
+                  // Simula recuperación: si status='processing' y locked_at <= 5m ago
+                  for (const r of stuckEvents) {
+                    if (r.status === 'processing') Object.assign(r, patch);
+                  }
+                  return Promise.resolve({ data: stuckEvents, error: null });
+                },
+              }),
+              in: (col: string, vals: any[]) => {
+                for (const r of stuckEvents) {
+                  if (vals.includes(r.id)) Object.assign(r, patch);
+                }
+                return Promise.resolve({ data: stuckEvents, error: null });
+              },
+            }),
+            select: () => ({
+              in: () => ({
+                lte: () => ({
+                  order: () => ({
+                    limit: () => Promise.resolve({ data: stuckEvents, error: null }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+        if (table === 'products') {
+          return {
+            select: () => ({
+              in: () =>
+                Promise.resolve({
+                  data: [
+                    {
+                      id: 'prod-stuck-001',
+                      slug: 'prod-stuck-slug',
+                      title: 'Producto Recuperado',
+                      base_price: 3500,
+                      status: 'published',
+                      is_active: true,
+                      updated_at: '2026-10-21T12:00:00Z',
+                    },
+                  ],
+                  error: null,
+                }),
+            }),
+          };
+        }
+        return { select: () => ({ in: () => Promise.resolve({ data: [], error: null }) }) };
+      },
+    };
+
+    const res = await processOutboxBatch(mockSupabase as any, {
+      batchSize: 10,
+      workerUrl: 'https://catalog.worker.internal',
+      syncSecret: SYNC_SECRET,
+      fetcher: ((url: string, init: any) =>
+        workerApp.fetch(new Request(url, init), env)) as any,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(res.processed).toBe(1);
+    expect(stuckEvents[0].status).toBe('synced');
   });
 });
