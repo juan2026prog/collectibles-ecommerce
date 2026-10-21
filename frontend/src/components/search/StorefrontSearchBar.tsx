@@ -148,19 +148,49 @@ export default function StorefrontSearchBar({
           return;
         }
 
-        const tokens = await resolveSearchTokens(trimmed);
-        const orClause = buildProductSearchOrClause(tokens);
+        let fetchedProducts: ProductItem[] | null = null;
 
-        const { data, error } = await supabase
-          .from("products")
-          .select("id, title, slug, base_price, product_images(id, url, is_primary), brand:brands!products_brand_id_fkey(name)")
-          .eq("status", "published")
-          .eq("is_active", true)
-          .or(orClause)
-          .limit(5);
+        // 1. Canal Primario: Cloudflare D1 (Autocomplete de alto rendimiento)
+        try {
+          const { PublicCatalogProvider } = await import("../../lib/providers/PublicCatalogProvider");
+          if (PublicCatalogProvider.isDomainEnabled("products") || PublicCatalogProvider.isDomainEnabled("search")) {
+            const d1Res = await PublicCatalogProvider.getProducts({ q: trimmed, limit: 5 });
+            if (d1Res?.data?.products && d1Res.data.products.length > 0) {
+              fetchedProducts = d1Res.data.products.map((p: any) => ({
+                id: p.id,
+                title: p.title,
+                slug: p.slug,
+                base_price: p.base_price,
+                currency: p.currency,
+                product_images: p.product_images || (p.primary_image_url ? [{ id: p.id + "-img", url: p.primary_image_url, is_primary: true }] : []),
+                brand: p.brand ? { name: p.brand.name } : (p.brand_name ? { name: p.brand_name } : null),
+              }));
+            }
+          }
+        } catch {
+          // Fall through a Supabase
+        }
 
-        if (!error && data) {
-          setProducts(data as unknown as ProductItem[]);
+        // 2. Fallback Seguro: Supabase PostgREST
+        if (!fetchedProducts) {
+          const tokens = await resolveSearchTokens(trimmed);
+          const orClause = buildProductSearchOrClause(tokens);
+
+          const { data, error } = await supabase
+            .from("products")
+            .select("id, title, slug, base_price, product_images(id, url, is_primary), brand:brands!products_brand_id_fkey(name)")
+            .eq("status", "published")
+            .eq("is_active", true)
+            .or(orClause)
+            .limit(5);
+
+          if (!error && data) {
+            fetchedProducts = data as unknown as ProductItem[];
+          }
+        }
+
+        if (fetchedProducts) {
+          setProducts(fetchedProducts);
         }
       } catch (err) {
         console.error("Error fetching autocomplete products:", err);

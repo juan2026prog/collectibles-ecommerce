@@ -178,19 +178,16 @@ export function getPublicCatalogConfig(): PublicCatalogConfig {
 
   const resolveDomain = (domain: CatalogDomainFlag, envKey: string): boolean => {
     if (killActive) return false;
-    // CRITICAL SECURITY ENFORCEMENT (Fase 1 - Requisito 5):
-    // search, radar, promotions y settings quedan estrictamente bloqueados en false
-    // para evitar cualquier activación accidental por override global o variable de entorno.
-    if (domain === 'search' || domain === 'radar' || domain === 'promotions' || domain === 'settings') {
-      return false;
-    }
     if (domain in runtimeState.domainOverrides && typeof runtimeState.domainOverrides[domain] === 'boolean') {
       return Boolean(runtimeState.domainOverrides[domain]);
     }
-    if (runtimeState.overrideGlobal !== null) {
-      return runtimeState.overrideGlobal;
+    if (runtimeState.overrideGlobal === false) {
+      return false;
     }
-    return parseBoolFlag(getEnvVar(envKey), effectiveGlobal);
+    const defaultVal = (domain === 'search' || domain === 'radar' || domain === 'promotions' || domain === 'settings')
+      ? false
+      : effectiveGlobal;
+    return parseBoolFlag(getEnvVar(envKey), defaultVal);
   };
 
   return {
@@ -297,18 +294,20 @@ export async function syncRuntimeConfig(fetcher: typeof fetch = fetch): Promise<
     }
 
     if (typeof json?.enabled === 'boolean') {
-      const safeDomains: Partial<Record<CatalogDomainFlag, boolean>> = {
-        ...(json.domains || {}),
-        search: false,
-        radar: false,
-        promotions: false,
-        settings: false,
+      const liveDomains: Partial<Record<CatalogDomainFlag, boolean>> = {
+        products: Boolean(json.domains?.products),
+        productDetail: Boolean(json.domains?.productDetail),
+        taxonomies: Boolean(json.domains?.taxonomies),
+        search: Boolean(json.domains?.search),
+        radar: Boolean(json.domains?.radar),
+        promotions: Boolean(json.domains?.promotions),
+        settings: Boolean(json.domains?.settings),
       };
-      setRuntimeCatalogOverride(json.enabled, safeDomains);
+      setRuntimeCatalogOverride(json.enabled, liveDomains);
       return {
         enabled: json.enabled,
         mode: json.mode || (json.enabled ? 'active' : 'disabled'),
-        domains: safeDomains,
+        domains: liveDomains,
       };
     }
   } catch (err) {

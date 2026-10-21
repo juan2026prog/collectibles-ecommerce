@@ -30,6 +30,29 @@ export const CompareTray: React.FC = () => {
     const fetchTrayItems = async () => {
       try {
         setLoading(true);
+
+        // 1. Canal Primario: Cloudflare D1 (Lectura pública masiva)
+        try {
+          const { PublicCatalogProvider } = await import('../../lib/providers/PublicCatalogProvider');
+          if (PublicCatalogProvider.isDomainEnabled('products')) {
+            const res = await PublicCatalogProvider.getProducts({ ids: comparedIds.join(',') });
+            if (res?.data?.products && res.data.products.length > 0) {
+              const mapped: TrayItem[] = res.data.products.map((p: any) => ({
+                id: p.id,
+                title: p.title,
+                primary_image: p.primary_image_url || p.product_images?.[0]?.url || null,
+                base_price: p.base_price
+              }));
+              setItems(mapped);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch {
+          // Fall through a Supabase ante errores de red o kill-switch
+        }
+
+        // 2. Fallback Seguro: Supabase PostgREST
         const { data, error } = await supabase
           .from('products')
           .select('id, title, base_price, product_images(url, is_primary)')

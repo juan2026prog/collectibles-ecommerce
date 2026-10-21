@@ -176,17 +176,36 @@ export default function VaultDashboard() {
       // Si está activada la completitud en Admin, calculamos el % y las piezas faltantes
       if (isEnabled && dbItems.length > 0) {
         const userWaveNames = Array.from(new Set(dbItems.map((i: any) => i.line).filter(Boolean)));
-        let catalogQuery = supabase
-          .from('products')
-          .select('id, title, slug, base_price, brand:brands(name), category_id')
-          .eq('status', 'published')
-          .eq('is_active', true);
-        
-        if (source === 'wave_series' && userWaveNames.length > 0) {
-          catalogQuery = catalogQuery.limit(50);
+        let catalogProducts: any[] | null = null;
+
+        // 1. Canal Primario: Cloudflare D1
+        try {
+          const { PublicCatalogProvider } = await import('../../lib/providers/PublicCatalogProvider');
+          if (PublicCatalogProvider.isDomainEnabled('products')) {
+            const d1Res = await PublicCatalogProvider.getProducts({ limit: 50 });
+            if (d1Res?.data?.products && d1Res.data.products.length > 0) {
+              catalogProducts = d1Res.data.products;
+            }
+          }
+        } catch {
+          // Fall through a Supabase
         }
 
-        const { data: catalogProducts } = await catalogQuery.limit(50);
+        // 2. Fallback Seguro: Supabase PostgREST
+        if (!catalogProducts) {
+          let catalogQuery = supabase
+            .from('products')
+            .select('id, title, slug, base_price, brand:brands(name), category_id')
+            .eq('status', 'published')
+            .eq('is_active', true);
+          
+          if (source === 'wave_series' && userWaveNames.length > 0) {
+            catalogQuery = catalogQuery.limit(50);
+          }
+
+          const { data } = await catalogQuery.limit(50);
+          catalogProducts = data;
+        }
 
         if (catalogProducts && catalogProducts.length > 0) {
           const ownedProductIds = new Set(dbItems.map((i: any) => i.product_id).filter(Boolean));
@@ -217,17 +236,44 @@ export default function VaultDashboard() {
 
     setSearchingCatalog(true);
     try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('id, title, slug, base_price, brand:brands(name), category:categories(name)')
-        .eq('status', 'published')
-        .eq('is_active', true)
-        .ilike('title', `%${q.trim()}%`)
-        .limit(8);
+      let results: any[] | null = null;
 
-      if (!error && data) {
-        setCatalogSearchResults(data);
+      // 1. Canal Primario: Cloudflare D1
+      try {
+        const { PublicCatalogProvider } = await import('../../lib/providers/PublicCatalogProvider');
+        if (PublicCatalogProvider.isDomainEnabled('products') || PublicCatalogProvider.isDomainEnabled('search')) {
+          const d1Res = await PublicCatalogProvider.getProducts({ q: q.trim(), limit: 8 });
+          if (d1Res?.data?.products && d1Res.data.products.length > 0) {
+            results = d1Res.data.products.map((p: any) => ({
+              id: p.id,
+              title: p.title,
+              slug: p.slug,
+              base_price: p.base_price,
+              brand: p.brand ? { name: p.brand.name } : (p.brand_name ? { name: p.brand_name } : null),
+              category: p.category ? { name: p.category.name } : (p.category_name ? { name: p.category_name } : null),
+            }));
+          }
+        }
+      } catch {
+        // Fall through a Supabase
       }
+
+      // 2. Fallback Seguro: Supabase PostgREST
+      if (!results) {
+        const { data, error } = await supabase
+          .from('products')
+          .select('id, title, slug, base_price, brand:brands(name), category:categories(name)')
+          .eq('status', 'published')
+          .eq('is_active', true)
+          .ilike('title', `%${q.trim()}%`)
+          .limit(8);
+
+        if (!error && data) {
+          results = data;
+        }
+      }
+
+      setCatalogSearchResults(results || []);
     } catch (err) {
       console.error('Error searching catalog:', err);
     } finally {

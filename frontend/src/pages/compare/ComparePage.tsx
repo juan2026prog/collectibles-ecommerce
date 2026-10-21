@@ -210,10 +210,35 @@ export const ComparePage: React.FC = () => {
 
         const activeAttrs = (dbAttrs && dbAttrs.length > 0) ? dbAttrs : DEFAULT_ATTRIBUTES;
 
-        const { data: rawProducts, error: rpcError } = await supabase
-          .rpc('get_products_for_comparison', { p_product_ids: productIds });
+        let rawProducts: any[] | null = null;
 
-        if (rpcError) throw rpcError;
+        // 1. Canal Primario: Cloudflare D1
+        try {
+          const { PublicCatalogProvider } = await import('../../lib/providers/PublicCatalogProvider');
+          if (PublicCatalogProvider.isDomainEnabled('products')) {
+            const d1Res = await PublicCatalogProvider.getProducts({ ids: productIds.join(',') });
+            if (d1Res?.data?.products && d1Res.data.products.length > 0) {
+              rawProducts = d1Res.data.products.map((p: any) => ({
+                ...p,
+                category_name: p.category?.name || p.category_name,
+                brand_name: p.brand?.name || p.brand_name,
+                license_name: p.license?.name || p.license_name,
+                primary_image: p.primary_image_url || p.product_images?.[0]?.url || null,
+              }));
+            }
+          }
+        } catch {
+          // Fall through a Supabase RPC
+        }
+
+        // 2. Fallback Seguro: Supabase RPC
+        if (!rawProducts || rawProducts.length === 0) {
+          const { data, error: rpcError } = await supabase
+            .rpc('get_products_for_comparison', { p_product_ids: productIds });
+
+          if (rpcError) throw rpcError;
+          rawProducts = data;
+        }
 
         if (rawProducts && Array.isArray(rawProducts) && rawProducts.length > 0) {
           const hydrated = hydrateProductAttributes(rawProducts, activeAttrs);
@@ -252,22 +277,48 @@ export const ComparePage: React.FC = () => {
     const fetchCatalog = async () => {
       try {
         setSearching(true);
-        let query = supabase
-          .from('products')
-          .select('id, title, slug, base_price, status, brand:brands!products_brand_id_fkey(name), product_images(url, is_primary)')
-          .in('status', ['published', 'ACTIVE', 'active']);
+        let searchData: any[] | null = null;
 
-        if (searchQuery.trim()) {
-          query = query.or(`title.ilike.%${searchQuery.trim()}%,description.ilike.%${searchQuery.trim()}%`);
+        // 1. Canal Primario: Cloudflare D1
+        try {
+          const { PublicCatalogProvider } = await import('../../lib/providers/PublicCatalogProvider');
+          if (PublicCatalogProvider.isDomainEnabled('products') || PublicCatalogProvider.isDomainEnabled('search')) {
+            const d1Res = await PublicCatalogProvider.getProducts({ q: searchQuery.trim(), limit: 10 });
+            if (d1Res?.data?.products && d1Res.data.products.length > 0) {
+              searchData = d1Res.data.products.map((p: any) => ({
+                id: p.id,
+                title: p.title,
+                slug: p.slug,
+                base_price: p.base_price,
+                status: p.status,
+                brand: p.brand ? { name: p.brand.name } : (p.brand_name ? { name: p.brand_name } : null),
+                product_images: p.images_json ? (typeof p.images_json === 'string' ? JSON.parse(p.images_json) : p.images_json) : (p.primary_image_url ? [{ url: p.primary_image_url, is_primary: true }] : []),
+              }));
+            }
+          }
+        } catch {
+          // Fall through a Supabase
         }
 
-        const { data, error } = await query.limit(10);
+        // 2. Fallback Seguro: Supabase
+        if (!searchData) {
+          let query = supabase
+            .from('products')
+            .select('id, title, slug, base_price, status, brand:brands!products_brand_id_fkey(name), product_images(url, is_primary)')
+            .in('status', ['published', 'ACTIVE', 'active']);
 
-        if (error) console.error('Supabase error in modal:', error);
+          if (searchQuery.trim()) {
+            query = query.or(`title.ilike.%${searchQuery.trim()}%,description.ilike.%${searchQuery.trim()}%`);
+          }
 
-        if (!isCancelled && data) {
+          const { data, error } = await query.limit(10);
+          if (error) console.error('Supabase error in modal:', error);
+          searchData = data;
+        }
+
+        if (!isCancelled && searchData) {
           const currentIds = products.map(p => p.id);
-          const filtered = data.filter(p => !currentIds.includes(p.id));
+          const filtered = searchData.filter(p => !currentIds.includes(p.id));
           setSearchResults(filtered);
         }
       } catch (err) {
