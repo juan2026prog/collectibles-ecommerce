@@ -29,12 +29,13 @@ export default function Wishlist() {
 
       setLoading(true);
       let loadedProducts: any[] | null = null;
+      const boundedWishlist = wishlist.slice(0, 50);
 
       // 1. Canal Primario: Cloudflare D1
       try {
         const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
         if (PublicCatalogProvider.isDomainEnabled('products')) {
-          const d1Res = await PublicCatalogProvider.getProducts({ ids: wishlist.join(',') });
+          const d1Res = await PublicCatalogProvider.getProducts({ ids: boundedWishlist.join(',') });
           if (d1Res?.data?.products && d1Res.data.products.length > 0) {
             loadedProducts = d1Res.data.products;
           }
@@ -57,7 +58,7 @@ export default function Wishlist() {
             vendor:vendors(id, store_name, slug, logo_url, promotions_opt_in),
             vendor_store:vendor_stores(id, store_name, slug, logo_url)
           `)
-          .in('id', wishlist)
+          .in('id', boundedWishlist)
           .eq('status', 'published')
           .eq('is_active', true);
         loadedProducts = data || [];

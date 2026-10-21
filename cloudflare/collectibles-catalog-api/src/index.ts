@@ -1187,7 +1187,9 @@ async function handleSettings(env: Env, corsHeaders: Record<string, string>): Pr
     {
       ok: true,
       source: 'cloudflare-d1',
-      site_config: settingsMap['public_site_config'] || {},
+      site_config: (settingsMap['public_site_config'] && typeof settingsMap['public_site_config'] === 'object' && Object.keys(settingsMap['public_site_config']).length > 0)
+        ? settingsMap['public_site_config']
+        : settingsMap,
       feature_toggles: settingsMap['feature_toggles'] || {},
       international_status: settingsMap['international_public_status'] || {
         international_enabled: true,
