@@ -15,11 +15,14 @@ export default function Wishlist() {
   const { wishlist } = useWishlistContext();
   const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(30);
   const [addAllState, setAddAllState] = useState<'idle' | 'adding' | 'added'>('idle');
   const { formatCurrencyPrice } = useCurrency();
   const cart = useCartContext();
 
   useEffect(() => {
+    let isCancelled = false;
+
     async function loadWishlistProducts() {
       if (!wishlist.length) {
         setProducts([]);
@@ -28,47 +31,83 @@ export default function Wishlist() {
       }
 
       setLoading(true);
-      let loadedProducts: any[] | null = null;
-      const boundedWishlist = wishlist.slice(0, 50);
 
-      // 1. Canal Primario: Cloudflare D1
+      // Particionar la lista en bloques seguros de 30 IDs para evitar desbordamiento de URL o saturación IN
+      const CHUNK_SIZE = 30;
+      const chunks: string[][] = [];
+      for (let i = 0; i < wishlist.length; i += CHUNK_SIZE) {
+        chunks.push(wishlist.slice(i, i + CHUNK_SIZE));
+      }
+
+      const allFetchedProducts: any[] = [];
+
       try {
         const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
-        if (PublicCatalogProvider.isDomainEnabled('products')) {
-          const d1Res = await PublicCatalogProvider.getProducts({ ids: boundedWishlist.join(',') });
-          if (d1Res?.data?.products && d1Res.data.products.length > 0) {
-            loadedProducts = d1Res.data.products;
+        const isD1Enabled = PublicCatalogProvider.isDomainEnabled('products');
+
+        for (const chunk of chunks) {
+          if (isCancelled) return;
+          let chunkProducts: any[] | null = null;
+
+          // 1. Canal Primario: Cloudflare D1
+          if (isD1Enabled) {
+            try {
+              const d1Res = await PublicCatalogProvider.getProducts({ ids: chunk.join(',') });
+              if (d1Res?.data?.products && d1Res.data.products.length > 0) {
+                chunkProducts = d1Res.data.products;
+              }
+            } catch {
+              // Fall through a Supabase para este lote
+            }
           }
+
+          // 2. Fallback Seguro: Supabase PostgREST acotado al lote
+          if (!chunkProducts || chunkProducts.length === 0) {
+            const { data } = await supabase
+              .from('products')
+              .select(`
+                *,
+                brand:brands!products_brand_id_fkey(*),
+                category:categories(*),
+                product_images(*),
+                variants:product_variants(*),
+                reviews:product_reviews(*),
+                vendor:vendors(id, store_name, slug, logo_url, promotions_opt_in),
+                vendor_store:vendor_stores(id, store_name, slug, logo_url)
+              `)
+              .in('id', chunk)
+              .eq('status', 'published')
+              .eq('is_active', true);
+            chunkProducts = data || [];
+          }
+
+          allFetchedProducts.push(...chunkProducts);
         }
-      } catch {
-        // Fall through a Supabase
-      }
 
-      // 2. Fallback Seguro: Supabase PostgREST
-      if (!loadedProducts) {
-        const { data } = await supabase
-          .from('products')
-          .select(`
-            *,
-            brand:brands!products_brand_id_fkey(*),
-            category:categories(*),
-            product_images(*),
-            variants:product_variants(*),
-            reviews:product_reviews(*),
-            vendor:vendors(id, store_name, slug, logo_url, promotions_opt_in),
-            vendor_store:vendor_stores(id, store_name, slug, logo_url)
-          `)
-          .in('id', boundedWishlist)
-          .eq('status', 'published')
-          .eq('is_active', true);
-        loadedProducts = data || [];
-      }
+        if (!isCancelled) {
+          // Mantener el orden canónico en que el usuario guardó sus favoritos
+          const productMap = new Map(allFetchedProducts.map(p => [p.id, p]));
+          const ordered = wishlist
+            .map(id => productMap.get(id))
+            .filter((p): p is any => Boolean(p));
 
-      setProducts(loadedProducts);
-      setLoading(false);
+          setProducts(ordered);
+          setLoading(false);
+        }
+      } catch (err) {
+        if (!isCancelled) {
+          console.error('[Wishlist] Error cargando favoritos:', err);
+          setProducts(allFetchedProducts);
+          setLoading(false);
+        }
+      }
     }
 
     loadWishlistProducts();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [wishlist]);
 
   function handleAddToCart(p: any) {
@@ -186,7 +225,7 @@ export default function Wishlist() {
       ) : (
         <div className="space-y-10">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-x-7 gap-y-12">
-            {products.map((product) => (
+            {products.slice(0, visibleCount).map((product) => (
               <ProductGridCard 
                 key={product.id} 
                 product={product} 
@@ -195,6 +234,19 @@ export default function Wishlist() {
               />
             ))}
           </div>
+
+          {products.length > visibleCount && (
+            <div className="flex justify-center pt-2">
+              <button
+                type="button"
+                onClick={() => setVisibleCount((prev) => prev + 30)}
+                className="px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 text-white font-bold text-xs border border-white/10 transition flex items-center gap-2 cursor-pointer"
+              >
+                <span>Cargar más favoritos</span>
+                <span className="text-[#f00856] font-black">({visibleCount} de {products.length})</span>
+              </button>
+            </div>
+          )}
 
           {/* AI Helper Banner */}
           <div className="bg-gradient-to-r from-zinc-900 via-fuchsia-950/30 to-zinc-900 border border-white/10 rounded-2xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">

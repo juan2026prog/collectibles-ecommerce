@@ -46,6 +46,7 @@ const RUNTIME_CTRL_STORAGE_KEY = 'collectibles_d1_runtime_ctrl_v1';
 const RUNTIME_KILL_SWITCH_TTL_MS = 5 * 60 * 1000; // 5 min cooldown before re-probing
 
 const memoryCache = new Map<string, { data: any; expiresAt: number; staleUntil: number }>();
+const inFlightRequests = new Map<string, Promise<{ data: any; fromCache: boolean; staleFallback: boolean }>>();
 
 let consecutiveWorkerFailures = 0;
 let circuitOpenUntil = 0;
@@ -354,6 +355,11 @@ export async function fetchFromCloudflareCatalog<T>(
     return { data: memEntry.data as T, fromCache: true, staleFallback: false };
   }
 
+  // Coalescencia / deduplicación de peticiones concurrentes idénticas en vuelo (anti-stampede)
+  if (inFlightRequests.has(cacheKey)) {
+    return inFlightRequests.get(cacheKey)! as Promise<{ data: T; fromCache: boolean; staleFallback: boolean }>;
+  }
+
   // Si el circuit breaker está abierto, servir snapshot sin bloquear la interfaz ni golpear Supabase
   if (circuitOpenUntil > now) {
     const fallback = (memEntry && memEntry.staleUntil > now ? memEntry.data : null) ?? readPersistentSnapshot<T>(cacheKey);
@@ -363,68 +369,82 @@ export async function fetchFromCloudflareCatalog<T>(
     throw new Error('Public catalog circuit breaker is open and no local snapshot is available.');
   }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), cfg.timeoutMs);
+  const executionPromise = (async () => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), cfg.timeoutMs);
 
-  try {
-    const res = await fetchImpl(url.toString(), {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        'X-Catalog-Client': 'collectibles-web-v1',
-      },
-      signal: controller.signal,
-    });
+    try {
+      const res = await fetchImpl(url.toString(), {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          'X-Catalog-Client': 'collectibles-web-v1',
+        },
+        signal: controller.signal,
+      });
 
-    // Detección instantánea de Kill-Switch en runtime (< 1s):
-    // Si el Worker devuelve X-Catalog-Kill-Switch: active o HTTP 503 con kill_switch_active,
-    // apagamos inmediatamente el enrutamiento en memoria/sessionStorage y lanzamos CatalogKillSwitchError
-    const killSwitchHeader = res.headers?.get?.('X-Catalog-Kill-Switch');
-    const catalogModeHeader = res.headers?.get?.('X-Catalog-Mode');
-    if (killSwitchHeader === 'active' || catalogModeHeader === 'disabled') {
-      setRuntimeKillSwitch(true, 'worker-kill-switch-header');
-      throw new CatalogKillSwitchError('Cloudflare D1 deactivated at runtime via X-Catalog-Kill-Switch');
-    }
+      // Detección instantánea de Kill-Switch en runtime (< 1s):
+      // Si el Worker devuelve X-Catalog-Kill-Switch: active o HTTP 503 con kill_switch_active global,
+      // apagamos inmediatamente el enrutamiento global en memoria/sessionStorage.
+      // Si el 503 es específico de un dominio (ej. search), solo marcamos ese dominio inactivo.
+      const killSwitchHeader = res.headers?.get?.('X-Catalog-Kill-Switch');
+      const catalogModeHeader = res.headers?.get?.('X-Catalog-Mode');
+      const catalogDomainHeader = res.headers?.get?.('X-Catalog-Domain') as CatalogDomainFlag | null;
 
-    if (res.status === 503) {
-      const errBody = await res.json().catch(() => ({} as any));
-      if (errBody?.kill_switch_active || errBody?.mode === 'disabled') {
-        setRuntimeKillSwitch(true, errBody?.reason || 'worker-503-disabled');
-        throw new CatalogKillSwitchError('Cloudflare D1 deactivated at runtime via 503 response');
+      if (catalogModeHeader === 'disabled' || (killSwitchHeader === 'active' && !catalogDomainHeader)) {
+        setRuntimeKillSwitch(true, 'worker-global-kill-switch');
+        throw new CatalogKillSwitchError('Cloudflare D1 deactivated globally at runtime');
       }
-    }
 
-    if (!res.ok) {
-      throw new Error(`Cloudflare Catalog API responded with HTTP ${res.status}`);
-    }
+      if (res.status === 503) {
+        const errBody = await res.json().catch(() => ({} as any));
+        if (errBody?.kill_switch_active || errBody?.mode === 'disabled') {
+          setRuntimeKillSwitch(true, errBody?.reason || 'worker-503-disabled');
+          throw new CatalogKillSwitchError('Cloudflare D1 deactivated globally via 503 response');
+        }
+        if (catalogDomainHeader || errBody?.domain) {
+          const dom = (catalogDomainHeader || errBody?.domain) as CatalogDomainFlag;
+          runtimeState.domainOverrides[dom] = false;
+          persistRuntimeControlState();
+          throw new Error(`Cloudflare domain '${dom}' is inactive at runtime`);
+        }
+      }
 
-    const json = (await res.json()) as T;
-    consecutiveWorkerFailures = 0;
-    circuitOpenUntil = 0;
-    writePersistentSnapshot(cacheKey, json, ttlMs, staleMs);
+      if (!res.ok) {
+        throw new Error(`Cloudflare Catalog API responded with HTTP ${res.status}`);
+      }
 
-    return { data: json, fromCache: false, staleFallback: false };
-  } catch (error) {
-    // Si es un rollback deliberado por kill-switch en runtime, no servir caché vieja de D1:
-    // propagar inmediatamente para que el caller use el canal de fallback controlado.
-    if (error instanceof CatalogKillSwitchError) {
+      const json = (await res.json()) as T;
+      consecutiveWorkerFailures = 0;
+      circuitOpenUntil = 0;
+      writePersistentSnapshot(cacheKey, json, ttlMs, staleMs);
+
+      return { data: json, fromCache: false, staleFallback: false };
+    } catch (error) {
+      if (error instanceof CatalogKillSwitchError) {
+        throw error;
+      }
+
+      consecutiveWorkerFailures += 1;
+      if (consecutiveWorkerFailures >= MAX_FAILURES_BEFORE_CIRCUIT) {
+        circuitOpenUntil = Date.now() + CIRCUIT_COOLDOWN_MS;
+      }
+
+      // Servir snapshot previo si existe ante errores de red/timeout transitorios (jamás hacer estampida directa a Supabase)
+      const fallback = (memEntry && memEntry.staleUntil > now ? memEntry.data : null) ?? readPersistentSnapshot<T>(cacheKey);
+      if (fallback !== null) {
+        return { data: fallback as T, fromCache: true, staleFallback: true };
+      }
       throw error;
+    } finally {
+      clearTimeout(timer);
     }
+  })().finally(() => {
+    inFlightRequests.delete(cacheKey);
+  });
 
-    consecutiveWorkerFailures += 1;
-    if (consecutiveWorkerFailures >= MAX_FAILURES_BEFORE_CIRCUIT) {
-      circuitOpenUntil = Date.now() + CIRCUIT_COOLDOWN_MS;
-    }
-
-    // Servir snapshot previo si existe ante errores de red/timeout transitorios (jamás hacer estampida directa a Supabase)
-    const fallback = (memEntry && memEntry.staleUntil > now ? memEntry.data : null) ?? readPersistentSnapshot<T>(cacheKey);
-    if (fallback !== null) {
-      return { data: fallback as T, fromCache: true, staleFallback: true };
-    }
-    throw error;
-  } finally {
-    clearTimeout(timer);
-  }
+  inFlightRequests.set(cacheKey, executionPromise);
+  return executionPromise;
 }
 
 export const PublicCatalogProvider = {

@@ -2362,7 +2362,7 @@ export default {
         corsHeaders,
         {
           'X-Catalog-Mode': runtimeCfg.mode,
-          'X-Catalog-Kill-Switch': 'active',
+          'X-Catalog-Domain-Disabled': 'active',
           'X-Catalog-Domain': domain,
         }
       );
