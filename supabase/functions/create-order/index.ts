@@ -4,6 +4,7 @@ import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { verifyOptionalAuth } from "../_shared/auth.ts";
 
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { syncProductsToCloudflareD1 } from "../_shared/cloudflareCatalogSync.ts";
 
 const itemSchema = z.object({
   product_id: z.string().uuid().optional(),
@@ -1844,6 +1845,24 @@ function sanitizePayloadForLogging(data: any) {
       }
     } catch (e) {
       console.warn('[Promotions Analytics] Unhandled error preparing granular usage stats:', e);
+    }
+
+    // Sincronización Comercial Nivel 1 hacia Cloudflare D1 (No-bloqueante, fail-safe)
+    try {
+      const affectedProductIds = Array.isArray(payload.items)
+        ? payload.items.map((it: any) => it.product_id || it.id).filter(Boolean)
+        : [];
+      if (affectedProductIds.length > 0) {
+        const syncPromise = syncProductsToCloudflareD1(affectedProductIds, supabase).catch((err) => {
+          console.warn('[D1-Sync-N1] Error no-bloqueante en sync D1:', err?.message || err);
+        });
+
+        if (typeof (globalThis as any).EdgeRuntime?.waitUntil === 'function') {
+          (globalThis as any).EdgeRuntime.waitUntil(syncPromise);
+        }
+      }
+    } catch (e) {
+      console.warn('[D1-Sync-N1] Excepción atrapada en Nivel 1:', e);
     }
 
     return new Response(JSON.stringify({

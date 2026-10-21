@@ -22,3 +22,9 @@ MAX_PAGE_SIZE = "60"
 
 # Secretos requeridos (configurar vía `wrangler secret put` tras aprobación):
 # - CATALOG_SYNC_SECRET: Token HMAC/Bearer exclusivo para el canal privado POST /api/v1/internal/sync
+
+# Nivel 2 — Cloudflare Cron Trigger (Reconciliador Incremental Periódico)
+# ESTADO: PREPARADO PERO INACTIVO. Descomentar tras autorización formal:
+# [triggers]
+# crons = ["*/10 * * * *"]
+

@@ -1,5 +1,6 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
+import { syncRuntimeConfig } from './lib/providers/PublicCatalogProvider';
 import { AuthProvider } from './contexts/AuthContext';
 import { CartProvider } from './contexts/CartContext';
 import { WishlistProvider } from './contexts/WishlistContext';
@@ -154,6 +155,12 @@ function NavigateToThemeDetail() {
 }
 
 function App() {
+  useEffect(() => {
+    syncRuntimeConfig().catch((err) => {
+      console.warn('[App] Public catalog runtime sync bypassed:', err);
+    });
+  }, []);
+
   return (
     <ErrorBoundary>
     <BrowserRouter>

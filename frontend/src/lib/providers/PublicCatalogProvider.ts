@@ -178,6 +178,12 @@ export function getPublicCatalogConfig(): PublicCatalogConfig {
 
   const resolveDomain = (domain: CatalogDomainFlag, envKey: string): boolean => {
     if (killActive) return false;
+    // CRITICAL SECURITY ENFORCEMENT (Fase 1 - Requisito 5):
+    // search, radar, promotions y settings quedan estrictamente bloqueados en false
+    // para evitar cualquier activación accidental por override global o variable de entorno.
+    if (domain === 'search' || domain === 'radar' || domain === 'promotions' || domain === 'settings') {
+      return false;
+    }
     if (domain in runtimeState.domainOverrides && typeof runtimeState.domainOverrides[domain] === 'boolean') {
       return Boolean(runtimeState.domainOverrides[domain]);
     }
@@ -276,29 +282,46 @@ export async function syncRuntimeConfig(fetcher: typeof fetch = fetch): Promise<
   domains: Partial<Record<CatalogDomainFlag, boolean>>;
 }> {
   const cfg = getPublicCatalogConfig();
-  const res = await fetcher(`${cfg.workerBaseUrl}/api/v1/runtime-config`, {
-    method: 'GET',
-    headers: { Accept: 'application/json', 'X-Catalog-Client': 'collectibles-web-v1' },
-  });
+  try {
+    const res = await fetcher(`${cfg.workerBaseUrl}/api/v1/runtime-config`, {
+      method: 'GET',
+      headers: { Accept: 'application/json', 'X-Catalog-Client': 'collectibles-web-v1' },
+    });
 
-  const killHeader = res.headers?.get?.('X-Catalog-Kill-Switch');
-  const json = await res.json().catch(() => ({} as any));
+    const killHeader = res.headers?.get?.('X-Catalog-Kill-Switch');
+    const json = await res.json().catch(() => ({} as any));
 
-  if (killHeader === 'active' || json?.enabled === false || res.status === 503) {
-    setRuntimeKillSwitch(true, json?.reason || 'worker-runtime-config-disabled');
-    return { enabled: false, mode: 'disabled', domains: {} };
-  }
+    if (killHeader === 'active' || json?.enabled === false || res.status === 503) {
+      setRuntimeKillSwitch(true, json?.reason || 'worker-runtime-config-disabled');
+      return { enabled: false, mode: 'disabled', domains: {} };
+    }
 
-  if (typeof json?.enabled === 'boolean') {
-    setRuntimeCatalogOverride(json.enabled, json.domains || {});
-    return {
-      enabled: json.enabled,
-      mode: json.mode || (json.enabled ? 'active' : 'disabled'),
-      domains: json.domains || {},
-    };
+    if (typeof json?.enabled === 'boolean') {
+      const safeDomains: Partial<Record<CatalogDomainFlag, boolean>> = {
+        ...(json.domains || {}),
+        search: false,
+        radar: false,
+        promotions: false,
+        settings: false,
+      };
+      setRuntimeCatalogOverride(json.enabled, safeDomains);
+      return {
+        enabled: json.enabled,
+        mode: json.mode || (json.enabled ? 'active' : 'disabled'),
+        domains: safeDomains,
+      };
+    }
+  } catch (err) {
+    // Fail-safe silencioso: si el worker no responde o hay error transitorio de red, no romper la app
+    console.warn('[PublicCatalogProvider] syncRuntimeConfig caught error; using current state:', err);
   }
 
   return { enabled: cfg.enabledGlobal, mode: cfg.enabledGlobal ? 'active' : 'disabled', domains: cfg.domains };
+}
+
+// Auto-inicialización silenciosa al cargar el script en el navegador
+if (typeof window !== 'undefined') {
+  syncRuntimeConfig().catch(() => {});
 }
 
 export async function fetchFromCloudflareCatalog<T>(

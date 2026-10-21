@@ -2437,4 +2437,27 @@ export default {
       );
     }
   },
+
+  /**
+   * Nivel 2 — Cloudflare Cron Trigger (Reconciliador Incremental Periódico)
+   * ESTADO: PREPARADO PERO INACTIVO (Aguardando autorización de activación en producción)
+   */
+  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    try {
+      const row = await env.DB.prepare(
+        "SELECT value_json FROM public_site_settings WHERE key = 'runtime_routing_config' LIMIT 1"
+      ).first<{ value_json: string }>();
+
+      const cfg = parseJsonSafe<any>(row?.value_json, {});
+      if (!cfg?.sync?.cron_enabled) {
+        console.log('[Scheduled] Reconciliador Nivel 2 inactivo en runtime (esperando activación autorizada).');
+        return;
+      }
+
+      console.log('[Scheduled] Ejecutando reconciliación periódica Nivel 2 hacia D1...');
+      // La ejecución periódica conectará con la función Keyset una vez activado el trigger
+    } catch (err: any) {
+      console.warn('[Scheduled] Error en job programado D1:', err.message);
+    }
+  },
 };
