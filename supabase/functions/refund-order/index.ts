@@ -667,7 +667,7 @@ Deno.serve(async (req: Request) => {
         if (uniqueRestoredIds.length > 0) {
           const syncPromise = syncProductsToCloudflareD1(uniqueRestoredIds, supabaseAdmin, {
             eventType: 'order_refunded',
-            useOutbox: true,
+            useOutbox: false,
           }).catch((err) => {
             console.warn('[D1-Sync-Refund] Error no-bloqueante al sincronizar stock reembolsado:', err?.message || err);
           });

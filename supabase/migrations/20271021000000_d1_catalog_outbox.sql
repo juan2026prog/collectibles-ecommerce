@@ -98,6 +98,10 @@ BEGIN
 END;
 $$;
 
+-- Permisos estrictos: solo service_role y postgres
+REVOKE EXECUTE ON FUNCTION public.claim_d1_outbox_batch(integer, text, integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_d1_outbox_batch(integer, text, integer) TO service_role, postgres;
+
 -- ------------------------------------------------------------------------------
 -- TRIGGER 1: Cambios de inventario en product_variants -> actualización monótona y outbox
 -- ------------------------------------------------------------------------------
@@ -106,14 +110,32 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
+DECLARE
+  v_prod_id UUID;
+  v_old_cnt INT;
+  v_new_cnt INT;
 BEGIN
-  IF (TG_OP = 'UPDATE' AND OLD.inventory_count IS DISTINCT FROM NEW.inventory_count) THEN
-    -- 1. Garantizar versión monótona estricta en products.updated_at
+  IF (TG_OP = 'DELETE') THEN
+    v_prod_id := OLD.product_id;
+    v_old_cnt := OLD.inventory_count;
+    v_new_cnt := 0;
+  ELSE
+    v_prod_id := NEW.product_id;
+    v_old_cnt := CASE WHEN TG_OP = 'UPDATE' THEN OLD.inventory_count ELSE 0 END;
+    v_new_cnt := NEW.inventory_count;
+  END IF;
+
+  IF (
+    TG_OP = 'INSERT' OR
+    TG_OP = 'DELETE' OR
+    (TG_OP = 'UPDATE' AND (OLD.inventory_count IS DISTINCT FROM NEW.inventory_count OR OLD.is_active IS DISTINCT FROM NEW.is_active))
+  ) THEN
+    -- Actualizar versión monótona en products
     UPDATE public.products
     SET updated_at = now()
-    WHERE id = NEW.product_id;
+    WHERE id = v_prod_id;
 
-    -- 2. Insertar evento en outbox en la misma transacción comercial
+    -- Encolar en outbox
     INSERT INTO public.d1_catalog_outbox (
       event_type,
       entity_type,
@@ -125,29 +147,31 @@ BEGIN
     ) VALUES (
       'stock_adjusted',
       'product',
-      NEW.product_id::text,
+      v_prod_id::text,
       jsonb_build_object(
-        'variant_id', NEW.id,
-        'old_inventory_count', OLD.inventory_count,
-        'new_inventory_count', NEW.inventory_count
+        'variant_id', CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END,
+        'old_inventory_count', v_old_cnt,
+        'new_inventory_count', v_new_cnt,
+        'operation', TG_OP
       ),
       now(),
       'pending',
       now()
     );
   END IF;
-  RETURN NEW;
+
+  RETURN COALESCE(NEW, OLD);
 END;
 $$;
 
 DROP TRIGGER IF EXISTS trg_product_variants_d1_outbox ON public.product_variants;
 CREATE TRIGGER trg_product_variants_d1_outbox
-  AFTER UPDATE OF inventory_count ON public.product_variants
+  AFTER INSERT OR UPDATE OF inventory_count, is_active OR DELETE ON public.product_variants
   FOR EACH ROW
   EXECUTE FUNCTION public.trg_fn_product_variants_outbox_sync();
 
 -- ------------------------------------------------------------------------------
--- TRIGGER 2: Cambios de precio o estado en products -> outbox
+-- TRIGGER 2: Cambios de precio, estado o slug en products -> outbox
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.trg_fn_products_outbox_sync()
 RETURNS TRIGGER
@@ -155,10 +179,34 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-  IF (TG_OP = 'UPDATE' AND (
+  IF (TG_OP = 'INSERT' AND NEW.status = 'published' AND NEW.is_active = true) THEN
+    INSERT INTO public.d1_catalog_outbox (
+      event_type,
+      entity_type,
+      entity_id,
+      payload,
+      version_timestamp,
+      status,
+      next_attempt_at
+    ) VALUES (
+      'product_published',
+      'product',
+      NEW.id::text,
+      jsonb_build_object(
+        'new_status', NEW.status,
+        'new_price', NEW.base_price,
+        'operation', 'INSERT'
+      ),
+      COALESCE(NEW.updated_at, now()),
+      'pending',
+      now()
+    );
+  ELSIF (TG_OP = 'UPDATE' AND (
     OLD.base_price IS DISTINCT FROM NEW.base_price OR
     OLD.status IS DISTINCT FROM NEW.status OR
-    OLD.is_active IS DISTINCT FROM NEW.is_active
+    OLD.is_active IS DISTINCT FROM NEW.is_active OR
+    OLD.slug IS DISTINCT FROM NEW.slug OR
+    OLD.title IS DISTINCT FROM NEW.title
   )) THEN
     INSERT INTO public.d1_catalog_outbox (
       event_type,
@@ -180,7 +228,9 @@ BEGIN
         'old_status', OLD.status,
         'new_status', NEW.status,
         'old_price', OLD.base_price,
-        'new_price', NEW.base_price
+        'new_price', NEW.base_price,
+        'old_slug', OLD.slug,
+        'new_slug', NEW.slug
       ),
       COALESCE(NEW.updated_at, now()),
       'pending',
@@ -193,6 +243,13 @@ $$;
 
 DROP TRIGGER IF EXISTS trg_products_d1_outbox ON public.products;
 CREATE TRIGGER trg_products_d1_outbox
-  AFTER UPDATE OF base_price, status, is_active ON public.products
+  AFTER INSERT OR UPDATE OF base_price, status, is_active, slug, title ON public.products
   FOR EACH ROW
   EXECUTE FUNCTION public.trg_fn_products_outbox_sync();
+
+-- Seguridad de privilegios mínimos para la RPC de reserva
+REVOKE EXECUTE ON FUNCTION public.claim_d1_outbox_batch(INT, TEXT, INT) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.claim_d1_outbox_batch(INT, TEXT, INT) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.claim_d1_outbox_batch(INT, TEXT, INT) FROM authenticated;
+GRANT EXECUTE ON FUNCTION public.claim_d1_outbox_batch(INT, TEXT, INT) TO service_role;
+GRANT EXECUTE ON FUNCTION public.claim_d1_outbox_batch(INT, TEXT, INT) TO postgres;

@@ -1855,7 +1855,7 @@ function sanitizePayloadForLogging(data: any) {
       if (affectedProductIds.length > 0) {
         const syncPromise = syncProductsToCloudflareD1(affectedProductIds, supabase, {
           eventType: 'order_created',
-          useOutbox: true,
+          useOutbox: false,
         }).catch((err) => {
           console.warn('[D1-Sync-N1] Error no-bloqueante en sync D1:', err?.message || err);
         });

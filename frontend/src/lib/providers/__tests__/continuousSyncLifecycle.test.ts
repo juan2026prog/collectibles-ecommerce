@@ -877,12 +877,24 @@ describe('ETAPA 6: Ciclo de Vida Completo de Sincronización Continua Supabase �
       updated_at: '2026-10-21T12:00:00Z',
     };
 
-    // 2. Producto internacional en USD
+    // 2. Producto internacional en USD con final_price_uyu explícito
     const intlProduct = {
       id: 'prod-intl-usd-011',
       slug: 'figura-importada-japon-011',
       title: 'Figura Importada Japón',
       base_price: 120, // 120 USD
+      is_international: true,
+      status: 'published',
+      is_active: true,
+      updated_at: '2026-10-21T12:00:00Z',
+    };
+
+    // 3. Producto internacional con final_price_uyu null pero exchange_rate_used = 44.8
+    const intlProductDynamicRate = {
+      id: 'prod-intl-usd-012',
+      slug: 'figura-importada-usa-012',
+      title: 'Figura Importada USA Tasa Variable',
+      base_price: 100, // 100 USD
       is_international: true,
       status: 'published',
       is_active: true,
@@ -905,23 +917,42 @@ describe('ETAPA 6: Ciclo de Vida Completo de Sincronización Continua Supabase �
           return {
             select: () => ({
               in: (col: string, ids: string[]) => {
-                return Promise.resolve({
-                  data: [
-                    {
-                      id: 'prod-intl-usd-011',
-                      slug: 'figura-importada-japon-011',
-                      title: 'Figura Importada Japón',
-                      base_price_usd: 120,
-                      final_price_usd: 120,
-                      final_price_uyu: 5220, // 120 * 43.5
-                      currency: 'USD',
-                      availability: 'in_stock',
-                      status: 'published',
-                    },
-                  ],
-                  error: null,
-                });
+                const items = [
+                  {
+                    id: 'prod-intl-usd-011',
+                    slug: 'figura-importada-japon-011',
+                    title: 'Figura Importada Japón',
+                    base_price_usd: 120,
+                    final_price_usd: 120,
+                    final_price_uyu: 5220, // 120 * 43.5
+                    currency: 'USD',
+                    availability: 'in_stock',
+                    status: 'published',
+                  },
+                  {
+                    id: 'prod-intl-usd-012',
+                    slug: 'figura-importada-usa-012',
+                    title: 'Figura Importada USA Tasa Variable',
+                    base_price_usd: 100,
+                    final_price_usd: 100,
+                    final_price_uyu: null, // null: debe usar exchange_rate_used
+                    exchange_rate_used: 44.8, // tasa real de BPS/BCU
+                    currency: 'USD',
+                    availability: 'in_stock',
+                    status: 'published',
+                  },
+                ].filter((p) => ids.includes(p.id));
+                return Promise.resolve({ data: items, error: null });
               },
+            }),
+          };
+        }
+        if (table === 'd1_catalog_outbox') {
+          return {
+            update: () => ({
+              in: () => ({
+                in: () => Promise.resolve({ data: [], error: null }),
+              }),
             }),
           };
         }
@@ -930,7 +961,7 @@ describe('ETAPA 6: Ciclo de Vida Completo de Sincronización Continua Supabase �
     };
 
     const syncRes = await syncProductsToCloudflareD1(
-      ['prod-local-uyu-011', 'prod-intl-usd-011'],
+      ['prod-local-uyu-011', 'prod-intl-usd-011', 'prod-intl-usd-012'],
       mockSupabase as any,
       {
         workerUrl: 'https://catalog.worker.internal',
@@ -941,7 +972,7 @@ describe('ETAPA 6: Ciclo de Vida Completo de Sincronización Continua Supabase �
     );
 
     expect(syncRes.ok).toBe(true);
-    expect(syncRes.recordsSynced).toBe(2);
+    expect(syncRes.recordsSynced).toBe(3);
 
     // Verificar en D1: Local = UYU
     const localRes = await workerApp.fetch(
@@ -954,17 +985,29 @@ describe('ETAPA 6: Ciclo de Vida Completo de Sincronización Continua Supabase �
     expect(localData.product.final_price_uyu).toBe(1850);
     expect(localData.product.final_price_usd).toBeNull();
 
-    // Verificar en D1: Internacional = USD con conversión UYU
-    const intlRes = await workerApp.fetch(
+    // Verificar en D1: Internacional 1 = USD con final_price_uyu explícito
+    const intlRes1 = await workerApp.fetch(
       new Request('https://catalog.worker.internal/api/v1/products/figura-importada-japon-011'),
       env
     );
-    const intlData = await intlRes.json();
-    expect(intlData.product.currency).toBe('USD');
-    expect(intlData.product.base_price).toBe(120);
-    expect(intlData.product.final_price_usd).toBe(120);
-    expect(intlData.product.final_price_uyu).toBe(5220);
-    expect(intlData.product.is_international).toBe(true);
+    const intlData1 = await intlRes1.json();
+    expect(intlData1.product.currency).toBe('USD');
+    expect(intlData1.product.base_price).toBe(120);
+    expect(intlData1.product.final_price_usd).toBe(120);
+    expect(intlData1.product.final_price_uyu).toBe(5220);
+    expect(intlData1.product.is_international).toBe(true);
+
+    // Verificar en D1: Internacional 2 = USD con exchange_rate_used dinámico (100 * 44.8 = 4480, NO 4350)
+    const intlRes2 = await workerApp.fetch(
+      new Request('https://catalog.worker.internal/api/v1/products/figura-importada-usa-012'),
+      env
+    );
+    const intlData2 = await intlRes2.json();
+    expect(intlData2.product.currency).toBe('USD');
+    expect(intlData2.product.base_price).toBe(100);
+    expect(intlData2.product.final_price_usd).toBe(100);
+    expect(intlData2.product.final_price_uyu).toBe(4480); // 100 * 44.8
+    expect(intlData2.product.is_international).toBe(true);
   });
 
   it('12. RESERVA ATÓMICA DE EVENTOS: FOR UPDATE SKIP LOCKED evita colisiones concurrentes', async () => {

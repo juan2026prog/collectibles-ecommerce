@@ -40,6 +40,7 @@ export interface OutboxBatchResult {
   deadLetters: number;
   errors: number;
   workerId?: string;
+  error?: string;
 }
 
 function getEnv(key: string): string | undefined {
@@ -174,7 +175,7 @@ export async function syncProductsToCloudflareD1(
     // 1. Consulta plana a productos locales (máx. 25 IDs)
     const { data: localProducts, error: prodErr } = await supabaseClient
       .from('products')
-      .select('id, slug, title, description, short_description, sku, base_price, compare_at_price, status, is_active, condition, category_id, brand_id, license_id, vendor_id, vendor_store_id, created_at, updated_at')
+      .select('id, slug, title, description, short_description, base_price, compare_at_price, status, is_active, condition, category_id, brand_id, license_id, vendor_id, vendor_store_id, created_at, updated_at')
       .in('id', cleanIds.slice(0, 25));
 
     // Identificar IDs que no estaban en products y buscar en international_products
@@ -262,7 +263,7 @@ export async function syncProductsToCloudflareD1(
         title: p.title,
         description: p.description,
         short_description: p.short_description,
-        sku: p.sku,
+        sku: prodVariants[0]?.sku || null,
         catalog_source: 'local',
         source_provider: 'platform',
         source_market: 'UY',
@@ -302,7 +303,14 @@ export async function syncProductsToCloudflareD1(
       }
 
       const priceUsd = Number(ip.final_price_usd ?? ip.base_price_usd ?? 0);
-      const priceUyu = ip.final_price_uyu != null ? Number(ip.final_price_uyu) : Math.round(priceUsd * 43.5);
+      let priceUyu: number;
+      if (ip.final_price_uyu != null && Number(ip.final_price_uyu) > 0) {
+        priceUyu = Number(ip.final_price_uyu);
+      } else if (ip.exchange_rate_used != null && Number(ip.exchange_rate_used) > 0) {
+        priceUyu = Math.round(priceUsd * Number(ip.exchange_rate_used));
+      } else {
+        priceUyu = Math.round(priceUsd * 43.5);
+      }
       const isAvailable = ip.availability !== 'out_of_stock' && ip.availability !== 'unavailable';
       const gallery = Array.isArray(ip.gallery_images) ? ip.gallery_images : [];
       const primaryImg = ip.image_url || gallery[0] || null;
@@ -374,6 +382,21 @@ export async function syncProductsToCloudflareD1(
       return { ok: false, durationMs, recordsSynced: 0, outboxEnqueued, error: `HTTP_${res.status}` };
     }
 
+    // 5. Marcar eventos outbox existentes para estos IDs como 'synced'
+    try {
+      await supabaseClient
+        .from('d1_catalog_outbox')
+        .update({
+          status: 'synced',
+          processed_at: new Date().toISOString(),
+          last_error: null,
+        })
+        .in('entity_id', cleanIds)
+        .in('status', ['pending', 'processing', 'failed']);
+    } catch {
+      // no bloqueante
+    }
+
     return { ok: true, durationMs, recordsSynced: upsertProducts.length + unpublishProducts.length, outboxEnqueued };
   } catch (err: any) {
     const durationMs = Date.now() - startedAt;
@@ -404,6 +427,8 @@ export async function processOutboxBatch(
 
   try {
     let rows: any[] = [];
+    let claimError: string | null = null;
+    let rpcSucceeded = false;
 
     // 1. Intentar reserva atómica con la función RPC PostgreSQL
     try {
@@ -415,13 +440,23 @@ export async function processOutboxBatch(
 
       if (!rpcErr && Array.isArray(claimedRows)) {
         rows = claimedRows;
+        rpcSucceeded = true;
+      } else if (rpcErr) {
+        claimError = rpcErr.message || 'CLAIM_RPC_ERROR';
       }
-    } catch {
+    } catch (rpcEx: any) {
       // Si la RPC aún no está definida en la base, continuar con fallback
+      claimError = rpcEx?.message || 'CLAIM_RPC_EXCEPTION';
     }
 
-    // 2. Fallback: reserva directa en base de datos si la RPC no devolvió filas
+    // La RPC respondió correctamente y no hay eventos elegibles: cola vacía real.
+    if (rpcSucceeded && rows.length === 0) {
+      return { ok: true, processed: 0, deadLetters: 0, errors: 0, workerId };
+    }
+
+    // 2. Fallback: reserva directa en base de datos solo si la RPC falló
     if (rows.length === 0) {
+      console.warn('[D1_OUTBOX] claim_d1_outbox_batch falló, usando fallback:', claimError);
       const nowIso = new Date().toISOString();
 
       // Recuperar posibles filas atascadas en 'processing' por más de 5 minutos
@@ -450,8 +485,13 @@ export async function processOutboxBatch(
         .order('next_attempt_at', { ascending: true })
         .limit(batchSize);
 
-      if (fetchErr || !candidateRows || candidateRows.length === 0) {
-        return { ok: true, processed: 0, deadLetters: 0, errors: 0, workerId };
+      if (fetchErr) {
+        console.warn('[D1_OUTBOX] No se pudo leer el outbox:', fetchErr.message);
+        return { ok: false, processed: 0, deadLetters: 0, errors: 1, workerId, error: `OUTBOX_READ_FAILED: ${fetchErr.message}` };
+      }
+      if (!candidateRows || candidateRows.length === 0) {
+        // La RPC falló pero la tabla es legible y no hay pendientes
+        return { ok: !claimError, processed: 0, deadLetters: 0, errors: claimError ? 1 : 0, workerId, error: claimError ?? undefined };
       }
 
       rows = candidateRows;
@@ -485,6 +525,7 @@ export async function processOutboxBatch(
       workerUrl: options.workerUrl,
       syncSecret: options.syncSecret,
       fetcher: options.fetcher,
+      timeoutMs: 10000, // Consumidor en segundo plano: no bloquea ventas, tolera más latencia
       useOutbox: false, // Evitar ciclo recursivo
     });
 
@@ -543,9 +584,9 @@ export async function processOutboxBatch(
       }
     }
 
-    return { ok: false, processed: rows.length, deadLetters, errors, workerId };
+    return { ok: false, processed: rows.length, deadLetters, errors, workerId, error: syncRes.error || 'SYNC_FAILED' };
   } catch (err: any) {
     console.warn('[D1_OUTBOX] Excepción al procesar lote outbox:', err?.message || err);
-    return { ok: false, processed: 0, deadLetters: 0, errors: 1, workerId };
+    return { ok: false, processed: 0, deadLetters: 0, errors: 1, workerId, error: err?.message || String(err) };
   }
 }

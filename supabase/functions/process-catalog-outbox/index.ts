@@ -32,7 +32,7 @@ Deno.serve(async (req: Request) => {
   const token = authHeader.replace(/^Bearer\s+/i, '').trim();
 
   const isServiceRole = token === supabaseServiceKey;
-  const isSyncSecret = expectedSecret && token === expectedSecret;
+  const isSyncSecret = Boolean(expectedSecret && token === expectedSecret);
 
   if (!isServiceRole && !isSyncSecret) {
     return new Response(JSON.stringify({ error: 'Unauthorized: Service Role or Sync Secret required' }), {
