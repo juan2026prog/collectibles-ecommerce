@@ -147,14 +147,22 @@ CREATE TRIGGER trg_release_events_d1_outbox
   EXECUTE FUNCTION public.trg_fn_release_events_outbox_sync();
 
 -- ------------------------------------------------------------------------------
--- 3. TRIGGER: public.site_settings & public.feature_toggles -> d1_catalog_outbox
+-- 3. TRIGGER: public.site_settings, public.feature_toggles, public.banners & public.vendor_store_badges -> d1_catalog_outbox
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.trg_fn_settings_outbox_sync()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
+DECLARE
+  v_entity_id TEXT;
 BEGIN
+  IF (TG_OP = 'DELETE') THEN
+    v_entity_id := COALESCE(OLD.id::text, TG_TABLE_NAME);
+  ELSE
+    v_entity_id := COALESCE(NEW.id::text, TG_TABLE_NAME);
+  END IF;
+
   INSERT INTO public.d1_catalog_outbox (
     event_type,
     entity_type,
@@ -166,13 +174,13 @@ BEGIN
   ) VALUES (
     'settings_updated',
     'settings',
-    COALESCE(NEW.id::text, TG_TABLE_NAME),
+    v_entity_id,
     jsonb_build_object('table', TG_TABLE_NAME, 'operation', TG_OP),
     now(),
     'pending',
     now()
   );
-  RETURN NEW;
+  RETURN COALESCE(NEW, OLD);
 END;
 $$;
 
@@ -185,5 +193,17 @@ CREATE TRIGGER trg_site_settings_d1_outbox
 DROP TRIGGER IF EXISTS trg_feature_toggles_d1_outbox ON public.feature_toggles;
 CREATE TRIGGER trg_feature_toggles_d1_outbox
   AFTER INSERT OR UPDATE OR DELETE ON public.feature_toggles
+  FOR EACH ROW
+  EXECUTE FUNCTION public.trg_fn_settings_outbox_sync();
+
+DROP TRIGGER IF EXISTS trg_banners_d1_outbox ON public.banners;
+CREATE TRIGGER trg_banners_d1_outbox
+  AFTER INSERT OR UPDATE OR DELETE ON public.banners
+  FOR EACH ROW
+  EXECUTE FUNCTION public.trg_fn_settings_outbox_sync();
+
+DROP TRIGGER IF EXISTS trg_vendor_store_badges_d1_outbox ON public.vendor_store_badges;
+CREATE TRIGGER trg_vendor_store_badges_d1_outbox
+  AFTER INSERT OR UPDATE OR DELETE ON public.vendor_store_badges
   FOR EACH ROW
   EXECUTE FUNCTION public.trg_fn_settings_outbox_sync();

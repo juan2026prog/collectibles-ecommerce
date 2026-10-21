@@ -1828,6 +1828,67 @@ async function handleInternalSync(
     }
   }
 
+  // 2b. Despublicación / eliminación de lanzamientos Radar
+  const radarUnpublishList = Array.isArray(payload.unpublish_radar_ids)
+    ? payload.unpublish_radar_ids
+    : Array.isArray(payload.delete_radar_ids)
+      ? payload.delete_radar_ids
+      : [];
+
+  if (radarUnpublishList.length > 0) {
+    for (const item of radarUnpublishList.slice(0, 100)) {
+      if (!item) continue;
+      const id = typeof item === 'object' ? item.id : String(item);
+      if (!id) continue;
+      statements.push(
+        env.DB.prepare(`DELETE FROM public_radar_releases WHERE id = ?`).bind(id)
+      );
+      affectedCount++;
+    }
+  }
+
+  // 2c. Despublicación / baja de promociones
+  const promoUnpublishList = Array.isArray(payload.unpublish_promotion_ids)
+    ? payload.unpublish_promotion_ids
+    : Array.isArray(payload.delete_promotion_ids)
+      ? payload.delete_promotion_ids
+      : [];
+
+  if (promoUnpublishList.length > 0) {
+    for (const item of promoUnpublishList.slice(0, 100)) {
+      if (!item) continue;
+      const id = typeof item === 'object' ? item.id : String(item);
+      if (!id) continue;
+      statements.push(
+        env.DB.prepare(
+          `UPDATE public_promotions SET is_active = 0, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?`
+        ).bind(id)
+      );
+      affectedCount++;
+    }
+  }
+
+  // 2d. Despublicación / baja de banners
+  const bannerUnpublishList = Array.isArray(payload.unpublish_banner_ids)
+    ? payload.unpublish_banner_ids
+    : Array.isArray(payload.delete_banner_ids)
+      ? payload.delete_banner_ids
+      : [];
+
+  if (bannerUnpublishList.length > 0) {
+    for (const item of bannerUnpublishList.slice(0, 100)) {
+      if (!item) continue;
+      const id = typeof item === 'object' ? item.id : String(item);
+      if (!id) continue;
+      statements.push(
+        env.DB.prepare(
+          `UPDATE public_banners SET is_active = 0, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?`
+        ).bind(id)
+      );
+      affectedCount++;
+    }
+  }
+
   // 3. Upsert de Categorías, Marcas, Licencias, Temas, Grupos, Vendedores, Promociones, Banners, Badges, Radar, Redirecciones y Configuración Pública
   if (Array.isArray(payload.upsert_categories)) {
     for (const c of payload.upsert_categories) {
@@ -2349,7 +2410,11 @@ export default {
     }
 
     const domain = getDomainForPath(pathname);
-    if (domain && runtimeCfg.domains && runtimeCfg.domains[domain] === false) {
+    const authHeader = request.headers.get('Authorization') || '';
+    const hasSyncAuth = Boolean(env.CATALOG_SYNC_SECRET && authHeader === `Bearer ${env.CATALOG_SYNC_SECRET}`);
+    const isSessionPreview = request.headers.get('X-Catalog-Session-Preview') === '1' || request.headers.get('X-Catalog-Preview') === 'true';
+
+    if (domain && runtimeCfg.domains && runtimeCfg.domains[domain] === false && !hasSyncAuth && !isSessionPreview) {
       return jsonResponse(
         {
           ok: false,

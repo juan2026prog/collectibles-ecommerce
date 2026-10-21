@@ -1,14 +1,21 @@
 /**
  * cloudflareCatalogSync.ts — Sincronización Asíncrona, Persistente, Atómica e Idempotente Supabase -> Cloudflare D1
- * (Mecanismo Nivel 1 Outbox + Fallback para Edge Functions: create-order, refund-order, admin-products)
+ * (Mecanismo Nivel 1 Outbox + Fallback para Edge Functions: create-order, refund-order, admin-products, etc.)
+ *
+ * Entidades soportadas:
+ * 1. Productos y Variantes ('product')
+ * 2. Promociones ('promotion')
+ * 3. Radar y Lanzamientos Públicos ('radar')
+ * 4. Ajustes del Sitio, Feature Toggles, Banners y Badges ('settings')
  *
  * Garantías Clave:
  * 1. Cero bloqueo de transacciones comerciales: persistencia en outbox y llamadas D1 en try/catch seguro.
  * 2. Monotonic Versioning: preserva updated_at autoritativo de PostgreSQL; D1 descarta updates desfasados.
  * 3. Reserva Atómica & SKIP LOCKED: evita procesamiento duplicado concurrente y recupera eventos atascados (timeout 5m).
  * 4. Preservación estricta de Moneda: USD para internacionales (con conversión UYU calculada) y UYU para locales.
- * 5. Dead Letter Queue & Backoff: retiros acotados con backoff exponencial (15s, 30s, 60s, 120s, 240s) y DLQ a 5 intentos.
- * 6. Deduplicación inteligente por entity_id en cada lote de drenaje.
+ * 5. Filtro estricto de Radar: SOLO eventos con is_published = true AND approval_status = 'PUBLISHED'.
+ * 6. Dead Letter Queue & Backoff: retiros acotados con backoff exponencial (15s, 30s, 60s, 120s, 240s) y DLQ a 5 intentos.
+ * 7. Deduplicación inteligente por entity_id en cada lote de drenaje.
  */
 
 export interface SyncProductResult {
@@ -16,6 +23,13 @@ export interface SyncProductResult {
   durationMs: number;
   recordsSynced: number;
   outboxEnqueued?: number;
+  error?: string;
+}
+
+export interface SyncSecondaryResult {
+  ok: boolean;
+  durationMs: number;
+  recordsSynced: number;
   error?: string;
 }
 
@@ -27,8 +41,14 @@ export interface OutboxEventInput {
     | 'stock_adjusted'
     | 'price_changed'
     | 'product_published'
-    | 'product_unpublished';
-  entity_type?: 'product' | 'taxonomy';
+    | 'product_unpublished'
+    | 'promotion_active'
+    | 'promotion_inactive'
+    | 'promotion_deleted'
+    | 'radar_published'
+    | 'radar_unpublished'
+    | 'settings_updated';
+  entity_type?: 'product' | 'taxonomy' | 'promotion' | 'radar' | 'settings';
   entity_id: string;
   payload?: Record<string, any>;
   version_timestamp?: string;
@@ -408,9 +428,399 @@ export async function syncProductsToCloudflareD1(
 }
 
 /**
+ * Sincroniza promociones hacia Cloudflare D1 de forma idempotente y atómica.
+ */
+export async function syncPromotionsToCloudflareD1(
+  promotionIds: string[],
+  supabaseClient: any,
+  options: {
+    workerUrl?: string;
+    syncSecret?: string;
+    timeoutMs?: number;
+    fetcher?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  } = {}
+): Promise<SyncSecondaryResult> {
+  const startedAt = Date.now();
+  const cleanIds = Array.from(new Set(promotionIds.map(String).filter(Boolean)));
+  if (cleanIds.length === 0) {
+    return { ok: true, durationMs: 0, recordsSynced: 0 };
+  }
+
+  const workerUrl = options.workerUrl || getEnv('CF_CATALOG_API_URL') || 'https://collectibles-catalog-api.pixelsncodes-uy.workers.dev';
+  const syncSecret = options.syncSecret || getEnv('CATALOG_SYNC_SECRET');
+
+  if (!syncSecret) {
+    return { ok: false, durationMs: Date.now() - startedAt, recordsSynced: 0, error: 'MISSING_SECRET' };
+  }
+
+  const timeoutMs = options.timeoutMs ?? 5000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const { data: rows, error } = await supabaseClient
+      .from('promotions')
+      .select('*')
+      .in('id', cleanIds);
+
+    if (error) {
+      return { ok: false, durationMs: Date.now() - startedAt, recordsSynced: 0, error: error.message };
+    }
+
+    const foundIds = new Set((rows || []).map((r: any) => String(r.id)));
+    const missingIds = cleanIds.filter((id) => !foundIds.has(id));
+
+    const upsertPromotions: any[] = [];
+    const unpublishPromoIds: string[] = [...missingIds];
+
+    for (const pr of rows || []) {
+      if (pr.is_active === false) {
+        unpublishPromoIds.push(pr.id);
+        continue;
+      }
+
+      upsertPromotions.push({
+        id: pr.id,
+        name: pr.name,
+        description: pr.description ?? null,
+        type: pr.discount_type || pr.type || 'percentage',
+        value: Number(pr.discount_value ?? pr.value ?? 0),
+        min_purchase_amount: pr.min_purchase != null ? Number(pr.min_purchase) : (pr.min_purchase_amount != null ? Number(pr.min_purchase_amount) : null),
+        max_discount_amount: pr.max_discount != null ? Number(pr.max_discount) : (pr.max_discount_amount != null ? Number(pr.max_discount_amount) : null),
+        starts_at: pr.starts_at ?? null,
+        ends_at: pr.ends_at ?? null,
+        is_active: pr.is_active !== false,
+        priority: Number(pr.priority ?? 0),
+        stackable: Boolean(pr.is_stackable ?? pr.stackable),
+        badge_text: pr.badge_text ?? null,
+        applies_to_all: pr.target_type === 'all' || Boolean(pr.applies_to_all),
+        targets: Array.isArray(pr.targets) ? pr.targets : [],
+        exclusions: Array.isArray(pr.exclusions) ? pr.exclusions : [],
+        tiers: Array.isArray(pr.tiers) ? pr.tiers : [],
+        group_items: Array.isArray(pr.group_items) ? pr.group_items : [],
+        updated_at: pr.updated_at || new Date().toISOString(),
+      });
+    }
+
+    const payload: Record<string, any> = {
+      batch_id: `sync-promo-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      upsert_promotions: upsertPromotions,
+      unpublish_promotion_ids: unpublishPromoIds,
+      cursor: {
+        entity_type: 'promotion',
+        last_updated_at: new Date().toISOString(),
+        last_id: cleanIds[0],
+      },
+    };
+
+    const rawBody = JSON.stringify(payload);
+    const timestampMs = String(Date.now());
+    const signature = await computeHmacSignature(syncSecret, timestampMs, rawBody);
+
+    const customFetch = options.fetcher || fetch;
+    const res = await customFetch(`${workerUrl.replace(/\/+$/, '')}/api/v1/internal/sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${syncSecret}`,
+        'X-Catalog-Timestamp': timestampMs,
+        'X-Catalog-Signature': signature,
+      },
+      body: rawBody,
+      signal: controller.signal,
+    });
+
+    const durationMs = Date.now() - startedAt;
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      return { ok: false, durationMs, recordsSynced: 0, error: `HTTP_${res.status}: ${errText.slice(0, 100)}` };
+    }
+
+    return { ok: true, durationMs, recordsSynced: upsertPromotions.length + unpublishPromoIds.length };
+  } catch (err: any) {
+    return { ok: false, durationMs: Date.now() - startedAt, recordsSynced: 0, error: err?.message || String(err) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Sincroniza eventos de Radar hacia Cloudflare D1 respetando el filtro estricto de publicación.
+ * Regla de Oro: Únicamente eventos publicados y aprobados (is_published = true AND approval_status = 'PUBLISHED').
+ * Si un evento se despublica o no cumple ambos requisitos, se purga inmediatamente de D1.
+ */
+export async function syncRadarToCloudflareD1(
+  radarIds: string[],
+  supabaseClient: any,
+  options: {
+    workerUrl?: string;
+    syncSecret?: string;
+    timeoutMs?: number;
+    purgeIds?: string[];
+    fetcher?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  } = {}
+): Promise<SyncSecondaryResult> {
+  const startedAt = Date.now();
+  const cleanIds = Array.from(new Set(radarIds.map(String).filter(Boolean)));
+  const purgeIds = Array.isArray(options.purgeIds) ? options.purgeIds : [];
+
+  if (cleanIds.length === 0 && purgeIds.length === 0) {
+    return { ok: true, durationMs: 0, recordsSynced: 0 };
+  }
+
+  const workerUrl = options.workerUrl || getEnv('CF_CATALOG_API_URL') || 'https://collectibles-catalog-api.pixelsncodes-uy.workers.dev';
+  const syncSecret = options.syncSecret || getEnv('CATALOG_SYNC_SECRET');
+
+  if (!syncSecret) {
+    return { ok: false, durationMs: Date.now() - startedAt, recordsSynced: 0, error: 'MISSING_SECRET' };
+  }
+
+  const timeoutMs = options.timeoutMs ?? 5000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    let rows: any[] = [];
+    if (cleanIds.length > 0) {
+      const { data, error } = await supabaseClient
+        .from('release_events')
+        .select('*')
+        .in('id', cleanIds);
+
+      if (error) {
+        return { ok: false, durationMs: Date.now() - startedAt, recordsSynced: 0, error: error.message };
+      }
+      rows = data || [];
+    }
+
+    const foundMap = new Map<string, any>(rows.map((r: any) => [String(r.id), r]));
+    const upsertReleases: any[] = [];
+    const unpublishRadarIds: string[] = [...purgeIds];
+
+    for (const id of cleanIds) {
+      const r = foundMap.get(id);
+
+      // Regla de Oro: Solo publicar si is_published = true AND approval_status = 'PUBLISHED'
+      const isPublic = r && r.is_published === true && r.approval_status === 'PUBLISHED';
+
+      if (!isPublic) {
+        unpublishRadarIds.push(id);
+        continue;
+      }
+
+      const gallery = Array.isArray(r.gallery) ? r.gallery : [];
+      const milestones = Array.isArray(r.milestones) ? r.milestones : (Array.isArray(r.release_milestones) ? r.release_milestones : []);
+      const linkedProducts = r.raw_source_data?.linked_products || [];
+
+      upsertReleases.push({
+        id: r.id,
+        title: r.title,
+        slug: r.slug,
+        brand_id: r.brand_id ?? null,
+        brand_name: r.manufacturer ?? r.brand_name ?? null,
+        brand_slug: r.brand_slug ?? null,
+        license_id: r.license_id ?? null,
+        license_name: r.franchise ?? r.license_name ?? null,
+        license_slug: r.license_slug ?? null,
+        category: r.category ?? r.product_line ?? null,
+        release_date: r.release_date_start ?? r.release_date ?? null,
+        estimated_quarter: r.date_display_text ?? r.estimated_release_date ?? null,
+        status: (r.status || 'announced').toLowerCase(),
+        msrp_usd: r.msrp != null ? Number(r.msrp) : null,
+        currency: r.currency || 'USD',
+        hero_image_url: r.official_image_url || r.image_source_url || null,
+        gallery,
+        description: r.description ?? null,
+        editorial_summary: r.subtitle || r.summary || r.radar_why || null,
+        hype_score: Number(r.confidence_score ?? 0),
+        is_featured: r.is_featured ? 1 : 0,
+        milestones,
+        related_products: linkedProducts,
+        created_at: r.created_at || new Date().toISOString(),
+        updated_at: r.updated_at || new Date().toISOString(),
+      });
+    }
+
+    const payload: Record<string, any> = {
+      batch_id: `sync-radar-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      upsert_radar_releases: upsertReleases,
+      unpublish_radar_ids: Array.from(new Set(unpublishRadarIds)),
+      cursor: {
+        entity_type: 'radar',
+        last_updated_at: new Date().toISOString(),
+        last_id: cleanIds[0] || 'reconcile',
+      },
+    };
+
+    const rawBody = JSON.stringify(payload);
+    const timestampMs = String(Date.now());
+    const signature = await computeHmacSignature(syncSecret, timestampMs, rawBody);
+
+    const customFetch = options.fetcher || fetch;
+    const res = await customFetch(`${workerUrl.replace(/\/+$/, '')}/api/v1/internal/sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${syncSecret}`,
+        'X-Catalog-Timestamp': timestampMs,
+        'X-Catalog-Signature': signature,
+      },
+      body: rawBody,
+      signal: controller.signal,
+    });
+
+    const durationMs = Date.now() - startedAt;
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      return { ok: false, durationMs, recordsSynced: 0, error: `HTTP_${res.status}: ${errText.slice(0, 100)}` };
+    }
+
+    return { ok: true, durationMs, recordsSynced: upsertReleases.length + unpublishRadarIds.length };
+  } catch (err: any) {
+    return { ok: false, durationMs: Date.now() - startedAt, recordsSynced: 0, error: err?.message || String(err) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Sincroniza Site Settings, Feature Toggles, Banners y Badges públicos hacia D1.
+ */
+export async function syncSettingsToCloudflareD1(
+  _settingKeys: string[],
+  supabaseClient: any,
+  options: {
+    workerUrl?: string;
+    syncSecret?: string;
+    timeoutMs?: number;
+    fetcher?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  } = {}
+): Promise<SyncSecondaryResult> {
+  const startedAt = Date.now();
+  const workerUrl = options.workerUrl || getEnv('CF_CATALOG_API_URL') || 'https://collectibles-catalog-api.pixelsncodes-uy.workers.dev';
+  const syncSecret = options.syncSecret || getEnv('CATALOG_SYNC_SECRET');
+
+  if (!syncSecret) {
+    return { ok: false, durationMs: Date.now() - startedAt, recordsSynced: 0, error: 'MISSING_SECRET' };
+  }
+
+  const timeoutMs = options.timeoutMs ?? 5000;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const [settingsRes, togglesRes, bannersRes, badgesRes] = await Promise.all([
+      supabaseClient.from('site_settings').select('*').then((r: any) => r).catch(() => ({ data: [] })),
+      supabaseClient.from('feature_toggles').select('*').then((r: any) => r).catch(() => ({ data: [] })),
+      supabaseClient.from('banners').select('*').then((r: any) => r).catch(() => ({ data: [] })),
+      supabaseClient.from('vendor_store_badges').select('*').then((r: any) => r).catch(() => ({ data: [] })),
+    ]);
+
+    const upsertSettings: Record<string, any> = {};
+
+    if (settingsRes.data && Array.isArray(settingsRes.data)) {
+      for (const s of settingsRes.data) {
+        if (s.key) upsertSettings[s.key] = s.value;
+      }
+    }
+
+    if (togglesRes.data && Array.isArray(togglesRes.data)) {
+      const toggleMap: Record<string, boolean> = {};
+      for (const t of togglesRes.data) {
+        if (t.id) toggleMap[t.id] = Boolean(t.is_enabled);
+      }
+      upsertSettings['feature_toggles'] = toggleMap;
+    }
+
+    const upsertBanners: any[] = [];
+    if (bannersRes.data && Array.isArray(bannersRes.data)) {
+      for (const b of bannersRes.data) {
+        if (!b.id || !b.image_url) continue;
+        upsertBanners.push({
+          id: b.id,
+          title: b.title ?? null,
+          subtitle: b.subtitle ?? null,
+          image_url: b.image_url,
+          mobile_image_url: b.mobile_image_url ?? null,
+          link_url: b.link_url ?? null,
+          cta_text: b.button_text ?? b.cta_text ?? null,
+          position: b.position || 'home_hero',
+          sort_order: Number(b.sort_order ?? 0),
+          is_active: b.is_active !== false,
+          starts_at: b.starts_at ?? null,
+          ends_at: b.ends_at ?? null,
+          updated_at: b.updated_at || new Date().toISOString(),
+        });
+      }
+    }
+
+    const upsertBadges: any[] = [];
+    if (badgesRes.data && Array.isArray(badgesRes.data)) {
+      for (const bg of badgesRes.data) {
+        if (!bg.id) continue;
+        upsertBadges.push({
+          id: bg.id,
+          name: bg.badge_key || bg.name || bg.label,
+          slug: bg.badge_key || bg.slug || bg.id,
+          label: bg.label || bg.name,
+          bg_color: bg.bg_color || null,
+          text_color: bg.text_color || null,
+          icon: bg.icon_url || bg.icon || null,
+          is_active: bg.is_active !== false,
+          updated_at: bg.updated_at || new Date().toISOString(),
+        });
+      }
+    }
+
+    const payload: Record<string, any> = {
+      batch_id: `sync-settings-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      upsert_settings: upsertSettings,
+      upsert_banners: upsertBanners,
+      upsert_badges: upsertBadges,
+      cursor: {
+        entity_type: 'settings',
+        last_updated_at: new Date().toISOString(),
+        last_id: 'site_settings',
+      },
+    };
+
+    const rawBody = JSON.stringify(payload);
+    const timestampMs = String(Date.now());
+    const signature = await computeHmacSignature(syncSecret, timestampMs, rawBody);
+
+    const customFetch = options.fetcher || fetch;
+    const res = await customFetch(`${workerUrl.replace(/\/+$/, '')}/api/v1/internal/sync`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${syncSecret}`,
+        'X-Catalog-Timestamp': timestampMs,
+        'X-Catalog-Signature': signature,
+      },
+      body: rawBody,
+      signal: controller.signal,
+    });
+
+    const durationMs = Date.now() - startedAt;
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      return { ok: false, durationMs, recordsSynced: 0, error: `HTTP_${res.status}: ${errText.slice(0, 100)}` };
+    }
+
+    const recordsCount = Object.keys(upsertSettings).length + upsertBanners.length + upsertBadges.length;
+    return { ok: true, durationMs, recordsSynced: recordsCount };
+  } catch (err: any) {
+    return { ok: false, durationMs: Date.now() - startedAt, recordsSynced: 0, error: err?.message || String(err) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Drenador y reconciliador atómico de lotes de outbox (`d1_catalog_outbox`).
  * Utiliza reserva atómica con `FOR UPDATE SKIP LOCKED` (vía RPC `claim_d1_outbox_batch`)
  * con recuperación automática de eventos atascados y retroceso exponencial ante fallas.
+ * Despacha de forma independiente y aislada según `entity_type` ('product', 'promotion', 'radar', 'settings').
  */
 export async function processOutboxBatch(
   supabaseClient: any,
@@ -445,7 +855,6 @@ export async function processOutboxBatch(
         claimError = rpcErr.message || 'CLAIM_RPC_ERROR';
       }
     } catch (rpcEx: any) {
-      // Si la RPC aún no está definida en la base, continuar con fallback
       claimError = rpcEx?.message || 'CLAIM_RPC_EXCEPTION';
     }
 
@@ -476,10 +885,10 @@ export async function processOutboxBatch(
         // Fallback defensivo si el cliente o mock no implementa encadenamiento
       }
 
-      // Obtener filas pendientes
+      // Obtener filas pendientes (incluyendo explícitamente entity_type)
       const { data: candidateRows, error: fetchErr } = await supabaseClient
         .from('d1_catalog_outbox')
-        .select('id, event_type, entity_id, version_timestamp, attempts, max_attempts')
+        .select('id, event_type, entity_type, entity_id, version_timestamp, attempts, max_attempts')
         .in('status', ['pending', 'failed'])
         .lte('next_attempt_at', nowIso)
         .order('next_attempt_at', { ascending: true })
@@ -490,7 +899,6 @@ export async function processOutboxBatch(
         return { ok: false, processed: 0, deadLetters: 0, errors: 1, workerId, error: `OUTBOX_READ_FAILED: ${fetchErr.message}` };
       }
       if (!candidateRows || candidateRows.length === 0) {
-        // La RPC falló pero la tabla es legible y no hay pendientes
         return { ok: !claimError, processed: 0, deadLetters: 0, errors: claimError ? 1 : 0, workerId, error: claimError ?? undefined };
       }
 
@@ -510,81 +918,143 @@ export async function processOutboxBatch(
       return { ok: true, processed: 0, deadLetters: 0, errors: 0, workerId };
     }
 
-    // 3. Deduplicación inteligente: si un mismo entity_id tiene varios eventos en el lote,
-    // sincronizarlo una sola vez con su estado más reciente
-    const latestByEntity = new Map<string, any>();
-    for (const r of rows) {
-      const existing = latestByEntity.get(r.entity_id);
-      if (!existing || new Date(r.version_timestamp).getTime() > new Date(existing.version_timestamp).getTime()) {
-        latestByEntity.set(r.entity_id, r);
+    // 3. Agrupación por entity_type para procesamiento independiente
+    const productRows = rows.filter((r: any) => !r.entity_type || r.entity_type === 'product');
+    const promotionRows = rows.filter((r: any) => r.entity_type === 'promotion');
+    const radarRows = rows.filter((r: any) => r.entity_type === 'radar');
+    const settingsRows = rows.filter((r: any) => r.entity_type === 'settings');
+
+    const handleGroup = async (
+      groupRows: any[],
+      syncFn: (ids: string[]) => Promise<{ ok: boolean; error?: string }>
+    ) => {
+      if (groupRows.length === 0) return { ok: true, processed: 0, deadLetters: 0, errors: 0 };
+
+      // Deduplicación inteligente por entity_id dentro del lote
+      const latestByEntity = new Map<string, any>();
+      for (const r of groupRows) {
+        const existing = latestByEntity.get(r.entity_id);
+        if (!existing || new Date(r.version_timestamp).getTime() > new Date(existing.version_timestamp).getTime()) {
+          latestByEntity.set(r.entity_id, r);
+        }
       }
-    }
 
-    const uniqueProductIds = Array.from(latestByEntity.keys());
-    const syncRes = await syncProductsToCloudflareD1(uniqueProductIds, supabaseClient, {
-      workerUrl: options.workerUrl,
-      syncSecret: options.syncSecret,
-      fetcher: options.fetcher,
-      timeoutMs: 10000, // Consumidor en segundo plano: no bloquea ventas, tolera más latencia
-      useOutbox: false, // Evitar ciclo recursivo
-    });
+      const uniqueIds = Array.from(latestByEntity.keys());
+      const syncRes = await syncFn(uniqueIds);
 
-    let deadLetters = 0;
-    let errors = 0;
+      let groupDeadLetters = 0;
+      let groupErrors = 0;
 
-    if (syncRes.ok) {
-      // Éxito: marcar todas las filas del lote como sincronizadas
-      const syncedIds = rows.map((r: any) => r.id);
-      await supabaseClient
-        .from('d1_catalog_outbox')
-        .update({
-          status: 'synced',
-          locked_at: null,
-          locked_by: null,
-          processed_at: new Date().toISOString(),
-          last_error: null,
-        })
-        .in('id', syncedIds);
-
-      return { ok: true, processed: rows.length, deadLetters: 0, errors: 0, workerId };
-    }
-
-    // Fallo de sincronización: incrementar intentos, calcular backoff o mover a dead_letter
-    for (const r of rows) {
-      const nextAttempts = (r.attempts || 0) + 1;
-      const maxAttempts = r.max_attempts || 5;
-
-      if (nextAttempts >= maxAttempts) {
-        deadLetters++;
+      if (syncRes.ok) {
+        const syncedIds = groupRows.map((r: any) => r.id);
         await supabaseClient
           .from('d1_catalog_outbox')
           .update({
-            attempts: nextAttempts,
-            status: 'dead_letter',
+            status: 'synced',
             locked_at: null,
             locked_by: null,
-            last_error: syncRes.error || 'MAX_RETRIES_EXCEEDED',
             processed_at: new Date().toISOString(),
+            last_error: null,
           })
-          .eq('id', r.id);
-      } else {
-        errors++;
-        const nextAttemptAt = calculateNextBackoff(nextAttempts);
-        await supabaseClient
-          .from('d1_catalog_outbox')
-          .update({
-            attempts: nextAttempts,
-            status: 'failed',
-            locked_at: null,
-            locked_by: null,
-            last_error: syncRes.error || 'SYNC_FAILED',
-            next_attempt_at: nextAttemptAt,
-          })
-          .eq('id', r.id);
-      }
-    }
+          .in('id', syncedIds);
 
-    return { ok: false, processed: rows.length, deadLetters, errors, workerId, error: syncRes.error || 'SYNC_FAILED' };
+        return { ok: true, processed: groupRows.length, deadLetters: 0, errors: 0 };
+      }
+
+      // Manejo de fallos con backoff exponencial o DLQ
+      for (const r of groupRows) {
+        const nextAttempts = (r.attempts || 0) + 1;
+        const maxAttempts = r.max_attempts || 5;
+
+        if (nextAttempts >= maxAttempts) {
+          groupDeadLetters++;
+          await supabaseClient
+            .from('d1_catalog_outbox')
+            .update({
+              attempts: nextAttempts,
+              status: 'dead_letter',
+              locked_at: null,
+              locked_by: null,
+              last_error: syncRes.error || 'MAX_RETRIES_EXCEEDED',
+              processed_at: new Date().toISOString(),
+            })
+            .eq('id', r.id);
+        } else {
+          groupErrors++;
+          const nextAttemptAt = calculateNextBackoff(nextAttempts);
+          await supabaseClient
+            .from('d1_catalog_outbox')
+            .update({
+              attempts: nextAttempts,
+              status: 'failed',
+              locked_at: null,
+              locked_by: null,
+              last_error: syncRes.error || 'SYNC_FAILED',
+              next_attempt_at: nextAttemptAt,
+            })
+            .eq('id', r.id);
+        }
+      }
+
+      return {
+        ok: false,
+        processed: groupRows.length,
+        deadLetters: groupDeadLetters,
+        errors: groupErrors,
+        error: syncRes.error,
+      };
+    };
+
+    const results = await Promise.all([
+      handleGroup(productRows, (ids) =>
+        syncProductsToCloudflareD1(ids, supabaseClient, {
+          workerUrl: options.workerUrl,
+          syncSecret: options.syncSecret,
+          fetcher: options.fetcher,
+          timeoutMs: 10000,
+          useOutbox: false,
+        })
+      ),
+      handleGroup(promotionRows, (ids) =>
+        syncPromotionsToCloudflareD1(ids, supabaseClient, {
+          workerUrl: options.workerUrl,
+          syncSecret: options.syncSecret,
+          fetcher: options.fetcher,
+          timeoutMs: 10000,
+        })
+      ),
+      handleGroup(radarRows, (ids) =>
+        syncRadarToCloudflareD1(ids, supabaseClient, {
+          workerUrl: options.workerUrl,
+          syncSecret: options.syncSecret,
+          fetcher: options.fetcher,
+          timeoutMs: 10000,
+        })
+      ),
+      handleGroup(settingsRows, (ids) =>
+        syncSettingsToCloudflareD1(ids, supabaseClient, {
+          workerUrl: options.workerUrl,
+          syncSecret: options.syncSecret,
+          fetcher: options.fetcher,
+          timeoutMs: 10000,
+        })
+      ),
+    ]);
+
+    const totalProcessed = results.reduce((acc, r) => acc + r.processed, 0);
+    const totalDeadLetters = results.reduce((acc, r) => acc + r.deadLetters, 0);
+    const totalErrors = results.reduce((acc, r) => acc + r.errors, 0);
+    const anyFailed = results.some((r) => !r.ok);
+    const firstError = results.find((r) => r.error)?.error;
+
+    return {
+      ok: !anyFailed,
+      processed: totalProcessed,
+      deadLetters: totalDeadLetters,
+      errors: totalErrors,
+      workerId,
+      error: anyFailed ? firstError || 'GROUP_SYNC_FAILED' : undefined,
+    };
   } catch (err: any) {
     console.warn('[D1_OUTBOX] Excepción al procesar lote outbox:', err?.message || err);
     return { ok: false, processed: 0, deadLetters: 0, errors: 1, workerId, error: err?.message || String(err) };

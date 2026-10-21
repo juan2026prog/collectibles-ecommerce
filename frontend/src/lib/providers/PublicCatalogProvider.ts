@@ -194,6 +194,9 @@ export function getPublicCatalogConfig(): PublicCatalogConfig {
     if (runtimeState.overrideGlobal === false) {
       return false;
     }
+    if (runtimeState.overrideGlobal === true) {
+      return (domain === 'products' || domain === 'productDetail' || domain === 'taxonomies');
+    }
     const defaultVal = (domain === 'search' || domain === 'radar' || domain === 'promotions' || domain === 'settings')
       ? false
       : effectiveGlobal;
@@ -434,6 +437,9 @@ export async function fetchFromCloudflareCatalog<T>(
         headers: {
           Accept: 'application/json',
           'X-Catalog-Client': 'collectibles-web-v1',
+          ...(runtimeState.domainOverrides && Object.values(runtimeState.domainOverrides).some(Boolean)
+            ? { 'X-Catalog-Session-Preview': '1' }
+            : {}),
         },
         signal: controller.signal,
       });
