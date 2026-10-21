@@ -6,11 +6,15 @@
 --            (public.d1_catalog_outbox) para soportar las entidades públicas:
 --            1. Promociones (public.promotions)
 --            2. Lanzamientos Radar públicos (public.release_events)
---            3. Configuración y Toggles (public.site_settings, public.feature_toggles)
+--            3. Configuración del Sitio (public.site_settings)
+--            4. Feature Toggles (public.feature_toggles)
+--            5. Banners (public.banners)
+--            6. Badges (public.vendor_store_badges)
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
 -- 1. TRIGGER: public.promotions -> d1_catalog_outbox
+-- Nota de esquema: PK es id (uuid), campos de descuento son discount_type y discount_value.
 -- ------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.trg_fn_promotions_outbox_sync()
 RETURNS TRIGGER
@@ -33,14 +37,14 @@ BEGIN
       NEW.id::text,
       jsonb_build_object(
         'name', NEW.name,
-        'type', NEW.type,
-        'value', NEW.value,
+        'discount_type', NEW.discount_type,
+        'discount_value', NEW.discount_value,
         'is_active', NEW.is_active,
         'starts_at', NEW.starts_at,
         'ends_at', NEW.ends_at,
         'operation', TG_OP
       ),
-      COALESCE(NEW.updated_at, now()),
+      COALESCE(NEW.created_at, now()),
       'pending',
       now()
     );
@@ -147,9 +151,55 @@ CREATE TRIGGER trg_release_events_d1_outbox
   EXECUTE FUNCTION public.trg_fn_release_events_outbox_sync();
 
 -- ------------------------------------------------------------------------------
--- 3. TRIGGER: public.site_settings, public.feature_toggles, public.banners & public.vendor_store_badges -> d1_catalog_outbox
+-- 3. TRIGGER: public.site_settings -> d1_catalog_outbox
+-- Nota de esquema: PK es key (text), no tiene id.
 -- ------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.trg_fn_settings_outbox_sync()
+CREATE OR REPLACE FUNCTION public.trg_fn_site_settings_outbox_sync()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_key TEXT;
+BEGIN
+  IF (TG_OP = 'DELETE') THEN
+    v_key := OLD.key;
+  ELSE
+    v_key := NEW.key;
+  END IF;
+
+  INSERT INTO public.d1_catalog_outbox (
+    event_type,
+    entity_type,
+    entity_id,
+    payload,
+    version_timestamp,
+    status,
+    next_attempt_at
+  ) VALUES (
+    'settings_updated',
+    'settings',
+    v_key,
+    jsonb_build_object('table', 'site_settings', 'key', v_key, 'operation', TG_OP),
+    now(),
+    'pending',
+    now()
+  );
+  RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_site_settings_d1_outbox ON public.site_settings;
+CREATE TRIGGER trg_site_settings_d1_outbox
+  AFTER INSERT OR UPDATE OR DELETE ON public.site_settings
+  FOR EACH ROW
+  EXECUTE FUNCTION public.trg_fn_site_settings_outbox_sync();
+
+-- ------------------------------------------------------------------------------
+-- 4. TRIGGER: public.feature_toggles, public.banners & public.vendor_store_badges -> d1_catalog_outbox
+-- Nota de esquema: PK es id (text o uuid).
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.trg_fn_settings_entity_outbox_sync()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -158,9 +208,9 @@ DECLARE
   v_entity_id TEXT;
 BEGIN
   IF (TG_OP = 'DELETE') THEN
-    v_entity_id := COALESCE(OLD.id::text, TG_TABLE_NAME);
+    v_entity_id := OLD.id::text;
   ELSE
-    v_entity_id := COALESCE(NEW.id::text, TG_TABLE_NAME);
+    v_entity_id := NEW.id::text;
   END IF;
 
   INSERT INTO public.d1_catalog_outbox (
@@ -184,26 +234,20 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS trg_site_settings_d1_outbox ON public.site_settings;
-CREATE TRIGGER trg_site_settings_d1_outbox
-  AFTER INSERT OR UPDATE OR DELETE ON public.site_settings
-  FOR EACH ROW
-  EXECUTE FUNCTION public.trg_fn_settings_outbox_sync();
-
 DROP TRIGGER IF EXISTS trg_feature_toggles_d1_outbox ON public.feature_toggles;
 CREATE TRIGGER trg_feature_toggles_d1_outbox
   AFTER INSERT OR UPDATE OR DELETE ON public.feature_toggles
   FOR EACH ROW
-  EXECUTE FUNCTION public.trg_fn_settings_outbox_sync();
+  EXECUTE FUNCTION public.trg_fn_settings_entity_outbox_sync();
 
 DROP TRIGGER IF EXISTS trg_banners_d1_outbox ON public.banners;
 CREATE TRIGGER trg_banners_d1_outbox
   AFTER INSERT OR UPDATE OR DELETE ON public.banners
   FOR EACH ROW
-  EXECUTE FUNCTION public.trg_fn_settings_outbox_sync();
+  EXECUTE FUNCTION public.trg_fn_settings_entity_outbox_sync();
 
 DROP TRIGGER IF EXISTS trg_vendor_store_badges_d1_outbox ON public.vendor_store_badges;
 CREATE TRIGGER trg_vendor_store_badges_d1_outbox
   AFTER INSERT OR UPDATE OR DELETE ON public.vendor_store_badges
   FOR EACH ROW
-  EXECUTE FUNCTION public.trg_fn_settings_outbox_sync();
+  EXECUTE FUNCTION public.trg_fn_settings_entity_outbox_sync();

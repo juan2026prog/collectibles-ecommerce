@@ -15,9 +15,12 @@ DROP FUNCTION IF EXISTS public.trg_fn_promotions_outbox_sync();
 DROP TRIGGER IF EXISTS trg_release_events_d1_outbox ON public.release_events;
 DROP FUNCTION IF EXISTS public.trg_fn_release_events_outbox_sync();
 
--- 3. Eliminar triggers y función de Configuración, Toggles, Banners y Badges
+-- 3. Eliminar trigger y función de Configuración del Sitio (site_settings)
 DROP TRIGGER IF EXISTS trg_site_settings_d1_outbox ON public.site_settings;
+DROP FUNCTION IF EXISTS public.trg_fn_site_settings_outbox_sync();
+
+-- 4. Eliminar triggers y función de Toggles, Banners y Badges
 DROP TRIGGER IF EXISTS trg_feature_toggles_d1_outbox ON public.feature_toggles;
 DROP TRIGGER IF EXISTS trg_banners_d1_outbox ON public.banners;
 DROP TRIGGER IF EXISTS trg_vendor_store_badges_d1_outbox ON public.vendor_store_badges;
-DROP FUNCTION IF EXISTS public.trg_fn_settings_outbox_sync();
+DROP FUNCTION IF EXISTS public.trg_fn_settings_entity_outbox_sync();
