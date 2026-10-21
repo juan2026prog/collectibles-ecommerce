@@ -10,6 +10,7 @@
 --            4. Feature Toggles (public.feature_toggles)
 --            5. Banners (public.banners)
 --            6. Badges (public.vendor_store_badges)
+--            7. Trigger asíncrono pg_net que despierta automáticamente a process-catalog-outbox
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
@@ -251,3 +252,41 @@ CREATE TRIGGER trg_vendor_store_badges_d1_outbox
   AFTER INSERT OR UPDATE OR DELETE ON public.vendor_store_badges
   FOR EACH ROW
   EXECUTE FUNCTION public.trg_fn_settings_entity_outbox_sync();
+
+-- ------------------------------------------------------------------------------
+-- 5. TRIGGER ASÍNCRONO PG_NET: public.d1_catalog_outbox -> process-catalog-outbox
+-- Despierta automáticamente al consumidor Edge Function sin bloquear la transacción
+-- ni requerir cron jobs ni intervención manual. Se ejecuta FOR EACH STATEMENT.
+-- ------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.trg_fn_d1_outbox_notify_consumer()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_secret TEXT;
+BEGIN
+  SELECT decrypted_secret INTO v_secret 
+  FROM vault.decrypted_secrets 
+  WHERE name = 'catalog_sync_secret';
+
+  IF v_secret IS NOT NULL THEN
+    PERFORM net.http_post(
+      url := 'https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/process-catalog-outbox',
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer ' || v_secret
+      ),
+      body := '{"source": "statement_trigger", "batch_size": 25}'::jsonb,
+      timeout_milliseconds := 15000
+    );
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_d1_outbox_notify_consumer ON public.d1_catalog_outbox;
+CREATE TRIGGER trg_d1_outbox_notify_consumer
+  AFTER INSERT ON public.d1_catalog_outbox
+  FOR EACH STATEMENT
+  EXECUTE FUNCTION public.trg_fn_d1_outbox_notify_consumer();
