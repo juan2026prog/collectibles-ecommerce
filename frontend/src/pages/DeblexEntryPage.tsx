@@ -111,7 +111,7 @@ export default function DeblexEntryPage() {
       // 1. Load packages
       const { data: pkgsData } = await supabase
         .from('argentina_packages')
-        .select('*')
+        .select('*, argentina_package_documents(*)')
         .order('created_at', { ascending: false });
 
       if (pkgsData) {
@@ -757,3 +757,4 @@ export default function DeblexEntryPage() {
     </div>
   );
 }
+
