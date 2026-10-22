@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { navigatorLock } from '@supabase/auth-js';
 
 // Use environment variables for Supabase configuration with process.env fallback.
 // These are PUBLIC keys (anon key) — safe for client-side use.
@@ -13,8 +14,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: true,
     flowType: 'pkce',
-    ...( {
-      lockAcquireTimeout: 15000,
-    } as any ),
+    // Custom lock implementation extending the Web Locks acquisition timeout
+    // to 15000ms using the official, exported navigatorLock from @supabase/auth-js.
+    lock: (name, _acquireTimeout, fn) => navigatorLock(name, 15000, fn),
   },
 });
