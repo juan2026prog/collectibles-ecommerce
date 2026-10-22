@@ -27,6 +27,15 @@ export const DEFAULT_DEBLEX_TARIFFS: DeblexTariffConfig = {
   max_weight_modalidad_a_kg: 50.0,
   max_units_per_species_modalidad_a: 3,
   max_operations_per_year_modalidad_a: 5,
+  is_modalidad_b_enabled: false,
+};
+
+export const DEBLEX_ERROR_MESSAGES = {
+  WEIGHT_EXCEEDED: 'Tu envío supera el límite de 50 kg permitido por Deblex. Modificá tu consolidación o solicitá asistencia.',
+  FOB_EXCEEDED: 'El valor FOB supera USD 400.00 (límite de Modalidad A). Se requiere cotización para importación especial.',
+  SPECIES_EXCEEDED: (species: string, count: number, max: number) =>
+    `Se superan las ${max} unidades de la misma especie (${species}: ${count} unidades). Límite de Modalidad A: ${max}.`,
+  QUOTA_EXCEEDED: 'Se ha alcanzado el límite anual de 5 envíos por destinatario para el régimen de pequeños envíos.',
 };
 
 export const AMBA_PARTIDOS = [
@@ -142,9 +151,7 @@ export function evaluateConsolidation(
   }
 
   if (total_weight_kg > tariffs.max_weight_modalidad_a_kg) {
-    errors.push(
-      `El peso consolidado (${total_weight_kg.toFixed(2)} kg) supera el límite operativo de ${tariffs.max_weight_modalidad_a_kg} kg.`
-    );
+    errors.push(DEBLEX_ERROR_MESSAGES.WEIGHT_EXCEEDED);
   }
 
   // Species check: max 3 units of the same species
@@ -157,7 +164,7 @@ export function evaluateConsolidation(
   for (const [species, count] of Object.entries(speciesCounts)) {
     if (count > tariffs.max_units_per_species_modalidad_a) {
       errors.push(
-        `Se superan las ${tariffs.max_units_per_species_modalidad_a} unidades de la misma especie (${species}: ${count} unidades).`
+        DEBLEX_ERROR_MESSAGES.SPECIES_EXCEEDED(species, count, tariffs.max_units_per_species_modalidad_a)
       );
     }
   }
@@ -169,7 +176,9 @@ export function evaluateConsolidation(
   );
 
   let status: ConsolidatedQuoteResult['status'] = 'ELIGIBLE';
-  if (fob_total_usd > tariffs.max_fob_modalidad_a) {
+  if (total_weight_kg > tariffs.max_weight_modalidad_a_kg) {
+    status = 'BLOCKED_WEIGHT';
+  } else if (fob_total_usd > tariffs.max_fob_modalidad_a) {
     status = 'BLOCKED_FOB';
   } else if (errors.some(e => e.includes('especie'))) {
     status = 'BLOCKED_SPECIES';

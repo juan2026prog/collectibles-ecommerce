@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { ShoppingBag, Truck, CreditCard, ShieldCheck, AlertCircle, ArrowRight, ArrowLeft, CheckCircle2, Info } from 'lucide-react';
+import { ShoppingBag, Truck, CreditCard, ShieldCheck, AlertCircle, ArrowRight, ArrowLeft, CheckCircle2, Info, HelpCircle } from 'lucide-react';
 import { validateArgentineTaxId, formatCUIT } from '../../lib/argentina/taxIdValidator';
-import { resolveArgentinaZone, calculateDeblexShipping } from '../../lib/argentina/pricingEngine';
-import { ArgentinaShipmentZone } from '../../lib/argentina/types';
+import { resolveArgentinaZone, calculateDeblexShipping, DEBLEX_ERROR_MESSAGES, DEFAULT_DEBLEX_TARIFFS } from '../../lib/argentina/pricingEngine';
+import { ArgentinaShipmentZone, DeblexTariffConfig } from '../../lib/argentina/types';
 
 export interface ArgentinaCheckoutItem {
   id: string;
@@ -11,18 +11,21 @@ export interface ArgentinaCheckoutItem {
   price_usd: number;
   weight_kg: number;
   quantity: number;
+  species_category?: string;
 }
 
 interface ArgentinaCheckoutFlowProps {
   items: ArgentinaCheckoutItem[];
   onCompleteOrder: (orderPayload: any) => Promise<{ success: boolean; orderId?: string; error?: string }>;
   isLiveCheckoutEnabled?: boolean; // Must be false until certified
+  tariffs?: DeblexTariffConfig;
 }
 
 export const ArgentinaCheckoutFlow: React.FC<ArgentinaCheckoutFlowProps> = ({
   items,
   onCompleteOrder,
   isLiveCheckoutEnabled = false,
+  tariffs = DEFAULT_DEBLEX_TARIFFS,
 }) => {
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
@@ -40,21 +43,35 @@ export const ArgentinaCheckoutFlow: React.FC<ArgentinaCheckoutFlowProps> = ({
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
 
-  // Step 3 acceptance
+  // Step 3 acceptance & modal state
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [specialQuoteRequested, setSpecialQuoteRequested] = useState(false);
 
   // Calculations
-  const totalFobUsd = items.reduce((sum, item) => sum + item.price_usd * item.quantity, 0);
-  const totalWeightKg = items.reduce((sum, item) => sum + item.weight_kg * item.quantity, 0);
+  const totalFobUsd = Number(items.reduce((sum, item) => sum + item.price_usd * item.quantity, 0).toFixed(2));
+  const totalWeightKg = Number(items.reduce((sum, item) => sum + item.weight_kg * item.quantity, 0).toFixed(2));
+
+  // Species check
+  const speciesCounts: Record<string, number> = {};
+  items.forEach(i => {
+    const sp = (i.species_category || 'general').toLowerCase().trim();
+    speciesCounts[sp] = (speciesCounts[sp] || 0) + i.quantity;
+  });
+  const speciesViolations = Object.entries(speciesCounts).filter(([_, count]) => count > tariffs.max_units_per_species_modalidad_a);
+
+  const isFobExceeded = totalFobUsd > tariffs.max_fob_modalidad_a;
+  const isWeightExceeded = totalWeightKg > tariffs.max_weight_modalidad_a_kg; // 50.00 allowed, 50.01 blocked
+  const isSpeciesExceeded = speciesViolations.length > 0;
 
   const zone: ArgentinaShipmentZone = resolveArgentinaZone(province, city, postalCode);
-  const shippingCalculation = calculateDeblexShipping(totalWeightKg, zone);
+  const shippingCalculation = calculateDeblexShipping(totalWeightKg, zone, tariffs);
 
-  // Estimated taxes under Modalidad A (Deseable / Estimado informativo; 0 arancel franquicia, IVA estimado)
-  const estimatedTaxUsd = 0; // Franquicia Modalidad A exempts import duty and statistical fee up to USD 400
-  const finalTotalUsd = totalFobUsd + shippingCalculation.total_logistics_usd + estimatedTaxUsd;
+  // Tax and customs segregation (Modalidad A: Exempt from duty, estimate VAT base = CIF = FOB + Flete)
+  const customsBaseUsd = Number((totalFobUsd + shippingCalculation.freight_usd).toFixed(2));
+  const estimatedVatUsd = 0; // Franquicia Modalidad A exempts duties and statistical fees for personal use
+  const finalTotalUsd = Number((totalFobUsd + shippingCalculation.total_logistics_usd).toFixed(2));
 
   // Validation
   const taxIdValidation = validateArgentineTaxId(docNumber, docType);
@@ -69,8 +86,17 @@ export const ArgentinaCheckoutFlow: React.FC<ArgentinaCheckoutFlowProps> = ({
     email.includes('@');
 
   const handleNextToStep2 = () => {
-    if (totalFobUsd > 400.0) {
-      setErrorMessage('El valor FOB total supera USD 400.00 (límite de Modalidad A). Se requiere cotización especial.');
+    if (isWeightExceeded) {
+      setErrorMessage(DEBLEX_ERROR_MESSAGES.WEIGHT_EXCEEDED);
+      return;
+    }
+    if (isFobExceeded && !tariffs.is_modalidad_b_enabled) {
+      setErrorMessage(DEBLEX_ERROR_MESSAGES.FOB_EXCEEDED);
+      return;
+    }
+    if (isSpeciesExceeded) {
+      const [violatingSp, count] = speciesViolations[0];
+      setErrorMessage(DEBLEX_ERROR_MESSAGES.SPECIES_EXCEEDED(violatingSp, count, tariffs.max_units_per_species_modalidad_a));
       return;
     }
     setErrorMessage(null);
@@ -78,6 +104,10 @@ export const ArgentinaCheckoutFlow: React.FC<ArgentinaCheckoutFlowProps> = ({
   };
 
   const handleNextToStep3 = () => {
+    if (isWeightExceeded) {
+      setErrorMessage(DEBLEX_ERROR_MESSAGES.WEIGHT_EXCEEDED);
+      return;
+    }
     if (!isStep2Valid) {
       setErrorMessage('Por favor completá todos los campos requeridos y verificá tu CUIT/documento.');
       return;
@@ -216,13 +246,41 @@ export const ArgentinaCheckoutFlow: React.FC<ArgentinaCheckoutFlowProps> = ({
 
           <div className="pt-3 border-t border-gray-700/60 flex items-center justify-between text-sm">
             <span className="text-gray-400">Subtotal FOB Estimado:</span>
-            <span className="font-bold text-white">USD {totalFobUsd.toFixed(2)}</span>
+            <span className="font-bold text-white font-mono">USD {totalFobUsd.toFixed(2)}</span>
           </div>
+
+          <div className="flex items-center justify-between text-xs text-gray-400">
+            <span>Peso total estimado del pedido:</span>
+            <span className={`font-mono font-medium ${isWeightExceeded ? 'text-red-400' : 'text-gray-200'}`}>
+              {totalWeightKg.toFixed(2)} kg {isWeightExceeded ? '(Excede límite de 50 kg)' : '(Límite: 50.00 kg)'}
+            </span>
+          </div>
+
+          {isFobExceeded && !tariffs.is_modalidad_b_enabled && (
+            <div className="p-3 bg-amber-950/40 border border-amber-800/80 rounded-lg text-amber-200 text-xs space-y-2">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                <span className="font-semibold">El valor FOB supera el límite de USD 400.00 de Modalidad A</span>
+              </div>
+              <p className="text-[11px] text-gray-300">
+                Para órdenes mayores a USD 400.00 se aplica el Régimen de Importación Especial (Modalidad B). Podés solicitar una cotización logística personalizada con Deblex.
+              </p>
+              <button
+                type="button"
+                onClick={() => setSpecialQuoteRequested(true)}
+                className="mt-1 px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded text-[11px] flex items-center gap-1.5 cursor-pointer"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                {specialQuoteRequested ? '✓ Solicitud de Cotización Especial Enviada' : 'Solicitar cotización para importación especial'}
+              </button>
+            </div>
+          )}
 
           <div className="flex justify-end pt-2">
             <button
               onClick={handleNextToStep2}
-              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-gray-950 font-bold text-xs rounded-lg flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-500/20"
+              disabled={isWeightExceeded || (isFobExceeded && !tariffs.is_modalidad_b_enabled)}
+              className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-gray-950 font-bold text-xs rounded-lg flex items-center gap-2 cursor-pointer shadow-lg shadow-amber-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Continuar a Entrega y Costos
               <ArrowRight className="w-4 h-4" />
@@ -370,9 +428,9 @@ export const ArgentinaCheckoutFlow: React.FC<ArgentinaCheckoutFlowProps> = ({
             </div>
           </div>
 
-          {/* Cost Breakdown */}
+          {/* Cost Breakdown & Customs Valuation */}
           <div className="bg-gray-800/60 border border-gray-700/60 rounded-xl p-5 space-y-3 text-xs">
-            <span className="text-sm font-semibold text-white block">Desglose de Costos Logísticos</span>
+            <span className="text-sm font-semibold text-white block">Desglose de Costos Logísticos y Aduaneros</span>
 
             <div className="space-y-1.5 text-gray-300">
               <div className="flex justify-between">
@@ -380,20 +438,28 @@ export const ArgentinaCheckoutFlow: React.FC<ArgentinaCheckoutFlowProps> = ({
                 <span className="font-mono text-white">USD {totalFobUsd.toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
-                <span>Flete Internacional ({totalWeightKg.toFixed(2)} kg × USD 19):</span>
+                <span>Flete Internacional ({totalWeightKg.toFixed(2)} kg × USD {tariffs.international_freight_usd_per_kg.toFixed(2)}/kg):</span>
                 <span className="font-mono text-white">USD {shippingCalculation.freight_usd.toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
-                <span>Logistic Pack Único (Zona {zone}):</span>
+                <span>Logistic Pack Único (Zona {zone} - Cargo fijo por envío):</span>
                 <span className="font-mono text-white">USD {shippingCalculation.logistic_pack_usd.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between">
-                <span>Aranceles Aduaneros (Franquicia Modalidad A):</span>
-                <span className="font-mono text-emerald-400">EXENTO</span>
+              <div className="flex justify-between pt-1 border-t border-gray-700/30 text-[11px] text-gray-400">
+                <span>Base Imponible Aduanera CIF (FOB + Flete):</span>
+                <span className="font-mono text-gray-300">USD {customsBaseUsd.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-[11px]">
+                <span className="text-emerald-400">Arancel Franquicia Modalidad A (hasta USD 400):</span>
+                <span className="font-mono text-emerald-400 font-bold">0% (EXENTO)</span>
+              </div>
+              <div className="flex justify-between text-[11px]">
+                <span className="text-gray-400">IVA Estimado Régimen Personal:</span>
+                <span className="font-mono text-emerald-400">INCLUIDO / EXENTO</span>
               </div>
               <div className="pt-2 border-t border-gray-700/60 flex justify-between font-bold text-sm text-white">
-                <span>Total a Pagar:</span>
-                <span className="text-amber-400">USD {finalTotalUsd.toFixed(2)}</span>
+                <span>Total Final a Pagar:</span>
+                <span className="text-amber-400 font-mono">USD {finalTotalUsd.toFixed(2)}</span>
               </div>
             </div>
           </div>

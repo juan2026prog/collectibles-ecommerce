@@ -34,6 +34,7 @@ const VendorStorefront = lazy(() => import('./pages/VendorStorefront'));
 const Cart = lazy(() => import('./pages/Cart'));
 const Checkout = lazy(() => import('./pages/Checkout'));
 const CheckoutSuccess = lazy(() => import('./pages/CheckoutSuccess'));
+const ArgentinaCheckoutPage = lazy(() => import('./pages/ArgentinaCheckoutPage').then(m => ({ default: m.ArgentinaCheckoutPage })));
 const MLCallback = lazy(() => import('./pages/MLCallback'));
 const VendorMLCallback = lazy(() => import('./pages/VendorMLCallback'));
 const Callback = lazy(() => import('./pages/Callback'));
@@ -203,6 +204,8 @@ function App() {
                     <Route path="/help" element={<Navigate to="/page/condiciones-de-compra" replace />} />
                     <Route path="/cart" element={<Cart />} />
                     <Route path="/checkout" element={<Checkout />} />
+                    <Route path="/checkout/ar" element={<ArgentinaCheckoutPage />} />
+                    <Route path="/checkout/argentina" element={<ArgentinaCheckoutPage />} />
                     <Route path="/checkout/success" element={<CheckoutSuccess />} />
                     <Route path="/auth/callback" element={<MLCallback />} />
                     <Route path="/vendor/ml/callback" element={<VendorMLCallback />} />

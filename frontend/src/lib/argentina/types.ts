@@ -50,6 +50,7 @@ export interface DeblexTariffConfig {
   max_weight_modalidad_a_kg: number;        // default 50.00
   max_units_per_species_modalidad_a: number;// default 3
   max_operations_per_year_modalidad_a: number; // default 5
+  is_modalidad_b_enabled?: boolean;         // default false ("Solicitar cotización para importación especial")
 }
 
 export interface MiamiCentralSuiteConfig {

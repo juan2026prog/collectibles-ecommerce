@@ -215,6 +215,25 @@ export const AdminArgentinaLogistics: React.FC<AdminArgentinaLogisticsProps> = (
             <span className="text-[10px] text-gray-500 mt-1 block">Máximo 5 operaciones</span>
           </div>
         </div>
+
+        {/* Modalidad B Commercial Courier Governance */}
+        <div className="pt-4 border-t border-gray-700/60 flex items-center justify-between">
+          <div>
+            <h4 className="text-xs font-semibold text-white">Modalidad B (Régimen General USD 400 - 3.000)</h4>
+            <p className="text-[11px] text-gray-400">
+              Cuando está desactivado, carritos con FOB &gt; USD 400 muestran &quot;Solicitar cotización para importación especial&quot; y no procesan cobro automático.
+            </p>
+          </div>
+          <label className="relative inline-flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={!!tariffs.is_modalidad_b_enabled}
+              onChange={e => setTariffs({ ...tariffs, is_modalidad_b_enabled: e.target.checked })}
+              className="sr-only peer"
+            />
+            <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+          </label>
+        </div>
       </div>
     </div>
   );
