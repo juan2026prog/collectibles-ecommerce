@@ -99,29 +99,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    // Fallback getSession check. Never leave auth initialization waiting on an unbounded promise.
-    Promise.race([
-      supabase.auth.getSession(),
-      new Promise<null>(resolve => window.setTimeout(() => resolve(null), 4000))
-    ]).then((result: any) => {
-      if (!result) {
-        // Cached profile can render admin while Supabase's listener continues recovering the live session.
-        if (cachedProfile) setLoading(false);
-        return;
+    // If onAuthStateChange does not fire INITIAL_SESSION within 2.5 seconds,
+    // safely check getSession as fallback without competing aggressively on navigator lock.
+    const fallbackTimer = window.setTimeout(() => {
+      if (!fetchedUserIdRef.current) {
+        supabase.auth.getSession().then((result: any) => {
+          const currentSession = result?.data?.session || null;
+          if (currentSession?.user && fetchedUserIdRef.current !== currentSession.user.id) {
+            setSession(currentSession);
+            setUser(currentSession.user);
+            fetchedUserIdRef.current = currentSession.user.id;
+            void fetchProfile(currentSession.user.id);
+          } else if (!currentSession?.user && !fetchedUserIdRef.current) {
+            setLoading(false);
+          }
+        }).catch((err) => {
+          console.warn('[AuthContext] getSession fallback caught error (non-fatal):', err?.message || err);
+          setLoading(false);
+        });
       }
-      const currentSession = result?.data?.session || null;
-      if (currentSession?.user && fetchedUserIdRef.current !== currentSession.user.id) {
-        setSession(currentSession);
-        setUser(currentSession.user);
-        fetchedUserIdRef.current = currentSession.user.id;
-        void fetchProfile(currentSession.user.id);
-      } else if (!currentSession?.user && !fetchedUserIdRef.current) {
-        setLoading(false);
-      }
-    }).catch(() => setLoading(false));
+    }, 2500);
 
     return () => {
       window.clearTimeout(authSafetyTimer);
+      window.clearTimeout(fallbackTimer);
       subscription.unsubscribe();
     };
   }, []);

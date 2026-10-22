@@ -20,6 +20,11 @@ export async function fetchPublicCatalog(filters: Record<string, unknown>, signa
         return data;
       }
 
+      if (mode === 'facets') {
+        const { data } = await PublicCatalogProvider.getPublicCatalogCompatible(cleanFilters);
+        return data;
+      }
+
       const { data } = await PublicCatalogProvider.getTaxonomies(
         filters.brand_id ? String(filters.brand_id) : undefined
       );
@@ -54,6 +59,27 @@ export async function fetchPublicCatalog(filters: Record<string, unknown>, signa
         throw err;
       }
       // Runtime kill-switch activated: fall through immediately to /api/public-catalog
+    }
+  }
+
+  // Protection against cascading 503/504 errors on Supabase:
+  // If the Worker is enabled for products/taxonomies, try Worker directly before hitting /api/public-catalog
+  if (PublicCatalogProvider.isDomainEnabled('products') || PublicCatalogProvider.isDomainEnabled('taxonomies')) {
+    try {
+      const cleanFilters: Record<string, string | number | boolean> = {};
+      Object.keys(filters).sort().forEach(key => {
+        const value = filters[key];
+        if (value !== undefined && value !== null && value !== '') {
+          cleanFilters[key] = typeof value === 'boolean' || typeof value === 'number' ? value : String(value);
+        }
+      });
+      const { data } = await PublicCatalogProvider.getPublicCatalogCompatible(cleanFilters);
+      if (data && (Array.isArray(data.products) || data.facets || (data as any).categories)) {
+        registerMediaVariants(data.image_variants || []);
+        return data;
+      }
+    } catch {
+      // If Worker also failed, continue to fallback endpoint
     }
   }
 

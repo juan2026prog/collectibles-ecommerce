@@ -170,7 +170,7 @@ function buildCorsHeaders(request: Request, env: Env): Record<string, string> {
   return {
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Catalog-Client, X-Sync-Timestamp, If-None-Match',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Catalog-Client, X-Sync-Timestamp, If-None-Match, X-Catalog-Session-Preview, X-Catalog-Preview',
     'Access-Control-Expose-Headers': 'X-Catalog-Mode, X-Catalog-Kill-Switch, X-Catalog-Cache, X-Catalog-Source',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',

@@ -1,3 +1,14 @@
+function getDomainForEndpoint(path: string): CatalogDomainFlag | null {
+  if (path.startsWith('/api/v1/products/') && path !== '/api/v1/products') return 'productDetail';
+  if (path.startsWith('/api/v1/products') || path.startsWith('/api/public-catalog')) return 'products';
+  if (path.startsWith('/api/v1/taxonomies') || path.startsWith('/api/v1/facets') || path.startsWith('/api/v1/banners')) return 'taxonomies';
+  if (path.startsWith('/api/v1/search')) return 'search';
+  if (path.startsWith('/api/v1/promotions')) return 'promotions';
+  if (path.startsWith('/api/v1/radar')) return 'radar';
+  if (path.startsWith('/api/v1/settings') || path.startsWith('/api/v1/runtime-config')) return 'settings';
+  return null;
+}
+
 /**
  * PublicCatalogProvider — Capa de Lectura Pública (Cloudflare Worker + D1 + Caché Local)
  *
@@ -437,7 +448,8 @@ export async function fetchFromCloudflareCatalog<T>(
         headers: {
           Accept: 'application/json',
           'X-Catalog-Client': 'collectibles-web-v1',
-          ...(runtimeState.domainOverrides && Object.values(runtimeState.domainOverrides).some(Boolean)
+          // Only attach session preview header if the specific domain has an explicit preview override
+          ...(getDomainForEndpoint(endpointPath) && runtimeState.domainOverrides?.[getDomainForEndpoint(endpointPath)!] === true
             ? { 'X-Catalog-Session-Preview': '1' }
             : {}),
         },
