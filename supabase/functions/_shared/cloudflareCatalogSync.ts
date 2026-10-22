@@ -195,7 +195,7 @@ export async function syncProductsToCloudflareD1(
     // 1. Consulta plana a productos locales (máx. 25 IDs)
     const { data: localProducts, error: prodErr } = await supabaseClient
       .from('products')
-      .select('id, slug, title, description, short_description, base_price, compare_at_price, status, is_active, condition, category_id, brand_id, license_id, vendor_id, vendor_store_id, created_at, updated_at')
+      .select('id, slug, title, description, short_description, base_price, compare_at_price, status, is_active, condition, category_id, brand_id, license_id, vendor_id, vendor_store_id, is_featured, badge, created_at, updated_at')
       .in('id', cleanIds.slice(0, 25));
 
     // Identificar IDs que no estaban en products y buscar en international_products
@@ -299,6 +299,8 @@ export async function syncProductsToCloudflareD1(
         stock: totalStock,
         stock_status: totalStock > 0 ? 'in_stock' : 'out_of_stock',
         availability_type: totalStock > 0 ? 'immediate' : 'out_of_stock',
+        is_featured: Boolean(p.is_featured),
+        is_new_arrival: Boolean(p.is_new_arrival || p.badge === 'new'),
         primary_image_url: primaryImg,
         images: prodImages,
         variants: activeVariants,
