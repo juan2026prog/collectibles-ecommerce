@@ -177,7 +177,7 @@ export const ArgentinaCheckoutFlow: React.FC<ArgentinaCheckoutFlowProps> = ({
         <div>
           <div className="mb-1 flex items-center gap-2 text-amber-400"><ShoppingBag size={18}/><span className="text-xs font-semibold uppercase tracking-wider">Collectibles Argentina</span></div>
           <h1 className="text-2xl font-bold text-white">Finalizar compra</h1>
-          <p className="mt-1 text-sm text-slate-400">Completá tus datos y revisá el costo de importación.</p>
+          <p className="mt-1 text-sm text-slate-400">Completá tus datos y revisá el resumen de tu compra.</p>
         </div>
         <span className="rounded-full border border-sky-700 bg-sky-950 px-3 py-1.5 text-xs font-medium text-sky-200">Vista previa · Pagos desactivados</span>
       </div>
@@ -270,17 +270,21 @@ export const ArgentinaCheckoutFlow: React.FC<ArgentinaCheckoutFlowProps> = ({
           </section>
 
           <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-5 sm:p-6">
-            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold"><span className="text-amber-400">03</span> Importación con Deblex</h2>
+            <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold"><span className="text-amber-400">03</span> Envío y entrega</h2>
             <div className="mb-4 flex items-center gap-3 rounded-lg border border-slate-700 bg-slate-950/60 p-3">
               <Truck className="shrink-0 text-amber-400" size={21}/>
-              <div><p className="text-sm font-semibold">Pequeño Envío · Hasta USD 400 FOB</p><p className="text-xs text-slate-400">Hasta 50 kg por envío · Hasta 3 unidades de una misma especie · 5 envíos anuales por persona</p></div>
+              <div><p className="text-sm font-semibold">Envíos Collectibles · Entrega a domicilio</p><p className="text-xs text-slate-400">Coordinamos el envío internacional hasta tu domicilio en Argentina.</p></div>
             </div>
             <div className="space-y-3 text-sm text-slate-300">
-              <label className="flex cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1 accent-amber-400" checked={personalUseAccepted} onChange={e => setPersonalUseAccepted(e.target.checked)}/><span>Declaro que los productos son para uso personal y no tienen finalidad comercial.</span></label>
-              <label className="flex cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1 accent-amber-400" checked={quotaDeclared} onChange={e => setQuotaDeclared(e.target.checked)}/><span>Declaro que cuento con cupo disponible dentro de los 5 envíos anuales. El cupo oficial deberá verificarse.</span></label>
-              <label className="flex cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1 accent-amber-400" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)}/><span>Acepto las condiciones de compra, importación y privacidad aplicables.</span></label>
+              <label className="flex cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1 accent-amber-400" checked={personalUseAccepted} onChange={e => setPersonalUseAccepted(e.target.checked)}/><span>Confirmo que los productos son para uso personal.</span></label>
+              <label className="flex cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1 accent-amber-400" checked={quotaDeclared} onChange={e => setQuotaDeclared(e.target.checked)}/><span>Confirmo que dispongo de cupo para importar.</span></label>
+              <label className="flex cursor-pointer items-start gap-3"><input type="checkbox" className="mt-1 accent-amber-400" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)}/><span>Acepto las condiciones de compra e importación y la política de privacidad.</span></label>
             </div>
-            <p className="mt-4 text-xs text-slate-400">Plazo orientativo Deblex: 4 a 7 días hábiles desde la recepción en depósito, sujeto a confirmación. Los envíos reales todavía no están habilitados.</p>
+            <details className="mt-4 rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-400">
+              <summary className="cursor-pointer font-medium text-slate-200">Condiciones de importación y entrega</summary>
+              <p className="mt-2 leading-relaxed">Régimen de Pequeño Envío: hasta USD 400 de mercadería, 50 kg por envío, 3 unidades de una misma especie y hasta 5 operaciones anuales por destinatario. El cupo y los requisitos legales deberán verificarse.</p>
+              <p className="mt-2">Operador logístico: Deblex. Entrega orientativa: 4 a 7 días hábiles desde la recepción en depósito, sujeto a confirmación. El pago y los envíos reales siguen desactivados.</p>
+            </details>
           </section>
         </div>
 
@@ -295,21 +299,30 @@ export const ArgentinaCheckoutFlow: React.FC<ArgentinaCheckoutFlowProps> = ({
               </div>)}
             </div>
             <div className="space-y-1 border-t border-slate-700 px-5 py-4">
-              {amountRow('Productos (FOB)', money(totalFobUsd))}
-              {amountRow('Flete internacional · 19 USD/kg', money(logistics.freight_usd))}
-              {amountRow('Logistic Pack fijo · ' + zone, money(logistics.logistic_pack_usd))}
-              <div className="my-2 border-t border-slate-800"/>
-              {amountRow('Base CIF simplificada (orientativa)', money(customsBase))}
-              <label className="flex items-center justify-between gap-3 py-1.5 text-sm"><span className="text-slate-400">IVA de importación (estimado)</span><select className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-white" value={vatRate} onChange={e=>setVatRate(Number(e.target.value) as 21 | 10.5)}><option value={21}>21%</option><option value={10.5}>10,5%</option></select><strong className="tabular-nums">{money(estimatedVat)}</strong></label>
-              {amountRow('Derechos y tasa estadística (franquicia)', 'USD 0,00')}
+              {amountRow('Productos', money(totalFobUsd))}
+              {amountRow('Envío a domicilio (estimado)', money(logistics.total_logistics_usd))}
+              {amountRow('Impuestos estimados', money(estimatedVat))}
+              <details className="mt-3 rounded-lg border border-slate-700 p-3 text-xs text-slate-300">
+                <summary className="cursor-pointer font-medium">Ver detalle de envío e impuestos</summary>
+                <div className="mt-3 space-y-1">
+                  {amountRow('Flete internacional', money(logistics.freight_usd))}
+                  {amountRow('Gestión logística y entrega', money(logistics.logistic_pack_usd))}
+                  {amountRow('Base aduanera simplificada (estimada)', money(customsBase))}
+                  <label className="flex items-center justify-between gap-2 py-2">
+                    <span>Alícuota ilustrativa de IVA (no verificada por producto)</span>
+                    <select className="rounded border border-slate-600 bg-slate-950 px-2 py-1 text-white" value={vatRate} onChange={e => setVatRate(Number(e.target.value) as 21 | 10.5)}><option value={21}>21%</option><option value={10.5}>10,5%</option></select>
+                  </label>
+                  {amountRow('Derechos y tasa estadística (franquicia estimada)', 'USD 0,00')}
+                </div>
+              </details>
             </div>
             <div className="border-t border-slate-700 bg-slate-950/70 p-5">
-              <div className="mb-2 flex items-center justify-between gap-2"><span className="font-semibold">Total orientativo</span><strong className="text-2xl font-bold text-amber-400 tabular-nums">{money(indicativeTotal)}</strong></div>
-              <p className="mb-4 text-xs leading-relaxed text-slate-400">El IVA es una estimación sobre FOB + flete, sin seguro ni ajustes aduaneros. La tasa aplicable y liquidación definitiva requieren validación de Deblex. No es un importe final garantizado.</p>
+              <div className="mb-2 flex items-center justify-between gap-2"><span className="font-semibold">Total estimado</span><strong className="text-2xl font-bold text-amber-400 tabular-nums">{money(indicativeTotal)}</strong></div>
+              <p className="mb-4 text-xs leading-relaxed text-slate-400">Los impuestos y el envío son estimados. El total definitivo se confirmará antes de habilitar compras.</p>
               {(exceedsWeight || exceedsFob || exceedsSpecies || needsSpeciesReview || hasInvalidItems) && <div role="alert" className="mb-4 flex gap-2 rounded-lg border border-red-800 bg-red-950/50 p-3 text-xs text-red-200"><AlertCircle size={16} className="shrink-0"/><span>{hasInvalidItems ? 'Faltan datos válidos de producto o peso.' : exceedsWeight ? 'Tu envío supera el límite de 50 kg permitido por Deblex.' : exceedsFob ? 'Supera USD 400 FOB. Requiere cotización especial; modalidad B no habilitada.' : needsSpeciesReview ? 'Falta clasificar la especie de un producto.' : 'Supera las 3 unidades de una misma especie.'}</span></div>}
-              {!dataReady && <p className="mb-3 text-xs text-slate-400">Completá los datos y seleccioná una calle sugerida. La verificación postal y Deblex será obligatoria al habilitar pagos.</p>}
-              <div className="mb-3 flex items-center gap-2 text-xs text-sky-300"><LockKeyhole size={15}/> Esperando integración con dLocal Go</div>
-              <button type="button" disabled aria-disabled="true" className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-3.5 text-sm font-bold text-slate-950 opacity-60"><CreditCard size={17}/> Pagar con dLocal Go — Próximamente</button>
+              {!dataReady && <p className="mb-3 text-xs text-slate-400">Completá tus datos de entrega para continuar cuando habilitemos las compras.</p>}
+              <div className="mb-3 flex items-center gap-2 text-xs text-sky-300"><LockKeyhole size={15}/> Pagos seguros: integración en preparación</div>
+              <button type="button" disabled aria-disabled="true" className="flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-3.5 text-sm font-bold text-slate-950 opacity-60"><CreditCard size={17}/> Pagar — Próximamente</button>
               <p className="mt-3 flex items-start gap-2 text-xs leading-relaxed text-slate-400"><ShieldCheck size={15} className="shrink-0 text-slate-500"/> No se generan cobros, pedidos reales, envíos ni consumos de franquicia desde esta pantalla.</p>
             </div>
           </div>
