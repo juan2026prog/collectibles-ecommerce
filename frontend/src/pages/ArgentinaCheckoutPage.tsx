@@ -106,7 +106,7 @@ export const ArgentinaCheckoutPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 pt-8 pb-16 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* Navigation Breadcrumb */}
         <div className="flex items-center justify-between">
           <Link
