@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ShoppingBag, Truck, CreditCard, ShieldCheck, AlertCircle, Info, LockKeyhole, PackageCheck } from 'lucide-react';
 import { validateArgentineTaxId } from '../../lib/argentina/taxIdValidator';
 import { resolveArgentinaZone, calculateDeblexShipping, DEFAULT_DEBLEX_TARIFFS } from '../../lib/argentina/pricingEngine';
@@ -20,6 +20,21 @@ interface ArgentinaCheckoutFlowProps {
   tariffs?: DeblexTariffConfig;
 }
 
+
+// Official Argentine Georef territory lists. Fail closed: never substitute invented locations.
+interface GeoEntity { id: string; nombre: string }
+const GEOREF_BASE = 'https://apis.datos.gob.ar/georef/api/v2.0';
+async function georefList(kind: 'provincias' | 'departamentos' | 'localidades', parent?: string): Promise<GeoEntity[]> {
+  const q = new URLSearchParams({ max: '5000', orden: 'nombre' });
+  if (parent) q.set(kind === 'departamentos' ? 'provincia' : 'departamento', parent);
+  const response = await fetch(`${GEOREF_BASE}/${kind}?${q.toString()}`);
+  if (!response.ok) throw new Error('No se pudieron cargar los datos oficiales de ubicación.');
+  const body = await response.json();
+  const records = body[kind];
+  if (!Array.isArray(records)) throw new Error('Respuesta geográfica inválida.');
+  return records.map((x: any) => ({ id: String(x.id), nombre: String(x.nombre) }));
+}
+
 const money = (n: number) => 'USD ' + n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const inputClass = 'w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-white outline-none focus:border-amber-400';
 const fieldLabel = 'mb-1.5 block text-xs font-medium text-slate-300';
@@ -33,7 +48,15 @@ export const ArgentinaCheckoutFlow: React.FC<ArgentinaCheckoutFlowProps> = ({
   const [docNumber, setDocNumber] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [province, setProvince] = useState('Ciudad Autónoma de Buenos Aires');
+  const [province, setProvince] = useState('');
+  const [provinceId, setProvinceId] = useState('');
+  const [department, setDepartment] = useState('');
+  const [departmentId, setDepartmentId] = useState('');
+  const [provinces, setProvinces] = useState<GeoEntity[]>([]);
+  const [departments, setDepartments] = useState<GeoEntity[]>([]);
+  const [localities, setLocalities] = useState<GeoEntity[]>([]);
+  const [locationBusy, setLocationBusy] = useState(false);
+  const [locationError, setLocationError] = useState('');
   const [city, setCity] = useState('');
   const [postalCode, setPostalCode] = useState('');
   const [street, setStreet] = useState('');
@@ -43,6 +66,32 @@ export const ArgentinaCheckoutFlow: React.FC<ArgentinaCheckoutFlowProps> = ({
   const [personalUseAccepted, setPersonalUseAccepted] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [vatRate, setVatRate] = useState<21 | 10.5>(21);
+  useEffect(() => {
+    let active = true;
+    setLocationBusy(true);
+    georefList('provincias').then(data => { if (active) setProvinces(data); })
+      .catch(() => { if (active) setLocationError('No pudimos cargar las provincias. Reintentá más tarde.'); })
+      .finally(() => { if (active) setLocationBusy(false); });
+    return () => { active = false; };
+  }, []);
+  useEffect(() => {
+    if (!provinceId) { setDepartments([]); return; }
+    let active = true;
+    setLocationBusy(true); setLocationError('');
+    georefList('departamentos', provinceId).then(data => { if (active) setDepartments(data); })
+      .catch(() => { if (active) setLocationError('No se pudieron cargar los partidos/departamentos.'); })
+      .finally(() => { if (active) setLocationBusy(false); });
+    return () => { active = false; };
+  }, [provinceId]);
+  useEffect(() => {
+    if (!departmentId) { setLocalities([]); return; }
+    let active = true;
+    setLocationBusy(true); setLocationError('');
+    georefList('localidades', departmentId).then(data => { if (active) setLocalities(data); })
+      .catch(() => { if (active) setLocationError('No se pudieron cargar las localidades.'); })
+      .finally(() => { if (active) setLocationBusy(false); });
+    return () => { active = false; };
+  }, [departmentId]);
 
   const totalFobUsd = Number(items.reduce((s, p) => s + p.price_usd * p.quantity, 0).toFixed(2));
   const totalWeightKg = Number(items.reduce((s, p) => s + p.weight_kg * p.quantity, 0).toFixed(3));
@@ -68,7 +117,7 @@ export const ArgentinaCheckoutFlow: React.FC<ArgentinaCheckoutFlowProps> = ({
   const estimatedVat = Number((customsBase * vatRate / 100).toFixed(2));
   const indicativeTotal = Number((totalFobUsd + logistics.total_logistics_usd + estimatedVat).toFixed(2));
   const taxId = validateArgentineTaxId(docNumber, docType);
-  const dataReady = !!(firstName.trim() && lastName.trim() && email.includes('@') && phone.trim() &&
+  const dataReady = !!(provinceId && departmentId && !locationError && firstName.trim() && lastName.trim() && email.includes('@') && phone.trim() &&
     taxId.is_valid_format && city.trim() && postalCode.trim() && street.trim() && streetNumber.trim());
   const field = (label: string, value: string, setter: (s: string) => void, placeholder = '', type = 'text') => (
     <label className="block"><span className={fieldLabel}>{label}</span><input className={inputClass} type={type}
@@ -115,16 +164,42 @@ export const ArgentinaCheckoutFlow: React.FC<ArgentinaCheckoutFlowProps> = ({
             <h2 className="mb-5 flex items-center gap-2 text-lg font-semibold"><span className="text-amber-400">02</span> Dirección de entrega</h2>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <label className="block"><span className={fieldLabel}>Provincia *</span>
-                <select value={province} onChange={e => setProvince(e.target.value)} className={inputClass}>
-                  {['Ciudad Autónoma de Buenos Aires','Buenos Aires','Córdoba','Santa Fe','Mendoza','Entre Ríos','Tucumán','Otras Provincias'].map(p => <option key={p} value={p}>{p}</option>)}
+                <select value={provinceId} className={inputClass} disabled={locationBusy && !provinces.length}
+                  onChange={e => {
+                    const id=e.target.value;
+                    setProvinceId(id); setProvince(provinces.find(p=>p.id===id)?.nombre || '');
+                    setDepartmentId(''); setDepartment(''); setCity(''); setLocalities([]); setDepartments([]);
+                  }}>
+                  <option value="">Seleccioná una provincia</option>
+                  {provinces.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
                 </select>
               </label>
-              {field('Localidad / partido *', city, setCity, 'Localidad')}
-              {field('Código postal *', postalCode, setPostalCode, 'C1425')}
+              <label className="block"><span className={fieldLabel}>Partido / Departamento *</span>
+                <select value={departmentId} className={inputClass} disabled={!provinceId || locationBusy}
+                  onChange={e => {
+                    const id=e.target.value;
+                    setDepartmentId(id); setDepartment(departments.find(p=>p.id===id)?.nombre || '');
+                    setCity(''); setLocalities([]);
+                  }}>
+                  <option value="">Seleccioná un partido o departamento</option>
+                  {departments.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+                </select>
+              </label>
+              <label className="block"><span className={fieldLabel}>Localidad *</span>
+                <select value={city} className={inputClass} disabled={!departmentId || locationBusy}
+                  onChange={e => setCity(e.target.value)}>
+                  <option value="">Seleccioná una localidad</option>
+                  {localities.map(p=><option key={p.id} value={p.nombre}>{p.nombre}</option>)}
+                </select>
+              </label>
+              {field('Código postal (CPA) *', postalCode, setPostalCode, 'C1425ABC')}
               {field('Calle *', street, setStreet, 'Nombre de calle')}
               {field('Número *', streetNumber, setStreetNumber, '1234')}
               {field('Piso / departamento', floorApt, setFloorApt, 'Opcional')}
             </div>
+            {locationBusy && <p className="mt-3 text-xs text-sky-300">Cargando ubicaciones oficiales…</p>}
+            {locationError && <p role="alert" className="mt-3 text-xs text-red-300">{locationError}</p>}
+            <p className="mt-3 text-xs text-slate-400">El CPA y la cobertura Deblex deben verificarse antes de confirmar un envío.</p>
             <div className="mt-4 flex items-start gap-2 rounded-lg border border-sky-900 bg-sky-950/40 p-3 text-xs text-sky-200">
               <Info size={15} className="mt-0.5 shrink-0"/><span>Zona estimada: <strong>{zone === 'INTERIOR' ? 'Interior' : zone}</strong>. La cobertura y el código postal requieren confirmación de Deblex antes de cobrar.</span>
             </div>
