@@ -25,6 +25,7 @@ export const DeblexUserManagement: React.FC<DeblexUserManagementProps> = ({
   const [newEmail, setNewEmail] = useState('');
   const [newRole, setNewRole] = useState<'deblex_operator' | 'deblex_admin'>('deblex_operator');
   const [isCreating, setIsCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Core business rule: Max 8 Deblex accounts in total (2 initial admins + max 6 operators)
@@ -85,6 +86,26 @@ export const DeblexUserManagement: React.FC<DeblexUserManagementProps> = ({
       await onRefreshUsers();
     } catch (err: any) {
       setStatusMessage({ type: 'error', text: err.message || 'Error al cambiar estado' });
+    }
+  };
+
+  const handleDeletePortalAccess = async (user: DeblexUserItem) => {
+    if (user.email.toLowerCase() === currentUserEmail?.toLowerCase()) return;
+    const confirmed = window.confirm(`¿Eliminar el acceso al portal Deblex de ${user.email}? Esta acción quitará su permiso logístico, pero conservará su cuenta general de Collectibles si la tiene.`);
+    if (!confirmed) return;
+    setDeletingId(user.id);
+    setStatusMessage(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('deblex-remove-user', {
+        body: { portal_user_id: user.id, email: user.email },
+      });
+      if (error || data?.error || !data?.success) throw new Error(data?.error || error?.message || 'No se pudo eliminar el usuario.');
+      await onRefreshUsers();
+      setStatusMessage({ type: 'success', text: `Acceso al portal eliminado para ${user.email}.` });
+    } catch (err: any) {
+      setStatusMessage({ type: 'error', text: err.message || 'No se pudo eliminar el usuario.' });
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -270,6 +291,14 @@ export const DeblexUserManagement: React.FC<DeblexUserManagementProps> = ({
                             }`}
                           >
                             {u.is_active ? 'Suspender' : 'Reactivar'}
+                          </button>
+                        )}
+                        {!isCurrent && (
+                          <button type="button"
+                            disabled={deletingId === u.id}
+                            onClick={() => handleDeletePortalAccess(u)}
+                            className="ml-2 px-2 py-0.5 text-[10px] font-semibold rounded border border-red-300 text-red-700 hover:bg-red-50 disabled:opacity-50">
+                            {deletingId === u.id ? 'Eliminando…' : 'Eliminar'}
                           </button>
                         )}
                       </td>
