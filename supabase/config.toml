@@ -1,3 +1,11 @@
+[functions.mercadopago-webhook]
+enabled = true
+verify_jwt = false
+
+[functions.handy-webhook]
+enabled = true
+verify_jwt = false
+
 [functions.dlocalgo-webhook]
 enabled = true
 verify_jwt = true

@@ -407,6 +407,59 @@ serve(async (req: Request) => {
         })
         .eq("id", orderId);
 
+      // Financial traceability: Record payment_attempt & payment_event for Mercado Pago
+      try {
+        const { data: existingAttempts } = await supabaseAdmin
+          .from("payment_attempts")
+          .select("attempt_number")
+          .eq("order_id", orderId);
+
+        const attemptNumber = (existingAttempts && existingAttempts.length > 0)
+          ? Math.max(...existingAttempts.map((a: any) => a.attempt_number)) + 1
+          : 1;
+
+        const { data: attempt } = await supabaseAdmin
+          .from("payment_attempts")
+          .insert({
+            order_id: orderId,
+            user_id: order.customer_id,
+            provider: "mercadopago",
+            payment_method_type: "mercadopago",
+            attempt_number: attemptNumber,
+            amount: amount,
+            currency: currency,
+            normalized_status: "initiated",
+            provider_status: "redirected",
+            external_preference_id: mpResult.id,
+            initiated_at: new Date().toISOString(),
+            metadata: { preference_id: mpResult.id, checkout_url: checkoutUrl }
+          })
+          .select()
+          .single();
+
+        await supabaseAdmin.from("payment_events").insert({
+          order_id: orderId,
+          payment_attempt_id: attempt?.id,
+          provider: "mercadopago",
+          event_type: "preference_created",
+          normalized_status: "initiated",
+          provider_status: "redirected",
+          source: "checkout",
+          payload_sanitized: { preference_id: mpResult.id },
+          processing_result: "Preferencia de Mercado Pago generada exitosamente",
+          occurred_at: new Date().toISOString()
+        });
+
+        if (attempt?.id) {
+          await supabaseAdmin
+            .from("orders")
+            .update({ last_payment_attempt_id: attempt.id })
+            .eq("id", orderId);
+        }
+      } catch (traceErr: any) {
+        console.warn("[create-payment] Non-blocking payment_attempts tracing warning:", traceErr?.message);
+      }
+
       return new Response(JSON.stringify({ checkout_url: checkoutUrl }), {
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
       });

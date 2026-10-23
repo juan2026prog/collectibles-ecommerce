@@ -42,7 +42,13 @@ async function verifyMPSignature(
 
   // Build the manifest string
   // Format: id:{data.id};request-id:{x-request-id};ts:{ts};
-  const dataId = body?.data?.id;
+  // MP may place id in body.data.id, body.id, or url query parameter "id" / "data.id"
+  const reqUrl = new URL(req.url);
+  const dataId = body?.data?.id || body?.id || reqUrl.searchParams.get("data.id") || reqUrl.searchParams.get("id");
+  if (!dataId) {
+    console.warn("[MP Webhook] Missing payment data.id for signature manifest");
+    return false;
+  }
   const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
 
   // Generate HMAC-SHA256
@@ -82,25 +88,24 @@ Deno.serve(async (req: Request) => {
 
     // ══════════════════════════════════════════════════════════
     // SEC-HIGH-01: Signature verification
-    // If a webhook secret is configured, verify the signature.
-    // If not configured, log a warning but still process 
-    // (backwards compat + existing API verification provides partial protection)
     // ══════════════════════════════════════════════════════════
     const webhookSecret = Deno.env.get("MERCADOPAGO_WEBHOOK_SECRET");
     
-    if (webhookSecret) {
-      const isValid = await verifyMPSignature(req, body, webhookSecret);
-      if (!isValid) {
-        console.error("🚨 [MP Webhook] INVALID SIGNATURE — potential forgery attempt blocked");
-        // Return 200 to prevent MP from retrying, but don't process
-        return new Response(JSON.stringify({ received: true, error: "Invalid signature" }), {
-          status: 200, headers: responseHeaders
-        });
-      }
-      console.log("✅ [MP Webhook] Signature verified successfully");
-    } else {
-      console.warn("⚠️ [MP Webhook] No MERCADOPAGO_WEBHOOK_SECRET configured — signature verification skipped. Set this secret for production security.");
+    if (!webhookSecret) {
+      console.error("🚨 [MP Webhook] CRITICAL SECURITY GATE: MERCADOPAGO_WEBHOOK_SECRET is not configured. Rejecting webhook request.");
+      return new Response(JSON.stringify({ error: "Webhook secret not configured on server" }), {
+        status: 500, headers: responseHeaders
+      });
     }
+
+    const isValid = await verifyMPSignature(req, body, webhookSecret);
+    if (!isValid) {
+      console.error("🚨 [MP Webhook] INVALID SIGNATURE — potential forgery attempt blocked");
+      return new Response(JSON.stringify({ error: "Invalid signature" }), {
+        status: 401, headers: responseHeaders
+      });
+    }
+    console.log("✅ [MP Webhook] Signature verified successfully");
 
     let paymentId: string | null = null;
     let topic: string | null = null;
@@ -252,8 +257,19 @@ Deno.serve(async (req: Request) => {
         })
         .eq("id", orderId);
 
-      // Check order current status + idempotency
-      const { data: order } = await supabaseAdmin.from('orders').select('status, payment_processed_at').eq('id', orderId).single();
+      // Check order current status, currency, total amount + idempotency
+      const { data: order } = await supabaseAdmin
+        .from('orders')
+        .select('status, payment_processed_at, total_amount, currency')
+        .eq('id', orderId)
+        .single();
+
+      if (!order) {
+        console.error(`🚨 [MP Webhook] Order ${orderId} not found in database.`);
+        return new Response(JSON.stringify({ received: true, error: "Order not found" }), {
+          headers: responseHeaders
+        });
+      }
       
       // APPROVED STATUS
       if (paymentData.status === "approved" || paymentData.status === "authorized") {
@@ -261,6 +277,27 @@ Deno.serve(async (req: Request) => {
         if (order?.payment_processed_at) {
           console.log(`⚠️ Order ${orderId} already processed. Skipping duplicate MP webhook.`);
           return new Response(JSON.stringify({ received: true, skipped: true }), {
+            headers: responseHeaders
+          });
+        }
+
+        // STRICT FINANCIAL INTEGRITY VALIDATION: Verify Amount and Currency
+        const paidAmount = Number(paymentData.transaction_amount || 0);
+        const orderAmount = Number(order.total_amount || 0);
+        const paidCurrency = String(paymentData.currency_id || "").toUpperCase();
+        const expectedCurrency = String(order.currency || "UYU").toUpperCase();
+
+        if (paidCurrency !== expectedCurrency) {
+          console.error(`🚨 [MP Webhook] CURRENCY MISMATCH for order ${orderId}: expected ${expectedCurrency}, received ${paidCurrency}`);
+          return new Response(JSON.stringify({ received: true, error: "Currency mismatch" }), {
+            headers: responseHeaders
+          });
+        }
+
+        // Allow at most 1 unit tolerance for minor rounding adjustments if applicable
+        if (Math.abs(paidAmount - orderAmount) > 1.0) {
+          console.error(`🚨 [MP Webhook] AMOUNT MISMATCH for order ${orderId}: expected ${orderAmount}, received ${paidAmount}`);
+          return new Response(JSON.stringify({ received: true, error: "Amount mismatch" }), {
             headers: responseHeaders
           });
         }

@@ -18,9 +18,9 @@ Deno.serve(async (req: Request) => {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     // 1. Webhook signature/secret verification
-    const handySecret = Deno.env.get("HANDY_WEBHOOK_SECRET");
+    const handySecret = (Deno.env.get("HANDY_WEBHOOK_SECRET") || Deno.env.get("HANDY_MERCHANT_SECRET_KEY") || "").trim();
     if (handySecret) {
-      const authHeader = req.headers.get("x-handy-secret") || req.headers.get("x-handy-signature") || "";
+      const authHeader = req.headers.get("x-handy-secret") || req.headers.get("x-handy-signature") || req.headers.get("merchant-secret-key") || "";
       const urlObj = new URL(req.url);
       const querySecret = urlObj.searchParams.get("secret") || urlObj.searchParams.get("token") || "";
       if (authHeader !== handySecret && querySecret !== handySecret) {
@@ -30,6 +30,12 @@ Deno.serve(async (req: Request) => {
           headers: responseHeaders,
         });
       }
+    } else {
+      console.error("🚨 [Handy Webhook] CRITICAL SECURITY GATE: HANDY_WEBHOOK_SECRET or HANDY_MERCHANT_SECRET_KEY is not configured.");
+      return new Response(JSON.stringify({ error: "Handy webhook authentication not configured" }), {
+        status: 500,
+        headers: responseHeaders,
+      });
     }
 
     const rawBody = await req.text();
@@ -71,6 +77,65 @@ Deno.serve(async (req: Request) => {
         status: 200,
         headers: responseHeaders,
       });
+    }
+
+    // STRICT FINANCIAL INTEGRITY VALIDATION: Verify Amount and Currency against order
+    if (webhookData.mappedStatus === "approved") {
+      const { data: orderRecord } = await supabaseAdmin
+        .from("orders")
+        .select("total_amount, currency, status, payment_processed_at")
+        .eq("id", payment.order_id)
+        .single();
+
+      if (!orderRecord) {
+        console.error(`🚨 [Handy Webhook] Order ${payment.order_id} not found in database.`);
+        return new Response(JSON.stringify({ received: true, error: "Order not found" }), {
+          status: 200,
+          headers: responseHeaders,
+        });
+      }
+
+      const receivedAmount = Number(getFirstValue(payload, [
+        "Amount",
+        "amount",
+        "TotalAmount",
+        "totalAmount",
+        "PurchaseData.Amount",
+        "purchaseData.amount",
+        "Cart.TotalAmount",
+        "cart.totalAmount"
+      ]) || payment.amount || 0);
+
+      const orderAmount = Number(orderRecord.total_amount || 0);
+      const expectedCurrency = String(orderRecord.currency || "UYU").toUpperCase();
+      const expectedHandyCurrencyCode = expectedCurrency === "USD" ? 840 : 858;
+
+      const receivedCurrency = Number(getFirstValue(payload, [
+        "Currency",
+        "currency",
+        "CurrencyCode",
+        "currencyCode",
+        "PurchaseData.Currency",
+        "purchaseData.currency",
+        "Cart.Currency",
+        "cart.currency"
+      ]) || 858);
+
+      if (receivedCurrency && receivedCurrency !== expectedHandyCurrencyCode) {
+        console.error(`🚨 [Handy Webhook] CURRENCY MISMATCH for order ${payment.order_id}: expected code ${expectedHandyCurrencyCode}, received ${receivedCurrency}`);
+        return new Response(JSON.stringify({ received: true, error: "Currency mismatch" }), {
+          status: 200,
+          headers: responseHeaders,
+        });
+      }
+
+      if (receivedAmount && Math.abs(receivedAmount - orderAmount) > 1.0) {
+        console.error(`🚨 [Handy Webhook] AMOUNT MISMATCH for order ${payment.order_id}: expected ${orderAmount}, received ${receivedAmount}`);
+        return new Response(JSON.stringify({ received: true, error: "Amount mismatch" }), {
+          status: 200,
+          headers: responseHeaders,
+        });
+      }
     }
 
     const paymentUpdate: Record<string, any> = {
