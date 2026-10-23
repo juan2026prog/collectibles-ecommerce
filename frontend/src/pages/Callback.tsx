@@ -34,11 +34,12 @@ export default function Callback() {
       const { data, error } = await supabase.functions.invoke('mercadolibre-auth', {
         body: { 
           code: authCode,
-          redirect_uri: redirectUri
+          redirect_uri: redirectUri,
+          is_admin_connection: true
         }
       });
 
-      if (error) throw error;
+      if (error) { const serverError = data?.error || error.message; throw new Error(serverError); }
       if (data.error) throw new Error(data.error);
 
       setStatus('success');

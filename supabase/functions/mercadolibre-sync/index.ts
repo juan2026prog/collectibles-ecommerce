@@ -34,6 +34,11 @@ async function getValidMercadoLibreToken(supabase: any, sellerId?: string, fetch
   // 1. Check if token expired and refresh if necessary
   if (currentExpiresAt && new Date(currentExpiresAt) <= new Date()) {
     // Token expired, refresh
+    if (!currentRefreshToken) {
+      console.warn(`[ML Auth] No refresh token available for account ${data.seller_id || data.id}. Reconnection required.`);
+      throw new Error("Mercado Libre token expired and no refresh token available. Por favor reconecta la cuenta.");
+    }
+
     const params = new URLSearchParams({
       grant_type: "refresh_token",
       client_id: ML_CLIENT_ID,
@@ -59,6 +64,8 @@ async function getValidMercadoLibreToken(supabase: any, sellerId?: string, fetch
            updated_at: new Date().toISOString()
        }).eq('id', data.id);
     } else {
+       const errData = await res.json().catch(() => ({}));
+       console.error(`[ML Auth] Token refresh failed for seller ${data.seller_id}:`, errData.message || errData.error || res.status);
        throw new Error("Mercado Libre token refresh failed. Por favor reconecta la cuenta.");
     }
   }
@@ -664,6 +671,33 @@ Deno.serve(async (req) => {
         }));
 
         return allItems.map((it: any) => ({ ...it, category_name: catNameMap[it.category_id] || null }));
+    }
+
+    // ═══ ACTION: VERIFY CREDENTIALS / STATUS PING ═══
+    if (action === 'verify_credentials' || action === 'status') {
+        const testRes = await customFetch("https://api.mercadolibre.com/users/me", { headers });
+        if (!testRes.ok) {
+          const errBody = await testRes.json().catch(() => ({}));
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: errBody.message || "No se pudo autenticar con Mercado Libre. Por favor reconecta la cuenta.",
+              details: errBody
+            }),
+            { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 200 }
+          );
+        }
+        const me = await testRes.json();
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            connected: true,
+            seller_id: me.id?.toString(),
+            nickname: me.nickname,
+            site_id: me.site_id
+          }),
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" } }
+        );
     }
 
     // ═══ ACTION: GET SHIPPING ONBOARDING ═══
