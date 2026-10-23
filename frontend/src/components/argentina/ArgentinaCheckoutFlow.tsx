@@ -68,7 +68,6 @@ export const ArgentinaCheckoutFlow: React.FC<ArgentinaCheckoutFlowProps> = ({
   const estimatedVat = Number((customsBase * vatRate / 100).toFixed(2));
   const indicativeTotal = Number((totalFobUsd + logistics.total_logistics_usd + estimatedVat).toFixed(2));
   const taxId = validateArgentineTaxId(docNumber, docType);
-  const eligible = !hasInvalidItems && !exceedsFob && !exceedsWeight && !exceedsSpecies && !needsSpeciesReview;
   const dataReady = !!(firstName.trim() && lastName.trim() && email.includes('@') && phone.trim() &&
     taxId.is_valid_format && city.trim() && postalCode.trim() && street.trim() && streetNumber.trim());
   const field = (label: string, value: string, setter: (s: string) => void, placeholder = '', type = 'text') => (
