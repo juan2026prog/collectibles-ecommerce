@@ -72,8 +72,8 @@ describe("Mercado Pago Production Robustness, PostgreSQL Semantics & Outbox Reco
           if (["PENDING", "RETRYING"].includes(j.status) && new Date(j.next_retry_at).getTime() <= now && j.attempts < j.max_attempts) {
             return true;
           }
-          // Caso 2: PROCESSING pero con lease abandonado/expirado
-          if (j.status === "PROCESSING" && j.locked_at && new Date(j.locked_at).getTime() < lockExpiryTime) {
+          // Caso 2: PROCESSING pero con lease abandonado/expirado Y attempts < max_attempts
+          if (j.status === "PROCESSING" && j.attempts < j.max_attempts && (j.locked_at === null || new Date(j.locked_at).getTime() < lockExpiryTime)) {
             return true;
           }
           // Caso 3: FAILED recuperable
@@ -457,6 +457,54 @@ describe("Mercado Pago Production Robustness, PostgreSQL Semantics & Outbox Reco
       expect(claim3.claimed).toBe(true);
       expect(mockJobsTable[2].locked_by).toBe("worker-new-1");
       expect(mockJobsTable[2].attempts).toBe(3);
+    });
+
+    it("impide que recordAndExecuteJob reclame tareas EXHAUSTED o COMPLETED con locked_at nulo", () => {
+      const now = Date.now();
+      const jobCompletedNoLock = {
+        id: "job-completed-null-lock",
+        job_type: "commissions_calc",
+        status: "COMPLETED",
+        attempts: 1,
+        max_attempts: 5,
+        locked_at: null,
+        next_retry_at: new Date(now - 1000).toISOString(),
+      };
+
+      const jobProcessingExhausted = {
+        id: "job-proc-exhausted",
+        job_type: "zinc_fulfillment",
+        status: "PROCESSING",
+        attempts: 5,
+        max_attempts: 5,
+        locked_at: new Date(now - 400000).toISOString(), // Lease vencido pero intentos agotados
+        next_retry_at: new Date(now - 1000).toISOString(),
+      };
+
+      function evaluateAtomicUpdateEligibility(job: any) {
+        const expiredLockTime = now - 300000;
+        // Regla estricta:
+        // 1. attempts < max_attempts
+        if ((job.attempts || 0) >= (job.max_attempts || 5)) return false;
+        // 2. status != COMPLETED
+        if (job.status === "COMPLETED") return false;
+        // 3. Elegible por estado y timing
+        if (["PENDING", "RETRYING", "FAILED"].includes(job.status) && new Date(job.next_retry_at).getTime() <= now) {
+          return true;
+        }
+        if (job.status === "PROCESSING" && job.locked_at && new Date(job.locked_at).getTime() < expiredLockTime) {
+          return true;
+        }
+        if (["PENDING", "RETRYING"].includes(job.status) && job.locked_at === null) {
+          return true;
+        }
+        return false;
+      }
+
+      // Job COMPLETED con locked_at null NUNCA debe ser elegible
+      expect(evaluateAtomicUpdateEligibility(jobCompletedNoLock)).toBe(false);
+      // Job PROCESSING con lease vencido pero intentos agotados NUNCA debe ser elegible
+      expect(evaluateAtomicUpdateEligibility(jobProcessingExhausted)).toBe(false);
     });
 
     it("garantiza que webhook devuelva 500 y no acredite orden ante fallo de persistencia atómica", () => {

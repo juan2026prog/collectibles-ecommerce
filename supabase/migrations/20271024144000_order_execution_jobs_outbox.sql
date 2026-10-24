@@ -88,6 +88,7 @@ BEGIN
             )
             OR (
                 j.status = 'PROCESSING'
+                AND j.attempts < j.max_attempts
                 AND (j.locked_at IS NULL OR j.locked_at < clock_timestamp() - (p_lock_seconds || ' seconds')::INTERVAL)
             )
             OR (

@@ -69,6 +69,8 @@ async function recordAndExecuteJob(
   let jobId = existingJob?.id;
   const executionWorkerId = `direct-exec-${Math.random().toString(36).slice(2, 9)}`;
   const nowIso = new Date().toISOString();
+  const executionWorkerId = `direct-exec-${Math.random().toString(36).slice(2, 9)}`;
+  const nowIso = new Date().toISOString();
 
   if (!jobId) {
     // Attempt atomic insertion with PROCESSING status and lease ownership
@@ -121,7 +123,11 @@ async function recordAndExecuteJob(
         return retryJob;
       }
 
-      // Atomic conditional update to claim lease
+      // Atomic conditional update to claim lease strictly on eligible states
+      const expiredLockIso = new Date(Date.now() - 300000).toISOString();
+      const nowFilterIso = new Date().toISOString();
+      const maxAttRetry = retryJob.max_attempts || 5;
+
       const { data: claimedJob, error: claimErr } = await supabaseClient
         .from("order_execution_jobs")
         .update({
@@ -132,7 +138,9 @@ async function recordAndExecuteJob(
           updated_at: nowIso,
         })
         .eq("id", retryJob.id)
-        .or(`status.in.(PENDING,RETRYING,FAILED),and(status.eq.PROCESSING,locked_at.lt.${new Date(Date.now() - 300000).toISOString()}),locked_at.is.null`)
+        .lt("attempts", maxAttRetry)
+        .neq("status", "COMPLETED")
+        .or(`and(status.in.(PENDING,RETRYING,FAILED),next_retry_at.lte.${nowFilterIso}),and(status.eq.PROCESSING,locked_at.lt.${expiredLockIso}),and(status.in.(PENDING,RETRYING),locked_at.is.null)`)
         .select("id")
         .maybeSingle();
 
@@ -156,7 +164,11 @@ async function recordAndExecuteJob(
       }
     }
 
-    // Atomic conditional lease acquisition: Only update if still in eligible state and lease unheld or expired
+    // Atomic conditional lease acquisition strictly on eligible states
+    const expiredLockIso = new Date(Date.now() - 300000).toISOString();
+    const nowFilterIso = new Date().toISOString();
+    const maxAttExisting = existingJob.max_attempts || 5;
+
     const { data: claimedJob, error: updateErr } = await supabaseClient
       .from("order_execution_jobs")
       .update({
@@ -167,7 +179,9 @@ async function recordAndExecuteJob(
         updated_at: nowIso,
       })
       .eq("id", jobId)
-      .or(`status.in.(PENDING,RETRYING,FAILED),and(status.eq.PROCESSING,locked_at.lt.${new Date(Date.now() - 300000).toISOString()}),locked_at.is.null`)
+      .lt("attempts", maxAttExisting)
+      .neq("status", "COMPLETED")
+      .or(`and(status.in.(PENDING,RETRYING,FAILED),next_retry_at.lte.${nowFilterIso}),and(status.eq.PROCESSING,locked_at.lt.${expiredLockIso}),and(status.in.(PENDING,RETRYING),locked_at.is.null)`)
       .select("id")
       .maybeSingle();
 
