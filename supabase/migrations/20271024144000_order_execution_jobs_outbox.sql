@@ -145,7 +145,11 @@ DECLARE
     v_now TIMESTAMPTZ := clock_timestamp();
     v_event_id TEXT;
     v_attempt_number INTEGER;
+    v_next_attempt_num INTEGER;
     v_preference_id TEXT;
+    v_is_financial_mismatch BOOLEAN := FALSE;
+    v_attempt_normalized_status TEXT;
+    v_payment_status TEXT;
 BEGIN
     -- 1. Lock the order row to serialize concurrent updates
     PERFORM 1 FROM public.orders WHERE id = p_order_id FOR UPDATE;
@@ -153,48 +157,101 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'error', 'Order not found');
     END IF;
 
-    -- Extract preference id if present in payload
+    -- Check if normalized status represents a financial discrepancy
+    IF p_normalized_status IN ('fraud_suspected', 'manual_verification_required', 'amount_mismatch') THEN
+        v_is_financial_mismatch := TRUE;
+        -- Map to compliant status that satisfies payment_attempts CHECK constraint
+        v_attempt_normalized_status := 'manual_verification_required';
+        -- Map to compliant status that satisfies payments CHECK constraint
+        v_payment_status := 'failed';
+    ELSE
+        v_attempt_normalized_status := p_normalized_status;
+        -- Map payment_attempts status to payments status if differing
+        IF p_normalized_status = 'initiated' THEN
+            v_payment_status := 'pending';
+        ELSIF p_normalized_status = 'processing' THEN
+            v_payment_status := 'pending';
+        ELSIF p_normalized_status = 'expired' THEN
+            v_payment_status := 'cancelled';
+        ELSE
+            v_payment_status := p_normalized_status;
+        END IF;
+    END IF;
+
+    -- Extract preference id if present in payload or explicit argument
     v_preference_id := COALESCE(
         p_raw_payload ->> 'preference_id',
-        p_raw_payload ->> 'order_id',
+        p_raw_payload -> 'metadata' ->> 'preference_id',
+        NULLIF(p_raw_payload ->> 'order_id', p_order_id::text),
         NULL
     );
 
-    -- 2. Find attempt specifically by external_payment_id or external_preference_id to prevent collision
+    -- 2. Find attempt STRICTLY by verifiable identifiers to prevent cross-attempt collisions:
+    -- A: By external_payment_id matching this transaction
     IF p_external_payment_id IS NOT NULL AND p_external_payment_id <> '' THEN
         SELECT id, attempt_number INTO v_attempt_id, v_attempt_number
         FROM public.payment_attempts
         WHERE order_id = p_order_id 
-          AND (external_payment_id = p_external_payment_id OR (v_preference_id IS NOT NULL AND external_preference_id = v_preference_id))
+          AND external_payment_id = p_external_payment_id
         ORDER BY attempt_number DESC
         LIMIT 1
         FOR UPDATE;
     END IF;
 
-    -- If not found by explicit transaction id, match latest attempt for this order and provider
-    IF v_attempt_id IS NULL THEN
+    -- B: By external_preference_id matching preference generated for this checkout
+    IF v_attempt_id IS NULL AND v_preference_id IS NOT NULL AND v_preference_id <> '' THEN
         SELECT id, attempt_number INTO v_attempt_id, v_attempt_number
         FROM public.payment_attempts
-        WHERE order_id = p_order_id AND provider = p_provider
+        WHERE order_id = p_order_id 
+          AND external_preference_id = v_preference_id
         ORDER BY attempt_number DESC
         LIMIT 1
         FOR UPDATE;
     END IF;
+
+    -- C: By checkout_session_id if provided in payload
+    IF v_attempt_id IS NULL AND (p_raw_payload ->> 'checkout_session_id') IS NOT NULL THEN
+        SELECT id, attempt_number INTO v_attempt_id, v_attempt_number
+        FROM public.payment_attempts
+        WHERE order_id = p_order_id 
+          AND checkout_session_id = (p_raw_payload ->> 'checkout_session_id')
+        ORDER BY attempt_number DESC
+        LIMIT 1
+        FOR UPDATE;
+    END IF;
+
+    -- NOTE: We explicitly DO NOT fall back to 'ORDER BY attempt_number DESC LIMIT 1'
+    -- without matching identifiers, because doing so could attribute a payment to an unrelated attempt.
+    -- Instead, if no matching attempt is found, we create a new distinct attempt with a next sequential attempt_number.
 
     IF v_attempt_id IS NOT NULL THEN
         UPDATE public.payment_attempts
         SET 
-            normalized_status = p_normalized_status,
+            normalized_status = v_attempt_normalized_status,
             provider_status = p_provider_status,
             provider_status_detail = p_provider_status_detail,
             external_payment_id = COALESCE(p_external_payment_id, external_payment_id),
-            approved_at = CASE WHEN p_normalized_status = 'approved' THEN v_now ELSE approved_at END,
-            rejected_at = CASE WHEN p_normalized_status = 'rejected' THEN v_now ELSE rejected_at END,
-            cancelled_at = CASE WHEN p_normalized_status = 'cancelled' THEN v_now ELSE cancelled_at END,
-            error_code = p_provider_status_detail,
+            approved_at = CASE WHEN v_attempt_normalized_status = 'approved' THEN v_now ELSE approved_at END,
+            rejected_at = CASE WHEN v_attempt_normalized_status = 'rejected' THEN v_now ELSE rejected_at END,
+            cancelled_at = CASE WHEN v_attempt_normalized_status = 'cancelled' THEN v_now ELSE cancelled_at END,
+            error_code = CASE WHEN v_is_financial_mismatch THEN 'amount_or_currency_mismatch' ELSE p_provider_status_detail END,
+            error_message_sanitized = CASE 
+                WHEN v_is_financial_mismatch THEN 'Discrepancia financiera detectada: monto o moneda incompatible con la orden'
+                ELSE error_message_sanitized 
+            END,
+            metadata = CASE 
+                WHEN v_is_financial_mismatch THEN 
+                    COALESCE(metadata, '{}'::jsonb) || jsonb_build_object('financial_discrepancy', true, 'flagged_at', v_now)
+                ELSE metadata 
+            END,
             updated_at = v_now
         WHERE id = v_attempt_id;
     ELSE
+        -- Calculate next attempt_number safely
+        SELECT COALESCE(MAX(attempt_number), 0) + 1 INTO v_next_attempt_num
+        FROM public.payment_attempts
+        WHERE order_id = p_order_id;
+
         INSERT INTO public.payment_attempts (
             order_id,
             provider,
@@ -206,21 +263,29 @@ BEGIN
             provider_status,
             provider_status_detail,
             external_payment_id,
+            external_preference_id,
+            error_code,
+            error_message_sanitized,
+            metadata,
             initiated_at,
             approved_at
         ) VALUES (
             p_order_id,
             p_provider,
             p_provider,
-            1,
+            v_next_attempt_num,
             p_amount,
             p_currency,
-            p_normalized_status,
+            v_attempt_normalized_status,
             p_provider_status,
             p_provider_status_detail,
             p_external_payment_id,
+            v_preference_id,
+            CASE WHEN v_is_financial_mismatch THEN 'amount_or_currency_mismatch' ELSE p_provider_status_detail END,
+            CASE WHEN v_is_financial_mismatch THEN 'Discrepancia financiera detectada: monto o moneda incompatible con la orden' ELSE NULL END,
+            CASE WHEN v_is_financial_mismatch THEN jsonb_build_object('financial_discrepancy', true, 'flagged_at', v_now) ELSE '{}'::jsonb END,
             v_now,
-            CASE WHEN p_normalized_status = 'approved' THEN v_now ELSE NULL END
+            CASE WHEN v_attempt_normalized_status = 'approved' THEN v_now ELSE NULL END
         )
         RETURNING id INTO v_attempt_id;
     END IF;
@@ -239,7 +304,7 @@ BEGIN
     IF v_payment_id IS NOT NULL THEN
         UPDATE public.payments
         SET 
-            status = p_normalized_status,
+            status = v_payment_status,
             amount = p_amount,
             currency = p_currency,
             raw_webhook = p_raw_payload,
@@ -262,7 +327,7 @@ BEGIN
             p_external_payment_id,
             p_amount,
             p_currency,
-            p_normalized_status,
+            v_payment_status,
             p_raw_payload,
             v_now,
             v_now
@@ -293,29 +358,40 @@ BEGIN
         v_attempt_id,
         p_provider,
         p_source || '_' || p_provider_status,
-        p_normalized_status,
+        v_attempt_normalized_status,
         p_provider_status,
         v_event_id,
         p_source,
-        jsonb_build_object('payment_id', p_external_payment_id, 'status', p_provider_status, 'detail', p_provider_status_detail),
-        'Transacción persistida atómicamente: ' || p_normalized_status,
+        jsonb_build_object(
+            'payment_id', p_external_payment_id, 
+            'status', p_provider_status, 
+            'detail', p_provider_status_detail,
+            'financial_mismatch', v_is_financial_mismatch
+        ),
+        CASE 
+            WHEN v_is_financial_mismatch THEN 'Discrepancia detectada y registrada en auditoría sin acreditar orden'
+            ELSE 'Transacción persistida atómicamente: ' || v_attempt_normalized_status
+        END,
         v_now
     )
     ON CONFLICT (provider, provider_event_id) WHERE provider_event_id IS NOT NULL DO NOTHING;
 
-    -- 5. Update last_payment_attempt_id and payment_status on order (only if not rejected/fraud)
-    IF p_normalized_status <> 'fraud_suspected' THEN
+    -- 5. Update last_payment_attempt_id and payment_status on order (only if not financial mismatch)
+    IF NOT v_is_financial_mismatch THEN
         UPDATE public.orders
         SET 
-            payment_status = p_normalized_status,
+            payment_status = v_attempt_normalized_status,
             payment_provider = p_provider,
             last_payment_attempt_id = v_attempt_id,
             updated_at = v_now
         WHERE id = p_order_id;
     ELSE
+        -- For financial mismatch, DO NOT change payment_status to approved;
+        -- maintain existing status or record manual_verification_required, link attempt only
         UPDATE public.orders
         SET 
             last_payment_attempt_id = v_attempt_id,
+            payment_provider = p_provider,
             updated_at = v_now
         WHERE id = p_order_id;
     END IF;
@@ -324,7 +400,8 @@ BEGIN
         'success', true,
         'attempt_id', v_attempt_id,
         'payment_id', v_payment_id,
-        'status', p_normalized_status
+        'status', v_attempt_normalized_status,
+        'financial_mismatch', v_is_financial_mismatch
     );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

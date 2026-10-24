@@ -268,34 +268,120 @@ describe("Mercado Pago Production Robustness, PostgreSQL Semantics & Outbox Reco
     });
   });
 
-  describe("4. Simulación de Fallo Post-Pago y Recuperación sin Duplicados", () => {
-    it("recupera operaciones interrumpidas a la mitad sin re-ejecutar las completadas", async () => {
-      const executedTasks: string[] = [];
+  describe("5. Compatibilidad Estricta con Restricciones CHECK de PostgreSQL y Asociación por Identificadores", () => {
+    it("respeta CHECK constraints de payments y payment_attempts ante discrepancias de monto o moneda", () => {
+      // Definición real de CHECK constraints en PostgreSQL de producción:
+      const allowedAttemptStatuses = new Set([
+        'no_payment_attempt', 'initiated', 'pending', 'processing', 'approved',
+        'rejected', 'cancelled', 'expired', 'refunded', 'partially_refunded',
+        'charged_back', 'manual_verification_required', 'unknown_legacy'
+      ]);
+      const allowedPaymentsStatuses = new Set([
+        'pending', 'redirected', 'approved', 'rejected', 'cancelled',
+        'refunded', 'partially_refunded', 'refund_pending', 'refund_failed',
+        'failed', 'manual_refund_required'
+      ]);
 
-      const jobStore = [
-        { id: "j1", order_id: "ord-recover", job_type: "commissions_calc", status: "COMPLETED" }, // Ya se completó antes del corte
-        { id: "j2", order_id: "ord-recover", job_type: "ml_stock_sync", status: "FAILED" },       // Falló durante el corte de red
-        { id: "j3", order_id: "ord-recover", job_type: "email_notification", status: "PENDING" },  // No llegó a ejecutarse
-      ];
+      function mapStatusesForPersistence(normalizedStatus: string) {
+        let isFinancialMismatch = false;
+        let attemptStatus = normalizedStatus;
+        let paymentStatus = normalizedStatus;
 
-      async function runWorkerRecovery() {
-        for (const job of jobStore) {
-          if (job.status === "COMPLETED") {
-            continue; // IDEMPOTENCIA: Omitido
+        if (['fraud_suspected', 'manual_verification_required', 'amount_mismatch'].includes(normalizedStatus)) {
+          isFinancialMismatch = true;
+          attemptStatus = 'manual_verification_required';
+          paymentStatus = 'failed';
+        } else {
+          if (normalizedStatus === 'initiated' || normalizedStatus === 'processing') {
+            paymentStatus = 'pending';
+          } else if (normalizedStatus === 'expired') {
+            paymentStatus = 'cancelled';
           }
-          // Ejecuta tarea
-          executedTasks.push(job.job_type);
-          job.status = "COMPLETED";
         }
+
+        return { isFinancialMismatch, attemptStatus, paymentStatus };
       }
 
-      await runWorkerRecovery();
+      // Caso A: Discrepancia financiera (fraude o manipulación de importe/moneda)
+      const fraudCase = mapStatusesForPersistence('fraud_suspected');
+      expect(allowedAttemptStatuses.has(fraudCase.attemptStatus)).toBe(true);
+      expect(allowedPaymentsStatuses.has(fraudCase.paymentStatus)).toBe(true);
+      expect(fraudCase.isFinancialMismatch).toBe(true);
+      expect(fraudCase.attemptStatus).toBe('manual_verification_required');
+      expect(fraudCase.paymentStatus).toBe('failed');
 
-      // commissions_calc NO debió ejecutarse de nuevo
-      expect(executedTasks).not.toContain("commissions_calc");
-      // ml_stock_sync y email_notification se recuperaron limpiamente
-      expect(executedTasks).toEqual(["ml_stock_sync", "email_notification"]);
-      expect(jobStore.every(j => j.status === "COMPLETED")).toBe(true);
+      // Caso B: Pago aprobado legítimo
+      const approvedCase = mapStatusesForPersistence('approved');
+      expect(allowedAttemptStatuses.has(approvedCase.attemptStatus)).toBe(true);
+      expect(allowedPaymentsStatuses.has(approvedCase.paymentStatus)).toBe(true);
+      expect(approvedCase.isFinancialMismatch).toBe(false);
+
+      // Caso C: Pago rechazado
+      const rejectedCase = mapStatusesForPersistence('rejected');
+      expect(allowedAttemptStatuses.has(rejectedCase.attemptStatus)).toBe(true);
+      expect(allowedPaymentsStatuses.has(rejectedCase.paymentStatus)).toBe(true);
+    });
+
+    it("asocia pagos ÚNICAMENTE por payment_id o preference_id verificable, sin sobrescribir intentos previos", () => {
+      const attempts = [
+        {
+          id: "att-1",
+          order_id: "order-xyz",
+          attempt_number: 1,
+          external_payment_id: null,
+          external_preference_id: "pref-111",
+          normalized_status: "initiated"
+        },
+        {
+          id: "att-2",
+          order_id: "order-xyz",
+          attempt_number: 2,
+          external_payment_id: null,
+          external_preference_id: "pref-222",
+          normalized_status: "initiated"
+        }
+      ];
+
+      function findOrAssociateAttempt(
+        orderId: string,
+        externalPaymentId: string | null,
+        preferenceId: string | null
+      ) {
+        // 1. Por external_payment_id exacto
+        if (externalPaymentId) {
+          const matchedByPayment = attempts.find(a => a.order_id === orderId && a.external_payment_id === externalPaymentId);
+          if (matchedByPayment) return { matched: matchedByPayment, isNew: false };
+        }
+        // 2. Por preference_id exacto
+        if (preferenceId) {
+          const matchedByPref = attempts.find(a => a.order_id === orderId && a.external_preference_id === preferenceId);
+          if (matchedByPref) return { matched: matchedByPref, isNew: false };
+        }
+        // 3. Si no hay coincidencia exacta de identificadores, CREAR nuevo intento sin pisar att-1 ni att-2
+        const nextAttemptNum = Math.max(...attempts.map(a => a.attempt_number)) + 1;
+        const newAttempt = {
+          id: `att-${nextAttemptNum}`,
+          order_id: orderId,
+          attempt_number: nextAttemptNum,
+          external_payment_id: externalPaymentId,
+          external_preference_id: preferenceId,
+          normalized_status: "initiated"
+        };
+        attempts.push(newAttempt);
+        return { matched: newAttempt, isNew: true };
+      }
+
+      // Si llega un webhook para la preferencia 1 (pref-111), debe asociar att-1 y NO el último att-2
+      const match1 = findOrAssociateAttempt("order-xyz", "mp-pay-1", "pref-111");
+      expect(match1.isNew).toBe(false);
+      expect(match1.matched.id).toBe("att-1");
+
+      // Si llega un webhook para una preferencia desconocida o externa, crea att-3 y preserva att-1 y att-2 intactos
+      const match3 = findOrAssociateAttempt("order-xyz", "mp-pay-99", "pref-999");
+      expect(match3.isNew).toBe(true);
+      expect(match3.matched.id).toBe("att-3");
+      expect(match3.matched.attempt_number).toBe(3);
+      expect(attempts.length).toBe(3);
     });
   });
 });

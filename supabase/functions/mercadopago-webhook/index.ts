@@ -271,7 +271,9 @@ Deno.serve(async (req: Request) => {
 
     if (mpStatus === "approved" && (!isCurrencyValid || !isAmountValid)) {
       isFraudOrMismatch = true;
-      effectiveNormalizedStatus = "fraud_suspected";
+      // Map to status that complies with payments.status and payment_attempts.normalized_status CHECK constraints
+      // while signaling that manual verification is required and preventing order accreditation
+      effectiveNormalizedStatus = "manual_verification_required";
       console.error(`🚨 [MP Webhook] FINANCIAL MISMATCH on approved payment ${paymentId} for order ${orderId}: paid ${paidAmount} ${paidCurrency}, expected ${orderAmount} ${expectedCurrency}`);
     }
 
@@ -350,6 +352,11 @@ Deno.serve(async (req: Request) => {
       }
 
       // Fallback 2: Upsert payments table
+      // Map effective status to a valid payments.status ('failed' for financial mismatch / manual verification)
+      const fallbackPaymentsStatus = isFraudOrMismatch 
+        ? "failed" 
+        : (effectiveNormalizedStatus === "initiated" || effectiveNormalizedStatus === "processing" ? "pending" : (effectiveNormalizedStatus === "expired" ? "cancelled" : effectiveNormalizedStatus));
+
       const { data: existingPayment } = await supabaseAdmin
         .from("payments")
         .select("id")
@@ -363,7 +370,7 @@ Deno.serve(async (req: Request) => {
         const { error: payUpdErr } = await supabaseAdmin
           .from("payments")
           .update({
-            status: effectiveNormalizedStatus,
+            status: fallbackPaymentsStatus,
             transaction_external_id: paymentId.toString(),
             raw_webhook: paymentData,
             updated_at: nowStr,
@@ -379,7 +386,7 @@ Deno.serve(async (req: Request) => {
             transaction_external_id: paymentId.toString(),
             amount: paidAmount,
             currency: paidCurrency,
-            status: effectiveNormalizedStatus,
+            status: fallbackPaymentsStatus,
             raw_webhook: paymentData,
           });
         if (payInsErr) console.error("[MP Webhook] payments insert error:", payInsErr.message);
