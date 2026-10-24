@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { verifyOptionalAuth } from "../_shared/auth.ts";
 import { finalizeOrderIfNeeded, orderSummary } from "../_shared/order-payments.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { verifyOrderAccessToken, generateOrderAccessToken } from "../_shared/order-token.ts";
 
 declare const Deno: any;
 
@@ -13,6 +14,7 @@ interface ConfirmRequest {
   order_id: string;
   external_id?: string;
   customer_email?: string;
+  order_token?: string;
 }
 
 Deno.serve(async (req: Request) => {
@@ -27,7 +29,11 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const supabaseClient = createClient(supabaseUrl, supabaseServiceRoleKey);
     const user = await verifyOptionalAuth(req);
-    const { provider, order_id, external_id, customer_email } = await req.json() as ConfirmRequest;
+    const { provider, order_id, external_id, customer_email, order_token } = await req.json() as ConfirmRequest;
+
+    if (!order_id) {
+      throw new Error("Missing order_id");
+    }
 
     const { data: currentOrder, error: orderError } = await supabaseClient
       .from("orders")
@@ -46,22 +52,35 @@ Deno.serve(async (req: Request) => {
       if (prof?.is_admin) isAdmin = true;
     }
 
+    // Check order token authorization (strong guest proof)
+    const isTokenValid = await verifyOrderAccessToken(order_token, order_id, supabaseServiceRoleKey);
+
     const reqEmail = (customer_email || "").trim().toLowerCase();
     const orderEmail = String(currentOrder.customer_email || "").trim().toLowerCase();
     const isEmailMatched = reqEmail.length > 0 && reqEmail === orderEmail;
     const isUserMatched = Boolean(user && currentOrder.customer_id && user.id === currentOrder.customer_id);
-    const isFullyAuthorized = isAdmin || isUserMatched;
 
+    // Fully authorized: Admin, Authenticated Buyer, or Guest holding valid cryptographic order token
+    const isFullyAuthorized = isAdmin || isUserMatched || isTokenValid;
+
+    // Authorization Gate:
+    // If registered buyer's order: must be admin or logged-in buyer.
+    // If guest order: must have valid order_token or email match or admin.
     if (currentOrder.customer_id) {
-      if (!isFullyAuthorized && !isEmailMatched) {
+      if (!isAdmin && !isUserMatched) {
         throw new Error("No tienes permisos para consultar esta orden.");
       }
-    } else if (customer_email && !isEmailMatched && !isAdmin) {
-      throw new Error("No se pudo validar el email de la orden.");
+    } else {
+      if (!isAdmin && !isTokenValid && !isEmailMatched) {
+        throw new Error("Acceso no autorizado a la orden de invitado.");
+      }
     }
 
     const { data: settings } = await supabaseClient.from("site_settings").select("key, value");
     const config = Object.fromEntries((settings || []).map((item: any) => [item.key, item.value]));
+
+    // Generate fresh order access token to return to frontend if guest
+    const verifiedOrderToken = await generateOrderAccessToken(order_id, supabaseServiceRoleKey);
 
     if (provider === "paypal") {
       if (!external_id || (currentOrder.payment_id && currentOrder.payment_id !== external_id)) {
@@ -69,7 +88,12 @@ Deno.serve(async (req: Request) => {
       }
 
       if (currentOrder.payment_processed_at || ['paid', 'confirmed'].includes(currentOrder.status)) {
-        return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(currentOrder, isFullyAuthorized) }), {
+        return new Response(JSON.stringify({ 
+          success: true, 
+          status: "paid", 
+          order_token: verifiedOrderToken,
+          order: orderSummary(currentOrder, isFullyAuthorized) 
+        }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -116,14 +140,24 @@ Deno.serve(async (req: Request) => {
         captureData.id || external_id,
       );
 
-      return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(paidOrder, isFullyAuthorized) }), {
+      return new Response(JSON.stringify({ 
+        success: true, 
+        status: "paid", 
+        order_token: verifiedOrderToken,
+        order: orderSummary(paidOrder, isFullyAuthorized) 
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (provider === "mercadopago") {
       if (currentOrder.payment_processed_at || ['paid', 'confirmed'].includes(currentOrder.status)) {
-        return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(currentOrder, isFullyAuthorized) }), {
+        return new Response(JSON.stringify({ 
+          success: true, 
+          status: "paid", 
+          order_token: verifiedOrderToken,
+          order: orderSummary(currentOrder, isFullyAuthorized) 
+        }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -168,35 +202,68 @@ Deno.serve(async (req: Request) => {
           }
         }
 
-        if (paymentData && (paymentData.status === "approved" || paymentData.status === "authorized")) {
-          const paidOrder = await finalizeOrderIfNeeded(
-            supabaseClient,
-            supabaseUrl,
-            supabaseServiceRoleKey,
-            order_id,
-            String(paymentData.id),
-          );
+        // UNIFIED FINANCIAL VALIDATION: ONLY 'approved' status, matching currency and exact amount
+        if (paymentData && paymentData.status === "approved") {
+          const paidAmount = Number(paymentData.transaction_amount || 0);
+          const orderAmount = Number(currentOrder.total_amount || 0);
+          const paidCurrency = String(paymentData.currency_id || "").toUpperCase();
+          const expectedCurrency = String(currentOrder.currency || "UYU").toUpperCase();
 
-          return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(paidOrder, isFullyAuthorized) }), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
+          const paidCents = Math.round(paidAmount * 100);
+          const orderCents = Math.round(orderAmount * 100);
+
+          if (paidCurrency === expectedCurrency && paidCents === orderCents) {
+            const paidOrder = await finalizeOrderIfNeeded(
+              supabaseClient,
+              supabaseUrl,
+              supabaseServiceRoleKey,
+              order_id,
+              String(paymentData.id),
+            );
+
+            return new Response(JSON.stringify({ 
+              success: true, 
+              status: "paid", 
+              order_token: verifiedOrderToken,
+              order: orderSummary(paidOrder, isFullyAuthorized) 
+            }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          } else {
+            console.warn(`[confirm-payment] Financial mismatch on MP payment ${paymentData.id}: paid ${paidAmount} ${paidCurrency}, expected ${orderAmount} ${expectedCurrency}`);
+          }
         }
       }
 
-      return new Response(JSON.stringify({ success: true, status: currentOrder.status || "pending", order: orderSummary(currentOrder, isFullyAuthorized) }), {
+      return new Response(JSON.stringify({ 
+        success: true, 
+        status: currentOrder.status || "pending", 
+        order_token: verifiedOrderToken,
+        order: orderSummary(currentOrder, isFullyAuthorized) 
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (provider === "dlocalgo" || provider === "dlocal") {
-      return new Response(JSON.stringify({ success: true, status: currentOrder.status || "pending", order: orderSummary(currentOrder, isFullyAuthorized) }), {
+      return new Response(JSON.stringify({ 
+        success: true, 
+        status: currentOrder.status || "pending", 
+        order_token: verifiedOrderToken,
+        order: orderSummary(currentOrder, isFullyAuthorized) 
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (provider === "handy") {
       if (currentOrder.payment_processed_at || ['paid', 'confirmed'].includes(currentOrder.status)) {
-        return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(currentOrder, isFullyAuthorized) }), {
+        return new Response(JSON.stringify({ 
+          success: true, 
+          status: "paid", 
+          order_token: verifiedOrderToken,
+          order: orderSummary(currentOrder, isFullyAuthorized) 
+        }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -219,7 +286,12 @@ Deno.serve(async (req: Request) => {
           handyPayment.provider_transaction_id || handyPayment.transaction_external_id || handyPayment.id,
         );
 
-        return new Response(JSON.stringify({ success: true, status: "paid", order: orderSummary(paidOrder, isFullyAuthorized) }), {
+        return new Response(JSON.stringify({ 
+          success: true, 
+          status: "paid", 
+          order_token: verifiedOrderToken,
+          order: orderSummary(paidOrder, isFullyAuthorized) 
+        }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -227,6 +299,7 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({
         success: true,
         status: currentOrder.payment_status || currentOrder.status || "pending_payment",
+        order_token: verifiedOrderToken,
         order: orderSummary(currentOrder, isFullyAuthorized),
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

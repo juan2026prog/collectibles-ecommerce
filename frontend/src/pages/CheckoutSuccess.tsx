@@ -12,6 +12,7 @@ export default function CheckoutSuccess() {
   const orderId = searchParams.get('order_id');
   const provider = searchParams.get('provider');
   const statusParam = searchParams.get('status');
+  const orderToken = searchParams.get('order_token') || (orderId ? sessionStorage.getItem('order_token_' + orderId) : null) || undefined;
   const { clearCart, items, total } = useCartContext();
   const [order, setOrder] = useState<any>(() => {
     try {
@@ -67,11 +68,12 @@ export default function CheckoutSuccess() {
                            undefined;
         const fallbackEmail = order?.customer_email || '';
         const { data, error } = await supabase.functions.invoke('confirm-payment', {
-          body: { provider, order_id: orderId, external_id: externalId, customer_email: fallbackEmail },
+          body: { provider, order_id: orderId, external_id: externalId, customer_email: fallbackEmail, order_token: orderToken },
         });
 
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
+        if (data?.order_token && orderId) { sessionStorage.setItem('order_token_' + orderId, data.order_token); }
         if (data?.order) {
           setOrder(data.order);
           sessionStorage.setItem('pending_checkout_order', JSON.stringify(data.order));

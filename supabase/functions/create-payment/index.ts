@@ -1,8 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { verifyOptionalAuth } from "../_shared/auth.ts";
-
 import { corsHeaders, handleOptions, getCorsHeaders } from "../_shared/cors.ts";
+import { generateOrderAccessToken } from "../_shared/order-token.ts";
 
 
 interface PaymentRequest {
@@ -359,6 +359,7 @@ serve(async (req: Request) => {
 
       const isLocalhost = origin.includes("localhost") || origin.includes("127.0.0.1");
       const mpOrigin = isLocalhost ? "https://collectibles-ecommerce.vercel.app" : origin;
+      const orderToken = await generateOrderAccessToken(orderId, supabaseServiceRoleKey);
 
       const preferencePayload = {
         items: mpItems,
@@ -368,9 +369,9 @@ serve(async (req: Request) => {
           surname: customer.name.split(" ").slice(1).join(" ") || "Guest",
         },
         back_urls: {
-          success: `${mpOrigin}/checkout/success?order_id=${orderId}&provider=mercadopago`,
+          success: `${mpOrigin}/checkout/success?order_id=${orderId}&provider=mercadopago&order_token=${orderToken}`,
           failure: `${mpOrigin}/checkout?error=pagorechazado`,
-          pending: `${mpOrigin}/checkout/success?order_id=${orderId}&provider=mercadopago&status=pending`,
+          pending: `${mpOrigin}/checkout/success?order_id=${orderId}&provider=mercadopago&status=pending&order_token=${orderToken}`,
         },
         auto_return: "approved",
         external_reference: String(orderId),
