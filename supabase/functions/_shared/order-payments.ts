@@ -69,8 +69,6 @@ async function recordAndExecuteJob(
   let jobId = existingJob?.id;
   const executionWorkerId = `direct-exec-${Math.random().toString(36).slice(2, 9)}`;
   const nowIso = new Date().toISOString();
-  const executionWorkerId = `direct-exec-${Math.random().toString(36).slice(2, 9)}`;
-  const nowIso = new Date().toISOString();
 
   if (!jobId) {
     // Attempt atomic insertion with PROCESSING status and lease ownership
