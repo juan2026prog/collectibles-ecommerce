@@ -2564,7 +2564,7 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
   const [limit, setLimit] = useState(20);
   const [itemStatus, setItemStatus] = useState('active');
   const [searchQuery, setSearchQuery] = useState('');
-  const [orderBy, setOrderBy] = useState('relevance');
+  const [orderBy, setOrderBy] = useState('start_time_desc');
 
   const [categories, setCategories] = useState<any[]>([]);
   const [existingProducts, setExistingProducts] = useState<any[]>([]);
@@ -2722,6 +2722,17 @@ function MLImportModal({ onClose, onImport, loading }: { onClose: () => void, on
                  <option value="active">Activas</option>
                  <option value="paused">Pausadas</option>
                  <option value="all">Todas</option>
+               </select>
+
+               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Publicaciones:</span>
+               <select 
+                 value={orderBy} 
+                 onChange={(e) => setOrderBy(e.target.value)}
+                 className="text-xs font-bold bg-white border border-blue-200 text-blue-600 rounded-md px-2 py-1.5 outline-none shadow-sm"
+               >
+                 <option value="start_time_desc">Recientes (Más nuevas primero)</option>
+                 <option value="relevance">Todas / Relevancia general</option>
+                 <option value="stop_time_asc">Por finalizar (Próximas a vencer)</option>
                </select>
             </div>
           </div>

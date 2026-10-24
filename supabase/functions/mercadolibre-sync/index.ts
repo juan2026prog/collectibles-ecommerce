@@ -532,7 +532,7 @@ Deno.serve(async (req) => {
     const incomingIds = body.product_ids || [];
     const product_ids = incomingIds.length > 0 ? incomingIds : (body.ml_item_ids || []);
     const status = body.status || 'active';
-    const sort = body.sort || 'relevance';
+    const sort = body.sort || body.orders || 'relevance';
     let limit = body.limit || 20;
 
     targetSellerId = body.seller_id;
@@ -606,7 +606,10 @@ Deno.serve(async (req) => {
             // Standard offset pagination for limited fetches
             const maxLimit = limit;
             const firstBatch = Math.min(50, maxLimit);
-            const searchUrl = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${firstBatch}&offset=0${statusParam ? `&status=${statusParam}` : ''}&sort=${sort}`;
+            const sortParam = sort === 'start_time_desc' || sort === 'stop_time_asc' || sort === 'stop_time_desc' 
+              ? `&orders=${sort}` 
+              : `&sort=${sort}`;
+            const searchUrl = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${firstBatch}&offset=0${statusParam ? `&status=${statusParam}` : ''}${sortParam}`;
             const searchRes = await customFetch(searchUrl, { headers });
             const searchData = await searchRes.json();
             
@@ -620,7 +623,7 @@ Deno.serve(async (req) => {
                 const searchUrls = [];
                 for (let offset = allIds.length; offset < finalMaxLimit; offset += 50) {
                     const bSize = Math.min(50, finalMaxLimit - offset);
-                    const url = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${bSize}&offset=${offset}${statusParam ? `&status=${statusParam}` : ''}&sort=${sort}`;
+                    const url = `https://api.mercadolibre.com/users/${userData.id}/items/search?limit=${bSize}&offset=${offset}${statusParam ? `&status=${statusParam}` : ''}${sortParam}`;
                     searchUrls.push(url);
                 }
                 for (let i = 0; i < searchUrls.length; i += 5) {
