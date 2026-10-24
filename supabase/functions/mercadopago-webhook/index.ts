@@ -254,59 +254,78 @@ Deno.serve(async (req: Request) => {
     }
 
     // ══════════════════════════════════════════════════════════
-    // Traceability: Update or Insert payment_attempts
+    // Traceability: Consistent Multi-table Persistence
+    // Attempts to use record_payment_transaction_atomic RPC if available,
+    // otherwise executes with robust sequential error checking.
     // ══════════════════════════════════════════════════════════
-    const { data: existingAttempt } = await supabaseAdmin
-      .from("payment_attempts")
-      .select("id")
-      .eq("order_id", orderId)
-      .order("attempt_number", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const { data: atomicPersistResult, error: atomicPersistErr } = await supabaseAdmin.rpc("record_payment_transaction_atomic", {
+      p_order_id: orderId,
+      p_provider: "mercadopago",
+      p_external_payment_id: paymentId.toString(),
+      p_amount: Number(paymentData.transaction_amount || 0),
+      p_currency: String(paymentData.currency_id || "UYU"),
+      p_normalized_status: normalizedStatus,
+      p_provider_status: mpStatus,
+      p_provider_status_detail: paymentData.status_detail || "",
+      p_raw_payload: paymentData,
+      p_source: "webhook"
+    });
 
-    let currentAttemptId = existingAttempt?.id;
+    let currentAttemptId: string | null = atomicPersistResult?.attempt_id || null;
 
-    if (existingAttempt) {
-      await supabaseAdmin
+    if (atomicPersistErr) {
+      console.warn("[MP Webhook] Atomic persistence RPC unavailable or failed. Executing fallback sequential persistence:", atomicPersistErr.message);
+
+      // Fallback 1: Update or Insert payment_attempts
+      const { data: existingAttempt } = await supabaseAdmin
         .from("payment_attempts")
-        .update({
-          normalized_status: normalizedStatus,
-          provider_status: mpStatus,
-          provider_status_detail: paymentData.status_detail || "",
-          external_payment_id: paymentId.toString(),
-          approved_at: (normalizedStatus === "approved") ? nowStr : undefined,
-          rejected_at: (normalizedStatus === "rejected") ? nowStr : undefined,
-          cancelled_at: (normalizedStatus === "cancelled") ? nowStr : undefined,
-          error_code: paymentData.status_detail,
-          updated_at: nowStr,
-        })
-        .eq("id", existingAttempt.id);
-    } else {
-      const { data: newAttempt } = await supabaseAdmin
-        .from("payment_attempts")
-        .insert({
-          order_id: orderId,
-          provider: "mercadopago",
-          payment_method_type: "mercadopago",
-          attempt_number: 1,
-          amount: paymentData.transaction_amount || 0,
-          currency: paymentData.currency_id || "UYU",
-          normalized_status: normalizedStatus,
-          provider_status: mpStatus,
-          provider_status_detail: paymentData.status_detail || "",
-          external_payment_id: paymentId.toString(),
-          initiated_at: nowStr,
-          approved_at: (normalizedStatus === "approved") ? nowStr : undefined,
-        })
-        .select()
-        .single();
-      if (newAttempt) currentAttemptId = newAttempt.id;
-    }
+        .select("id")
+        .eq("order_id", orderId)
+        .order("attempt_number", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-    // ══════════════════════════════════════════════════════════
-    // Traceability: Insert or Update payments table
-    // ══════════════════════════════════════════════════════════
-    try {
+      if (existingAttempt) {
+        currentAttemptId = existingAttempt.id;
+        const { error: updErr } = await supabaseAdmin
+          .from("payment_attempts")
+          .update({
+            normalized_status: normalizedStatus,
+            provider_status: mpStatus,
+            provider_status_detail: paymentData.status_detail || "",
+            external_payment_id: paymentId.toString(),
+            approved_at: (normalizedStatus === "approved") ? nowStr : undefined,
+            rejected_at: (normalizedStatus === "rejected") ? nowStr : undefined,
+            cancelled_at: (normalizedStatus === "cancelled") ? nowStr : undefined,
+            error_code: paymentData.status_detail,
+            updated_at: nowStr,
+          })
+          .eq("id", existingAttempt.id);
+        if (updErr) console.error("[MP Webhook] payment_attempts update error:", updErr.message);
+      } else {
+        const { data: newAttempt, error: insErr } = await supabaseAdmin
+          .from("payment_attempts")
+          .insert({
+            order_id: orderId,
+            provider: "mercadopago",
+            payment_method_type: "mercadopago",
+            attempt_number: 1,
+            amount: paymentData.transaction_amount || 0,
+            currency: paymentData.currency_id || "UYU",
+            normalized_status: normalizedStatus,
+            provider_status: mpStatus,
+            provider_status_detail: paymentData.status_detail || "",
+            external_payment_id: paymentId.toString(),
+            initiated_at: nowStr,
+            approved_at: (normalizedStatus === "approved") ? nowStr : undefined,
+          })
+          .select("id")
+          .single();
+        if (newAttempt) currentAttemptId = newAttempt.id;
+        if (insErr) console.error("[MP Webhook] payment_attempts insert error:", insErr.message);
+      }
+
+      // Fallback 2: Upsert payments table
       const { data: existingPayment } = await supabaseAdmin
         .from("payments")
         .select("id")
@@ -317,7 +336,7 @@ Deno.serve(async (req: Request) => {
         .maybeSingle();
 
       if (existingPayment) {
-        await supabaseAdmin
+        const { error: payUpdErr } = await supabaseAdmin
           .from("payments")
           .update({
             status: normalizedStatus,
@@ -326,8 +345,9 @@ Deno.serve(async (req: Request) => {
             updated_at: nowStr,
           })
           .eq("id", existingPayment.id);
+        if (payUpdErr) console.error("[MP Webhook] payments update error:", payUpdErr.message);
       } else {
-        await supabaseAdmin
+        const { error: payInsErr } = await supabaseAdmin
           .from("payments")
           .insert({
             order_id: orderId,
@@ -338,30 +358,26 @@ Deno.serve(async (req: Request) => {
             status: normalizedStatus,
             raw_webhook: paymentData,
           });
+        if (payInsErr) console.error("[MP Webhook] payments insert error:", payInsErr.message);
       }
-    } catch (pErr: any) {
-      console.warn("[MP Webhook] Non-blocking payments table recording note:", pErr?.message);
-    }
 
-    // ══════════════════════════════════════════════════════════
-    // Traceability: Insert payment_events (Append-Only)
-    // ══════════════════════════════════════════════════════════
-    const providerEventId = `mp-wh-${paymentId}-${body.action || Date.now()}`;
-    await supabaseAdmin.from("payment_events").insert({
-      order_id: orderId,
-      payment_attempt_id: currentAttemptId,
-      provider: "mercadopago",
-      event_type: `webhook_${mpStatus}`,
-      normalized_status: normalizedStatus,
-      provider_status: mpStatus,
-      provider_event_id: providerEventId,
-      source: "webhook",
-      payload_sanitized: { payment_id: paymentId, status: mpStatus, detail: paymentData.status_detail },
-      processing_result: `Webhook Mercado Pago: ${normalizedStatus}`,
-      occurred_at: nowStr,
-    }).catch((evtErr: any) => {
-      console.warn("[MP Webhook] Non-blocking payment_events insert note:", evtErr?.message);
-    });
+      // Fallback 3: Insert payment_events (Append-Only)
+      const providerEventId = `mp-wh-${paymentId}-${body.action || Date.now()}`;
+      const { error: evtErr } = await supabaseAdmin.from("payment_events").insert({
+        order_id: orderId,
+        payment_attempt_id: currentAttemptId,
+        provider: "mercadopago",
+        event_type: `webhook_${mpStatus}`,
+        normalized_status: normalizedStatus,
+        provider_status: mpStatus,
+        provider_event_id: providerEventId,
+        source: "webhook",
+        payload_sanitized: { payment_id: paymentId, status: mpStatus, detail: paymentData.status_detail },
+        processing_result: `Webhook Mercado Pago: ${normalizedStatus}`,
+        occurred_at: nowStr,
+      });
+      if (evtErr) console.error("[MP Webhook] payment_events insert error:", evtErr.message);
+    }
 
     // ══════════════════════════════════════════════════════════
     // Financial Execution: ONLY 'approved' status credits the order

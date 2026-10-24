@@ -173,8 +173,11 @@ Deno.serve(async (req: Request) => {
             });
             if (directRes.ok) {
               const dData = await directRes.json();
-              if (dData.external_reference === order_id || !dData.external_reference) {
+              // Financial integrity: strict external_reference equality required
+              if (dData.external_reference && String(dData.external_reference).trim() === String(order_id).trim()) {
                 paymentData = dData;
+              } else {
+                console.warn(`[confirm-payment] MP direct payment ${dData.id} rejected: external_reference mismatch ('${dData.external_reference}' !== '${order_id}')`);
               }
             }
           } catch (e) {
@@ -192,7 +195,11 @@ Deno.serve(async (req: Request) => {
             if (searchRes.ok) {
               const searchData = await searchRes.json();
               if (searchData.results?.length > 0) {
-                paymentData = searchData.results[0];
+                // Find matching payment with identical external_reference
+                const matched = searchData.results.find((p: any) => String(p.external_reference).trim() === String(order_id).trim());
+                if (matched) {
+                  paymentData = matched;
+                }
               }
             }
           } catch (e) {
