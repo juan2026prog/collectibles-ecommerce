@@ -72,11 +72,35 @@ async function recordAndExecuteJob(
       .single();
 
     if (insertErr) {
-      console.warn(`[Outbox] Job record insert conflict for ${jobType} (${eventId}):`, insertErr.message);
+      // If table is missing or insert failed critically, log and check if already completed
+      console.error(`[Outbox] Critical error inserting job ${jobType} (${eventId}):`, insertErr.message);
+      // If table doesn't exist or insert fails, re-check if existing was created by concurrent request
+      const { data: retryJob } = await supabaseClient
+        .from("order_execution_jobs")
+        .select("id, status")
+        .eq("job_type", jobType)
+        .eq("event_id", eventId)
+        .maybeSingle();
+
+      if (retryJob) {
+        if (retryJob.status === "COMPLETED") {
+          console.log(`[Outbox] Job ${jobType} (${eventId}) completed concurrently. Skipping.`);
+          return retryJob;
+        }
+        jobId = retryJob.id;
+      } else {
+        // Table doesn't exist or DB connection error: Halt execution to prevent non-idempotent duplicate side effects!
+        throw new Error(`DURABLE_OUTBOX_UNAVAILABLE: Cannot guarantee idempotency for ${jobType}. Cause: ${insertErr.message}`);
+      }
     } else {
       jobId = inserted?.id;
     }
   } else {
+    if (existingJob.status === "PROCESSING") {
+      console.log(`[Outbox] Job ${jobType} (${eventId}) is currently PROCESSING by another worker. Skipping duplicate invocation.`);
+      return existingJob;
+    }
+
     await supabaseClient
       .from("order_execution_jobs")
       .update({

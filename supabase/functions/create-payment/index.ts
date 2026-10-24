@@ -2,13 +2,14 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { verifyOptionalAuth } from "../_shared/auth.ts";
 import { corsHeaders, handleOptions, getCorsHeaders } from "../_shared/cors.ts";
-import { generateOrderAccessToken } from "../_shared/order-token.ts";
+import { getGuestTokenSecret, generateOrderAccessToken, verifyOrderAccessToken } from "../_shared/order-token.ts";
 
 
 interface PaymentRequest {
   provider: "dlocal" | "paypal" | "mercadopago";
   order_id: string;
   customer_email?: string;
+  order_token?: string;
 }
 
 function getCustomerName(order: Record<string, any>) {
@@ -35,7 +36,7 @@ serve(async (req: Request) => {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
     const user = await verifyOptionalAuth(req);
     const body = await req.json() as PaymentRequest;
-    const { provider, order_id: orderId, customer_email: customerEmail } = body;
+    const { provider, order_id: orderId, customer_email: customerEmail, order_token: orderToken } = body;
 
     if (!orderId) {
       throw new Error("Debes crear una orden validada antes de iniciar el pago.");
@@ -55,12 +56,18 @@ serve(async (req: Request) => {
       throw new Error("Esta orden ya fue pagada.");
     }
 
+    const guestSecret = await getGuestTokenSecret(supabaseServiceRoleKey);
+
     if (order.customer_id) {
       if (!user || user.id !== order.customer_id) {
         throw new Error("No tienes permisos para iniciar el pago de esta orden.");
       }
-    } else if (!customerEmail || customerEmail.toLowerCase() !== String(order.customer_email || "").toLowerCase()) {
-      throw new Error("No se pudo validar el email de la orden.");
+    } else {
+      // Guest buyer must prove order token possession issued at order creation
+      const isValidGuest = await verifyOrderAccessToken(orderToken, orderId, guestSecret);
+      if (!isValidGuest) {
+        throw new Error("Acceso no autorizado: token de orden de invitado inválido o ausente.");
+      }
     }
 
     const { data: settings } = await supabaseAdmin.from("site_settings").select("key, value");
@@ -359,7 +366,6 @@ serve(async (req: Request) => {
 
       const isLocalhost = origin.includes("localhost") || origin.includes("127.0.0.1");
       const mpOrigin = isLocalhost ? "https://collectibles-ecommerce.vercel.app" : origin;
-      const orderToken = await generateOrderAccessToken(orderId, supabaseServiceRoleKey);
 
       const preferencePayload = {
         items: mpItems,
@@ -369,9 +375,9 @@ serve(async (req: Request) => {
           surname: customer.name.split(" ").slice(1).join(" ") || "Guest",
         },
         back_urls: {
-          success: `${mpOrigin}/checkout/success?order_id=${orderId}&provider=mercadopago&order_token=${orderToken}`,
+          success: `${mpOrigin}/checkout/success?order_id=${orderId}&provider=mercadopago`,
           failure: `${mpOrigin}/checkout?error=pagorechazado`,
-          pending: `${mpOrigin}/checkout/success?order_id=${orderId}&provider=mercadopago&status=pending&order_token=${orderToken}`,
+          pending: `${mpOrigin}/checkout/success?order_id=${orderId}&provider=mercadopago&status=pending`,
         },
         auto_return: "approved",
         external_reference: String(orderId),
@@ -457,6 +463,21 @@ serve(async (req: Request) => {
             .update({ last_payment_attempt_id: attempt.id })
             .eq("id", orderId);
         }
+
+        // Traceability: Insert into payments table
+        await supabaseAdmin.from("payments").insert({
+          order_id: orderId,
+          provider: "mercadopago",
+          transaction_external_id: mpResult.id,
+          payment_url: checkoutUrl,
+          amount: amount,
+          currency: currency,
+          status: "redirected",
+          raw_request: preferencePayload,
+          raw_response: mpResult,
+        }).catch((pErr: any) => {
+          console.warn("[create-payment] payments table insert warning:", pErr?.message);
+        });
       } catch (traceErr: any) {
         console.warn("[create-payment] Non-blocking payment_attempts tracing warning:", traceErr?.message);
       }

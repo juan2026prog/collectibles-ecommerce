@@ -73,7 +73,6 @@ export default function CheckoutSuccess() {
 
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
-        if (data?.order_token && orderId) { sessionStorage.setItem('order_token_' + orderId, data.order_token); }
         if (data?.order) {
           setOrder(data.order);
           sessionStorage.setItem('pending_checkout_order', JSON.stringify(data.order));

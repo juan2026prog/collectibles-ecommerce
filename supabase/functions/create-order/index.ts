@@ -5,6 +5,7 @@ import { verifyOptionalAuth } from "../_shared/auth.ts";
 
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { syncProductsToCloudflareD1 } from "../_shared/cloudflareCatalogSync.ts";
+import { getGuestTokenSecret, generateOrderAccessToken } from "../_shared/order-token.ts";
 
 const itemSchema = z.object({
   product_id: z.string().uuid().optional(),
@@ -1868,8 +1869,13 @@ function sanitizePayloadForLogging(data: any) {
       console.warn('[D1-Sync-N1] Excepción atrapada en Nivel 1:', e);
     }
 
+    // Generate guest order access token securely for unauthenticated buyer
+    const guestSecret = await getGuestTokenSecret(supabaseServiceKey);
+    const guestOrderToken = await generateOrderAccessToken(orderResult.order_id, guestSecret);
+
     return new Response(JSON.stringify({
       success: true,
+      order_token: guestOrderToken,
       order: {
         id: orderResult.order_id,
         order_number: orderResult.order_number,

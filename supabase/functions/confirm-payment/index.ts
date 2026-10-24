@@ -5,7 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { verifyOptionalAuth } from "../_shared/auth.ts";
 import { finalizeOrderIfNeeded, orderSummary } from "../_shared/order-payments.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
-import { verifyOrderAccessToken, generateOrderAccessToken } from "../_shared/order-token.ts";
+import { getGuestTokenSecret, verifyOrderAccessToken } from "../_shared/order-token.ts";
 
 declare const Deno: any;
 
@@ -52,35 +52,33 @@ Deno.serve(async (req: Request) => {
       if (prof?.is_admin) isAdmin = true;
     }
 
-    // Check order token authorization (strong guest proof)
-    const isTokenValid = await verifyOrderAccessToken(order_token, order_id, supabaseServiceRoleKey);
+    // Guest secret derived without exposing raw service role key
+    const guestSecret = await getGuestTokenSecret(supabaseServiceRoleKey);
 
-    const reqEmail = (customer_email || "").trim().toLowerCase();
-    const orderEmail = String(currentOrder.customer_email || "").trim().toLowerCase();
-    const isEmailMatched = reqEmail.length > 0 && reqEmail === orderEmail;
+    // Check order token authorization (strong guest proof delivered at order creation)
+    const isTokenValid = await verifyOrderAccessToken(order_token, order_id, guestSecret);
+
     const isUserMatched = Boolean(user && currentOrder.customer_id && user.id === currentOrder.customer_id);
 
     // Fully authorized: Admin, Authenticated Buyer, or Guest holding valid cryptographic order token
     const isFullyAuthorized = isAdmin || isUserMatched || isTokenValid;
 
-    // Authorization Gate:
+    // Strict Authorization Gate:
     // If registered buyer's order: must be admin or logged-in buyer.
-    // If guest order: must have valid order_token or email match or admin.
+    // If guest order: must have valid order_token (generated at order creation) or be admin.
+    // UUID + email alone is strictly rejected to prevent privilege escalation.
     if (currentOrder.customer_id) {
       if (!isAdmin && !isUserMatched) {
         throw new Error("No tienes permisos para consultar esta orden.");
       }
     } else {
-      if (!isAdmin && !isTokenValid && !isEmailMatched) {
-        throw new Error("Acceso no autorizado a la orden de invitado.");
+      if (!isAdmin && !isTokenValid) {
+        throw new Error("Acceso no autorizado a la orden de invitado: token de acceso inválido o ausente.");
       }
     }
 
     const { data: settings } = await supabaseClient.from("site_settings").select("key, value");
     const config = Object.fromEntries((settings || []).map((item: any) => [item.key, item.value]));
-
-    // Generate fresh order access token to return to frontend if guest
-    const verifiedOrderToken = await generateOrderAccessToken(order_id, supabaseServiceRoleKey);
 
     if (provider === "paypal") {
       if (!external_id || (currentOrder.payment_id && currentOrder.payment_id !== external_id)) {
@@ -91,7 +89,7 @@ Deno.serve(async (req: Request) => {
         return new Response(JSON.stringify({ 
           success: true, 
           status: "paid", 
-          order_token: verifiedOrderToken,
+          
           order: orderSummary(currentOrder, isFullyAuthorized) 
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -143,7 +141,7 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ 
         success: true, 
         status: "paid", 
-        order_token: verifiedOrderToken,
+        
         order: orderSummary(paidOrder, isFullyAuthorized) 
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -155,7 +153,7 @@ Deno.serve(async (req: Request) => {
         return new Response(JSON.stringify({ 
           success: true, 
           status: "paid", 
-          order_token: verifiedOrderToken,
+          
           order: orderSummary(currentOrder, isFullyAuthorized) 
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -224,7 +222,7 @@ Deno.serve(async (req: Request) => {
             return new Response(JSON.stringify({ 
               success: true, 
               status: "paid", 
-              order_token: verifiedOrderToken,
+              
               order: orderSummary(paidOrder, isFullyAuthorized) 
             }), {
               headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -238,7 +236,7 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ 
         success: true, 
         status: currentOrder.status || "pending", 
-        order_token: verifiedOrderToken,
+        
         order: orderSummary(currentOrder, isFullyAuthorized) 
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -249,7 +247,7 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({ 
         success: true, 
         status: currentOrder.status || "pending", 
-        order_token: verifiedOrderToken,
+        
         order: orderSummary(currentOrder, isFullyAuthorized) 
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -261,7 +259,7 @@ Deno.serve(async (req: Request) => {
         return new Response(JSON.stringify({ 
           success: true, 
           status: "paid", 
-          order_token: verifiedOrderToken,
+          
           order: orderSummary(currentOrder, isFullyAuthorized) 
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -289,7 +287,7 @@ Deno.serve(async (req: Request) => {
         return new Response(JSON.stringify({ 
           success: true, 
           status: "paid", 
-          order_token: verifiedOrderToken,
+          
           order: orderSummary(paidOrder, isFullyAuthorized) 
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -299,7 +297,7 @@ Deno.serve(async (req: Request) => {
       return new Response(JSON.stringify({
         success: true,
         status: currentOrder.payment_status || currentOrder.status || "pending_payment",
-        order_token: verifiedOrderToken,
+        
         order: orderSummary(currentOrder, isFullyAuthorized),
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -213,8 +213,8 @@ Deno.serve(async (req: Request) => {
     console.log(`[MP Webhook] Payment ${paymentId}, Status: ${paymentData.status}, Order: ${orderId}`);
 
     if (!orderId) {
-      console.warn(`[MP Webhook] Payment ${paymentId} has no external_reference (Order ID)`);
-      return new Response(JSON.stringify({ received: true, info: "Missing external_reference" }), {
+      console.warn(`[MP Webhook] Payment ${paymentId} has no external_reference (Order ID). Rejection required.`);
+      return new Response(JSON.stringify({ received: true, ignored: true, error: "Missing external_reference" }), {
         status: 200,
         headers: responseHeaders,
       });
@@ -301,6 +301,46 @@ Deno.serve(async (req: Request) => {
         .select()
         .single();
       if (newAttempt) currentAttemptId = newAttempt.id;
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // Traceability: Insert or Update payments table
+    // ══════════════════════════════════════════════════════════
+    try {
+      const { data: existingPayment } = await supabaseAdmin
+        .from("payments")
+        .select("id")
+        .eq("order_id", orderId)
+        .eq("provider", "mercadopago")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (existingPayment) {
+        await supabaseAdmin
+          .from("payments")
+          .update({
+            status: normalizedStatus,
+            transaction_external_id: paymentId.toString(),
+            raw_webhook: paymentData,
+            updated_at: nowStr,
+          })
+          .eq("id", existingPayment.id);
+      } else {
+        await supabaseAdmin
+          .from("payments")
+          .insert({
+            order_id: orderId,
+            provider: "mercadopago",
+            transaction_external_id: paymentId.toString(),
+            amount: paymentData.transaction_amount || 0,
+            currency: paymentData.currency_id || "UYU",
+            status: normalizedStatus,
+            raw_webhook: paymentData,
+          });
+      }
+    } catch (pErr: any) {
+      console.warn("[MP Webhook] Non-blocking payments table recording note:", pErr?.message);
     }
 
     // ══════════════════════════════════════════════════════════

@@ -126,6 +126,9 @@ export async function createCheckoutOrder(params: CreateOrderParams) {
 
     try {
       sessionStorage.setItem('pending_checkout_order', JSON.stringify(data.order));
+      if (data.order_token && data.order.id) {
+        sessionStorage.setItem(`order_token_${data.order.id}`, data.order_token);
+      }
     } catch {
       // Ignore storage failures; the payment flow can continue without local cache.
     }
@@ -176,9 +179,11 @@ export async function startCheckoutPayment(params: StartPaymentParams): Promise<
   }
 
   const endpoint = CREATE_PAYMENT_URL;
+  const guestOrderToken = sessionStorage.getItem(`order_token_${params.order_id}`) || undefined;
   const payload = {
     ...params,
-    provider: params.provider === 'dlocalgo' ? 'dlocal' : params.provider
+    provider: params.provider === 'dlocalgo' ? 'dlocal' : params.provider,
+    order_token: guestOrderToken,
   };
   const response = await fetch(endpoint, {
     method: 'POST',
