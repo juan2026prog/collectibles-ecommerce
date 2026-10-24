@@ -300,131 +300,22 @@ Deno.serve(async (req: Request) => {
     let currentAttemptId: string | null = atomicPersistResult?.attempt_id || null;
 
     if (atomicPersistErr) {
-      console.warn("[MP Webhook] Atomic persistence RPC unavailable or failed. Executing fallback sequential persistence:", atomicPersistErr.message);
-
-      // Fallback 1: Update or Insert payment_attempts
-      const { data: existingAttempt } = await supabaseAdmin
-        .from("payment_attempts")
-        .select("id")
-        .eq("order_id", orderId)
-        .order("attempt_number", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (existingAttempt) {
-        currentAttemptId = existingAttempt.id;
-        const { error: updErr } = await supabaseAdmin
-          .from("payment_attempts")
-          .update({
-            normalized_status: effectiveNormalizedStatus,
-            provider_status: mpStatus,
-            provider_status_detail: paymentData.status_detail || "",
-            external_payment_id: paymentId.toString(),
-            approved_at: (effectiveNormalizedStatus === "approved") ? nowStr : undefined,
-            rejected_at: (effectiveNormalizedStatus === "rejected") ? nowStr : undefined,
-            cancelled_at: (effectiveNormalizedStatus === "cancelled") ? nowStr : undefined,
-            error_code: paymentData.status_detail,
-            updated_at: nowStr,
-          })
-          .eq("id", existingAttempt.id);
-        if (updErr) console.error("[MP Webhook] payment_attempts update error:", updErr.message);
-      } else {
-        const { data: newAttempt, error: insErr } = await supabaseAdmin
-          .from("payment_attempts")
-          .insert({
-            order_id: orderId,
-            provider: "mercadopago",
-            payment_method_type: "mercadopago",
-            attempt_number: 1,
-            amount: paidAmount,
-            currency: paidCurrency,
-            normalized_status: effectiveNormalizedStatus,
-            provider_status: mpStatus,
-            provider_status_detail: paymentData.status_detail || "",
-            external_payment_id: paymentId.toString(),
-            initiated_at: nowStr,
-            approved_at: (effectiveNormalizedStatus === "approved") ? nowStr : undefined,
-          })
-          .select("id")
-          .single();
-        if (newAttempt) currentAttemptId = newAttempt.id;
-        if (insErr) console.error("[MP Webhook] payment_attempts insert error:", insErr.message);
-      }
-
-      // Fallback 2: Upsert payments table
-      // Map effective status to a valid payments.status ('failed' for financial mismatch / manual verification)
-      const fallbackPaymentsStatus = isFraudOrMismatch 
-        ? "failed" 
-        : (effectiveNormalizedStatus === "initiated" || effectiveNormalizedStatus === "processing" ? "pending" : (effectiveNormalizedStatus === "expired" ? "cancelled" : effectiveNormalizedStatus));
-
-      const { data: existingPayment } = await supabaseAdmin
-        .from("payments")
-        .select("id")
-        .eq("order_id", orderId)
-        .eq("provider", "mercadopago")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (existingPayment) {
-        const { error: payUpdErr } = await supabaseAdmin
-          .from("payments")
-          .update({
-            status: fallbackPaymentsStatus,
-            transaction_external_id: paymentId.toString(),
-            raw_webhook: paymentData,
-            updated_at: nowStr,
-          })
-          .eq("id", existingPayment.id);
-        if (payUpdErr) console.error("[MP Webhook] payments update error:", payUpdErr.message);
-      } else {
-        const { error: payInsErr } = await supabaseAdmin
-          .from("payments")
-          .insert({
-            order_id: orderId,
-            provider: "mercadopago",
-            transaction_external_id: paymentId.toString(),
-            amount: paidAmount,
-            currency: paidCurrency,
-            status: fallbackPaymentsStatus,
-            raw_webhook: paymentData,
-          });
-        if (payInsErr) console.error("[MP Webhook] payments insert error:", payInsErr.message);
-      }
-
-      // Fallback 3: Insert payment_events (Append-Only)
-      const { error: evtErr } = await supabaseAdmin.from("payment_events").insert({
-        order_id: orderId,
-        payment_attempt_id: currentAttemptId,
-        provider: "mercadopago",
-        event_type: isFraudOrMismatch ? "fraud_suspected" : `webhook_${mpStatus}`,
-        normalized_status: effectiveNormalizedStatus,
-        provider_status: mpStatus,
-        provider_event_id: stableEventId,
-        source: "webhook",
-        payload_sanitized: { payment_id: paymentId, status: mpStatus, detail: paymentData.status_detail, paidAmount, orderAmount, paidCurrency, expectedCurrency },
-        processing_result: isFraudOrMismatch ? "Rechazado por discrepancia financiera" : `Webhook Mercado Pago: ${effectiveNormalizedStatus}`,
-        occurred_at: nowStr,
+      console.error("[MP Webhook] CRITICAL: record_payment_transaction_atomic failed:", atomicPersistErr.message);
+      // Return 500 to trigger Mercado Pago legitimate webhook retry without silent data loss
+      // Never proceed to finalize or credit an order when atomic transaction persistence fails!
+      return new Response(JSON.stringify({ 
+        error: "Database atomic persistence failed", 
+        detail: atomicPersistErr.message,
+        retryable: true 
+      }), {
+        status: 500,
+        headers: responseHeaders,
       });
-      if (evtErr) console.error("[MP Webhook] payment_events insert error:", evtErr.message);
-
-      // Update order status only if NOT a mismatch
-      if (!isFraudOrMismatch) {
-        await supabaseAdmin
-          .from("orders")
-          .update({
-            payment_status: effectiveNormalizedStatus,
-            payment_provider: "mercadopago",
-            last_payment_attempt_id: currentAttemptId,
-            updated_at: nowStr,
-          })
-          .eq("id", orderId);
-      }
     }
 
     // If financial mismatch occurred on approved payment, halt order confirmation
     if (isFraudOrMismatch) {
-      return new Response(JSON.stringify({ received: true, error: "Financial integrity mismatch: payment recorded as fraud_suspected without crediting order" }), {
+      return new Response(JSON.stringify({ received: true, error: "Financial integrity mismatch: payment recorded as manual_verification_required without crediting order" }), {
         status: 200,
         headers: responseHeaders,
       });

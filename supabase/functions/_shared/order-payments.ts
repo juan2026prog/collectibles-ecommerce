@@ -42,16 +42,27 @@ async function recordAndExecuteJob(
 ) {
   const { orderId, suborderId, jobType, eventId, payload = {}, executor } = params;
 
-  // 1. Try to insert pending job into order_execution_jobs
-  const { data: existingJob } = await supabaseClient
+  // 1. Try to query existing job with complete lease and execution fields
+  const { data: existingJob, error: queryErr } = await supabaseClient
     .from("order_execution_jobs")
-    .select("id, status, attempts")
+    .select("id, status, attempts, max_attempts, locked_at, locked_by")
     .eq("job_type", jobType)
     .eq("event_id", eventId)
     .maybeSingle();
 
+  if (queryErr) {
+    console.error(`[Outbox] Error querying job ${jobType} (${eventId}):`, queryErr.message);
+    throw new Error(`DURABLE_OUTBOX_UNAVAILABLE: Failed to query job state: ${queryErr.message}`);
+  }
+
   if (existingJob && existingJob.status === "COMPLETED") {
     console.log(`[Outbox] Job ${jobType} (${eventId}) already COMPLETED. Skipping.`);
+    return existingJob;
+  }
+
+  // Check if job has already exhausted max_attempts
+  if (existingJob && (existingJob.attempts || 0) >= (existingJob.max_attempts || 5) && existingJob.status === "FAILED") {
+    console.warn(`[Outbox] Job ${jobType} (${eventId}) has exhausted maximum attempts (${existingJob.attempts}/${existingJob.max_attempts || 5}). Skipping invocation.`);
     return existingJob;
   }
 
@@ -60,6 +71,7 @@ async function recordAndExecuteJob(
   const nowIso = new Date().toISOString();
 
   if (!jobId) {
+    // Attempt atomic insertion with PROCESSING status and lease ownership
     const { data: inserted, error: insertErr } = await supabaseClient
       .from("order_execution_jobs")
       .insert({
@@ -70,6 +82,7 @@ async function recordAndExecuteJob(
         status: "PROCESSING",
         payload,
         attempts: 1,
+        max_attempts: 5,
         locked_by: executionWorkerId,
         locked_at: nowIso,
       })
@@ -77,41 +90,74 @@ async function recordAndExecuteJob(
       .single();
 
     if (insertErr) {
-      // If table is missing or insert failed critically, log and check if already completed
-      console.error(`[Outbox] Critical error inserting job ${jobType} (${eventId}):`, insertErr.message);
-      // If table doesn't exist or insert fails, re-check if existing was created by concurrent request
+      console.warn(`[Outbox] Job insert conflict or failure for ${jobType} (${eventId}):`, insertErr.message);
+      // Re-query: If inserted concurrently by another worker, attempt atomic lease claim
       const { data: retryJob } = await supabaseClient
         .from("order_execution_jobs")
-        .select("id, status, locked_at, locked_by")
+        .select("id, status, attempts, max_attempts, locked_at, locked_by")
         .eq("job_type", jobType)
         .eq("event_id", eventId)
         .maybeSingle();
 
-      if (retryJob) {
-        if (retryJob.status === "COMPLETED") {
-          console.log(`[Outbox] Job ${jobType} (${eventId}) completed concurrently. Skipping.`);
-          return retryJob;
-        }
-        jobId = retryJob.id;
-      } else {
-        // Table doesn't exist or DB connection error: Halt execution to prevent non-idempotent duplicate side effects!
+      if (!retryJob) {
         throw new Error(`DURABLE_OUTBOX_UNAVAILABLE: Cannot guarantee idempotency for ${jobType}. Cause: ${insertErr.message}`);
       }
+
+      if (retryJob.status === "COMPLETED") {
+        console.log(`[Outbox] Job ${jobType} (${eventId}) completed concurrently. Skipping.`);
+        return retryJob;
+      }
+
+      if ((retryJob.attempts || 0) >= (retryJob.max_attempts || 5) && retryJob.status === "FAILED") {
+        console.warn(`[Outbox] Concurrently found job ${jobType} has exhausted attempts. Skipping.`);
+        return retryJob;
+      }
+
+      // Check if lease is active
+      const retryLockTime = retryJob.locked_at ? new Date(retryJob.locked_at).getTime() : 0;
+      const isRetryLockActive = retryJob.status === "PROCESSING" && (Date.now() - retryLockTime) < 300000;
+      if (isRetryLockActive) {
+        console.log(`[Outbox] Job ${jobType} is actively held by ${retryJob.locked_by}. Skipping.`);
+        return retryJob;
+      }
+
+      // Atomic conditional update to claim lease
+      const { data: claimedJob, error: claimErr } = await supabaseClient
+        .from("order_execution_jobs")
+        .update({
+          status: "PROCESSING",
+          attempts: (retryJob.attempts || 0) + 1,
+          locked_by: executionWorkerId,
+          locked_at: nowIso,
+          updated_at: nowIso,
+        })
+        .eq("id", retryJob.id)
+        .or(`status.in.(PENDING,RETRYING,FAILED),and(status.eq.PROCESSING,locked_at.lt.${new Date(Date.now() - 300000).toISOString()}),locked_at.is.null`)
+        .select("id")
+        .maybeSingle();
+
+      if (claimErr || !claimedJob) {
+        console.log(`[Outbox] Could not atomically claim concurrent job ${jobType}. Skipping to prevent race.`);
+        return retryJob;
+      }
+
+      jobId = claimedJob.id;
     } else {
       jobId = inserted?.id;
     }
   } else {
-    // If existing job is currently processing and lock is active (< 300s), skip duplicate execution
+    // Job already existed: Check if currently processing and lock is active (< 300s)
     if (existingJob.status === "PROCESSING") {
       const lockTime = existingJob.locked_at ? new Date(existingJob.locked_at).getTime() : 0;
       const isLockActive = (Date.now() - lockTime) < 300000;
       if (isLockActive) {
-        console.log(`[Outbox] Job ${jobType} (${eventId}) is currently actively PROCESSING by ${existingJob.locked_by || 'another worker'}. Skipping duplicate invocation.`);
+        console.log(`[Outbox] Job ${jobType} (${eventId}) is actively PROCESSING by ${existingJob.locked_by || 'another worker'}. Skipping duplicate invocation.`);
         return existingJob;
       }
     }
 
-    await supabaseClient
+    // Atomic conditional lease acquisition: Only update if still in eligible state and lease unheld or expired
+    const { data: claimedJob, error: updateErr } = await supabaseClient
       .from("order_execution_jobs")
       .update({
         status: "PROCESSING",
@@ -120,7 +166,15 @@ async function recordAndExecuteJob(
         locked_at: nowIso,
         updated_at: nowIso,
       })
-      .eq("id", jobId);
+      .eq("id", jobId)
+      .or(`status.in.(PENDING,RETRYING,FAILED),and(status.eq.PROCESSING,locked_at.lt.${new Date(Date.now() - 300000).toISOString()}),locked_at.is.null`)
+      .select("id")
+      .maybeSingle();
+
+    if (updateErr || !claimedJob) {
+      console.log(`[Outbox] Lost race to claim job ${jobId} (${jobType}). Skipping duplicate execution.`);
+      return existingJob;
+    }
   }
 
   // 2. Execute the downstream task
