@@ -56,6 +56,9 @@ async function recordAndExecuteJob(
   }
 
   let jobId = existingJob?.id;
+  const executionWorkerId = `direct-exec-${Math.random().toString(36).slice(2, 9)}`;
+  const nowIso = new Date().toISOString();
+
   if (!jobId) {
     const { data: inserted, error: insertErr } = await supabaseClient
       .from("order_execution_jobs")
@@ -67,6 +70,8 @@ async function recordAndExecuteJob(
         status: "PROCESSING",
         payload,
         attempts: 1,
+        locked_by: executionWorkerId,
+        locked_at: nowIso,
       })
       .select("id")
       .single();
@@ -77,7 +82,7 @@ async function recordAndExecuteJob(
       // If table doesn't exist or insert fails, re-check if existing was created by concurrent request
       const { data: retryJob } = await supabaseClient
         .from("order_execution_jobs")
-        .select("id, status")
+        .select("id, status, locked_at, locked_by")
         .eq("job_type", jobType)
         .eq("event_id", eventId)
         .maybeSingle();
@@ -96,9 +101,14 @@ async function recordAndExecuteJob(
       jobId = inserted?.id;
     }
   } else {
+    // If existing job is currently processing and lock is active (< 300s), skip duplicate execution
     if (existingJob.status === "PROCESSING") {
-      console.log(`[Outbox] Job ${jobType} (${eventId}) is currently PROCESSING by another worker. Skipping duplicate invocation.`);
-      return existingJob;
+      const lockTime = existingJob.locked_at ? new Date(existingJob.locked_at).getTime() : 0;
+      const isLockActive = (Date.now() - lockTime) < 300000;
+      if (isLockActive) {
+        console.log(`[Outbox] Job ${jobType} (${eventId}) is currently actively PROCESSING by ${existingJob.locked_by || 'another worker'}. Skipping duplicate invocation.`);
+        return existingJob;
+      }
     }
 
     await supabaseClient
@@ -106,7 +116,9 @@ async function recordAndExecuteJob(
       .update({
         status: "PROCESSING",
         attempts: (existingJob.attempts || 0) + 1,
-        updated_at: new Date().toISOString(),
+        locked_by: executionWorkerId,
+        locked_at: nowIso,
+        updated_at: nowIso,
       })
       .eq("id", jobId);
   }
@@ -122,8 +134,11 @@ async function recordAndExecuteJob(
           processed_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           last_error: null,
+          locked_by: null,
+          locked_at: null,
         })
-        .eq("id", jobId);
+        .eq("id", jobId)
+        .eq("locked_by", executionWorkerId);
     }
     return result;
   } catch (err: any) {
@@ -135,8 +150,11 @@ async function recordAndExecuteJob(
           status: "FAILED",
           last_error: err?.message || String(err),
           updated_at: new Date().toISOString(),
+          locked_by: null,
+          locked_at: null,
         })
-        .eq("id", jobId);
+        .eq("id", jobId)
+        .eq("locked_by", executionWorkerId);
     }
   }
 }

@@ -254,21 +254,45 @@ Deno.serve(async (req: Request) => {
     }
 
     // ══════════════════════════════════════════════════════════
-    // Traceability: Consistent Multi-table Persistence
-    // Attempts to use record_payment_transaction_atomic RPC if available,
-    // otherwise executes with robust sequential error checking.
+    // FINANCIAL INTEGRITY GATE: Validate amount & currency BEFORE updating order status
     // ══════════════════════════════════════════════════════════
+    const paidAmount = Number(paymentData.transaction_amount || 0);
+    const orderAmount = Number(order.total_amount || 0);
+    const paidCurrency = String(paymentData.currency_id || "").toUpperCase();
+    const expectedCurrency = String(order.currency || "UYU").toUpperCase();
+
+    const isCurrencyValid = paidCurrency === expectedCurrency;
+    const paidCents = Math.round(paidAmount * 100);
+    const orderCents = Math.round(orderAmount * 100);
+    const isAmountValid = paidCents === orderCents;
+
+    let effectiveNormalizedStatus = normalizedStatus;
+    let isFraudOrMismatch = false;
+
+    if (mpStatus === "approved" && (!isCurrencyValid || !isAmountValid)) {
+      isFraudOrMismatch = true;
+      effectiveNormalizedStatus = "fraud_suspected";
+      console.error(`🚨 [MP Webhook] FINANCIAL MISMATCH on approved payment ${paymentId} for order ${orderId}: paid ${paidAmount} ${paidCurrency}, expected ${orderAmount} ${expectedCurrency}`);
+    }
+
+    // ══════════════════════════════════════════════════════════
+    // Traceability: Consistent Multi-table Persistence
+    // Stable provider_event_id: mp-wh-{paymentId}-{status} for true deduplication
+    // ══════════════════════════════════════════════════════════
+    const stableEventId = `mp-wh-${paymentId}-${mpStatus}`;
+
     const { data: atomicPersistResult, error: atomicPersistErr } = await supabaseAdmin.rpc("record_payment_transaction_atomic", {
       p_order_id: orderId,
       p_provider: "mercadopago",
       p_external_payment_id: paymentId.toString(),
-      p_amount: Number(paymentData.transaction_amount || 0),
-      p_currency: String(paymentData.currency_id || "UYU"),
-      p_normalized_status: normalizedStatus,
+      p_amount: paidAmount,
+      p_currency: paidCurrency,
+      p_normalized_status: effectiveNormalizedStatus,
       p_provider_status: mpStatus,
       p_provider_status_detail: paymentData.status_detail || "",
       p_raw_payload: paymentData,
-      p_source: "webhook"
+      p_source: "webhook",
+      p_provider_event_id: stableEventId,
     });
 
     let currentAttemptId: string | null = atomicPersistResult?.attempt_id || null;
@@ -290,13 +314,13 @@ Deno.serve(async (req: Request) => {
         const { error: updErr } = await supabaseAdmin
           .from("payment_attempts")
           .update({
-            normalized_status: normalizedStatus,
+            normalized_status: effectiveNormalizedStatus,
             provider_status: mpStatus,
             provider_status_detail: paymentData.status_detail || "",
             external_payment_id: paymentId.toString(),
-            approved_at: (normalizedStatus === "approved") ? nowStr : undefined,
-            rejected_at: (normalizedStatus === "rejected") ? nowStr : undefined,
-            cancelled_at: (normalizedStatus === "cancelled") ? nowStr : undefined,
+            approved_at: (effectiveNormalizedStatus === "approved") ? nowStr : undefined,
+            rejected_at: (effectiveNormalizedStatus === "rejected") ? nowStr : undefined,
+            cancelled_at: (effectiveNormalizedStatus === "cancelled") ? nowStr : undefined,
             error_code: paymentData.status_detail,
             updated_at: nowStr,
           })
@@ -310,14 +334,14 @@ Deno.serve(async (req: Request) => {
             provider: "mercadopago",
             payment_method_type: "mercadopago",
             attempt_number: 1,
-            amount: paymentData.transaction_amount || 0,
-            currency: paymentData.currency_id || "UYU",
-            normalized_status: normalizedStatus,
+            amount: paidAmount,
+            currency: paidCurrency,
+            normalized_status: effectiveNormalizedStatus,
             provider_status: mpStatus,
             provider_status_detail: paymentData.status_detail || "",
             external_payment_id: paymentId.toString(),
             initiated_at: nowStr,
-            approved_at: (normalizedStatus === "approved") ? nowStr : undefined,
+            approved_at: (effectiveNormalizedStatus === "approved") ? nowStr : undefined,
           })
           .select("id")
           .single();
@@ -339,7 +363,7 @@ Deno.serve(async (req: Request) => {
         const { error: payUpdErr } = await supabaseAdmin
           .from("payments")
           .update({
-            status: normalizedStatus,
+            status: effectiveNormalizedStatus,
             transaction_external_id: paymentId.toString(),
             raw_webhook: paymentData,
             updated_at: nowStr,
@@ -353,92 +377,60 @@ Deno.serve(async (req: Request) => {
             order_id: orderId,
             provider: "mercadopago",
             transaction_external_id: paymentId.toString(),
-            amount: paymentData.transaction_amount || 0,
-            currency: paymentData.currency_id || "UYU",
-            status: normalizedStatus,
+            amount: paidAmount,
+            currency: paidCurrency,
+            status: effectiveNormalizedStatus,
             raw_webhook: paymentData,
           });
         if (payInsErr) console.error("[MP Webhook] payments insert error:", payInsErr.message);
       }
 
       // Fallback 3: Insert payment_events (Append-Only)
-      const providerEventId = `mp-wh-${paymentId}-${body.action || Date.now()}`;
       const { error: evtErr } = await supabaseAdmin.from("payment_events").insert({
         order_id: orderId,
         payment_attempt_id: currentAttemptId,
         provider: "mercadopago",
-        event_type: `webhook_${mpStatus}`,
-        normalized_status: normalizedStatus,
+        event_type: isFraudOrMismatch ? "fraud_suspected" : `webhook_${mpStatus}`,
+        normalized_status: effectiveNormalizedStatus,
         provider_status: mpStatus,
-        provider_event_id: providerEventId,
+        provider_event_id: stableEventId,
         source: "webhook",
-        payload_sanitized: { payment_id: paymentId, status: mpStatus, detail: paymentData.status_detail },
-        processing_result: `Webhook Mercado Pago: ${normalizedStatus}`,
+        payload_sanitized: { payment_id: paymentId, status: mpStatus, detail: paymentData.status_detail, paidAmount, orderAmount, paidCurrency, expectedCurrency },
+        processing_result: isFraudOrMismatch ? "Rechazado por discrepancia financiera" : `Webhook Mercado Pago: ${effectiveNormalizedStatus}`,
         occurred_at: nowStr,
       });
       if (evtErr) console.error("[MP Webhook] payment_events insert error:", evtErr.message);
+
+      // Update order status only if NOT a mismatch
+      if (!isFraudOrMismatch) {
+        await supabaseAdmin
+          .from("orders")
+          .update({
+            payment_status: effectiveNormalizedStatus,
+            payment_provider: "mercadopago",
+            last_payment_attempt_id: currentAttemptId,
+            updated_at: nowStr,
+          })
+          .eq("id", orderId);
+      }
+    }
+
+    // If financial mismatch occurred on approved payment, halt order confirmation
+    if (isFraudOrMismatch) {
+      return new Response(JSON.stringify({ received: true, error: "Financial integrity mismatch: payment recorded as fraud_suspected without crediting order" }), {
+        status: 200,
+        headers: responseHeaders,
+      });
     }
 
     // ══════════════════════════════════════════════════════════
-    // Financial Execution: ONLY 'approved' status credits the order
-    // 'authorized', 'in_process', 'pending' DO NOT credit the order
+    // Financial Execution: ONLY genuinely approved payments credit and finalize order
     // ══════════════════════════════════════════════════════════
     if (mpStatus === "approved") {
       // IDEMPOTENCY: Skip if already finalized
       if (order.payment_processed_at || ['paid', 'confirmed'].includes(order.status)) {
         console.log(`⚠️ [MP Webhook] Order ${orderId} already processed. Skipping duplicate finalization.`);
         return new Response(JSON.stringify({ received: true, skipped: true, info: "Order already finalized" }), {
-          status: 200,
-          headers: responseHeaders,
-        });
-      }
-
-      // STRICT FINANCIAL INTEGRITY VALIDATION
-      const paidAmount = Number(paymentData.transaction_amount || 0);
-      const orderAmount = Number(order.total_amount || 0);
-      const paidCurrency = String(paymentData.currency_id || "").toUpperCase();
-      const expectedCurrency = String(order.currency || "UYU").toUpperCase();
-
-      if (paidCurrency !== expectedCurrency) {
-        console.error(`🚨 [MP Webhook] CURRENCY MISMATCH for order ${orderId}: expected ${expectedCurrency}, received ${paidCurrency}`);
-        await supabaseAdmin.from("payment_events").insert({
-          order_id: orderId,
-          payment_attempt_id: currentAttemptId,
-          provider: "mercadopago",
-          event_type: "currency_mismatch_rejected",
-          normalized_status: "fraud_suspected",
-          provider_status: mpStatus,
-          provider_event_id: `mismatch-curr-${paymentId}-${Date.now()}`,
-          source: "webhook",
-          payload_sanitized: { paidCurrency, expectedCurrency },
-          processing_result: "Rechazado por discrepancia de moneda",
-          occurred_at: nowStr,
-        }).catch(() => {});
-        return new Response(JSON.stringify({ received: true, error: "Currency mismatch rejected" }), {
-          status: 200,
-          headers: responseHeaders,
-        });
-      }
-
-      // Strict amount check with zero tolerance: cents comparison
-      const paidCents = Math.round(paidAmount * 100);
-      const orderCents = Math.round(orderAmount * 100);
-      if (paidCents !== orderCents) {
-        console.error(`🚨 [MP Webhook] AMOUNT MISMATCH for order ${orderId}: expected ${orderAmount} (${orderCents}c), received ${paidAmount} (${paidCents}c)`);
-        await supabaseAdmin.from("payment_events").insert({
-          order_id: orderId,
-          payment_attempt_id: currentAttemptId,
-          provider: "mercadopago",
-          event_type: "amount_mismatch_rejected",
-          normalized_status: "fraud_suspected",
-          provider_status: mpStatus,
-          provider_event_id: `mismatch-amt-${paymentId}-${Date.now()}`,
-          source: "webhook",
-          payload_sanitized: { paidAmount, orderAmount, paidCents, orderCents },
-          processing_result: "Rechazado por discrepancia en el importe cobrado",
-          occurred_at: nowStr,
-        }).catch(() => {});
-        return new Response(JSON.stringify({ received: true, error: "Amount mismatch rejected" }), {
           status: 200,
           headers: responseHeaders,
         });

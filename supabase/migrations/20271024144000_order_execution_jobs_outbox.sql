@@ -1,6 +1,11 @@
 -- ==============================================================================
 -- COLLECTIBLES 2026 — ORDER EXECUTION JOBS, OUTBOX WORKER & PAYMENT ATOMIC RPC
 -- Migration: 20271024144000_order_execution_jobs_outbox.sql
+-- Description:
+-- 1. Table order_execution_jobs with locking, attempts, and payload.
+-- 2. Concurrency-safe claim function claim_order_execution_jobs with FOR UPDATE SKIP LOCKED.
+-- 3. Multi-table atomic persistence RPC record_payment_transaction_atomic linked by payment ID.
+-- 4. Inactive cron registration definition for pg_cron outbox sweep.
 -- ==============================================================================
 
 -- 1. Table: order_execution_jobs
@@ -83,7 +88,7 @@ BEGIN
             )
             OR (
                 j.status = 'PROCESSING'
-                AND j.locked_at < clock_timestamp() - (p_lock_seconds || ' seconds')::INTERVAL
+                AND (j.locked_at IS NULL OR j.locked_at < clock_timestamp() - (p_lock_seconds || ' seconds')::INTERVAL)
             )
             OR (
                 j.status = 'FAILED'
@@ -130,29 +135,51 @@ CREATE OR REPLACE FUNCTION public.record_payment_transaction_atomic(
     p_provider_status TEXT,
     p_provider_status_detail TEXT,
     p_raw_payload JSONB DEFAULT '{}'::jsonb,
-    p_source TEXT DEFAULT 'webhook'
+    p_source TEXT DEFAULT 'webhook',
+    p_provider_event_id TEXT DEFAULT NULL
 )
 RETURNS JSONB AS $$
 DECLARE
     v_attempt_id UUID;
     v_payment_id UUID;
     v_now TIMESTAMPTZ := clock_timestamp();
-    v_provider_event_id TEXT;
+    v_event_id TEXT;
     v_attempt_number INTEGER;
+    v_preference_id TEXT;
 BEGIN
-    -- 1. Lock the order row to serialize concurrent webhook updates
+    -- 1. Lock the order row to serialize concurrent updates
     PERFORM 1 FROM public.orders WHERE id = p_order_id FOR UPDATE;
     IF NOT FOUND THEN
         RETURN jsonb_build_object('success', false, 'error', 'Order not found');
     END IF;
 
-    -- 2. Find or create payment attempt
-    SELECT id, attempt_number INTO v_attempt_id, v_attempt_number
-    FROM public.payment_attempts
-    WHERE order_id = p_order_id
-    ORDER BY attempt_number DESC
-    LIMIT 1
-    FOR UPDATE;
+    -- Extract preference id if present in payload
+    v_preference_id := COALESCE(
+        p_raw_payload ->> 'preference_id',
+        p_raw_payload ->> 'order_id',
+        NULL
+    );
+
+    -- 2. Find attempt specifically by external_payment_id or external_preference_id to prevent collision
+    IF p_external_payment_id IS NOT NULL AND p_external_payment_id <> '' THEN
+        SELECT id, attempt_number INTO v_attempt_id, v_attempt_number
+        FROM public.payment_attempts
+        WHERE order_id = p_order_id 
+          AND (external_payment_id = p_external_payment_id OR (v_preference_id IS NOT NULL AND external_preference_id = v_preference_id))
+        ORDER BY attempt_number DESC
+        LIMIT 1
+        FOR UPDATE;
+    END IF;
+
+    -- If not found by explicit transaction id, match latest attempt for this order and provider
+    IF v_attempt_id IS NULL THEN
+        SELECT id, attempt_number INTO v_attempt_id, v_attempt_number
+        FROM public.payment_attempts
+        WHERE order_id = p_order_id AND provider = p_provider
+        ORDER BY attempt_number DESC
+        LIMIT 1
+        FOR UPDATE;
+    END IF;
 
     IF v_attempt_id IS NOT NULL THEN
         UPDATE public.payment_attempts
@@ -160,7 +187,7 @@ BEGIN
             normalized_status = p_normalized_status,
             provider_status = p_provider_status,
             provider_status_detail = p_provider_status_detail,
-            external_payment_id = p_external_payment_id,
+            external_payment_id = COALESCE(p_external_payment_id, external_payment_id),
             approved_at = CASE WHEN p_normalized_status = 'approved' THEN v_now ELSE approved_at END,
             rejected_at = CASE WHEN p_normalized_status = 'rejected' THEN v_now ELSE rejected_at END,
             cancelled_at = CASE WHEN p_normalized_status = 'cancelled' THEN v_now ELSE cancelled_at END,
@@ -198,19 +225,21 @@ BEGIN
         RETURNING id INTO v_attempt_id;
     END IF;
 
-    -- 3. Upsert into payments table
-    SELECT id INTO v_payment_id
-    FROM public.payments
-    WHERE order_id = p_order_id AND provider = p_provider
-    ORDER BY created_at DESC
-    LIMIT 1
-    FOR UPDATE;
+    -- 3. Upsert into payments table by order_id + transaction_external_id
+    IF p_external_payment_id IS NOT NULL AND p_external_payment_id <> '' THEN
+        SELECT id INTO v_payment_id
+        FROM public.payments
+        WHERE order_id = p_order_id 
+          AND provider = p_provider 
+          AND transaction_external_id = p_external_payment_id
+        LIMIT 1
+        FOR UPDATE;
+    END IF;
 
     IF v_payment_id IS NOT NULL THEN
         UPDATE public.payments
         SET 
             status = p_normalized_status,
-            transaction_external_id = p_external_payment_id,
             amount = p_amount,
             currency = p_currency,
             raw_webhook = p_raw_payload,
@@ -241,9 +270,12 @@ BEGIN
         RETURNING id INTO v_payment_id;
     END IF;
 
-    -- 4. Append to payment_events audit trail (idempotent ON CONFLICT)
-    v_provider_event_id := p_provider || '-' || p_source || '-' || p_external_payment_id || '-' || EXTRACT(EPOCH FROM v_now)::BIGINT;
-    
+    -- 4. Append to payment_events audit trail with stable idempotency key
+    v_event_id := COALESCE(
+        p_provider_event_id,
+        p_provider || '-' || p_source || '-' || COALESCE(p_external_payment_id, v_attempt_id::text) || '-' || p_provider_status
+    );
+
     INSERT INTO public.payment_events (
         order_id,
         payment_attempt_id,
@@ -263,7 +295,7 @@ BEGIN
         p_source || '_' || p_provider_status,
         p_normalized_status,
         p_provider_status,
-        v_provider_event_id,
+        v_event_id,
         p_source,
         jsonb_build_object('payment_id', p_external_payment_id, 'status', p_provider_status, 'detail', p_provider_status_detail),
         'Transacción persistida atómicamente: ' || p_normalized_status,
@@ -271,14 +303,22 @@ BEGIN
     )
     ON CONFLICT (provider, provider_event_id) WHERE provider_event_id IS NOT NULL DO NOTHING;
 
-    -- 5. Update last_payment_attempt_id on order
-    UPDATE public.orders
-    SET 
-        payment_status = p_normalized_status,
-        payment_provider = p_provider,
-        last_payment_attempt_id = v_attempt_id,
-        updated_at = v_now
-    WHERE id = p_order_id;
+    -- 5. Update last_payment_attempt_id and payment_status on order (only if not rejected/fraud)
+    IF p_normalized_status <> 'fraud_suspected' THEN
+        UPDATE public.orders
+        SET 
+            payment_status = p_normalized_status,
+            payment_provider = p_provider,
+            last_payment_attempt_id = v_attempt_id,
+            updated_at = v_now
+        WHERE id = p_order_id;
+    ELSE
+        UPDATE public.orders
+        SET 
+            last_payment_attempt_id = v_attempt_id,
+            updated_at = v_now
+        WHERE id = p_order_id;
+    END IF;
 
     RETURN jsonb_build_object(
         'success', true,
@@ -289,5 +329,42 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-REVOKE ALL ON FUNCTION public.record_payment_transaction_atomic(UUID, TEXT, TEXT, NUMERIC, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.record_payment_transaction_atomic(UUID, TEXT, TEXT, NUMERIC, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT) TO service_role, postgres;
+REVOKE ALL ON FUNCTION public.record_payment_transaction_atomic(UUID, TEXT, TEXT, NUMERIC, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, TEXT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.record_payment_transaction_atomic(UUID, TEXT, TEXT, NUMERIC, TEXT, TEXT, TEXT, TEXT, JSONB, TEXT, TEXT) TO service_role, postgres;
+
+-- 4. Outbox Worker Scheduled Cron Definition (INACTIVE by default until authorization)
+CREATE OR REPLACE FUNCTION public.invoke_order_execution_worker_cron()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_supabase_url text;
+    v_service_key text;
+BEGIN
+    SELECT value INTO v_supabase_url FROM public.site_settings WHERE key = 'supabase_url';
+    IF v_supabase_url IS NULL OR v_supabase_url = '' THEN
+        v_supabase_url := 'https://cobtsgkwcftvexaarwmo.supabase.co';
+    END IF;
+
+    -- Read service key from vault if available
+    SELECT decrypted_secret INTO v_service_key
+    FROM vault.decrypted_secrets
+    WHERE name = 'service_role_key'
+    LIMIT 1;
+
+    PERFORM net.http_post(
+        url := v_supabase_url || '/functions/v1/order-execution-worker',
+        headers := jsonb_build_object(
+            'Content-Type', 'application/json',
+            'Authorization', 'Bearer ' || COALESCE(v_service_key, current_setting('request.jwt.claim.sub', true))
+        ),
+        body := '{"source": "pg_cron"}'::jsonb
+    );
+EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'Failed to invoke order-execution-worker: %', SQLERRM;
+END;
+$$;
+
+REVOKE EXECUTE ON FUNCTION public.invoke_order_execution_worker_cron() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.invoke_order_execution_worker_cron() TO service_role;
