@@ -363,7 +363,7 @@ export default async function handler(req, res) {
         try {
           const dbQuery = supabase
             .from('currency_exchange_rates')
-            .select('*')
+            .select('id, country_code, country_name, base_currency, quote_currency, rate, provider, source_name, source_url, status, safety_buffer_percent, is_manual_override, is_active, is_auto_sync, fetched_at, effective_at, expires_at, created_at, updated_at')
             .order('country_code', { ascending: false });
 
           const { data, error } = await fetchWithTimeout(dbQuery, 3500);
@@ -374,16 +374,30 @@ export default async function handler(req, res) {
               const fetchedTime = new Date(item.fetched_at).getTime();
               const ageHours = (now - fetchedTime) / 3600000;
               let currentStatus = item.status;
+              // Strict financial defense: If row is marked STALE or UNAVAILABLE in DB, NEVER promote to VERIFIED
               if (!item.is_manual_override) {
                 if (ageHours > 24) {
                   currentStatus = 'STALE';
-                } else if (ageHours <= 24 && currentStatus === 'STALE') {
-                  currentStatus = 'VERIFIED';
                 }
               }
               return {
-                ...item,
+                id: item.id,
+                country_code: item.country_code,
+                country_name: item.country_name,
+                base_currency: item.base_currency,
+                quote_currency: item.quote_currency,
+                rate: Number(item.rate),
+                provider: item.provider,
+                source_name: item.source_name,
+                source_url: item.source_url,
                 status: currentStatus,
+                safety_buffer_percent: Number(item.safety_buffer_percent || 2.00),
+                is_manual_override: !!item.is_manual_override,
+                is_active: !!item.is_active,
+                is_auto_sync: !!item.is_auto_sync,
+                fetched_at: item.fetched_at,
+                effective_at: item.effective_at,
+                expires_at: item.expires_at,
                 age_hours: Number(ageHours.toFixed(1))
               };
             });

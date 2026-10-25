@@ -158,10 +158,19 @@ export function getStoredExchangeRate(currency: DisplayCurrency = 'UYU'): Exchan
   const inMem = _memoryRateDetails.get(currency);
   if (inMem) {
     const ageHours = (Date.now() - Date.parse(inMem.fetched_at)) / 3600000;
+    // Strict state preservation: If original status was STALE or UNAVAILABLE, NEVER promote to VERIFIED
+    let resolvedStatus: FXStatus = inMem.status;
+    if (inMem.is_manual_override) {
+      resolvedStatus = 'MANUAL_OVERRIDE';
+    } else if (inMem.status === 'VERIFIED') {
+      resolvedStatus = ageHours <= inMem.max_age_hours ? 'VERIFIED' : 'STALE';
+    } else {
+      resolvedStatus = inMem.status;
+    }
     return {
       ...inMem,
       age_hours: Number(ageHours.toFixed(1)),
-      status: inMem.is_manual_override ? 'MANUAL_OVERRIDE' : (ageHours <= inMem.max_age_hours ? 'VERIFIED' : 'STALE')
+      status: resolvedStatus
     };
   }
 
@@ -171,10 +180,18 @@ export function getStoredExchangeRate(currency: DisplayCurrency = 'UYU'): Exchan
       if (cachedStr) {
         const parsed = JSON.parse(cachedStr) as ExchangeRateDetail;
         const ageHours = (Date.now() - Date.parse(parsed.fetched_at)) / 3600000;
+        let resolvedStatus: FXStatus = parsed.status;
+        if (parsed.is_manual_override) {
+          resolvedStatus = 'MANUAL_OVERRIDE';
+        } else if (parsed.status === 'VERIFIED') {
+          resolvedStatus = ageHours <= FX_MAX_AGE_HOURS ? 'VERIFIED' : 'STALE';
+        } else {
+          resolvedStatus = parsed.status;
+        }
         const detail: ExchangeRateDetail = {
           ...parsed,
           age_hours: Number(ageHours.toFixed(1)),
-          status: parsed.is_manual_override ? 'MANUAL_OVERRIDE' : (ageHours <= FX_MAX_AGE_HOURS ? 'VERIFIED' : 'STALE')
+          status: resolvedStatus
         };
         _memoryRateDetails.set(currency, detail);
         return detail;
@@ -223,7 +240,9 @@ export async function fetchLiveExchangeRates(): Promise<Record<DisplayCurrency, 
         serverData.rates.forEach((row: any) => {
           const quote = row.quote_currency as DisplayCurrency;
           if (quote && currencies.includes(quote)) {
-            const ageHours = (Date.now() - Date.parse(row.fetched_at || nowIso)) / 3600000;
+            // Preservation: Never invent a current timestamp if fetched_at was null
+            const rawFetched = row.fetched_at || null;
+            const ageHours = rawFetched ? (Date.now() - Date.parse(rawFetched)) / 3600000 : null;
             const detail: ExchangeRateDetail = {
               base: 'USD',
               target: quote,
@@ -235,11 +254,11 @@ export async function fetchLiveExchangeRates(): Promise<Record<DisplayCurrency, 
               is_manual_override: !!row.is_manual_override,
               override_reason: row.override_reason,
               override_admin_email: row.override_admin_email,
-              fetched_at: row.fetched_at || nowIso,
-              effective_at: row.effective_at || nowIso,
+              fetched_at: rawFetched || '2026-01-01T00:00:00.000Z',
+              effective_at: row.effective_at || '2026-01-01T00:00:00.000Z',
               expires_at: row.expires_at,
               max_age_hours: FX_MAX_AGE_HOURS,
-              age_hours: Number(ageHours.toFixed(1))
+              age_hours: ageHours !== null ? Number(ageHours.toFixed(1)) : null
             };
             _memoryRateDetails.set(quote, detail);
             if (typeof window !== 'undefined') {
@@ -257,7 +276,7 @@ export async function fetchLiveExchangeRates(): Promise<Record<DisplayCurrency, 
     console.warn('[CurrencyService] Server sync fetch failed, checking direct provider fallback:', serverErr);
   }
 
-  // 2. Direct external API fallback
+  // 2. Direct external API fallback — Only allowed if not manual override and explicitly marked as DIRECT_PROVIDER_FALLBACK
   try {
     const res = await fetch('https://open.er-api.com/v6/latest/USD');
     if (res.ok) {
@@ -265,6 +284,10 @@ export async function fetchLiveExchangeRates(): Promise<Record<DisplayCurrency, 
       if (data && data.rates) {
         for (const curr of currencies) {
           if (curr === 'USD') continue;
+          // Never override an existing manual rate from direct provider fallback
+          const existing = _memoryRateDetails.get(curr);
+          if (existing?.is_manual_override) continue;
+
           const liveRate = data.rates[curr];
           if (typeof liveRate === 'number' && liveRate > 0) {
             const meta = COUNTRY_CURRENCY_CONFIG[curr];
@@ -338,6 +361,64 @@ export function convertUsdToDisplay(amountUsd: number, targetCurrency: DisplayCu
   }
 
   return Number((safeUsd * rateDetail.rate).toFixed(2));
+}
+
+/**
+ * Strict transactional conversion validator for checkout and payment operations.
+ * Enforces status validity (VERIFIED or MANUAL_OVERRIDE), country active enablement,
+ * and freshness thresholds.
+ * Fail-closed: returns null if the rate is STALE, UNAVAILABLE, inactive, or unverified.
+ */
+export function convertUsdForTransaction(
+  amountUsd: number,
+  targetCurrency: DisplayCurrency,
+  options: { allowManualOverride?: boolean; maxAgeHours?: number } = {}
+): { amount: number; rate: number; status: FXStatus; error?: string } | null {
+  const safeUsd = Number(amountUsd);
+  if (isNaN(safeUsd) || !isFinite(safeUsd) || safeUsd < 0) {
+    return null;
+  }
+
+  if (targetCurrency === 'USD') {
+    return { amount: Number(safeUsd.toFixed(2)), rate: 1.0, status: 'VERIFIED' };
+  }
+
+  const rateDetail = getStoredExchangeRate(targetCurrency);
+  if (!rateDetail || !rateDetail.rate || isNaN(rateDetail.rate) || rateDetail.rate <= 0) {
+    return null;
+  }
+
+  // Country commercial validation: check if currency is officially active for local checkout
+  const config = COUNTRY_CURRENCY_CONFIG[targetCurrency];
+  if (!config || !config.is_active) {
+    return null; // Disabled for commercial transaction in local currency
+  }
+
+  const { allowManualOverride = true, maxAgeHours = FX_MAX_AGE_HOURS } = options;
+
+  if (rateDetail.status === 'MANUAL_OVERRIDE') {
+    if (!allowManualOverride) return null;
+    // Authorized manual override
+    return {
+      amount: Number((safeUsd * rateDetail.rate).toFixed(2)),
+      rate: rateDetail.rate,
+      status: 'MANUAL_OVERRIDE'
+    };
+  }
+
+  if (rateDetail.status === 'VERIFIED') {
+    if (rateDetail.age_hours !== null && rateDetail.age_hours > maxAgeHours) {
+      return null; // Rate is too old for transactional settlement
+    }
+    return {
+      amount: Number((safeUsd * rateDetail.rate).toFixed(2)),
+      rate: rateDetail.rate,
+      status: 'VERIFIED'
+    };
+  }
+
+  // STALE, UNAVAILABLE, or unverified fallback: Fail-closed for transactions
+  return null;
 }
 
 export function convertUsdToDisplayUyu(amountUsd: number, exchangeRate?: number | null): number | null {
@@ -429,6 +510,7 @@ export const CurrencyService = {
   subscribeToCurrencyRates,
   convertUsdToDisplay,
   convertUsdToDisplayUyu,
+  convertUsdForTransaction,
   formatMoney,
   FALLBACK_USD_TO_UYU_RATE,
   FALLBACK_RATES,
