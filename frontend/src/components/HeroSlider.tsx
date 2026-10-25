@@ -28,6 +28,7 @@ interface HeroSliderProps {
 export default function HeroSlider({ banners, loading = false }: HeroSliderProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [loadedIndices, setLoadedIndices] = useState<Set<number>>(() => new Set([0, 1]));
+  const [failedImages, setFailedImages] = useState<Set<string>>(() => new Set());
   const touchStartX = useRef<number | null>(null);
   const touchEndX = useRef<number | null>(null);
   const autoplayTimer = useRef<NodeJS.Timeout | null>(null);
@@ -212,7 +213,15 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
         const isCurrent = index === activeIndex;
         const opacityVal = banner.overlay_opacity !== null ? Number(banner.overlay_opacity) : 0.4;
         const alignCenter = banner.content_align === 'center';
-        const isImageEligible = loadedIndices.has(index);
+        const isImageEligible = isCurrent || loadedIndices.has(index);
+        const slideKey = banner.id || `slide-${index}`;
+        const useFallback = failedImages.has(slideKey);
+        const desktopSrc = useFallback ? '/images/banners/vitrina_desktop.png' : banner.image_url;
+        const mobileSrc = (!useFallback && banner.mobile_image_url) || desktopSrc;
+        const backgroundVars = {
+          '--hero-desktop-image': `url(${JSON.stringify(desktopSrc)})`,
+          '--hero-mobile-image': `url(${JSON.stringify(mobileSrc)})`,
+        } as React.CSSProperties;
         
         return (
           <div
@@ -224,24 +233,30 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
             }`}
             aria-hidden={!isCurrent}
           >
-            {/* 1. Fullscreen Background Image with Ken-Burns zoom on active */}
+            {/* 1. The active image has a CSS background backup while the picture loads. */}
             {isImageEligible ? (
-              <picture>
-                {banner.mobile_image_url && (
+              <>
+                <div className="hero-slide-background absolute inset-0 bg-cover bg-center" style={backgroundVars} aria-hidden="true" />
+                <picture>
+                {!useFallback && banner.mobile_image_url && (
                   <source media="(max-width: 767px)" srcSet={banner.mobile_image_url} />
                 )}
                 <img
-                  src={banner.image_url}
+                  src={desktopSrc}
                   alt={banner.title || 'Slide'}
                   style={{
                     transform: isCurrent ? 'scale(1.05)' : 'scale(1.00)'
                   }}
-                  loading={index === 0 ? "eager" : "lazy"}
-                  fetchPriority={index === 0 ? "high" : "low"}
+                  loading={isCurrent ? 'eager' : 'lazy'}
+                  fetchPriority={isCurrent ? 'high' : 'low'}
                   decoding="async"
+                  onError={() => {
+                    if (!useFallback) setFailedImages(prev => new Set(prev).add(slideKey));
+                  }}
                   {...getImageProps("absolute inset-0 w-full h-full object-cover object-center transition-transform duration-[7000ms] ease-out")}
                 />
-              </picture>
+                </picture>
+              </>
             ) : (
               <div className="absolute inset-0 bg-[#05070f]" />
             )}
@@ -397,6 +412,10 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
 
       {/* Component Specific Inline Styles for Keyframe Animations */}
       <style dangerouslySetInnerHTML={{__html: `
+        .hero-slide-background { background-image: var(--hero-desktop-image); }
+        @media (max-width: 767px) {
+          .hero-slide-background { background-image: var(--hero-mobile-image); }
+        }
         @keyframes timelineProgress {
           from { width: 0%; }
           to { width: 100%; }
