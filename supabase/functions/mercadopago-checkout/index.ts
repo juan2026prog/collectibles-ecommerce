@@ -76,13 +76,29 @@ serve(async (req: Request) => {
       throw new Error("Mercado Pago no está configurado adecuadamente para procesar cobros reales. Contacte al administrador.");
     }
 
-    // 4. Determinar base URL permitida (origen)
+    // 4. Determinar base URL permitida con validación estricta de URL y whitelist
     const rawOrigin = req.headers.get("origin") || "";
-    const isAllowedOrigin = rawOrigin.includes("collectibles.uy") || 
-                            rawOrigin.includes("collectibles-ecommerce.vercel.app") || 
-                            rawOrigin.includes("localhost") || 
-                            rawOrigin.includes("127.0.0.1");
-    const base_url = isAllowedOrigin ? rawOrigin : "https://collectibles.uy";
+    let base_url = "https://collectibles.uy";
+
+    if (rawOrigin) {
+      try {
+        const parsed = new URL(rawOrigin);
+        const host = parsed.hostname.toLowerCase();
+        const protocol = parsed.protocol;
+
+        const isExactProd = (protocol === "https:" && (host === "collectibles.uy" || host === "www.collectibles.uy"));
+        const isOfficialVercel = (protocol === "https:" && (host === "collectibles-ecommerce.vercel.app" || host.endsWith("-collectibles-ecommerce.vercel.app")));
+        const isLocalDev = ((protocol === "http:" || protocol === "https:") && (host === "localhost" || host === "127.0.0.1"));
+
+        if (isExactProd || isOfficialVercel || isLocalDev) {
+          base_url = parsed.origin;
+        }
+      } catch (_e) {
+        // Invalid origin URL format: fallback to canonical production URL
+        base_url = "https://collectibles.uy";
+      }
+    }
+
     const webhook_url = `${supabaseUrl}/functions/v1/mercadopago-webhook`;
 
     const items = (order.order_items || []).map((item: any) => ({

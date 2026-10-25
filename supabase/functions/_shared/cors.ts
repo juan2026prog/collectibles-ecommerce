@@ -9,15 +9,27 @@ const ALLOWED_ORIGINS = [
 
 export function getCorsOrigin(req: Request): string {
   const origin = req.headers.get('origin') || '';
-  // Allow the origin if it's in our whitelist, a Vercel preview URL, or a local development URL
-  if (
-    ALLOWED_ORIGINS.includes(origin) || 
-    origin.endsWith('.vercel.app') ||
-    /^https?:\/\/localhost(:\d+)?$/.test(origin) ||
-    /^https?:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)
-  ) {
-    return origin;
+  if (!origin) return ALLOWED_ORIGINS[0];
+
+  try {
+    const parsed = new URL(origin);
+    const host = parsed.hostname.toLowerCase();
+    const protocol = parsed.protocol;
+
+    if (protocol === 'https:') {
+      if (host === 'collectibles.uy' || host === 'www.collectibles.uy') return origin;
+      if (host === 'collectibles-ecommerce.vercel.app') return origin;
+      if (host.endsWith('-collectibles-ecommerce.vercel.app')) return origin;
+    }
+
+    if (protocol === 'http:' || protocol === 'https:') {
+      if (host === 'localhost' || host === '127.0.0.1') return origin;
+    }
+  } catch (_e) {
+    // Malformed origin URL
+    return ALLOWED_ORIGINS[0];
   }
+
   return ALLOWED_ORIGINS[0]; // Default to production
 }
 

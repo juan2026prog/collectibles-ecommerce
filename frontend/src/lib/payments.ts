@@ -222,63 +222,14 @@ export async function getPublicPaymentProviders() {
   try {
     const { data, error } = await supabase.rpc('get_public_payment_providers');
     if (error) {
-      console.warn("RPC get_public_payment_providers missing or failed, using robust frontend fallback:", error);
-      return getFallbackProviders();
+      console.warn("RPC get_public_payment_providers missing or failed:", error);
+      return [];
     }
     return (data || []) as PublicPaymentProvider[];
   } catch (err) {
-    console.warn("RPC get_public_payment_providers failed, using robust frontend fallback:", err);
-    return getFallbackProviders();
+    console.warn("RPC get_public_payment_providers failed:", err);
+    return [];
   }
-}
-
-function getFallbackProviders(): PublicPaymentProvider[] {
-  return [
-    {
-      provider_key: 'mercadopago',
-      name: 'Mercado Pago',
-      is_active: true,
-      status: 'active',
-      environment: 'production',
-      checkout_text: 'Pagar con Mercado Pago',
-      default_image_url: '',
-      currency: 858,
-      response_type: 'Json'
-    },
-    {
-      provider_key: 'dlocalgo',
-      name: 'dLocal Go',
-      is_active: true,
-      status: 'active',
-      environment: 'production',
-      checkout_text: 'Pagar con tarjeta de crédito/débito',
-      default_image_url: '',
-      currency: 858,
-      response_type: 'Json'
-    },
-    {
-      provider_key: 'paypal',
-      name: 'PayPal',
-      is_active: true,
-      status: 'active',
-      environment: 'production',
-      checkout_text: 'Pagar con PayPal',
-      default_image_url: '',
-      currency: 858,
-      response_type: 'Json'
-    },
-    {
-      provider_key: 'handy',
-      name: 'Handy Botón de Pago',
-      is_active: true,
-      status: 'active',
-      environment: 'testing',
-      checkout_text: 'Pagar con Handy',
-      default_image_url: '',
-      currency: 858,
-      response_type: 'Json'
-    }
-  ];
 }
 
 export function isOrderPaymentApproved(order: any): boolean {

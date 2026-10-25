@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, ArrowDownCircle, Clock, CreditCard, Download, ArrowRight, ShieldAlert, CheckCircle2, AlertCircle } from 'lucide-react';
+import { DollarSign, TrendingUp, ArrowDownCircle, Clock, CreditCard, Download, ArrowRight, ShieldAlert, CheckCircle2, AlertCircle, Lock } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { isRealPaidOrder } from '../../lib/payments';
 
 const suborderStatusMap: Record<string, { l: string; c: string }> = {
   pending: { l: 'Pendiente', c: 'border-gray-500/20 text-gray-400 bg-gray-500/5' },
@@ -42,10 +43,17 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
           .select(`
             *,
             orders!parent_order_id (
+              id,
               created_at,
               customer_name,
               customer_email,
               payment_status,
+              payment_processed_at,
+              payment_provider,
+              payment_provider_reference,
+              payment_method,
+              payment_id,
+              is_test_order,
               status
             )
           `)
@@ -105,22 +113,52 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
     return <div className="text-gray-900 text-center p-12">Cargando datos financieros...</div>;
   }
 
-  // Totals calculations strictly validating payment confirmation
+  // Strict Financial Separation according to Marketplace Governance & isRealPaidOrder
+  const now = new Date();
+  const custodyThreshold = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+
+  // 1. All registered sales
+  const allSuborders = suborders;
+
+  // 2. Confirmed paid sales (certified through isRealPaidOrder)
   const paidSuborders = suborders.filter(s => {
     const parent = s.orders;
-    const isParentPaid = parent && (parent.status === 'paid' || parent.payment_status === 'approved');
-    return isParentPaid && !['cancelled', 'refunded'].includes(s.status);
+    const isRealPaid = parent && isRealPaidOrder(parent);
+    return isRealPaid && !['cancelled', 'refunded'].includes(s.status);
+  });
+
+  // Open disputes set for blocking liquidation eligibility
+  const openDisputeOrderIds = new Set(
+    disputes.filter(d => d.status === 'open').map(d => d.order_id)
+  );
+
+  // 3. Retained by logistics / custody (delivered < 48 hours, in-transit, or open dispute)
+  const retainedSuborders = paidSuborders.filter(s => {
+    if (s.liquidation_status === 'paid') return false;
+    const isDelivered = s.shipping_status === 'delivered';
+    const isMatured = isDelivered && s.delivered_at && new Date(s.delivered_at) <= custodyThreshold;
+    const hasDispute = openDisputeOrderIds.has(s.parent_order_id);
+    return !isMatured || hasDispute;
+  });
+
+  // 4. Truly eligible for liquidation batch (delivered >= 48h, paid, no disputes, pending)
+  const eligibleSuborders = paidSuborders.filter(s => {
+    if (s.liquidation_status === 'paid') return false;
+    const isDelivered = s.shipping_status === 'delivered';
+    const isMatured = isDelivered && s.delivered_at && new Date(s.delivered_at) <= custodyThreshold;
+    const hasDispute = openDisputeOrderIds.has(s.parent_order_id);
+    return isMatured && !hasDispute;
   });
 
   const totals = {
-    gross: paidSuborders.reduce((sum, s) => sum + Number(s.product_subtotal || 0) + Number(s.shipping_cost || 0), 0),
+    registeredGross: allSuborders.reduce((sum, s) => sum + Number(s.product_subtotal || 0) + Number(s.shipping_cost || 0), 0),
+    paidGross: paidSuborders.reduce((sum, s) => sum + Number(s.product_subtotal || 0) + Number(s.shipping_cost || 0), 0),
     fees: paidSuborders.reduce((sum, s) => sum + Number(s.marketplace_fee || 0), 0),
     gateway: paidSuborders.reduce((sum, s) => sum + Number(s.payment_fee_share || 0), 0),
     shipping: paidSuborders.reduce((sum, s) => sum + Number(s.shipping_cost || 0), 0),
     net: paidSuborders.reduce((sum, s) => sum + Number(s.vendor_net_amount || 0), 0),
-    pending: paidSuborders
-      .filter(s => ['pending', 'eligible', 'included_in_batch'].includes(s.liquidation_status))
-      .reduce((sum, s) => sum + Number(s.vendor_net_amount || 0), 0),
+    retained: retainedSuborders.reduce((sum, s) => sum + Number(s.vendor_net_amount || 0), 0),
+    eligible: eligibleSuborders.reduce((sum, s) => sum + Number(s.vendor_net_amount || 0), 0),
     paid: suborders
       .filter(s => s.liquidation_status === 'paid')
       .reduce((sum, s) => sum + Number(s.vendor_net_amount || 0), 0)
@@ -227,35 +265,38 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Ventas Brutas" value={`$${totals.gross.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={DollarSign} color="emerald" />
+        <StatCard label="Ventas Confirmadas" value={`$${totals.paidGross.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={DollarSign} color="emerald" />
         <StatCard label="Comisión Collectibles" value={`$${totals.fees.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={ArrowDownCircle} color="red" />
-        <StatCard label="Costo Pasarela (MP/Handy)" value={`$${totals.gateway.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={ShieldAlert} color="red" />
-        <StatCard label="Neto Histórico" value={`$${totals.net.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={TrendingUp} color="green" />
+        <StatCard label="Costo Pasarela" value={`$${totals.gateway.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={ShieldAlert} color="red" />
+        <StatCard label="Neto Confirmado" value={`$${totals.net.toLocaleString('es-UY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={TrendingUp} color="green" />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="soft rounded-[2.5rem] p-12 hover:bg-gray-50 transition-all border border-gray-100 shadow-sm">
-          <p className="text-[11px] text-primary-600 font-black uppercase tracking-[0.4em] mb-6">Saldo a Liquidar</p>
-          <div className="flex items-end justify-between">
-             <div>
-               <p className="text-5xl font-black text-gray-900 tracking-tighter">${totals.pending.toLocaleString('es-UY', { minimumFractionDigits: 2 })}</p>
-               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1 block">Próxima liquidación: {nextPayoutDate()}</span>
-             </div>
-             <Clock className="w-10 h-10 text-gray-400 animate-pulse" />
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="soft rounded-[2.5rem] p-8 hover:bg-gray-50 transition-all border border-gray-100 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Lock className="w-4 h-4 text-amber-500" />
+            <p className="text-[11px] text-amber-600 font-black uppercase tracking-[0.3em]">Saldo Retenido en Custodia</p>
           </div>
+          <p className="text-4xl font-black text-gray-900 tracking-tighter">${totals.retained.toLocaleString('es-UY', { minimumFractionDigits: 2 })}</p>
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2 block">En tránsito / plazo 48h pos-entrega</span>
         </div>
-        <div className="bg-white rounded-[2.5rem] border border-primary-600/30 p-12 bg-primary-50 relative overflow-hidden group shadow-sm">
-          <div className="absolute top-0 right-0 p-12 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
-             <CreditCard className="w-48 h-48 text-gray-900 -rotate-12" />
+
+        <div className="soft rounded-[2.5rem] p-8 hover:bg-gray-50 transition-all border border-primary-100 bg-primary-50/20 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Clock className="w-4 h-4 text-primary-600" />
+            <p className="text-[11px] text-primary-600 font-black uppercase tracking-[0.3em]">Saldo Elegible a Liquidar</p>
           </div>
-          <div className="relative z-10 flex justify-between items-end">
-            <div>
-              <p className="text-[11px] text-emerald-500 font-black uppercase tracking-[0.4em] mb-6">Monto Transferido</p>
-              <p className="text-5xl font-black text-emerald-500 tracking-tighter mb-1">${totals.paid.toLocaleString('es-UY', { minimumFractionDigits: 2 })}</p>
-              <p className="text-[10px] font-black text-gray-900/40 uppercase tracking-widest">Depositado en cuenta</p>
-            </div>
-            <CheckCircle2 className="w-10 h-10 text-emerald-500" />
+          <p className="text-4xl font-black text-primary-700 tracking-tighter">${totals.eligible.toLocaleString('es-UY', { minimumFractionDigits: 2 })}</p>
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2 block">Próximo corte: {nextPayoutDate()}</span>
+        </div>
+
+        <div className="bg-white rounded-[2.5rem] border border-emerald-500/30 p-8 bg-emerald-50/20 relative overflow-hidden group shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            <p className="text-[11px] text-emerald-600 font-black uppercase tracking-[0.3em]">Liquidaciones Pagadas</p>
           </div>
+          <p className="text-4xl font-black text-emerald-600 tracking-tighter">${totals.paid.toLocaleString('es-UY', { minimumFractionDigits: 2 })}</p>
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2 block">Transferencias acreditadas</span>
         </div>
       </div>
 
