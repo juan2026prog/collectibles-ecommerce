@@ -189,15 +189,15 @@ export function getStoredExchangeRate(currency: DisplayCurrency = 'UYU'): Exchan
     base: 'USD',
     target: currency,
     rate: FALLBACK_RATES[currency] || 1.0,
-    provider: 'ExchangeRate-API',
+    provider: 'FALLBACK_OFFLINE',
     source_name: meta.source_name,
     source_url: meta.source_url,
-    status: 'VERIFIED',
+    status: 'STALE',
     is_manual_override: false,
-    fetched_at: new Date().toISOString(),
-    effective_at: new Date().toISOString(),
+    fetched_at: '2026-01-01T00:00:00.000Z',
+    effective_at: '2026-01-01T00:00:00.000Z',
     max_age_hours: FX_MAX_AGE_HOURS,
-    age_hours: 0
+    age_hours: Number(((Date.now() - Date.parse('2026-01-01T00:00:00.000Z')) / 3600000).toFixed(1))
   };
 }
 
