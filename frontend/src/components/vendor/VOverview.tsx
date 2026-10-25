@@ -68,11 +68,17 @@ export default function VOverview({ onChangeTab, activeStoreId }: VOverviewProps
       
       const { data: payouts } = await supabase
         .from('vendor_payouts')
-        .select('amount, status, created_at')
+        .select('amount, status, created_at, order:orders(status, payment_status)')
         .eq('vendor_id', vendorId);
 
       const pList = payouts || [];
-      const pendingF = pList.filter(p => p.status === 'pending' || p.status === 'settlable').reduce((sum, p) => sum + Number(p.amount), 0);
+      const pendingF = pList
+        .filter(p => {
+          const ord = (p as any).order;
+          const isPaid = ord && (ord.status === 'paid' || ord.payment_status === 'approved');
+          return (p.status === 'pending' || p.status === 'settlable') && isPaid;
+        })
+        .reduce((sum, p) => sum + Number(p.amount), 0);
 
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();

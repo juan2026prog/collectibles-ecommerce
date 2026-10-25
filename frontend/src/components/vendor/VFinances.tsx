@@ -105,19 +105,25 @@ export default function VFinances({ mode = 'finances' }: { mode?: 'finances' | '
     return <div className="text-gray-900 text-center p-12">Cargando datos financieros...</div>;
   }
 
-  // Totals calculations
+  // Totals calculations strictly validating payment confirmation
+  const paidSuborders = suborders.filter(s => {
+    const parent = s.orders;
+    const isParentPaid = parent && (parent.status === 'paid' || parent.payment_status === 'approved');
+    return isParentPaid && !['cancelled', 'refunded'].includes(s.status);
+  });
+
   const totals = {
-    gross: suborders.reduce((sum, s) => sum + Number(s.product_subtotal) + Number(s.shipping_cost), 0),
-    fees: suborders.reduce((sum, s) => sum + Number(s.marketplace_fee), 0),
-    gateway: suborders.reduce((sum, s) => sum + Number(s.payment_fee_share), 0),
-    shipping: suborders.reduce((sum, s) => sum + Number(s.shipping_cost), 0),
-    net: suborders.reduce((sum, s) => sum + Number(s.vendor_net_amount), 0),
-    pending: suborders
+    gross: paidSuborders.reduce((sum, s) => sum + Number(s.product_subtotal || 0) + Number(s.shipping_cost || 0), 0),
+    fees: paidSuborders.reduce((sum, s) => sum + Number(s.marketplace_fee || 0), 0),
+    gateway: paidSuborders.reduce((sum, s) => sum + Number(s.payment_fee_share || 0), 0),
+    shipping: paidSuborders.reduce((sum, s) => sum + Number(s.shipping_cost || 0), 0),
+    net: paidSuborders.reduce((sum, s) => sum + Number(s.vendor_net_amount || 0), 0),
+    pending: paidSuborders
       .filter(s => ['pending', 'eligible', 'included_in_batch'].includes(s.liquidation_status))
-      .reduce((sum, s) => sum + Number(s.vendor_net_amount), 0),
+      .reduce((sum, s) => sum + Number(s.vendor_net_amount || 0), 0),
     paid: suborders
       .filter(s => s.liquidation_status === 'paid')
-      .reduce((sum, s) => sum + Number(s.vendor_net_amount), 0)
+      .reduce((sum, s) => sum + Number(s.vendor_net_amount || 0), 0)
   };
 
   const nextPayoutDate = () => {
