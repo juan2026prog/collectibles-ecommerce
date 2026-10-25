@@ -158,18 +158,21 @@ async function executeLiveSync(triggerSource = 'SCHEDULED_CRON') {
 
         if (!rateChanged && existing) {
           // Touch updated_at and expires_at without re-writing entire row or creating duplicate history
-          await fetchWithTimeout(
-            supabase
-              .from('currency_exchange_rates')
-              .update({
-                status: 'VERIFIED',
-                fetched_at: nowIso,
-                expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
-                updated_at: nowIso
-              })
-              .eq('id', existing.id),
-            4000
-          ).catch(() => {});
+          const touchQuery = supabase
+            .from('currency_exchange_rates')
+            .update({
+              status: 'VERIFIED',
+              fetched_at: nowIso,
+              expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
+              updated_at: nowIso
+            })
+            .eq('id', existing.id);
+
+          const { error: touchErr } = await fetchWithTimeout(touchQuery, 4000);
+
+          if (touchErr) {
+            throw new Error(`Touch update error for unchanged ${item.quote_currency}: ${touchErr.message}`);
+          }
 
           dbPersistCount++;
           ratesProcessed.push({
