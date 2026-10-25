@@ -227,115 +227,121 @@ export class CollectiblesSearchService {
 
     // Fallback to Supabase if D1 was disabled or returned no response structure
     if (!d1Succeeded) {
-      const tokens = await resolveSearchTokens(searchTerm);
-      const orClause = buildProductSearchOrClause(tokens);
+      try {
+        const tokens = await resolveSearchTokens(searchTerm);
+        const orClause = buildProductSearchOrClause(tokens);
 
-      let localQuery = supabase
-        .from('products')
-        .select(`
-          id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, created_at,
-          category:categories(id, name, slug),
-          brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
-          images:product_images(id, url, alt_text, is_primary),
-          variants:product_variants(id, sku, price_adjustment, inventory_count),
-          vendor:vendors(id, store_name, slug, logo_url),
-          vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official)
-        `)
-        .eq('status', 'published')
-        .eq('is_active', true);
+        let localQuery = supabase
+          .from('products')
+          .select(`
+            id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, created_at,
+            category:categories(id, name, slug),
+            brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
+            images:product_images(id, url, alt_text, is_primary),
+            variants:product_variants(id, sku, price_adjustment, inventory_count),
+            vendor:vendors(id, store_name, slug, logo_url),
+            vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official)
+          `)
+          .eq('status', 'published')
+          .eq('is_active', true);
 
-      if (orClause) {
-        localQuery = localQuery.or(orClause);
-      } else if (searchTerm) {
-        localQuery = localQuery.ilike('title', `%${searchTerm}%`);
-      }
-      if (localPriceMax) {
-        localQuery = localQuery.lte('base_price', Math.round(localPriceMax));
-      }
-      if (localPriceMin) {
-        localQuery = localQuery.gte('base_price', Math.round(localPriceMin));
-      }
+        if (orClause) {
+          localQuery = localQuery.or(orClause);
+        } else if (searchTerm) {
+          localQuery = localQuery.ilike('title', `%${searchTerm}%`);
+        }
+        if (localPriceMax) {
+          localQuery = localQuery.lte('base_price', Math.round(localPriceMax));
+        }
+        if (localPriceMin) {
+          localQuery = localQuery.gte('base_price', Math.round(localPriceMin));
+        }
 
-      localQuery = localQuery.limit(limitLocal);
+        localQuery = localQuery.limit(limitLocal);
 
-      const { data: localData, error: localErr } = await localQuery;
+        const timeoutPromise = new Promise<{ data: null; error: any }>((resolve) => setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 3500));
+        const { data: localData, error: localErr } = await Promise.race([localQuery, timeoutPromise]);
 
-      if (!localErr && Array.isArray(localData)) {
-        localResults = localData.map(item => {
-          const priceUyu = Number(item.base_price || 0);
-          const priceUsd = Number((priceUyu / fxRate).toFixed(2));
-          return {
-            id: item.id,
-            title: item.title,
-            slug: item.slug,
-            base_price: priceUyu,
-            price: priceUyu,
-            compare_at_price: item.compare_at_price ? Number(item.compare_at_price) : undefined,
-            currency: 'UYU',
-            price_in_usd: priceUsd,
-            price_in_uyu: priceUyu,
-            images: item.images || [],
-            image_url: item.images?.find((img: any) => img.is_primary)?.url || item.images?.[0]?.url,
-            badge: item.badge,
-            is_featured: item.is_featured,
-            is_active: item.is_active,
-            status: item.status,
-            brand: relatedRecord(item.brand),
-            category: relatedRecord(item.category),
-            vendor: relatedRecord(item.vendor),
-            vendor_store: relatedRecord(item.vendor_store),
-            variants: item.variants,
-            is_international: false,
-            condition: item.condition,
-            created_at: item.created_at
-          };
-        });
-      }
+        if (!localErr && Array.isArray(localData)) {
+          localResults = localData.map(item => {
+            const priceUyu = Number(item.base_price || 0);
+            const priceUsd = Number((priceUyu / fxRate).toFixed(2));
+            return {
+              id: item.id,
+              title: item.title,
+              slug: item.slug,
+              base_price: priceUyu,
+              price: priceUyu,
+              compare_at_price: item.compare_at_price ? Number(item.compare_at_price) : undefined,
+              currency: 'UYU',
+              price_in_usd: priceUsd,
+              price_in_uyu: priceUyu,
+              images: item.images || [],
+              image_url: item.images?.find((img: any) => img.is_primary)?.url || item.images?.[0]?.url,
+              badge: item.badge,
+              is_featured: item.is_featured,
+              is_active: item.is_active,
+              status: item.status,
+              brand: relatedRecord(item.brand),
+              category: relatedRecord(item.category),
+              vendor: relatedRecord(item.vendor),
+              vendor_store: relatedRecord(item.vendor_store),
+              variants: item.variants,
+              is_international: false,
+              condition: item.condition,
+              created_at: item.created_at
+            };
+          });
+        }
 
-      // 2. Query International Products
-      let intlQuery = supabase
-        .from('international_products')
-        .select('id, title, slug, final_price_usd, amazon_list_price_usd, image_url, brand, category, status')
-        .eq('status', 'published');
+        // 2. Query International Products with circuit timeout
+        let intlQuery = supabase
+          .from('international_products')
+          .select('id, title, slug, final_price_usd, amazon_list_price_usd, image_url, brand, category, status')
+          .eq('status', 'published');
 
-      if (searchTerm) {
-        intlQuery = intlQuery.ilike('title', `%${searchTerm}%`);
-      }
-      if (intlPriceMax) {
-        intlQuery = intlQuery.lte('final_price_usd', Math.round(intlPriceMax * 100) / 100);
-      }
-      if (intlPriceMin) {
-        intlQuery = intlQuery.gte('final_price_usd', Math.round(intlPriceMin * 100) / 100);
-      }
+        if (searchTerm) {
+          intlQuery = intlQuery.ilike('title', `%${searchTerm}%`);
+        }
+        if (intlPriceMax) {
+          intlQuery = intlQuery.lte('final_price_usd', Math.round(intlPriceMax * 100) / 100);
+        }
+        if (intlPriceMin) {
+          intlQuery = intlQuery.gte('final_price_usd', Math.round(intlPriceMin * 100) / 100);
+        }
 
-      intlQuery = intlQuery.limit(limitIntl);
+        intlQuery = intlQuery.limit(limitIntl);
 
-      const { data: intlData } = await intlQuery;
+        const intlTimeoutPromise = new Promise<{ data: null }>((resolve) => setTimeout(() => resolve({ data: null }), 3500));
+        const { data: intlData } = await Promise.race([intlQuery, intlTimeoutPromise]);
 
-      if (Array.isArray(intlData)) {
-        intlResults = intlData.map(item => {
-          const priceUsd = Number(item.final_price_usd || item.amazon_list_price_usd || 0);
-          const priceUyu = Math.round(priceUsd * fxRate);
-          return {
-            id: item.id,
-            title: item.title,
-            slug: item.slug || `intl-${item.id}`,
-            base_price: priceUsd,
-            price: priceUsd,
-            compare_at_price: Number(item.amazon_list_price_usd || item.final_price_usd || 0),
-            currency: 'USD',
-            price_in_usd: priceUsd,
-            price_in_uyu: priceUyu,
-            images: [{ id: item.id, url: item.image_url, is_primary: true }],
-            image_url: item.image_url,
-            brand: { name: item.brand || 'Importado', slug: item.brand ? item.brand.toLowerCase() : 'importado' },
-            category: { name: item.category || 'Coleccionables', slug: 'coleccionables' },
-            source_provider: 'zinc',
-            is_international: true,
-            is_active: true,
-            status: item.status
-          };
-        });
+        if (Array.isArray(intlData)) {
+          intlResults = intlData.map(item => {
+            const priceUsd = Number(item.final_price_usd || item.amazon_list_price_usd || 0);
+            const priceUyu = Math.round(priceUsd * fxRate);
+            return {
+              id: item.id,
+              title: item.title,
+              slug: item.slug || `intl-${item.id}`,
+              base_price: priceUsd,
+              price: priceUsd,
+              compare_at_price: Number(item.amazon_list_price_usd || item.final_price_usd || 0),
+              currency: 'USD',
+              price_in_usd: priceUsd,
+              price_in_uyu: priceUyu,
+              images: [{ id: item.id, url: item.image_url, is_primary: true }],
+              image_url: item.image_url,
+              brand: { name: item.brand || 'Importado', slug: item.brand ? item.brand.toLowerCase() : 'importado' },
+              category: { name: item.category || 'Coleccionables', slug: 'coleccionables' },
+              source_provider: 'zinc',
+              is_international: true,
+              is_active: true,
+              status: item.status
+            };
+          });
+        }
+      } catch (sqlFallbackErr) {
+        console.warn('CollectiblesSearchService: SQL fallback degraded gracefully:', sqlFallbackErr);
       }
     }
 
@@ -357,13 +363,14 @@ export class CollectiblesSearchService {
       combined = combined.filter(p => p.is_international);
     }
 
-    // 3. Query Radar / Release Events (D1 Primary -> Supabase Fallback)
+    // 3. Query Radar / Release Events (D1 Primary -> Safe Fallback with Circuit Breaker)
     let radarDrops: RadarSearchResult[] = [];
     let radarD1Succeeded = false;
 
     try {
       if (PublicCatalogProvider.isDomainEnabled('radar')) {
-        const d1Radar = await PublicCatalogProvider.getRadarReleases(limitRadar * 2);
+        // Fetch up to 100 drops to evaluate against search query without missing matches
+        const d1Radar = await PublicCatalogProvider.getRadarReleases(100);
         if (d1Radar && d1Radar.data && Array.isArray(d1Radar.data.releases)) {
           radarD1Succeeded = true;
           const searchLower = searchTerm.toLowerCase();
@@ -392,12 +399,17 @@ export class CollectiblesSearchService {
 
     if (!radarD1Succeeded) {
       try {
-        const { data: radarEvents } = await supabase
+        // Fast race fallback to prevent hanging on saturated Supabase instance
+        const radarSupabaseQuery = supabase
           .from('release_events')
           .select('id, slug, title, manufacturer, product_line, radar_signal, date_display_text, official_image_url, brand:brands(name)')
           .eq('is_published', true)
           .or(`title.ilike.%${searchTerm}%,manufacturer.ilike.%${searchTerm}%,franchise.ilike.%${searchTerm}%`)
           .limit(limitRadar);
+
+        const timeoutPromise = new Promise<{ data: null }>((resolve) => setTimeout(() => resolve({ data: null }), 3000));
+        const res = await Promise.race([radarSupabaseQuery, timeoutPromise]);
+        const radarEvents = res?.data;
 
         if (Array.isArray(radarEvents)) {
           radarDrops = radarEvents.map((r: any) => ({
@@ -412,7 +424,7 @@ export class CollectiblesSearchService {
           }));
         }
       } catch (radarErr) {
-        console.warn('CollectiblesSearchService: radar load error:', radarErr);
+        console.warn('CollectiblesSearchService: radar load degraded gracefully:', radarErr);
       }
     }
 

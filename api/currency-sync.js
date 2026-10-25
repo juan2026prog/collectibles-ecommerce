@@ -11,7 +11,12 @@ import { authenticateRequest } from '../server/lib/authGuard.js';
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_f_7xF86CT0DFwT7YupNh_Q_TzmemHNf';
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { persistSession: false },
+  global: {
+    headers: { 'x-application-name': 'collectibles-currency-sync' }
+  }
+});
 
 const FX_PROVIDER_CONFIG = {
   provider_id: 'EXCHANGERATE_API',
@@ -72,6 +77,7 @@ const COUNTRY_CURRENCIES = [
   }
 ];
 
+// Baseline reference rates for emergency fallback when both PostgreSQL & upstream FX are down
 const FALLBACK_STATIC_RATES = {
   UYU: 40.0835,
   ARS: 1528.7563,
@@ -80,6 +86,15 @@ const FALLBACK_STATIC_RATES = {
   MXN: 17.8992,
   USD: 1.0
 };
+
+// Helper: fetch with timeout to prevent hanging serverless functions
+async function fetchWithTimeout(promise, ms = 4000) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 async function executeLiveSync(triggerSource = 'SCHEDULED_CRON') {
   const fxRes = await fetch(FX_PROVIDER_CONFIG.provider_endpoint);
@@ -105,61 +120,69 @@ async function executeLiveSync(triggerSource = 'SCHEDULED_CRON') {
     const formattedRate = Number(rawRate.toFixed(6));
 
     if (supabase) {
-      // Check if row has active manual override
-      const { data: existing } = await supabase
-        .from('currency_exchange_rates')
-        .select('*')
-        .eq('base_currency', 'USD')
-        .eq('quote_currency', item.quote_currency)
-        .maybeSingle();
+      try {
+        // Check if row has active manual override (with 4s timeout)
+        const checkQuery = supabase
+          .from('currency_exchange_rates')
+          .select('*')
+          .eq('base_currency', 'USD')
+          .eq('quote_currency', item.quote_currency)
+          .maybeSingle();
 
-      if (existing && existing.is_manual_override) {
-        syncedRates.push({
-          quote_currency: item.quote_currency,
-          rate: existing.rate,
-          status: 'MANUAL_OVERRIDE_PRESERVED',
-          source: item.source_name
-        });
-        continue;
-      }
+        const { data: existing } = await fetchWithTimeout(checkQuery, 4000);
 
-      const { data: upserted, error: upErr } = await supabase
-        .from('currency_exchange_rates')
-        .upsert({
-          country_code: item.country_code,
-          country_name: item.country_name,
-          base_currency: 'USD',
-          quote_currency: item.quote_currency,
-          rate: formattedRate,
-          provider: FX_PROVIDER_CONFIG.provider_name,
-          source_name: item.source_name,
-          source_url: item.source_url,
-          status: 'VERIFIED',
-          is_manual_override: false,
-          is_active: item.is_active,
-          is_auto_sync: true,
-          fetched_at: nowIso,
-          effective_at: nowIso,
-          expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
-          updated_at: nowIso
-        }, { onConflict: 'base_currency,quote_currency' })
-        .select()
-        .single();
+        if (existing && existing.is_manual_override) {
+          syncedRates.push({
+            quote_currency: item.quote_currency,
+            rate: existing.rate,
+            status: 'MANUAL_OVERRIDE_PRESERVED',
+            source: item.source_name
+          });
+          continue;
+        }
 
-      if (!upErr && upserted) {
-        await supabase.from('currency_exchange_rate_history').insert({
-          rate_id: upserted.id,
-          base_currency: 'USD',
-          quote_currency: item.quote_currency,
-          rate: formattedRate,
-          provider: FX_PROVIDER_CONFIG.provider_name,
-          source_name: item.source_name,
-          source_url: item.source_url,
-          status: 'VERIFIED',
-          is_manual_override: false,
-          reason: `Automated live FX synchronization (${triggerSource})`,
-          effective_at: nowIso
-        });
+        const upsertQuery = supabase
+          .from('currency_exchange_rates')
+          .upsert({
+            country_code: item.country_code,
+            country_name: item.country_name,
+            base_currency: 'USD',
+            quote_currency: item.quote_currency,
+            rate: formattedRate,
+            provider: FX_PROVIDER_CONFIG.provider_name,
+            source_name: item.source_name,
+            source_url: item.source_url,
+            status: 'VERIFIED',
+            is_manual_override: false,
+            is_active: item.is_active,
+            is_auto_sync: true,
+            fetched_at: nowIso,
+            effective_at: nowIso,
+            expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
+            updated_at: nowIso
+          }, { onConflict: 'base_currency,quote_currency' })
+          .select()
+          .single();
+
+        const { data: upserted, error: upErr } = await fetchWithTimeout(upsertQuery, 4000);
+
+        if (!upErr && upserted) {
+          await fetchWithTimeout(supabase.from('currency_exchange_rate_history').insert({
+            rate_id: upserted.id,
+            base_currency: 'USD',
+            quote_currency: item.quote_currency,
+            rate: formattedRate,
+            provider: FX_PROVIDER_CONFIG.provider_name,
+            source_name: item.source_name,
+            source_url: item.source_url,
+            status: 'VERIFIED',
+            is_manual_override: false,
+            reason: `Automated live FX synchronization (${triggerSource})`,
+            effective_at: nowIso
+          }), 4000).catch(() => {});
+        }
+      } catch (dbErr) {
+        console.warn(`[CurrencySync] DB persist skipped for ${item.quote_currency}:`, dbErr.message);
       }
     }
 
@@ -184,12 +207,9 @@ async function executeLiveSync(triggerSource = 'SCHEDULED_CRON') {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-  res.setHeader('CDN-Cache-Control', 'no-store');
-  res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, apikey, x-vercel-cron');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, apikey, x-vercel-cron, x-cron-secret');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -203,20 +223,28 @@ export default async function handler(req, res) {
   // ----------------------------------------------------
   if (req.method === 'GET') {
     if (isCronHeader || isForceSyncRequested) {
+      // Must NOT be cached when executing cron/sync
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.setHeader('CDN-Cache-Control', 'no-store');
+      res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
+
       const auth = await authenticateRequest(req, { allowCron: true });
-      if (!auth.authenticated || (!auth.isCron && !auth.isAdmin)) {
+      // Allow Vercel Cron if standard header 'x-vercel-cron' is present OR Bearer CRON_SECRET matched
+      const cronAuthorized = auth.isCron || isCronHeader || auth.isAdmin;
+
+      if (!cronAuthorized) {
         return res.status(401).json({
           ok: false,
           error: 'UNAUTHORIZED_SYNC_REQUEST',
-          message: 'Se requieren permisos administrativos o cabecera de Vercel Cron autorizada para disparar sincronizaciones.'
+          message: 'Se requieren permisos administrativos o autorización de Vercel Cron para disparar sincronizaciones.'
         });
       }
 
       try {
-        const syncResult = await executeLiveSync(auth.isCron ? 'VERCEL_CRON' : 'ADMIN_GET_SYNC_REQUEST');
+        const syncResult = await executeLiveSync(isCronHeader ? 'VERCEL_CRON_HEADER' : (auth.isCron ? 'VERCEL_CRON_SECRET' : 'ADMIN_GET_SYNC'));
         return res.status(200).json({
           ok: true,
-          message: auth.isCron ? 'Vercel Cron scheduled FX sync executed successfully' : 'Live FX sync executed successfully',
+          message: (auth.isCron || isCronHeader) ? 'Vercel Cron scheduled FX sync executed successfully' : 'Live FX sync executed successfully',
           ...syncResult
         });
       } catch (err) {
@@ -225,77 +253,88 @@ export default async function handler(req, res) {
       }
     }
 
+    // Standard Public Read: Edge CDN Cache enabled to shield PostgreSQL
+    res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600');
+    res.setHeader('CDN-Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+    res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+
     try {
       if (supabase) {
-        const { data, error } = await supabase
-          .from('currency_exchange_rates')
-          .select('*')
-          .order('country_code', { ascending: false });
+        try {
+          const dbQuery = supabase
+            .from('currency_exchange_rates')
+            .select('*')
+            .order('country_code', { ascending: false });
 
-        if (!error && data && data.length > 0) {
-          const now = Date.now();
-          const enriched = data.map(item => {
-            const fetchedTime = new Date(item.fetched_at).getTime();
-            const ageHours = (now - fetchedTime) / 3600000;
-            let currentStatus = item.status;
-            if (!item.is_manual_override) {
-              if (ageHours > 24) {
-                currentStatus = 'STALE';
-              } else if (ageHours <= 24 && currentStatus === 'STALE') {
-                currentStatus = 'VERIFIED';
+          const { data, error } = await fetchWithTimeout(dbQuery, 3500);
+
+          if (!error && data && data.length > 0) {
+            const now = Date.now();
+            const enriched = data.map(item => {
+              const fetchedTime = new Date(item.fetched_at).getTime();
+              const ageHours = (now - fetchedTime) / 3600000;
+              let currentStatus = item.status;
+              if (!item.is_manual_override) {
+                if (ageHours > 24) {
+                  currentStatus = 'STALE';
+                } else if (ageHours <= 24 && currentStatus === 'STALE') {
+                  currentStatus = 'VERIFIED';
+                }
               }
-            }
-            return {
-              ...item,
-              status: currentStatus,
-              age_hours: Number(ageHours.toFixed(1))
-            };
-          });
+              return {
+                ...item,
+                status: currentStatus,
+                age_hours: Number(ageHours.toFixed(1))
+              };
+            });
 
-          // Edge CDN Cache headers to eliminate repetitive Disk I/O roundtrips to Supabase
-          res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600');
-          res.setHeader('CDN-Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
-          res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
-
-          return res.status(200).json({
-            ok: true,
-            canonical_currency: 'USD',
-            provider: FX_PROVIDER_CONFIG.provider_name,
-            provider_endpoint: FX_PROVIDER_CONFIG.provider_endpoint,
-            rates: enriched,
-            source: 'SUPABASE_EXCHANGE_RATES',
-            timestamp: new Date().toISOString()
-          });
+            return res.status(200).json({
+              ok: true,
+              canonical_currency: 'USD',
+              provider: FX_PROVIDER_CONFIG.provider_name,
+              provider_endpoint: FX_PROVIDER_CONFIG.provider_endpoint,
+              rates: enriched,
+              source: 'SUPABASE_EXCHANGE_RATES',
+              timestamp: new Date().toISOString()
+            });
+          }
+        } catch (dbReadErr) {
+          console.warn('[CurrencySync] Supabase read timed out, falling back to static rates:', dbReadErr.message);
         }
       }
 
-      // Fallback in-memory response if DB is unreachable
+      // Fallback in-memory response if DB is unreachable or timing out.
+      // Transparent status: STALE / UNAVAILABLE. Never marked as VERIFIED.
       const fallbackList = COUNTRY_CURRENCIES.map(c => ({
         country_code: c.country_code,
         country_name: c.country_name,
         base_currency: 'USD',
         quote_currency: c.quote_currency,
         rate: FALLBACK_STATIC_RATES[c.quote_currency] || 1.0,
-        provider: FX_PROVIDER_CONFIG.provider_name,
+        provider: 'FALLBACK_STATIC_BASELINE',
         source_name: c.source_name,
         source_url: c.source_url,
-        status: 'VERIFIED',
+        status: 'STALE',
         is_manual_override: false,
         is_active: c.is_active,
-        is_auto_sync: true,
-        fetched_at: new Date().toISOString(),
-        effective_at: new Date().toISOString(),
-        age_hours: 0
+        is_auto_sync: false,
+        is_fallback: true,
+        verification_warning: 'PostgreSQL unreachable; serving hardcoded fallback baseline. Not verified against live FX.',
+        fetched_at: null,
+        effective_at: null,
+        age_hours: null
       }));
 
       // Fallback response with shorter edge cache
       res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=120');
+      res.setHeader('CDN-Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
+      res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
 
       return res.status(200).json({
         ok: true,
         canonical_currency: 'USD',
-        provider: FX_PROVIDER_CONFIG.provider_name,
-        provider_endpoint: FX_PROVIDER_CONFIG.provider_endpoint,
+        provider: 'FALLBACK_OFFLINE',
+        provider_endpoint: null,
         rates: fallbackList,
         source: 'INSTITUTIONAL_FALLBACK',
         timestamp: new Date().toISOString()
@@ -309,6 +348,10 @@ export default async function handler(req, res) {
   // POST: Sync or Override FX (Strictly Admin / Cron Protected)
   // ----------------------------------------------------
   if (req.method === 'POST') {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('CDN-Cache-Control', 'no-store');
+    res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
+
     const auth = await authenticateRequest(req, { allowCron: true });
     if (!auth.authenticated || (!auth.isCron && !auth.isAdmin)) {
       return res.status(401).json({
@@ -318,7 +361,9 @@ export default async function handler(req, res) {
       });
     }
 
-    const { action, quote_currency, rate, reason, admin_email } = req.body || {};
+    // Always derive authenticated user's email securely from the verified token/session
+    const verifiedAdminEmail = auth.user?.email || 'admin@collectibles.uy';
+    const { action, quote_currency, rate, reason } = req.body || {};
 
     // 1. Manual Override Action
     if (action === 'MANUAL_OVERRIDE') {
@@ -330,12 +375,12 @@ export default async function handler(req, res) {
       }
 
       const numRate = Number(rate);
-      const email = admin_email || 'superadmin@collectibles.uy';
+      const email = verifiedAdminEmail;
       const nowIso = new Date().toISOString();
 
       try {
         if (supabase) {
-          const { data: updatedRow, error: updateErr } = await supabase
+          const updateQuery = supabase
             .from('currency_exchange_rates')
             .update({
               rate: numRate,
@@ -351,9 +396,11 @@ export default async function handler(req, res) {
             .select()
             .single();
 
+          const { data: updatedRow, error: updateErr } = await fetchWithTimeout(updateQuery, 5000);
+
           if (updateErr) throw updateErr;
 
-          await supabase.from('currency_exchange_rate_history').insert({
+          await fetchWithTimeout(supabase.from('currency_exchange_rate_history').insert({
             rate_id: updatedRow.id,
             base_currency: 'USD',
             quote_currency,
@@ -366,18 +413,18 @@ export default async function handler(req, res) {
             reason,
             admin_email: email,
             effective_at: nowIso
-          });
+          }), 4000).catch(() => {});
 
           return res.status(200).json({
             ok: true,
-            message: `Manual override applied for USD/${quote_currency}: ${numRate}`,
+            message: `Manual override applied for USD/${quote_currency}: ${numRate} by ${email}`,
             record: updatedRow
           });
         }
 
         return res.status(200).json({
           ok: true,
-          message: `Manual override registered (local mode): USD/${quote_currency} = ${numRate}`
+          message: `Manual override registered: USD/${quote_currency} = ${numRate} by ${email}`
         });
       } catch (err) {
         return res.status(500).json({ ok: false, error: err.message });
@@ -395,10 +442,10 @@ export default async function handler(req, res) {
         const fxData = await fxRes.json();
         const liveRate = fxData?.rates?.[quote_currency] || FALLBACK_STATIC_RATES[quote_currency];
         const nowIso = new Date().toISOString();
-        const email = admin_email || 'superadmin@collectibles.uy';
+        const email = verifiedAdminEmail;
 
         if (supabase) {
-          const { data: updatedRow, error: updateErr } = await supabase
+          const updateQuery = supabase
             .from('currency_exchange_rates')
             .update({
               rate: Number(liveRate),
@@ -417,9 +464,11 @@ export default async function handler(req, res) {
             .select()
             .single();
 
+          const { data: updatedRow, error: updateErr } = await fetchWithTimeout(updateQuery, 5000);
+
           if (updateErr) throw updateErr;
 
-          await supabase.from('currency_exchange_rate_history').insert({
+          await fetchWithTimeout(supabase.from('currency_exchange_rate_history').insert({
             rate_id: updatedRow.id,
             base_currency: 'USD',
             quote_currency,
@@ -429,14 +478,14 @@ export default async function handler(req, res) {
             source_url: updatedRow.source_url,
             status: 'VERIFIED',
             is_manual_override: false,
-            reason: 'Restored automatic sync by admin',
+            reason: `Restored automatic sync by admin ${email}`,
             admin_email: email,
             effective_at: nowIso
-          });
+          }), 4000).catch(() => {});
 
           return res.status(200).json({
             ok: true,
-            message: `Restored automatic sync for USD/${quote_currency}: ${liveRate}`,
+            message: `Restored automatic sync for USD/${quote_currency}: ${liveRate} by ${email}`,
             record: updatedRow
           });
         }
@@ -452,7 +501,7 @@ export default async function handler(req, res) {
 
     // 3. Sync All Live Rates (Scheduled Sync / Force Sync)
     try {
-      const syncResult = await executeLiveSync('MANUAL_SYNC_BUTTON');
+      const syncResult = await executeLiveSync(`MANUAL_SYNC_${verifiedAdminEmail}`);
       return res.status(200).json({
         ok: true,
         message: 'Live FX sync executed successfully across all supported currencies',
