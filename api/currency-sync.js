@@ -553,8 +553,22 @@ export default async function handler(req, res) {
 
       try {
         const fxRes = await fetch(FX_PROVIDER_CONFIG.provider_endpoint);
+        if (!fxRes.ok) {
+          throw new Error(`El proveedor de cotizaciones devolvió HTTP ${fxRes.status}. No se pudo obtener una tasa en vivo.`);
+        }
         const fxData = await fxRes.json();
-        const liveRate = fxData?.rates?.[quote_currency] || FALLBACK_STATIC_RATES[quote_currency];
+        const rawLiveRate = fxData?.rates?.[quote_currency];
+        
+        // STRICT DEFENSE: Never substitute invalid or missing external rates with static fallback rates,
+        // and never mark a failed live query as VERIFIED. Abort and preserve manual override!
+        if (typeof rawLiveRate !== 'number' || isNaN(rawLiveRate) || rawLiveRate <= 0) {
+          return res.status(422).json({
+            ok: false,
+            error: `El proveedor no devolvió una cotización válida para USD/${quote_currency}. Se canceló la restauración automática y se preservó la cotización manual existente.`
+          });
+        }
+
+        const liveRate = Number(rawLiveRate.toFixed(6));
         const nowIso = new Date().toISOString();
         const email = verifiedAdminEmail;
 
@@ -562,7 +576,7 @@ export default async function handler(req, res) {
           const updateQuery = supabase
             .from('currency_exchange_rates')
             .update({
-              rate: Number(liveRate),
+              rate: liveRate,
               status: 'VERIFIED',
               is_manual_override: false,
               override_reason: null,
@@ -586,7 +600,7 @@ export default async function handler(req, res) {
             rate_id: updatedRow.id,
             base_currency: 'USD',
             quote_currency,
-            rate: Number(liveRate),
+            rate: liveRate,
             provider: FX_PROVIDER_CONFIG.provider_name,
             source_name: updatedRow.source_name,
             source_url: updatedRow.source_url,

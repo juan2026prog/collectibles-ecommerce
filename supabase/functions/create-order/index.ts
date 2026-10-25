@@ -1580,20 +1580,40 @@ function sanitizePayloadForLogging(data: any) {
     // Handle Argentina International Shipping & Quote Required Rules
     let intlShippingCostUsd = 0;
     let intlShippingCostArs = 0;
-    let arsPerUsdRate = 1140;
+    let arsPerUsdRate: number | null = null;
+    let fxRateSource = 'currency_exchange_rates';
     let shippingRuleApplied = '';
     let isShippingQuoteRequired = false;
 
     if (isArgentinaOrder) {
-      // Fetch live FX rates from open.er-api.com or DB
+      // Authoritative database FX lookup for USD_ARS
       try {
-        const fxResp = await fetch('https://open.er-api.com/v6/latest/UYU');
-        const fxData = await fxResp.json();
-        if (fxData && fxData.rates && fxData.rates.USD && fxData.rates.ARS) {
-          arsPerUsdRate = Math.round(fxData.rates.ARS / fxData.rates.USD);
+        const { data: arsFxRow, error: fxErr } = await supabase
+          .from('currency_exchange_rates')
+          .select('rate, status, source_name, is_active')
+          .eq('base_currency', 'USD')
+          .eq('quote_currency', 'ARS')
+          .maybeSingle();
+
+        if (fxErr || !arsFxRow || !arsFxRow.rate || Number(arsFxRow.rate) <= 0) {
+          throw new Error("No existe una cotización válida en la base de datos para ARS.");
         }
-      } catch (e) {
-        console.warn("[Create Order] Failed to fetch live FX rate, using fallback 1140 ARS/USD:", e);
+
+        if (!arsFxRow.is_active || (arsFxRow.status !== 'VERIFIED' && arsFxRow.status !== 'MANUAL_OVERRIDE')) {
+          throw new Error(`La cotización de ARS (${arsFxRow.status}) no está autorizada para transacciones comerciales.`);
+        }
+
+        arsPerUsdRate = Number(arsFxRow.rate);
+        fxRateSource = arsFxRow.source_name || 'currency_exchange_rates';
+      } catch (e: any) {
+        console.error("[Create Order] Error de validación cambiaria para ARS:", e.message);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "No fue posible validar la cotización oficial de la moneda de destino para completar la orden."
+          }),
+          { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+        );
       }
 
       // Rule 1: Missing Product Weight
@@ -1758,9 +1778,23 @@ function sanitizePayloadForLogging(data: any) {
       ...(resolvedMiamiAddress || {})
     };
 
-    // Calculate display totals in ARS if Argentina
-    const subtotalArs = Math.round(subtotal * (arsPerUsdRate / 40));
-    const totalArs = Math.round((subtotal - totalDiscounts) * (arsPerUsdRate / 40)) + intlShippingCostArs;
+    // Calculate display totals in ARS if Argentina (using authoritative USD_UYU rate to convert UYU subtotal to USD base)
+    let subtotalArs = 0;
+    let totalArs = 0;
+    if (isArgentinaOrder && arsPerUsdRate) {
+      let uyuPerUsd = 42.50;
+      const { data: uyuFx } = await supabase
+        .from('currency_exchange_rates')
+        .select('rate')
+        .eq('base_currency', 'USD')
+        .eq('quote_currency', 'UYU')
+        .maybeSingle();
+      if (uyuFx?.rate && Number(uyuFx.rate) > 0) {
+        uyuPerUsd = Number(uyuFx.rate);
+      }
+      subtotalArs = Math.round((subtotal / uyuPerUsd) * arsPerUsdRate);
+      totalArs = Math.round(((subtotal - totalDiscounts) / uyuPerUsd) * arsPerUsdRate) + intlShippingCostArs;
+    }
 
     const { data: orderResult, error: rpcError } = await supabase.rpc("create_order_atomic", {
       p_customer_id: user?.id || null,
@@ -1785,7 +1819,7 @@ function sanitizePayloadForLogging(data: any) {
       p_display_shipping: isArgentinaOrder ? intlShippingCostArs : totalShippingCost,
       p_display_total: isArgentinaOrder ? totalArs : totalAmount,
       p_fx_rate: isArgentinaOrder ? arsPerUsdRate : null,
-      p_fx_rate_source: isArgentinaOrder ? "open.er-api.com" : null,
+      p_fx_rate_source: isArgentinaOrder ? fxRateSource : null,
       p_shipping_weight_kg: totalRealWeightKg,
       p_shipping_cost_ars: isArgentinaOrder ? intlShippingCostArs : 0,
       p_shipping_cost_usd: isArgentinaOrder ? intlShippingCostUsd : 0,

@@ -88,12 +88,9 @@ export default function AdminCurrencies() {
   async function loadCurrencyHistory(currency: DisplayCurrency) {
     setLoadingHistory(true);
     try {
-      const { data, error } = await supabase
-        .from('currency_exchange_rate_history')
-        .select('*')
-        .eq('quote_currency', currency)
-        .order('recorded_at', { ascending: false })
-        .limit(25);
+      const { data, error } = await supabase.rpc('get_admin_currency_history', {
+        p_quote_currency: currency
+      });
 
       if (!error && data) {
         setHistoryItems(data);
