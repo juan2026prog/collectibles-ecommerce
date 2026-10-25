@@ -242,6 +242,11 @@ export default async function handler(req, res) {
             };
           });
 
+          // Edge CDN Cache headers to eliminate repetitive Disk I/O roundtrips to Supabase
+          res.setHeader('Cache-Control', 'public, max-age=60, s-maxage=300, stale-while-revalidate=600');
+          res.setHeader('CDN-Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+          res.setHeader('Vercel-CDN-Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600');
+
           return res.status(200).json({
             ok: true,
             canonical_currency: 'USD',
@@ -272,6 +277,9 @@ export default async function handler(req, res) {
         effective_at: new Date().toISOString(),
         age_hours: 0
       }));
+
+      // Fallback response with shorter edge cache
+      res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=60, stale-while-revalidate=120');
 
       return res.status(200).json({
         ok: true,
