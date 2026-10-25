@@ -72,6 +72,17 @@ async function executeCancellableQuery<T = any>(
   try {
     const res = await queryFactory(controller.signal);
     clearTimeout(timer);
+
+    // If PostgREST returned an application-level error (e.g. 500, timeout, connection termination)
+    if (res && res.error) {
+      SEARCH_CIRCUIT_STATE.failureCount++;
+      if (SEARCH_CIRCUIT_STATE.failureCount >= 2) {
+        SEARCH_CIRCUIT_STATE.circuitOpenUntil = Date.now() + 60_000;
+        console.warn('CollectiblesSearchService: PostgreSQL search circuit OPENED for 60s due to database error:', res.error);
+      }
+      return { data: null, error: res.error };
+    }
+
     SEARCH_CIRCUIT_STATE.failureCount = 0;
     return res;
   } catch (err: any) {

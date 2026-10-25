@@ -124,7 +124,7 @@ async function executeLiveSync(triggerSource = 'SCHEDULED_CRON') {
 
     if (supabase) {
       try {
-        // Check if row has active manual override (with 4s timeout)
+        // Check existing rate and manual override status (with 4s timeout)
         const checkQuery = supabase
           .from('currency_exchange_rates')
           .select('*')
@@ -132,17 +132,55 @@ async function executeLiveSync(triggerSource = 'SCHEDULED_CRON') {
           .eq('quote_currency', item.quote_currency)
           .maybeSingle();
 
-        const { data: existing } = await fetchWithTimeout(checkQuery, 4000);
+        const { data: existing, error: checkErr } = await fetchWithTimeout(checkQuery, 4000);
 
+        // REQUIREMENT D: If checking existing row fails or times out, DO NOT overwrite!
+        if (checkErr) {
+          throw new Error(`Safety halt: unable to verify manual override for ${item.quote_currency}: ${checkErr.message}`);
+        }
+
+        // REQUIREMENT C: Preserved manual override is NOT counted as a new write
         if (existing && existing.is_manual_override) {
           ratesProcessed.push({
             quote_currency: item.quote_currency,
             rate: existing.rate,
             provider_fetched_rate: formattedRate,
             saved_to_supabase: true,
-            history_persisted: true,
+            history_persisted: false,
             status: 'MANUAL_OVERRIDE_PRESERVED',
             source: item.source_name
+          });
+          continue;
+        }
+
+        // REQUIREMENT: Idempotent writes & reduce redundant writes if rate unchanged
+        const rateChanged = !existing || Math.abs(Number(existing.rate) - formattedRate) > 0.000001;
+
+        if (!rateChanged && existing) {
+          // Touch updated_at and expires_at without re-writing entire row or creating duplicate history
+          await fetchWithTimeout(
+            supabase
+              .from('currency_exchange_rates')
+              .update({
+                status: 'VERIFIED',
+                fetched_at: nowIso,
+                expires_at: new Date(Date.now() + 24 * 3600000).toISOString(),
+                updated_at: nowIso
+              })
+              .eq('id', existing.id),
+            4000
+          ).catch(() => {});
+
+          dbPersistCount++;
+          ratesProcessed.push({
+            country: item.country_name,
+            currency: item.quote_currency,
+            rate: formattedRate,
+            saved_to_supabase: true,
+            history_persisted: false,
+            source: item.source_name,
+            provider_timestamp: providerTimestamp,
+            status: 'VERIFIED_UNCHANGED'
           });
           continue;
         }
