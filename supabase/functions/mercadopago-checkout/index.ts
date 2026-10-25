@@ -1,11 +1,9 @@
-// @ts-ignore
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-// @ts-ignore
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-// @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
-// @ts-ignore
-import { corsHeaders, handleOptions } from "../_shared/cors.ts";
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
+import { verifyOptionalAuth } from "../_shared/auth.ts";
+import { getGuestTokenSecret, verifyOrderAccessToken } from "../_shared/order-token.ts";
 
 declare const Deno: any;
 
@@ -14,15 +12,20 @@ serve(async (req: Request) => {
   if (options) return options;
 
   try {
-    const { orderId } = await req.json();
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error("Supabase configuration missing");
+    }
+
+    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
+    const user = await verifyOptionalAuth(req);
+
+    const body = await req.json().catch(() => ({}));
+    const { orderId, order_token: orderToken } = body;
     if (!orderId) throw new Error("Falta confirmar el ID de la orden");
 
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
-    );
-
-    // Obtener la orden de la base de datos
+    // 1. Obtener la orden de la base de datos
     const { data: order, error } = await supabaseClient
       .from("orders")
       .select("*, order_items(*, products(*))")
@@ -31,8 +34,31 @@ serve(async (req: Request) => {
 
     if (error || !order) throw new Error("Orden no encontrada en la base de datos.");
     if (order.status !== "pending") throw new Error("La orden ya fue procesada o no está pendiente.");
+    if (order.payment_processed_at || order.status === "paid") {
+      throw new Error("Esta orden ya fue pagada.");
+    }
 
-    // Fallback resolution: Environment Variable first, then site_settings
+    // 2. Control estricto de identidad / autorización
+    const guestSecret = await getGuestTokenSecret(supabaseServiceKey);
+    if (order.customer_id) {
+      if (!user || user.id !== order.customer_id) {
+        return new Response(
+          JSON.stringify({ error: "No tienes permisos para iniciar el pago de esta orden." }),
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 403 }
+        );
+      }
+    } else {
+      // Pedido de invitado: debe validar el token criptográfico emitido al crear la orden
+      const isValidGuest = await verifyOrderAccessToken(orderToken, orderId, guestSecret);
+      if (!isValidGuest) {
+        return new Response(
+          JSON.stringify({ error: "Acceso no autorizado: token de orden de invitado inválido o ausente." }),
+          { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 401 }
+        );
+      }
+    }
+
+    // 3. Fallback resolution: Environment Variable first, then site_settings
     let MP_ACCESS_TOKEN = (Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || "").trim();
     if (!MP_ACCESS_TOKEN) {
       const { data: settings } = await supabaseClient
@@ -45,16 +71,21 @@ serve(async (req: Request) => {
       }
     }
 
-    // Fail-Closed: Strict rejection if no valid Mercado Pago Access Token is configured
+    // Fail-Closed: Rechazo estricto si no existe credencial real
     if (!MP_ACCESS_TOKEN || MP_ACCESS_TOKEN.includes("mock") || MP_ACCESS_TOKEN === "TEST-mock") {
       throw new Error("Mercado Pago no está configurado adecuadamente para procesar cobros reales. Contacte al administrador.");
     }
-    
-    // Crear la preferencia de Mercado Pago
-    const base_url = req.headers.get("origin") || "http://localhost:5173";
-    const webhook_url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/mercadopago-webhook`;
 
-    const items = order.order_items.map((item: any) => ({
+    // 4. Determinar base URL permitida (origen)
+    const rawOrigin = req.headers.get("origin") || "";
+    const isAllowedOrigin = rawOrigin.includes("collectibles.uy") || 
+                            rawOrigin.includes("collectibles-ecommerce.vercel.app") || 
+                            rawOrigin.includes("localhost") || 
+                            rawOrigin.includes("127.0.0.1");
+    const base_url = isAllowedOrigin ? rawOrigin : "https://collectibles.uy";
+    const webhook_url = `${supabaseUrl}/functions/v1/mercadopago-webhook`;
+
+    const items = (order.order_items || []).map((item: any) => ({
       id: item.product_id,
       title: item.products?.title || "Producto",
       quantity: item.quantity,
@@ -124,7 +155,7 @@ serve(async (req: Request) => {
     const preferencePayload = {
       items,
       payer: {
-        email: order.customer_email || "test_user_123@testuser.com",
+        email: order.customer_email || "cliente@collectibles.uy",
         name: order.shipping_address?.first_name || "Cliente",
         surname: order.shipping_address?.last_name || "Guest"
       },
@@ -135,7 +166,7 @@ serve(async (req: Request) => {
       },
       auto_return: "approved",
       external_reference: order.id,
-      notification_url: webhook_url, // Escucha el Webhook!
+      notification_url: webhook_url,
       statement_descriptor: "COLLECTIBLES STORE"
     };
 
@@ -151,10 +182,9 @@ serve(async (req: Request) => {
     const mpData = await response.json();
     if (!response.ok) throw new Error(JSON.stringify(mpData));
 
-    // El init_point o sandbox_init_point es la URL a la que el usuario va para pagar
-    const redirectUrl = MP_ACCESS_TOKEN.includes("TEST") ? mpData.sandbox_init_point : mpData.init_point;
+    const redirectUrl = MP_ACCESS_TOKEN.startsWith("TEST-") ? mpData.sandbox_init_point : mpData.init_point;
 
-    // Determine next attempt number
+    // Registrar intento para trazabilidad financiera
     const { data: existingAttempts } = await supabaseClient
       .from("payment_attempts")
       .select("attempt_number")
@@ -207,13 +237,13 @@ serve(async (req: Request) => {
       .eq("id", order.id);
 
     return new Response(JSON.stringify({ redirect_url: redirectUrl }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
 
   } catch (error: any) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 400,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
     });
   }
 });
