@@ -49,6 +49,42 @@ export interface RadarSearchResult {
   official_image_url: string;
 }
 
+// Helper to execute a Supabase query with real AbortController cancellation and circuit breaker
+const SEARCH_CIRCUIT_STATE = {
+  failureCount: 0,
+  circuitOpenUntil: 0
+};
+
+async function executeCancellableQuery<T = any>(
+  queryFactory: (signal: AbortSignal) => PromiseLike<{ data: T | null; error: any }>,
+  timeoutMs = 3000
+): Promise<{ data: T | null; error: any }> {
+  const now = Date.now();
+  if (now < SEARCH_CIRCUIT_STATE.circuitOpenUntil) {
+    return { data: null, error: new Error('PostgreSQL search circuit breaker is open (saturation protection)') };
+  }
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    const res = await queryFactory(controller.signal);
+    clearTimeout(timer);
+    SEARCH_CIRCUIT_STATE.failureCount = 0;
+    return res;
+  } catch (err: any) {
+    clearTimeout(timer);
+    SEARCH_CIRCUIT_STATE.failureCount++;
+    if (SEARCH_CIRCUIT_STATE.failureCount >= 2) {
+      SEARCH_CIRCUIT_STATE.circuitOpenUntil = Date.now() + 60_000; // Open circuit for 60s
+      console.warn('CollectiblesSearchService: PostgreSQL search circuit OPENED for 60s after repeated timeouts/aborts');
+    }
+    return { data: null, error: err };
+  }
+}
+
 export interface UnifiedSearchOptions {
   query: string;
   limitLocal?: number;
@@ -231,36 +267,36 @@ export class CollectiblesSearchService {
         const tokens = await resolveSearchTokens(searchTerm);
         const orClause = buildProductSearchOrClause(tokens);
 
-        let localQuery = supabase
-          .from('products')
-          .select(`
-            id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, created_at,
-            category:categories(id, name, slug),
-            brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
-            images:product_images(id, url, alt_text, is_primary),
-            variants:product_variants(id, sku, price_adjustment, inventory_count),
-            vendor:vendors(id, store_name, slug, logo_url),
-            vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official)
-          `)
-          .eq('status', 'published')
-          .eq('is_active', true);
+        const { data: localData, error: localErr } = await executeCancellableQuery(signal => {
+          let q = supabase
+            .from('products')
+            .select(`
+              id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, created_at,
+              category:categories(id, name, slug),
+              brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
+              images:product_images(id, url, alt_text, is_primary),
+              variants:product_variants(id, sku, price_adjustment, inventory_count),
+              vendor:vendors(id, store_name, slug, logo_url),
+              vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official)
+            `)
+            .eq('status', 'published')
+            .eq('is_active', true)
+            .abortSignal(signal);
 
-        if (orClause) {
-          localQuery = localQuery.or(orClause);
-        } else if (searchTerm) {
-          localQuery = localQuery.ilike('title', `%${searchTerm}%`);
-        }
-        if (localPriceMax) {
-          localQuery = localQuery.lte('base_price', Math.round(localPriceMax));
-        }
-        if (localPriceMin) {
-          localQuery = localQuery.gte('base_price', Math.round(localPriceMin));
-        }
+          if (orClause) {
+            q = q.or(orClause);
+          } else if (searchTerm) {
+            q = q.ilike('title', `%${searchTerm}%`);
+          }
+          if (localPriceMax) {
+            q = q.lte('base_price', Math.round(localPriceMax));
+          }
+          if (localPriceMin) {
+            q = q.gte('base_price', Math.round(localPriceMin));
+          }
 
-        localQuery = localQuery.limit(limitLocal);
-
-        const timeoutPromise = new Promise<{ data: null; error: any }>((resolve) => setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 3500));
-        const { data: localData, error: localErr } = await Promise.race([localQuery, timeoutPromise]);
+          return q.limit(limitLocal);
+        }, 3000);
 
         if (!localErr && Array.isArray(localData)) {
           localResults = localData.map(item => {
@@ -294,26 +330,26 @@ export class CollectiblesSearchService {
           });
         }
 
-        // 2. Query International Products with circuit timeout
-        let intlQuery = supabase
-          .from('international_products')
-          .select('id, title, slug, final_price_usd, amazon_list_price_usd, image_url, brand, category, status')
-          .eq('status', 'published');
+        // 2. Query International Products with cancellable query
+        const { data: intlData } = await executeCancellableQuery(signal => {
+          let q = supabase
+            .from('international_products')
+            .select('id, title, slug, final_price_usd, amazon_list_price_usd, image_url, brand, category, status')
+            .eq('status', 'published')
+            .abortSignal(signal);
 
-        if (searchTerm) {
-          intlQuery = intlQuery.ilike('title', `%${searchTerm}%`);
-        }
-        if (intlPriceMax) {
-          intlQuery = intlQuery.lte('final_price_usd', Math.round(intlPriceMax * 100) / 100);
-        }
-        if (intlPriceMin) {
-          intlQuery = intlQuery.gte('final_price_usd', Math.round(intlPriceMin * 100) / 100);
-        }
+          if (searchTerm) {
+            q = q.ilike('title', `%${searchTerm}%`);
+          }
+          if (intlPriceMax) {
+            q = q.lte('final_price_usd', Math.round(intlPriceMax * 100) / 100);
+          }
+          if (intlPriceMin) {
+            q = q.gte('final_price_usd', Math.round(intlPriceMin * 100) / 100);
+          }
 
-        intlQuery = intlQuery.limit(limitIntl);
-
-        const intlTimeoutPromise = new Promise<{ data: null }>((resolve) => setTimeout(() => resolve({ data: null }), 3500));
-        const { data: intlData } = await Promise.race([intlQuery, intlTimeoutPromise]);
+          return q.limit(limitIntl);
+        }, 3000);
 
         if (Array.isArray(intlData)) {
           intlResults = intlData.map(item => {
@@ -399,17 +435,15 @@ export class CollectiblesSearchService {
 
     if (!radarD1Succeeded) {
       try {
-        // Fast race fallback to prevent hanging on saturated Supabase instance
-        const radarSupabaseQuery = supabase
-          .from('release_events')
-          .select('id, slug, title, manufacturer, product_line, radar_signal, date_display_text, official_image_url, brand:brands(name)')
-          .eq('is_published', true)
-          .or(`title.ilike.%${searchTerm}%,manufacturer.ilike.%${searchTerm}%,franchise.ilike.%${searchTerm}%`)
-          .limit(limitRadar);
-
-        const timeoutPromise = new Promise<{ data: null }>((resolve) => setTimeout(() => resolve({ data: null }), 3000));
-        const res = await Promise.race([radarSupabaseQuery, timeoutPromise]);
-        const radarEvents = res?.data;
+        const { data: radarEvents } = await executeCancellableQuery(signal => {
+          return supabase
+            .from('release_events')
+            .select('id, slug, title, manufacturer, product_line, radar_signal, date_display_text, official_image_url, brand:brands(name)')
+            .eq('is_published', true)
+            .or(`title.ilike.%${searchTerm}%,manufacturer.ilike.%${searchTerm}%,franchise.ilike.%${searchTerm}%`)
+            .abortSignal(signal)
+            .limit(limitRadar);
+        }, 3000);
 
         if (Array.isArray(radarEvents)) {
           radarDrops = radarEvents.map((r: any) => ({
@@ -474,19 +508,22 @@ export class CollectiblesSearchService {
 
       if (!relaxedD1Done) {
         try {
-          const { data: fallbackLocal } = await supabase
-            .from('products')
-            .select(`
-              id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, created_at,
-              category:categories(id, name, slug),
-              brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
-              images:product_images(id, url, alt_text, is_primary),
-              variants:product_variants(id, sku, price_adjustment, inventory_count),
-              vendor:vendors(id, store_name, slug, logo_url),
-              vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official)
-            `)
-            .eq('is_active', true)
-            .limit(12);
+          const { data: fallbackLocal } = await executeCancellableQuery(signal => {
+            return supabase
+              .from('products')
+              .select(`
+                id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, created_at,
+                category:categories(id, name, slug),
+                brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
+                images:product_images(id, url, alt_text, is_primary),
+                variants:product_variants(id, sku, price_adjustment, inventory_count),
+                vendor:vendors(id, store_name, slug, logo_url),
+                vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official)
+              `)
+              .eq('is_active', true)
+              .abortSignal(signal)
+              .limit(12);
+          }, 3000);
 
           if (Array.isArray(fallbackLocal)) {
             relaxedProducts = fallbackLocal.map(item => {

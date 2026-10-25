@@ -5,7 +5,7 @@
   "outputDirectory": "frontend/dist",
   "crons": [
     {
-      "path": "/api/currency-sync",
+      "path": "/api/currency-sync?cron=true",
       "schedule": "0 6 * * *"
     },
     {

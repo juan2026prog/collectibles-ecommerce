@@ -109,7 +109,10 @@ async function executeLiveSync(triggerSource = 'SCHEDULED_CRON') {
 
   const nowIso = new Date().toISOString();
   const providerTimestamp = fxData.time_last_update_utc || fxData.time_last_update_unix || null;
-  const syncedRates = [];
+  const ratesProcessed = [];
+  const errors = [];
+  let dbPersistCount = 0;
+  let historyPersistCount = 0;
 
   for (const item of COUNTRY_CURRENCIES) {
     const rawRate = item.quote_currency === 'USD' ? 1.0 : fxData.rates[item.quote_currency];
@@ -132,9 +135,12 @@ async function executeLiveSync(triggerSource = 'SCHEDULED_CRON') {
         const { data: existing } = await fetchWithTimeout(checkQuery, 4000);
 
         if (existing && existing.is_manual_override) {
-          syncedRates.push({
+          ratesProcessed.push({
             quote_currency: item.quote_currency,
             rate: existing.rate,
+            provider_fetched_rate: formattedRate,
+            saved_to_supabase: true,
+            history_persisted: true,
             status: 'MANUAL_OVERRIDE_PRESERVED',
             source: item.source_name
           });
@@ -166,34 +172,81 @@ async function executeLiveSync(triggerSource = 'SCHEDULED_CRON') {
 
         const { data: upserted, error: upErr } = await fetchWithTimeout(upsertQuery, 4000);
 
-        if (!upErr && upserted) {
-          await fetchWithTimeout(supabase.from('currency_exchange_rate_history').insert({
-            rate_id: upserted.id,
-            base_currency: 'USD',
-            quote_currency: item.quote_currency,
-            rate: formattedRate,
-            provider: FX_PROVIDER_CONFIG.provider_name,
-            source_name: item.source_name,
-            source_url: item.source_url,
-            status: 'VERIFIED',
-            is_manual_override: false,
-            reason: `Automated live FX synchronization (${triggerSource})`,
-            effective_at: nowIso
-          }), 4000).catch(() => {});
+        if (upErr) {
+          throw new Error(`Upsert error for ${item.quote_currency}: ${upErr.message}`);
         }
-      } catch (dbErr) {
-        console.warn(`[CurrencySync] DB persist skipped for ${item.quote_currency}:`, dbErr.message);
-      }
-    }
 
-    syncedRates.push({
-      country: item.country_name,
-      currency: item.quote_currency,
-      rate: formattedRate,
-      source: item.source_name,
-      provider_timestamp: providerTimestamp,
-      status: 'VERIFIED'
-    });
+        dbPersistCount++;
+        let histPersisted = false;
+
+        if (upserted) {
+          try {
+            await fetchWithTimeout(supabase.from('currency_exchange_rate_history').insert({
+              rate_id: upserted.id,
+              base_currency: 'USD',
+              quote_currency: item.quote_currency,
+              rate: formattedRate,
+              provider: FX_PROVIDER_CONFIG.provider_name,
+              source_name: item.source_name,
+              source_url: item.source_url,
+              status: 'VERIFIED',
+              is_manual_override: false,
+              reason: `Automated live FX synchronization (${triggerSource})`,
+              effective_at: nowIso
+            }), 4000);
+            historyPersistCount++;
+            histPersisted = true;
+          } catch (histErr) {
+            console.warn(`[CurrencySync] History insert failed for ${item.quote_currency}:`, histErr.message);
+          }
+        }
+
+        ratesProcessed.push({
+          country: item.country_name,
+          currency: item.quote_currency,
+          rate: formattedRate,
+          saved_to_supabase: true,
+          history_persisted: histPersisted,
+          source: item.source_name,
+          provider_timestamp: providerTimestamp,
+          status: 'VERIFIED'
+        });
+      } catch (dbErr) {
+        console.error(`[CurrencySync] DB persist failed for ${item.quote_currency}:`, dbErr.message);
+        errors.push({ currency: item.quote_currency, error: dbErr.message });
+        ratesProcessed.push({
+          country: item.country_name,
+          currency: item.quote_currency,
+          rate: formattedRate,
+          saved_to_supabase: false,
+          history_persisted: false,
+          source: item.source_name,
+          provider_timestamp: providerTimestamp,
+          status: 'FETCHED_UPSTREAM_BUT_PERSIST_FAILED',
+          error: dbErr.message
+        });
+      }
+    } else {
+      ratesProcessed.push({
+        country: item.country_name,
+        currency: item.quote_currency,
+        rate: formattedRate,
+        saved_to_supabase: false,
+        history_persisted: false,
+        source: item.source_name,
+        provider_timestamp: providerTimestamp,
+        status: 'FETCHED_UPSTREAM_NO_DB'
+      });
+    }
+  }
+
+  // Determine actual synchronization status
+  const totalCurrencies = COUNTRY_CURRENCIES.length;
+  let overallSyncStatus = 'SUCCESS';
+  if (dbPersistCount === 0 && COUNTRY_CURRENCIES.length > 0) {
+    overallSyncStatus = 'FAILED_PERSISTENCE';
+  } else if (errors.length > 0) {
+    overallSyncStatus = 'PARTIAL_SUCCESS';
   }
 
   return {
@@ -201,50 +254,56 @@ async function executeLiveSync(triggerSource = 'SCHEDULED_CRON') {
     provider_endpoint: FX_PROVIDER_CONFIG.provider_endpoint,
     provider_timestamp: providerTimestamp,
     synced_at: nowIso,
-    synced_count: syncedRates.length,
-    results: syncedRates
+    total_requested: totalCurrencies,
+    rates_processed_count: ratesProcessed.length,
+    db_persisted_count: dbPersistCount,
+    history_persisted_count: historyPersistCount,
+    sync_status: overallSyncStatus,
+    errors: errors.length > 0 ? errors : undefined,
+    results: ratesProcessed
   };
 }
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, apikey, x-vercel-cron, x-cron-secret');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, apikey, x-cron-secret');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  const isCronHeader = !!req.headers['x-vercel-cron'];
   const isForceSyncRequested = req.query?.sync === 'true' || req.query?.cron === 'true';
 
   // ----------------------------------------------------
-  // GET: Read Active Rates OR Trigger Vercel Cron / Authenticated Sync
+  // GET: Read Active Rates OR Trigger Authenticated Cron / Admin Sync
   // ----------------------------------------------------
   if (req.method === 'GET') {
-    if (isCronHeader || isForceSyncRequested) {
+    if (isForceSyncRequested) {
       // Must NOT be cached when executing cron/sync
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
       res.setHeader('CDN-Cache-Control', 'no-store');
       res.setHeader('Vercel-CDN-Cache-Control', 'no-store');
 
       const auth = await authenticateRequest(req, { allowCron: true });
-      // Allow Vercel Cron if standard header 'x-vercel-cron' is present OR Bearer CRON_SECRET matched
-      const cronAuthorized = auth.isCron || isCronHeader || auth.isAdmin;
+      // STRICT SECURITY: Only authenticate via verified Bearer CRON_SECRET or Admin JWT.
+      // Never authorize merely by an arbitrary header like 'x-vercel-cron'.
+      const cronAuthorized = auth.authenticated && (auth.isCron || auth.isAdmin);
 
       if (!cronAuthorized) {
         return res.status(401).json({
           ok: false,
           error: 'UNAUTHORIZED_SYNC_REQUEST',
-          message: 'Se requieren permisos administrativos o autorización de Vercel Cron para disparar sincronizaciones.'
+          message: 'Acceso denegado. Se requiere autenticación estricta: Authorization: Bearer CRON_SECRET o sesión administrativa válida.'
         });
       }
 
       try {
-        const syncResult = await executeLiveSync(isCronHeader ? 'VERCEL_CRON_HEADER' : (auth.isCron ? 'VERCEL_CRON_SECRET' : 'ADMIN_GET_SYNC'));
-        return res.status(200).json({
-          ok: true,
-          message: (auth.isCron || isCronHeader) ? 'Vercel Cron scheduled FX sync executed successfully' : 'Live FX sync executed successfully',
+        const syncResult = await executeLiveSync(auth.isCron ? 'VERCEL_CRON_SECRET' : 'ADMIN_GET_SYNC');
+        const isFailure = syncResult.sync_status === 'FAILED_PERSISTENCE';
+        return res.status(isFailure ? 502 : 200).json({
+          ok: !isFailure,
+          message: isFailure ? 'Upstream FX rates retrieved but failed to persist to PostgreSQL' : (auth.isCron ? 'Vercel Cron scheduled FX sync executed successfully' : 'Live FX sync executed successfully'),
           ...syncResult
         });
       } catch (err) {
