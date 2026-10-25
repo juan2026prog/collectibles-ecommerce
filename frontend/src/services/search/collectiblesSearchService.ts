@@ -1,5 +1,6 @@
 import { supabase } from '../../lib/supabase';
 import { relatedRecord } from '../../lib/relatedRecord';
+import { PublicCatalogProvider } from '../../lib/providers/PublicCatalogProvider';
 import { 
   interpretUserQuery, 
   generateDirectEditorialAnswer, 
@@ -157,118 +158,185 @@ export class CollectiblesSearchService {
       }
     }
 
-    // 1. Query Local Products
+    // 1. Query Products (Cloudflare D1 Primary -> Supabase Fallback)
     const tokens = await resolveSearchTokens(searchTerm);
-    const orClause = buildProductSearchOrClause(tokens);
-
-    let localQuery = supabase
-      .from('products')
-      .select(`
-        id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, created_at,
-        category:categories(id, name, slug),
-        brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
-        images:product_images(id, url, alt_text, is_primary),
-        variants:product_variants(id, sku, price_adjustment, inventory_count),
-        vendor:vendors(id, store_name, slug, logo_url),
-        vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official)
-      `)
-      .eq('status', 'published')
-      .eq('is_active', true);
-
-    if (orClause) {
-      localQuery = localQuery.or(orClause);
-    } else if (searchTerm) {
-      localQuery = localQuery.ilike('title', `%${searchTerm}%`);
-    }
-    if (localPriceMax) {
-      localQuery = localQuery.lte('base_price', Math.round(localPriceMax));
-    }
-    if (localPriceMin) {
-      localQuery = localQuery.gte('base_price', Math.round(localPriceMin));
-    }
-
-    localQuery = localQuery.limit(limitLocal);
-
-    const { data: localData, error: localErr } = await localQuery;
     let localResults: SearchProductResult[] = [];
-
-    if (!localErr && Array.isArray(localData)) {
-      localResults = localData.map(item => {
-        const priceUyu = Number(item.base_price || 0);
-        const priceUsd = Number((priceUyu / fxRate).toFixed(2));
-        return {
-          id: item.id,
-          title: item.title,
-          slug: item.slug,
-          base_price: priceUyu,
-          price: priceUyu,
-          compare_at_price: item.compare_at_price ? Number(item.compare_at_price) : undefined,
-          currency: 'UYU',
-          price_in_usd: priceUsd,
-          price_in_uyu: priceUyu,
-          images: item.images || [],
-          image_url: item.images?.find((img: any) => img.is_primary)?.url || item.images?.[0]?.url,
-          badge: item.badge,
-          is_featured: item.is_featured,
-          is_active: item.is_active,
-          status: item.status,
-          brand: relatedRecord(item.brand),
-          category: relatedRecord(item.category),
-          vendor: relatedRecord(item.vendor),
-          vendor_store: relatedRecord(item.vendor_store),
-          variants: item.variants,
-          is_international: false,
-          condition: item.condition,
-          created_at: item.created_at
-        };
-      });
-    }
-
-    // 2. Query International Products
-    let intlQuery = supabase
-      .from('international_products')
-      .select('id, title, slug, final_price_usd, amazon_list_price_usd, image_url, brand, category, status')
-      .eq('status', 'published');
-
-    if (searchTerm) {
-      intlQuery = intlQuery.ilike('title', `%${searchTerm}%`);
-    }
-    if (intlPriceMax) {
-      intlQuery = intlQuery.lte('final_price_usd', Math.round(intlPriceMax * 100) / 100);
-    }
-    if (intlPriceMin) {
-      intlQuery = intlQuery.gte('final_price_usd', Math.round(intlPriceMin * 100) / 100);
-    }
-
-    intlQuery = intlQuery.limit(limitIntl);
-
-    const { data: intlData } = await intlQuery;
     let intlResults: SearchProductResult[] = [];
+    let d1Succeeded = false;
 
-    if (Array.isArray(intlData)) {
-      intlResults = intlData.map(item => {
-        const priceUsd = Number(item.final_price_usd || item.amazon_list_price_usd || 0);
-        const priceUyu = Math.round(priceUsd * fxRate);
-        return {
-          id: item.id,
-          title: item.title,
-          slug: item.slug || `intl-${item.id}`,
-          base_price: priceUsd,
-          price: priceUsd,
-          compare_at_price: Number(item.amazon_list_price_usd || item.final_price_usd || 0),
-          currency: 'USD',
-          price_in_usd: priceUsd,
-          price_in_uyu: priceUyu,
-          images: [{ id: item.id, url: item.image_url, is_primary: true }],
-          image_url: item.image_url,
-          brand: { name: item.brand || 'Importado', slug: item.brand ? item.brand.toLowerCase() : 'importado' },
-          category: { name: item.category || 'Coleccionables', slug: 'coleccionables' },
-          source_provider: 'zinc',
-          is_international: true,
-          is_active: true,
-          status: item.status
-        };
-      });
+    try {
+      if (PublicCatalogProvider.isDomainEnabled('products') || PublicCatalogProvider.isDomainEnabled('search')) {
+        const d1Res = await PublicCatalogProvider.getProducts({
+          q: searchTerm,
+          limit: limitLocal + limitIntl,
+          availability: options.filterTab === 'in_stock' ? 'local' : (options.filterTab === 'international' ? 'international' : 'all')
+        });
+
+        if (d1Res && d1Res.data && Array.isArray(d1Res.data.products)) {
+          d1Succeeded = true;
+          d1Res.data.products.forEach((p: any) => {
+            const isIntl = Boolean(p.is_international);
+            const price = Number(p.price || p.base_price || 0);
+            const priceUsd = isIntl ? price : Number((price / fxRate).toFixed(2));
+            const priceUyu = isIntl ? Math.round(price * fxRate) : price;
+
+            // Budget filter check
+            if (localPriceMin !== undefined && priceUyu < localPriceMin) return;
+            if (localPriceMax !== undefined && priceUyu > localPriceMax) return;
+            if (intlPriceMin !== undefined && priceUsd < intlPriceMin) return;
+            if (intlPriceMax !== undefined && priceUsd > intlPriceMax) return;
+
+            const mappedItem: SearchProductResult = {
+              id: p.id,
+              title: p.title,
+              slug: p.slug,
+              base_price: price,
+              price: price,
+              compare_at_price: p.compare_at_price ? Number(p.compare_at_price) : undefined,
+              currency: isIntl ? 'USD' : 'UYU',
+              price_in_usd: priceUsd,
+              price_in_uyu: priceUyu,
+              images: Array.isArray(p.images) ? p.images : (p.primary_image_url ? [{ id: p.id, url: p.primary_image_url, is_primary: true }] : []),
+              image_url: p.primary_image_url || p.image_url || (Array.isArray(p.images) && p.images[0]?.url),
+              badge: p.badge,
+              is_featured: Boolean(p.is_featured),
+              is_active: Boolean(p.is_active !== false),
+              status: p.status || 'published',
+              brand: p.brand ? { name: p.brand.name, slug: p.brand.slug, logo_url: p.brand.logo_url } : undefined,
+              category: p.category ? { name: p.category.name, slug: p.category.slug } : undefined,
+              vendor: p.vendor ? { id: p.vendor.id, store_name: p.vendor.store_name, slug: p.vendor.slug, logo_url: p.vendor.logo_url } : undefined,
+              vendor_store: p.vendor_store ? { id: p.vendor_store.id, store_name: p.vendor_store.store_name, slug: p.vendor_store.slug, logo_url: p.vendor_store.logo_url, is_official: p.vendor_store.is_official } : undefined,
+              variants: Array.isArray(p.variants) ? p.variants : [],
+              is_international: isIntl,
+              source_provider: p.source_provider || (isIntl ? 'zinc' : 'platform'),
+              condition: p.condition || 'new_sealed',
+              created_at: p.created_at
+            };
+
+            if (isIntl) {
+              intlResults.push(mappedItem);
+            } else {
+              localResults.push(mappedItem);
+            }
+          });
+        }
+      }
+    } catch (d1Err) {
+      console.warn('CollectiblesSearchService: D1 search fallback to Supabase:', d1Err);
+    }
+
+    // Fallback to Supabase if D1 was disabled or returned no response structure
+    if (!d1Succeeded) {
+      const tokens = await resolveSearchTokens(searchTerm);
+      const orClause = buildProductSearchOrClause(tokens);
+
+      let localQuery = supabase
+        .from('products')
+        .select(`
+          id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, created_at,
+          category:categories(id, name, slug),
+          brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
+          images:product_images(id, url, alt_text, is_primary),
+          variants:product_variants(id, sku, price_adjustment, inventory_count),
+          vendor:vendors(id, store_name, slug, logo_url),
+          vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official)
+        `)
+        .eq('status', 'published')
+        .eq('is_active', true);
+
+      if (orClause) {
+        localQuery = localQuery.or(orClause);
+      } else if (searchTerm) {
+        localQuery = localQuery.ilike('title', `%${searchTerm}%`);
+      }
+      if (localPriceMax) {
+        localQuery = localQuery.lte('base_price', Math.round(localPriceMax));
+      }
+      if (localPriceMin) {
+        localQuery = localQuery.gte('base_price', Math.round(localPriceMin));
+      }
+
+      localQuery = localQuery.limit(limitLocal);
+
+      const { data: localData, error: localErr } = await localQuery;
+
+      if (!localErr && Array.isArray(localData)) {
+        localResults = localData.map(item => {
+          const priceUyu = Number(item.base_price || 0);
+          const priceUsd = Number((priceUyu / fxRate).toFixed(2));
+          return {
+            id: item.id,
+            title: item.title,
+            slug: item.slug,
+            base_price: priceUyu,
+            price: priceUyu,
+            compare_at_price: item.compare_at_price ? Number(item.compare_at_price) : undefined,
+            currency: 'UYU',
+            price_in_usd: priceUsd,
+            price_in_uyu: priceUyu,
+            images: item.images || [],
+            image_url: item.images?.find((img: any) => img.is_primary)?.url || item.images?.[0]?.url,
+            badge: item.badge,
+            is_featured: item.is_featured,
+            is_active: item.is_active,
+            status: item.status,
+            brand: relatedRecord(item.brand),
+            category: relatedRecord(item.category),
+            vendor: relatedRecord(item.vendor),
+            vendor_store: relatedRecord(item.vendor_store),
+            variants: item.variants,
+            is_international: false,
+            condition: item.condition,
+            created_at: item.created_at
+          };
+        });
+      }
+
+      // 2. Query International Products
+      let intlQuery = supabase
+        .from('international_products')
+        .select('id, title, slug, final_price_usd, amazon_list_price_usd, image_url, brand, category, status')
+        .eq('status', 'published');
+
+      if (searchTerm) {
+        intlQuery = intlQuery.ilike('title', `%${searchTerm}%`);
+      }
+      if (intlPriceMax) {
+        intlQuery = intlQuery.lte('final_price_usd', Math.round(intlPriceMax * 100) / 100);
+      }
+      if (intlPriceMin) {
+        intlQuery = intlQuery.gte('final_price_usd', Math.round(intlPriceMin * 100) / 100);
+      }
+
+      intlQuery = intlQuery.limit(limitIntl);
+
+      const { data: intlData } = await intlQuery;
+
+      if (Array.isArray(intlData)) {
+        intlResults = intlData.map(item => {
+          const priceUsd = Number(item.final_price_usd || item.amazon_list_price_usd || 0);
+          const priceUyu = Math.round(priceUsd * fxRate);
+          return {
+            id: item.id,
+            title: item.title,
+            slug: item.slug || `intl-${item.id}`,
+            base_price: priceUsd,
+            price: priceUsd,
+            compare_at_price: Number(item.amazon_list_price_usd || item.final_price_usd || 0),
+            currency: 'USD',
+            price_in_usd: priceUsd,
+            price_in_uyu: priceUyu,
+            images: [{ id: item.id, url: item.image_url, is_primary: true }],
+            image_url: item.image_url,
+            brand: { name: item.brand || 'Importado', slug: item.brand ? item.brand.toLowerCase() : 'importado' },
+            category: { name: item.category || 'Coleccionables', slug: 'coleccionables' },
+            source_provider: 'zinc',
+            is_international: true,
+            is_active: true,
+            status: item.status
+          };
+        });
+      }
     }
 
     // Filter exclusions (e.g. "que no sea Funko")
@@ -289,82 +357,158 @@ export class CollectiblesSearchService {
       combined = combined.filter(p => p.is_international);
     }
 
-    // 3. Query Radar / Release Events
+    // 3. Query Radar / Release Events (D1 Primary -> Supabase Fallback)
     let radarDrops: RadarSearchResult[] = [];
-    try {
-      const { data: radarEvents } = await supabase
-        .from('release_events')
-        .select('id, slug, title, manufacturer, product_line, radar_signal, date_display_text, official_image_url, brand:brands(name)')
-        .eq('is_published', true)
-        .or(`title.ilike.%${searchTerm}%,manufacturer.ilike.%${searchTerm}%,franchise.ilike.%${searchTerm}%`)
-        .limit(limitRadar);
+    let radarD1Succeeded = false;
 
-      if (Array.isArray(radarEvents)) {
-        radarDrops = radarEvents.map((r: any) => ({
-          id: r.id,
-          slug: r.slug,
-          title: r.title,
-          brand: r.brand?.name || r.manufacturer || 'Oficial',
-          line: r.product_line || 'Línea Regular',
-          radar_signal: r.radar_signal || 'NUEVO_ANUNCIO',
-          date_label: r.date_display_text || 'Próximamente',
-          official_image_url: r.official_image_url || '/images/radar/placeholder.jpg'
-        }));
+    try {
+      if (PublicCatalogProvider.isDomainEnabled('radar')) {
+        const d1Radar = await PublicCatalogProvider.getRadarReleases(limitRadar * 2);
+        if (d1Radar && d1Radar.data && Array.isArray(d1Radar.data.releases)) {
+          radarD1Succeeded = true;
+          const searchLower = searchTerm.toLowerCase();
+          const filtered = d1Radar.data.releases.filter((r: any) => {
+            const title = String(r.title || '').toLowerCase();
+            const brand = String(r.brand_name || r.brand || '').toLowerCase();
+            const line = String(r.line || r.product_line || '').toLowerCase();
+            return title.includes(searchLower) || brand.includes(searchLower) || line.includes(searchLower);
+          }).slice(0, limitRadar);
+
+          radarDrops = filtered.map((r: any) => ({
+            id: r.id,
+            slug: r.slug,
+            title: r.title,
+            brand: r.brand_name || r.brand?.name || r.brand || r.manufacturer || 'Oficial',
+            line: r.line || r.product_line || 'Línea Regular',
+            radar_signal: r.radar_signal || 'NUEVO_ANUNCIO',
+            date_label: r.date_display_text || r.estimated_quarter || 'Próximamente',
+            official_image_url: r.official_image_url || r.hero_image_url || '/images/radar/placeholder.jpg'
+          }));
+        }
       }
-    } catch (radarErr) {
-      console.warn('CollectiblesSearchService: radar load error:', radarErr);
+    } catch (radarD1Err) {
+      console.warn('CollectiblesSearchService: radar D1 load fallback:', radarD1Err);
     }
 
-    // 4. Relaxed Products fallback if 0 exact results
+    if (!radarD1Succeeded) {
+      try {
+        const { data: radarEvents } = await supabase
+          .from('release_events')
+          .select('id, slug, title, manufacturer, product_line, radar_signal, date_display_text, official_image_url, brand:brands(name)')
+          .eq('is_published', true)
+          .or(`title.ilike.%${searchTerm}%,manufacturer.ilike.%${searchTerm}%,franchise.ilike.%${searchTerm}%`)
+          .limit(limitRadar);
+
+        if (Array.isArray(radarEvents)) {
+          radarDrops = radarEvents.map((r: any) => ({
+            id: r.id,
+            slug: r.slug,
+            title: r.title,
+            brand: r.brand?.name || r.manufacturer || 'Oficial',
+            line: r.product_line || 'Línea Regular',
+            radar_signal: r.radar_signal || 'NUEVO_ANUNCIO',
+            date_label: r.date_display_text || 'Próximamente',
+            official_image_url: r.official_image_url || '/images/radar/placeholder.jpg'
+          }));
+        }
+      } catch (radarErr) {
+        console.warn('CollectiblesSearchService: radar load error:', radarErr);
+      }
+    }
+
+    // 4. Relaxed Products fallback if 0 exact results (D1 Primary -> Supabase Fallback)
     let relaxedProducts: SearchProductResult[] = [];
     if (combined.length === 0) {
+      let relaxedD1Done = false;
       try {
-        const { data: fallbackLocal } = await supabase
-          .from('products')
-          .select(`
-            id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, created_at,
-            category:categories(id, name, slug),
-            brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
-            images:product_images(id, url, alt_text, is_primary),
-            variants:product_variants(id, sku, price_adjustment, inventory_count),
-            vendor:vendors(id, store_name, slug, logo_url),
-            vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official)
-          `)
-          .eq('is_active', true)
-          .limit(12);
-
-        if (Array.isArray(fallbackLocal)) {
-          relaxedProducts = fallbackLocal.map(item => {
-            const priceUyu = Number(item.base_price || 0);
-            const priceUsd = Number((priceUyu / fxRate).toFixed(2));
-            return {
-              id: item.id,
-              title: item.title,
-              slug: item.slug,
-              base_price: priceUyu,
-              price: priceUyu,
-              compare_at_price: item.compare_at_price ? Number(item.compare_at_price) : undefined,
-              currency: 'UYU',
-              price_in_usd: priceUsd,
-              price_in_uyu: priceUyu,
-              images: item.images || [],
-              image_url: item.images?.find((img: any) => img.is_primary)?.url || item.images?.[0]?.url,
-              badge: item.badge,
-              is_featured: item.is_featured,
-              is_active: item.is_active,
-              status: item.status,
-              brand: relatedRecord(item.brand),
-              category: relatedRecord(item.category),
-              vendor: relatedRecord(item.vendor),
-              vendor_store: relatedRecord(item.vendor_store),
-              variants: item.variants,
-              is_international: false,
-              condition: item.condition,
-              created_at: item.created_at
-            };
-          });
+        if (PublicCatalogProvider.isDomainEnabled('products')) {
+          const d1Relaxed = await PublicCatalogProvider.getProducts({ limit: 12 });
+          if (d1Relaxed && d1Relaxed.data && Array.isArray(d1Relaxed.data.products)) {
+            relaxedD1Done = true;
+            relaxedProducts = d1Relaxed.data.products.map((p: any) => {
+              const isIntl = Boolean(p.is_international);
+              const price = Number(p.price || p.base_price || 0);
+              const priceUsd = isIntl ? price : Number((price / fxRate).toFixed(2));
+              const priceUyu = isIntl ? Math.round(price * fxRate) : price;
+              return {
+                id: p.id,
+                title: p.title,
+                slug: p.slug,
+                base_price: price,
+                price: price,
+                compare_at_price: p.compare_at_price ? Number(p.compare_at_price) : undefined,
+                currency: isIntl ? 'USD' : 'UYU',
+                price_in_usd: priceUsd,
+                price_in_uyu: priceUyu,
+                images: Array.isArray(p.images) ? p.images : (p.primary_image_url ? [{ id: p.id, url: p.primary_image_url, is_primary: true }] : []),
+                image_url: p.primary_image_url || p.image_url || (Array.isArray(p.images) && p.images[0]?.url),
+                badge: p.badge,
+                is_featured: Boolean(p.is_featured),
+                is_active: Boolean(p.is_active !== false),
+                status: p.status || 'published',
+                brand: p.brand ? { name: p.brand.name, slug: p.brand.slug, logo_url: p.brand.logo_url } : undefined,
+                category: p.category ? { name: p.category.name, slug: p.category.slug } : undefined,
+                vendor: p.vendor ? { id: p.vendor.id, store_name: p.vendor.store_name, slug: p.vendor.slug, logo_url: p.vendor.logo_url } : undefined,
+                vendor_store: p.vendor_store ? { id: p.vendor_store.id, store_name: p.vendor_store.store_name, slug: p.vendor_store.slug, logo_url: p.vendor_store.logo_url, is_official: p.vendor_store.is_official } : undefined,
+                variants: Array.isArray(p.variants) ? p.variants : [],
+                is_international: isIntl,
+                condition: p.condition || 'new_sealed',
+                created_at: p.created_at
+              };
+            });
+          }
         }
       } catch (_) {}
+
+      if (!relaxedD1Done) {
+        try {
+          const { data: fallbackLocal } = await supabase
+            .from('products')
+            .select(`
+              id, title, slug, base_price, compare_at_price, badge, is_featured, is_active, status, vendor_id, vendor_store_id, brand_id, category_id, condition, created_at,
+              category:categories(id, name, slug),
+              brand:brands!products_brand_id_fkey(id, name, slug, logo_url),
+              images:product_images(id, url, alt_text, is_primary),
+              variants:product_variants(id, sku, price_adjustment, inventory_count),
+              vendor:vendors(id, store_name, slug, logo_url),
+              vendor_store:vendor_stores(id, store_name, slug, logo_url, is_official)
+            `)
+            .eq('is_active', true)
+            .limit(12);
+
+          if (Array.isArray(fallbackLocal)) {
+            relaxedProducts = fallbackLocal.map(item => {
+              const priceUyu = Number(item.base_price || 0);
+              const priceUsd = Number((priceUyu / fxRate).toFixed(2));
+              return {
+                id: item.id,
+                title: item.title,
+                slug: item.slug,
+                base_price: priceUyu,
+                price: priceUyu,
+                compare_at_price: item.compare_at_price ? Number(item.compare_at_price) : undefined,
+                currency: 'UYU',
+                price_in_usd: priceUsd,
+                price_in_uyu: priceUyu,
+                images: item.images || [],
+                image_url: item.images?.find((img: any) => img.is_primary)?.url || item.images?.[0]?.url,
+                badge: item.badge,
+                is_featured: item.is_featured,
+                is_active: item.is_active,
+                status: item.status,
+                brand: relatedRecord(item.brand),
+                category: relatedRecord(item.category),
+                vendor: relatedRecord(item.vendor),
+                vendor_store: relatedRecord(item.vendor_store),
+                variants: item.variants,
+                is_international: false,
+                condition: item.condition,
+                created_at: item.created_at
+              };
+            });
+          }
+        } catch (_) {}
+      }
     }
 
     // 5. Editorial AI Answer with deterministic fallback

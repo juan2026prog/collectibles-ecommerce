@@ -1,11 +1,12 @@
 // ==============================================================================
 // COLLECTIBLES 2026 — SERVER-SIDE FX SYNC & OVERRIDE HANDLER
 // Path: /api/currency-sync.js
-// GET: Publicly read verified exchange rates OR run scheduled Vercel Cron sync
-// POST: (Protected / SuperAdmin) Sync live rates or apply manual override
+// GET: Publicly read verified exchange rates (CDN cached) OR run authenticated Cron sync
+// POST: (Protected / Admin / Cron) Sync live rates or apply manual override
 // ==============================================================================
 
 import { createClient } from '@supabase/supabase-js';
+import { authenticateRequest } from '../server/lib/authGuard.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_f_7xF86CT0DFwT7YupNh_Q_TzmemHNf';
@@ -194,19 +195,28 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const isCronExecution = !!req.headers['x-vercel-cron'] || req.query?.cron === 'true';
-  const isForceSyncRequested = req.query?.sync === 'true';
+  const isCronHeader = !!req.headers['x-vercel-cron'];
+  const isForceSyncRequested = req.query?.sync === 'true' || req.query?.cron === 'true';
 
   // ----------------------------------------------------
-  // GET: Read Active Rates OR Trigger Vercel Cron / On-demand Sync
+  // GET: Read Active Rates OR Trigger Vercel Cron / Authenticated Sync
   // ----------------------------------------------------
   if (req.method === 'GET') {
-    if (isCronExecution || isForceSyncRequested) {
+    if (isCronHeader || isForceSyncRequested) {
+      const auth = await authenticateRequest(req, { allowCron: true });
+      if (!auth.authenticated || (!auth.isCron && !auth.isAdmin)) {
+        return res.status(401).json({
+          ok: false,
+          error: 'UNAUTHORIZED_SYNC_REQUEST',
+          message: 'Se requieren permisos administrativos o cabecera de Vercel Cron autorizada para disparar sincronizaciones.'
+        });
+      }
+
       try {
-        const syncResult = await executeLiveSync(isCronExecution ? 'VERCEL_CRON' : 'GET_SYNC_REQUEST');
+        const syncResult = await executeLiveSync(auth.isCron ? 'VERCEL_CRON' : 'ADMIN_GET_SYNC_REQUEST');
         return res.status(200).json({
           ok: true,
-          message: isCronExecution ? 'Vercel Cron scheduled FX sync executed successfully' : 'Live FX sync executed successfully',
+          message: auth.isCron ? 'Vercel Cron scheduled FX sync executed successfully' : 'Live FX sync executed successfully',
           ...syncResult
         });
       } catch (err) {
@@ -296,9 +306,18 @@ export default async function handler(req, res) {
   }
 
   // ----------------------------------------------------
-  // POST: Sync or Override FX
+  // POST: Sync or Override FX (Strictly Admin / Cron Protected)
   // ----------------------------------------------------
   if (req.method === 'POST') {
+    const auth = await authenticateRequest(req, { allowCron: true });
+    if (!auth.authenticated || (!auth.isCron && !auth.isAdmin)) {
+      return res.status(401).json({
+        ok: false,
+        error: 'UNAUTHORIZED_MUTATION_REQUEST',
+        message: 'Acceso denegado. Se requiere autenticación administrativa válida.'
+      });
+    }
+
     const { action, quote_currency, rate, reason, admin_email } = req.body || {};
 
     // 1. Manual Override Action

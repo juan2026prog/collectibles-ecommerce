@@ -111,9 +111,14 @@ export default function AdminCurrencies() {
   async function handleForceSync() {
     setSyncing(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
       const res = await fetch('/api/currency-sync', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ action: 'SYNC_ALL' })
       });
 
@@ -155,15 +160,20 @@ export default function AdminCurrencies() {
 
     setSavingOverride(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
       const res = await fetch('/api/currency-sync', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           action: 'MANUAL_OVERRIDE',
           quote_currency: overrideCurrency,
           rate: num,
           reason: overrideReason.trim(),
-          admin_email: 'superadmin@collectibles.uy'
+          admin_email: session?.user?.email || 'superadmin@collectibles.uy'
         })
       });
 
@@ -191,13 +201,18 @@ export default function AdminCurrencies() {
 
     setLoading(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
       const res = await fetch('/api/currency-sync', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           action: 'RESTORE_AUTOMATIC',
           quote_currency: currency,
-          admin_email: 'superadmin@collectibles.uy'
+          admin_email: session?.user?.email || 'superadmin@collectibles.uy'
         })
       });
 
