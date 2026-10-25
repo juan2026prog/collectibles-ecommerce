@@ -32,7 +32,23 @@ serve(async (req: Request) => {
     if (error || !order) throw new Error("Orden no encontrada en la base de datos.");
     if (order.status !== "pending") throw new Error("La orden ya fue procesada o no está pendiente.");
 
-    const MP_ACCESS_TOKEN = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || "TEST-mock";
+    // Fallback resolution: Environment Variable first, then site_settings
+    let MP_ACCESS_TOKEN = (Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || "").trim();
+    if (!MP_ACCESS_TOKEN) {
+      const { data: settings } = await supabaseClient
+        .from("site_settings")
+        .select("key, value")
+        .eq("key", "payments_mercadopago_access_token")
+        .maybeSingle();
+      if (settings?.value) {
+        MP_ACCESS_TOKEN = settings.value.trim();
+      }
+    }
+
+    // Fail-Closed: Strict rejection if no valid Mercado Pago Access Token is configured
+    if (!MP_ACCESS_TOKEN || MP_ACCESS_TOKEN.includes("mock") || MP_ACCESS_TOKEN === "TEST-mock") {
+      throw new Error("Mercado Pago no está configurado adecuadamente para procesar cobros reales. Contacte al administrador.");
+    }
     
     // Crear la preferencia de Mercado Pago
     const base_url = req.headers.get("origin") || "http://localhost:5173";
@@ -120,21 +136,8 @@ serve(async (req: Request) => {
       auto_return: "approved",
       external_reference: order.id,
       notification_url: webhook_url, // Escucha el Webhook!
-      statement_descriptor: "MERCADOLIBRE STORE"
+      statement_descriptor: "COLLECTIBLES STORE"
     };
-
-    if (MP_ACCESS_TOKEN.includes("mock")) {
-      // Entorno de simulación
-      console.log("Generando Link Mock (Sin Token Real):", preferencePayload);
-      const mockPaymentId = "MP-MOCK-" + Math.floor(Math.random() * 100000);
-      await supabaseClient.from("orders").update({ payment_id: mockPaymentId }).eq("id", order.id);
-      
-      return new Response(JSON.stringify({ 
-        redirect_url: `${base_url}/checkout/success?order_id=${order.id}`, 
-        id: mockPaymentId,
-        is_mock: true
-      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
 
     const response = await fetch("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",
