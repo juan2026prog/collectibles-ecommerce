@@ -397,7 +397,7 @@ function sanitizePayloadForLogging(data: any) {
     // 3. Consulta segura y correcta a la tabla real 'products' (columna 'base_price')
     const { data: products, error: productError } = await supabase
       .from("products")
-      .select("id, title, base_price, currency, price_currency, source_provider, is_international, category_id, brand_id, vendor_id, vendor_store_id, vendors(store_name, promotions_opt_in, ships_to_argentina, shipping_settings), product_tags(tag_id)")
+      .select("id, title, base_price, metadata, dimensions, weight_kg, category_id, brand_id, vendor_id, vendor_store_id, vendors(store_name, promotions_opt_in, ships_to_argentina, shipping_settings), product_tags(tag_id)")
       .in("id", productIds);
 
     if (productError) {
@@ -483,10 +483,11 @@ function sanitizePayloadForLogging(data: any) {
     // --- REGLA FINANCIERA CANÓNICA Y SEGREGACIÓN DE MONEDAS ---
     const resolveDbProductCurrency = (prod: any): 'UYU' | 'USD' => {
       if (!prod) return 'UYU';
-      const explicit = (prod.currency || prod.price_currency)?.toString().toUpperCase().trim();
+      const meta = prod.metadata || {};
+      const explicit = (meta.currency || meta.price_currency)?.toString().toUpperCase().trim();
       if (explicit === 'UYU') return 'UYU';
       if (explicit === 'USD') return 'USD';
-      const source = (prod.source_provider || '').toString().toLowerCase().trim();
+      const source = (meta.source_platform || meta.source_provider || '').toString().toLowerCase().trim();
       if (['amazon', 'ebay', 'bestbuy', 'zinc'].includes(source) || prod.is_international === true) {
         return 'USD';
       }
@@ -1778,22 +1779,36 @@ function sanitizePayloadForLogging(data: any) {
       ...(resolvedMiamiAddress || {})
     };
 
-    // Calculate display totals in ARS if Argentina (using authoritative USD_UYU rate to convert UYU subtotal to USD base)
+    // Calculate display totals in ARS if Argentina using strict server-side FX validation (Fail-Closed)
     let subtotalArs = 0;
     let totalArs = 0;
     if (isArgentinaOrder && arsPerUsdRate) {
-      let uyuPerUsd = 42.50;
-      const { data: uyuFx } = await supabase
-        .from('currency_exchange_rates')
-        .select('rate')
-        .eq('base_currency', 'USD')
-        .eq('quote_currency', 'UYU')
-        .maybeSingle();
-      if (uyuFx?.rate && Number(uyuFx.rate) > 0) {
-        uyuPerUsd = Number(uyuFx.rate);
+      // Determine base currency of the subtotal (UYU or USD)
+      if (hasUSDOrderItems) {
+        // Subtotal is already in USD: convert directly using arsPerUsdRate
+        subtotalArs = Math.round(subtotal * arsPerUsdRate);
+        totalArs = Math.round((subtotal - totalDiscounts) * arsPerUsdRate) + intlShippingCostArs;
+      } else {
+        // Subtotal is in UYU: must convert UYU -> USD -> ARS using authoritative USD_UYU rate from database
+        const { data: uyuFx, error: uyuErr } = await supabase
+          .from('currency_exchange_rates')
+          .select('rate, status, is_active')
+          .eq('base_currency', 'USD')
+          .eq('quote_currency', 'UYU')
+          .maybeSingle();
+
+        if (uyuErr || !uyuFx || !uyuFx.rate || Number(uyuFx.rate) <= 0) {
+          throw new Error('No existe una cotización autorizada de USD/UYU en la base de datos para realizar la conversión transaccional a ARS.');
+        }
+
+        if (!uyuFx.is_active || (uyuFx.status !== 'VERIFIED' && uyuFx.status !== 'MANUAL_OVERRIDE')) {
+          throw new Error(`La cotización de UYU (${uyuFx.status}) no está aprobada para liquidación transaccional.`);
+        }
+
+        const uyuPerUsd = Number(uyuFx.rate);
+        subtotalArs = Math.round((subtotal / uyuPerUsd) * arsPerUsdRate);
+        totalArs = Math.round(((subtotal - totalDiscounts) / uyuPerUsd) * arsPerUsdRate) + intlShippingCostArs;
       }
-      subtotalArs = Math.round((subtotal / uyuPerUsd) * arsPerUsdRate);
-      totalArs = Math.round(((subtotal - totalDiscounts) / uyuPerUsd) * arsPerUsdRate) + intlShippingCostArs;
     }
 
     const { data: orderResult, error: rpcError } = await supabase.rpc("create_order_atomic", {
