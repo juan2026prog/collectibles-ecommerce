@@ -19,6 +19,7 @@ import AddressAutocomplete from '../components/AddressAutocomplete';
 import { FranchiseStatusCard } from '../components/customs/FranchiseStatusCard';
 import { ImportHub } from '../components/customs/ImportHub';
 import CustomerQuestionsTab from '../components/customer/CustomerQuestionsTab';
+import OrderResolutionModal from '../components/customer/OrderResolutionModal';
 import { MessageSquare } from 'lucide-react';
 
 function getOrderItemImage(item: any): string {
@@ -115,6 +116,7 @@ export default function CustomerPortal() {
   const [showPw, setShowPw] = useState(false);
   const [pwLoading, setPwLoading] = useState(false);
   const [pwMessage, setPwMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
+  const [resolutionOrder, setResolutionOrder] = useState<any | null>(null);
 
   const getTrackingMilestoneStep = (status: string) => {
     switch (status) {
@@ -261,39 +263,44 @@ export default function CustomerPortal() {
     printWindow.document.close();
   };
 
+  const loadOrders = async () => {
+    if (!user) return;
+    const orderSelect = `
+      id, total_amount, currency, status, created_at, payment_method, customer_email, shipping_address, total_shipping,
+      payments(id, status, payment_url),
+      order_items (
+        quantity, unit_price, total_price, product_id, variant_id, vendor_id, vendor_store_id, sku,
+        vendor:vendors(store_name, slug, logo_url, promotions_opt_in, company_name),
+        vendor_store:vendor_stores(store_name, slug, logo_url),
+        products (title, slug, images:product_images(url)),
+        international_order_items (id, purchase_status, zinc_order_id, tracking_number, carrier, tracking_url, final_price_usd, estimated_delivery_to_courier)
+      ),
+      order_suborders (
+        id, suborder_number, status, shipping_method, shipping_provider, shipping_cost, tracking_number, tracking_url, exchange_rate_value,
+        shipments(id, tracking_code, external_guide, shipping_status, package_number, total_packages),
+        vendor:vendors(store_name, slug, logo_url),
+        vendor_store:vendor_stores(store_name, slug, logo_url)
+      ),
+      international_shipment_tracking (
+        tracking_number, tracking_url, courier_company, picked_up_at, estimated_delivery, contact_phone, contact_email, observations
+      )
+    `;
+
+    const { data: ordersData } = await supabase
+      .from('orders').select(orderSelect).eq('customer_id', user!.id).order('created_at', { ascending: false });
+    let finalOrders = ordersData || [];
+    if (finalOrders.length === 0 && user!.email) {
+      const { data: emailOrders } = await supabase
+        .from('orders').select(orderSelect).eq('customer_email', user!.email).order('created_at', { ascending: false });
+      finalOrders = emailOrders || [];
+    }
+    setOrders(finalOrders);
+  };
+
   useEffect(() => {
     if (!user) return;
     async function loadData() {
-      const orderSelect = `
-        id, total_amount, currency, status, created_at, payment_method, customer_email, shipping_address, total_shipping,
-        payments(id, status, payment_url),
-        order_items (
-          quantity, unit_price, total_price, product_id, variant_id, vendor_id, vendor_store_id, sku,
-          vendor:vendors(store_name, slug, logo_url, promotions_opt_in, company_name),
-          vendor_store:vendor_stores(store_name, slug, logo_url),
-          products (title, slug, images:product_images(url)),
-          international_order_items (id, purchase_status, zinc_order_id, tracking_number, carrier, tracking_url, final_price_usd, estimated_delivery_to_courier)
-        ),
-        order_suborders (
-          id, suborder_number, status, shipping_method, shipping_provider, shipping_cost, tracking_number, tracking_url, exchange_rate_value,
-          shipments(id, tracking_code, external_guide, shipping_status, package_number, total_packages),
-          vendor:vendors(store_name, slug, logo_url),
-          vendor_store:vendor_stores(store_name, slug, logo_url)
-        ),
-        international_shipment_tracking (
-          tracking_number, tracking_url, courier_company, picked_up_at, estimated_delivery, contact_phone, contact_email, observations
-        )
-      `;
-
-      const { data: ordersData } = await supabase
-        .from('orders').select(orderSelect).eq('customer_id', user!.id).order('created_at', { ascending: false });
-      let finalOrders = ordersData || [];
-      if (finalOrders.length === 0 && user!.email) {
-        const { data: emailOrders } = await supabase
-          .from('orders').select(orderSelect).eq('customer_email', user!.email).order('created_at', { ascending: false });
-        finalOrders = emailOrders || [];
-      }
-      setOrders(finalOrders);
+      await loadOrders();
 
       // Load profile
       const { data: profileData } = await supabase
@@ -1276,10 +1283,16 @@ export default function CustomerPortal() {
                       <FileText className="w-4 h-4 text-slate-400" /> Descargar Factura
                     </button>
                     <button 
+                      onClick={() => setResolutionOrder(order)} 
+                      className="flex items-center gap-2 px-5 py-2 bg-rose-600/20 text-rose-300 hover:bg-rose-600/30 font-bold text-sm transition-colors border border-rose-500/30"
+                    >
+                      <RotateCcw className="w-4 h-4 text-rose-400" /> Cancelar / Devolución
+                    </button>
+                    <button 
                       onClick={() => setSupportOrderModal(order)} 
                       className="flex items-center gap-2 px-5 py-2 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 font-bold text-sm transition-colors border border-amber-500/20"
                     >
-                      <HelpCircle className="w-4 h-4 text-amber-400" /> Ayuda / Devolución
+                      <HelpCircle className="w-4 h-4 text-amber-400" /> Ayuda WhatsApp
                     </button>
                   </div>
                 </div>
@@ -1995,6 +2008,19 @@ export default function CustomerPortal() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL UNIFICADO DE RESOLUCIÓN (CANCELACIÓN / DEVOLUCIÓN POR MODELO) */}
+      {resolutionOrder && (
+        <OrderResolutionModal
+          order={resolutionOrder}
+          suborder={resolutionOrder.order_suborders?.[0]}
+          isOpen={!!resolutionOrder}
+          onClose={() => setResolutionOrder(null)}
+          onSuccess={() => {
+            loadOrders();
+          }}
+        />
       )}
     </div>
   );

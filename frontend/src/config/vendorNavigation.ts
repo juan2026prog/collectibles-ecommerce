@@ -39,7 +39,13 @@ export const SETTINGS_TAB_ALIASES: Record<string, string> = {
   // Terms & Conditions
   terms: 'terms',
   terminos: 'terms',
-  legal: 'terms'
+  legal: 'terms',
+
+  // Cancellations & Returns
+  cancellations: 'cancellations',
+  cancelaciones: 'cancellations',
+  returns: 'cancellations',
+  devoluciones: 'cancellations'
 };
 
 export function normalizeSettingsTab(tab?: string | null): string {

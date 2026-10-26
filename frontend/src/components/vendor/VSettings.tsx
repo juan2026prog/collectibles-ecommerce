@@ -7,7 +7,8 @@ import VMercadoLibre from './VMercadoLibre';
 import VShipping from './VShipping';
 import VKyc from './VKyc';
 import VTermsSettings from './VTermsSettings';
-import { User, CreditCard, Truck, Link2, FileText, Save, UploadCloud, Bell, AlertCircle, CheckCircle2, RefreshCw, ToggleLeft, ToggleRight, ShieldCheck, Smartphone, Mail, MessageSquare, BellRing, Settings } from 'lucide-react';
+import VCancellationsSettings from './VCancellationsSettings';
+import { User, CreditCard, Truck, Link2, FileText, Save, UploadCloud, Bell, AlertCircle, CheckCircle2, RefreshCw, ToggleLeft, ToggleRight, ShieldCheck, Smartphone, Mail, MessageSquare, BellRing, Settings, RotateCcw } from 'lucide-react';
 import { EmailRecipientsModal, type EmailRecipient } from '../common/EmailRecipientsModal';
 import { MobilePushSetup } from '../common/MobilePushSetup';
 import {
@@ -533,6 +534,7 @@ export default function VSettings() {
     { id: 'notifications', label: 'Notificaciones', fullLabel: 'Notificaciones', icon: Bell },
     { id: 'mercadolibre', label: 'Mercado Libre', fullLabel: 'Mercado Libre', icon: Link2 },
     { id: 'documents', label: 'Documentación', fullLabel: 'Documentación', icon: FileText },
+    { id: 'cancellations', label: 'Cancelaciones', fullLabel: 'Cancelaciones y Devoluciones', icon: RotateCcw },
     { id: 'terms', label: 'Términos', fullLabel: 'Términos y Condiciones', icon: ShieldCheck },
   ];
 
@@ -1051,6 +1053,13 @@ export default function VSettings() {
         {activeTab === 'documents' && (
           <div className="bg-white rounded-xl">
              <VKyc />
+          </div>
+        )}
+
+        {/* TAB CANCELACIONES Y DEVOLUCIONES */}
+        {activeTab === 'cancellations' && (
+          <div className="bg-white rounded-xl">
+             <VCancellationsSettings />
           </div>
         )}
 
