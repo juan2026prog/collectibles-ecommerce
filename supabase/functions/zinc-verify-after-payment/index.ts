@@ -262,6 +262,20 @@ serve(async (req) => {
           intlOrderItem.idempotency_key = idempotencyKey;
         }
 
+        // 2b. VERIFY CANCELLATION LOCK BEFORE EXTERNAL SUBMISSION (RACE PROTECTION)
+        const { data: zincPreLock, error: preLockErr } = await serviceClient.rpc('check_and_lock_zinc_purchase_item', {
+          p_item_id: intlOrderItem.id
+        });
+
+        if (preLockErr) {
+          console.error("[Zinc Pre-Lock RPC Error]:", preLockErr.message);
+        } else if (zincPreLock && zincPreLock.allowed === false) {
+          console.warn(`[Zinc Pre-Lock Blocked]: Purchase cancelled before Zinc submission. Reason: ${zincPreLock.reason}`);
+          allOk = false;
+          finalOrderStatus = 'cancelled';
+          continue;
+        }
+
         const zincRequestPayload: ZincOrderCreatePayload = {
           products: [{
             url: prod.product_url_external,

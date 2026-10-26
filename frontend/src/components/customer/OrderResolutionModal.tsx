@@ -41,6 +41,7 @@ export default function OrderResolutionModal({
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [evidenceImages, setEvidenceImages] = useState<string[]>([]);
+  const [evidencePreviews, setEvidencePreviews] = useState<{ path: string; previewUrl: string }[]>([]);
 
   if (!isOpen || !order) return null;
 
@@ -78,12 +79,14 @@ export default function OrderResolutionModal({
       if (error) throw error;
 
       // Generar Signed URL temporal de 24 horas para visualización segura sin bucket público
-      const { data: signData, error: signErr } = await supabase.storage
+      // Generar Signed URL temporal solo para la vista previa local inmediata
+      const { data: signData } = await supabase.storage
         .from('order-dispute-evidence')
-        .createSignedUrl(filePath, 86400);
+        .createSignedUrl(filePath, 3600);
 
-      const targetUrl = signData?.signedUrl || filePath;
-      setEvidenceImages(prev => [...prev, targetUrl]);
+      // Guardar ruta permanente en el array de evidencias para la base de datos
+      setEvidenceImages(prev => [...prev, filePath]);
+      setEvidencePreviews(prev => [...prev, { path: filePath, previewUrl: signData?.signedUrl || '' }]);
       toast.success('Fotografía de evidencia subida y protegida correctamente.');
     } catch (uploadErr: any) {
       console.error('Error subiendo imagen privada:', uploadErr);
@@ -283,14 +286,17 @@ export default function OrderResolutionModal({
                 <span className="text-[11px] text-zinc-400">Archivos JPG, PNG o WebP protegidos.</span>
               </div>
 
-              {evidenceImages.length > 0 && (
+              {evidencePreviews.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-3">
-                  {evidenceImages.map((img, i) => (
+                  {evidencePreviews.map((item, i) => (
                     <div key={i} className="relative group w-14 h-14 rounded-lg overflow-hidden border border-white/20">
-                      <img src={img} alt="Evidencia" className="w-full h-full object-cover" />
+                      <img src={item.previewUrl || '/placeholder.png'} alt="Evidencia" className="w-full h-full object-cover" />
                       <button
                         type="button"
-                        onClick={() => setEvidenceImages(evidenceImages.filter((_, idx) => idx !== i))}
+                        onClick={() => {
+                          setEvidenceImages(prev => prev.filter(p => p !== item.path));
+                          setEvidencePreviews(prev => prev.filter((_, idx) => idx !== i));
+                        }}
                         className="absolute inset-0 bg-red-600/80 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity"
                       >
                         <X className="w-4 h-4" />

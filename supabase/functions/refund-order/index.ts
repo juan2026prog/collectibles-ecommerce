@@ -23,6 +23,10 @@ Deno.serve(async (req: Request) => {
   let order: any = null;
   let refundAmount = 0;
   let processingRefundId: string | null = null;
+  let refundSuccess = false;
+  let refundDetails: any = null;
+  let gatewayRefundId: string | null = null;
+  let isManualRefundRequired = false;
 
   try {
     // SECURITY: Only admins can process refunds
@@ -104,6 +108,7 @@ Deno.serve(async (req: Request) => {
         amount: amount || Number(order.total_amount),
         reason: reason || "Intención de reembolso en proceso",
         status: "processing",
+        idempotency_key: idempotencyKey || null,
         requested_by: requestedBy,
         api_response: {
           idempotency_key: idempotencyKey || undefined,
@@ -182,10 +187,10 @@ Deno.serve(async (req: Request) => {
     const isEnvTestOrDev = Deno.env.get("ENVIRONMENT") === "development" || Deno.env.get("ENVIRONMENT") === "test";
     const isMockPayment = isEnvTestOrDev && (order.payment_id?.startsWith('MP-MOCK') || order.payment_id?.startsWith('DLG-MOCK'));
 
-    let refundSuccess = false;
-    let refundDetails: any = null;
-    let gatewayRefundId: string | null = null;
-    let isManualRefundRequired = false;
+    refundSuccess = false;
+    refundDetails = null;
+    gatewayRefundId = null;
+    isManualRefundRequired = false;
 
     // ═════ COURIER SHIPMENTS CHECK (FASE 1) ═════
     const shipmentQuery = supabaseAdmin
@@ -501,6 +506,7 @@ Deno.serve(async (req: Request) => {
             payment_id: paymentIdUuid,
             provider: order.payment_method,
             provider_refund_id: gatewayRefundId,
+            idempotency_key: idempotencyKey || null,
             amount: refundAmount,
             reason: reason || "Cancelación / Reembolso procesado",
             status: "completed",
