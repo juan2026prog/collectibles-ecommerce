@@ -28,8 +28,12 @@ export default function OrderResolutionModal({
 
   const selectedSuborder = suborders.find((s: any) => s.id === selectedSuborderId) || suborders[0] || null;
 
-  // Determinar modelo comercial de la selección
-  const isInternational = Boolean(selectedSuborder?.is_international || order?.is_international);
+  // Determinar modelo comercial de la selección de forma fiable:
+  // Si los items de la orden contienen international_order_items -> Internacional
+  const hasIntlItems = (order?.order_items || []).some((it: any) => 
+    it.international_order_items && it.international_order_items.length > 0
+  );
+  const isInternational = hasIntlItems || Boolean(selectedSuborder?.is_international);
   const isVendor = Boolean(!isInternational && selectedSuborder && !selectedSuborder.is_collectibles_order && selectedSuborder.vendor_id);
   const isCollectiblesNational = !isInternational && !isVendor;
 
@@ -47,34 +51,43 @@ export default function OrderResolutionModal({
   const diffMinutes = paymentDate > 0 ? (Date.now() - paymentDate) / (1000 * 60) : 999;
   const isWithin10m = isCollectiblesNational && ['paid', 'confirmed'].includes(order.status) && diffMinutes <= 10;
 
-  // Subida segura de fotografías a Supabase Storage
+  // Subida segura de fotografías a Supabase Storage (Bucket Privado order-dispute-evidence)
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
+    const file = files[0];
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('El tamaño máximo permitido por fotografía es de 10 MB.');
+      return;
+    }
+
     setUploadingImage(true);
     try {
-      const file = files[0];
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData?.session?.user?.id;
+      if (!userId) throw new Error('Sesión no encontrada');
+
       const fileExt = file.name.split('.').pop();
-      const fileName = `disputes/${order.id}/${Date.now()}.${fileExt}`;
+      const filePath = `${userId}/${order.id}/${Date.now()}.${fileExt}`;
 
       const { data, error } = await supabase.storage
-        .from('product-images')
-        .upload(fileName, file, { cacheControl: '3600', upsert: true });
+        .from('order-dispute-evidence')
+        .upload(filePath, file, { cacheControl: '3600', upsert: true });
 
       if (error) throw error;
 
-      const { data: urlData } = supabase.storage
-        .from('product-images')
-        .getPublicUrl(fileName);
+      // Generar Signed URL temporal de 24 horas para visualización segura sin bucket público
+      const { data: signData, error: signErr } = await supabase.storage
+        .from('order-dispute-evidence')
+        .createSignedUrl(filePath, 86400);
 
-      if (urlData?.publicUrl) {
-        setEvidenceImages(prev => [...prev, urlData.publicUrl]);
-        toast.success('Fotografía de evidencia subida correctamente.');
-      }
+      const targetUrl = signData?.signedUrl || filePath;
+      setEvidenceImages(prev => [...prev, targetUrl]);
+      toast.success('Fotografía de evidencia subida y protegida correctamente.');
     } catch (uploadErr: any) {
-      console.error('Error subiendo imagen:', uploadErr);
-      toast.error('Error al subir imagen: ' + uploadErr.message);
+      console.error('Error subiendo imagen privada:', uploadErr);
+      toast.error('Error al subir imagen privada: ' + uploadErr.message);
     } finally {
       setUploadingImage(false);
     }

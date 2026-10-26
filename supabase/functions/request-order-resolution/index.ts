@@ -8,7 +8,7 @@ import { corsHeaders, handleOptions } from "../_shared/cors.ts";
  * Modelos contemplados:
  * 1. Collectibles Nacional: ventana de cancelación inmediata 10 min tras pago confirmado.
  * 2. Vendors Nacionales: según políticas configuradas por cada vendor (mínimos legales respetados).
- * 3. Collectibles Internacional: cancelación basada en confirmación Zinc 2.0 (HTTP 204).
+ * 3. Collectibles Internacional: cancelación basada en confirmación Zinc 2.0 (HTTP 204) coordinada con el outbox worker.
  */
 
 Deno.serve(async (req: Request) => {
@@ -115,6 +115,44 @@ Deno.serve(async (req: Request) => {
       businessModel = "collectibles_international";
     }
 
+    // IDEMPOTENCY KEY ESTABLE Y DETERMINÍSTICA
+    // Formato: cancel-{requestType}-{orderId}-{suborderId || 'all'}
+    const stableIdempotencyKey = `cancel-${requestType}-${orderId}-${suborderId || 'all'}`;
+
+    // Verificar si ya existe una solicitud activa o procesada con esta clave
+    const { data: existingRequest } = await supabaseAdmin
+      .from("unified_order_requests")
+      .select("*")
+      .eq("idempotency_key", stableIdempotencyKey)
+      .maybeSingle();
+
+    if (existingRequest) {
+      if (['CANCELLATION_PENDING', 'REFUND_PENDING', 'REFUND_PROCESSING'].includes(existingRequest.status)) {
+        return new Response(JSON.stringify({
+          success: true,
+          inProgress: true,
+          message: "Ya existe una operación de cancelación en proceso para este pedido.",
+          requestId: existingRequest.id,
+          status: existingRequest.status
+        }), {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+
+      if (['REFUNDED', 'CANCELLATION_CONFIRMED', 'APPROVED'].includes(existingRequest.status)) {
+        return new Response(JSON.stringify({
+          success: true,
+          idempotentReplay: true,
+          message: "Esta solicitud ya fue confirmada y procesada previamente.",
+          requestId: existingRequest.id,
+          status: existingRequest.status
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
+
     // 3. CANCELACIÓN NACIONAL INMEDIATA (10 MINUTOS TRAS PAGO REAL)
     if (requestType === "cancel_immediate_10m") {
       if (businessModel !== "collectibles_national") {
@@ -165,8 +203,7 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // A. Registrar solicitud en estado inicial CANCELLATION_PENDING (No APPROVED antes del reembolso)
-      const idempotencyKey = `cancel-10m-${orderId}-${Date.now()}`;
+      // A. Registrar solicitud en estado inicial CANCELLATION_PENDING (Con stableIdempotencyKey)
       const { data: pendingReq, error: reqInsertErr } = await supabaseAdmin
         .from("unified_order_requests")
         .insert({
@@ -181,14 +218,14 @@ Deno.serve(async (req: Request) => {
           currency: order.currency || "UYU",
           reason: reason || "Cancelación inmediata comercial 10 min",
           customer_notes: notes,
-          idempotency_key: idempotencyKey
+          idempotency_key: stableIdempotencyKey
         })
         .select()
         .single();
 
       if (reqInsertErr) throw reqInsertErr;
 
-      // B. Invocar refund-order para procesar la reversión idempotente
+      // B. Invocar refund-order pasando el stableIdempotencyKey
       const refundRes = await fetch(`${supabaseUrl}/functions/v1/refund-order`, {
         method: "POST",
         headers: {
@@ -199,7 +236,7 @@ Deno.serve(async (req: Request) => {
           orderId,
           suborderId: targetSuborder?.id || null,
           reason: `Cancelación inmediata 10 min cliente (${user.email || user.id})`,
-          idempotencyKey
+          idempotencyKey: stableIdempotencyKey
         })
       });
 
@@ -226,7 +263,7 @@ Deno.serve(async (req: Request) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       } else {
-        // Falló la reversión en la pasarela: marcar como REFUND_FAILED / UNDER_REVIEW para no dar falsa confirmación
+        // Falló la reversión en la pasarela: marcar como REFUND_FAILED
         await supabaseAdmin
           .from("unified_order_requests")
           .update({
@@ -246,7 +283,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // 4. CANCELACIÓN INTERNACIONAL ZINC 2.0 (POST /orders/{order_id}/cancel -> HTTP 204)
+    // 4. CANCELACIÓN INTERNACIONAL ZINC 2.0 Y COORDINACIÓN CON OUTBOX WORKER
     if (businessModel === "collectibles_international" && requestType === "cancel_international_zinc") {
       const { data: intlItems, error: intlErr } = await supabaseAdmin
         .from("international_order_items")
@@ -260,15 +297,28 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Si ningún ítem ha sido enviado a Zinc todavía (todos pending_purchase): cancelar en outbox local
+      // Si ningún ítem ha sido enviado a Zinc todavía (todos pending_purchase):
+      // Bloquear atómicamente cancelando cualquier job de compra en order_execution_jobs
       const anySentToZinc = intlItems.some((item: any) => item.zinc_order_id);
 
       if (!anySentToZinc) {
-        // Bloquear de forma transaccional cancelando compras pendientes
+        // 1. Cancelar en order_execution_jobs para que el worker no lo tome
+        await supabaseAdmin
+          .from("order_execution_jobs")
+          .update({
+            status: 'CANCELLED',
+            last_error: `Cancelado por solicitud del comprador antes de ejecución Zinc (${user.email || user.id})`,
+            updated_at: new Date().toISOString()
+          })
+          .eq("order_id", orderId)
+          .in("job_type", ["zinc_fulfillment", "zinc_purchase", "post_payment_execution"]);
+
+        // 2. Actualizar purchase_status de ítems internacionales
         await supabaseAdmin
           .from("international_order_items")
           .update({
             purchase_status: 'cancelled',
+            review_reason_code: 'CANCELLED_BEFORE_ZINC_SUBMISSION',
             updated_at: new Date().toISOString()
           })
           .eq("order_id", orderId);
@@ -286,7 +336,8 @@ Deno.serve(async (req: Request) => {
             amount_approved: order.total_amount,
             currency: order.currency || "UYU",
             reason: reason,
-            customer_notes: notes
+            customer_notes: notes,
+            idempotency_key: stableIdempotencyKey
           })
           .select()
           .single();
@@ -294,7 +345,7 @@ Deno.serve(async (req: Request) => {
         return new Response(JSON.stringify({
           success: true,
           zincConfirmed: true,
-          message: "Compra internacional cancelada con éxito antes de ser enviada al proveedor exterior.",
+          message: "Compra internacional detenida y cancelada con éxito en cola de ejecución.",
           request: intlReq
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -332,8 +383,7 @@ Deno.serve(async (req: Request) => {
         if (!item.zinc_order_id) continue;
 
         try {
-          // Zinc 2.0: POST https://api.zinc.com/orders/{order_id}/cancel
-          // Respuesta exitosa documentada oficial: HTTP 204 No Content (Sin JSON body)
+          // Zinc 2.0: POST https://api.zinc.com/orders/{order_id}/cancel -> HTTP 204 No Content
           const cancelRes = await fetch(`https://api.zinc.com/orders/${item.zinc_order_id}/cancel`, {
             method: 'POST',
             headers: {
@@ -342,7 +392,6 @@ Deno.serve(async (req: Request) => {
           });
 
           if (cancelRes.status === 204) {
-            // Confirmación auténtica Zinc 2.0
             await supabaseAdmin
               .from("international_order_items")
               .update({
@@ -379,7 +428,8 @@ Deno.serve(async (req: Request) => {
           customer_notes: notes,
           zinc_order_id: intlItems.map((i: any) => i.zinc_order_id).filter(Boolean).join(", "),
           zinc_cancellation_status: allZincCancelled ? '204_confirmed' : 'pending_manual_review',
-          zinc_response_payload: { results: cancellationResults }
+          zinc_response_payload: { results: cancellationResults },
+          idempotency_key: stableIdempotencyKey
         })
         .select()
         .single();
@@ -414,7 +464,8 @@ Deno.serve(async (req: Request) => {
         currency: order.currency || "UYU",
         reason: reason,
         customer_notes: notes,
-        evidence_images: Array.isArray(evidenceImages) ? evidenceImages : []
+        evidence_images: Array.isArray(evidenceImages) ? evidenceImages : [],
+        idempotency_key: stableIdempotencyKey
       })
       .select()
       .single();

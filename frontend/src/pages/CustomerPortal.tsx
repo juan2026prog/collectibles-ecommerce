@@ -266,7 +266,7 @@ export default function CustomerPortal() {
   const loadOrders = async () => {
     if (!user) return;
     const orderSelect = `
-      id, total_amount, currency, status, created_at, paid_at, payment_method, customer_id, user_id, is_international, customer_email, shipping_address, total_shipping,
+      id, total_amount, currency, status, created_at, paid_at, payment_method, customer_id, user_id, customer_email, shipping_address, total_shipping,
       payments(id, status, payment_url, created_at),
       order_items (
         quantity, unit_price, total_price, product_id, variant_id, vendor_id, vendor_store_id, sku,
@@ -276,7 +276,7 @@ export default function CustomerPortal() {
         international_order_items (id, purchase_status, zinc_order_id, tracking_number, carrier, tracking_url, final_price_usd, estimated_delivery_to_courier)
       ),
       order_suborders (
-        id, suborder_number, status, is_collectibles_order, is_international, vendor_id, shipping_method, shipping_provider, shipping_cost, tracking_number, tracking_url, exchange_rate_value,
+        id, suborder_number, status, is_collectibles_order, vendor_id, shipping_method, shipping_provider, shipping_cost, tracking_number, tracking_url, exchange_rate_value,
         shipments(id, tracking_code, external_guide, shipping_status, package_number, total_packages),
         vendor:vendors(store_name, slug, logo_url),
         vendor_store:vendor_stores(store_name, slug, logo_url)

@@ -77,6 +77,43 @@ Deno.serve(async (req: Request) => {
       throw new Error("La orden ya está completamente cancelada");
     }
 
+    // Lock de Intención / Concurrencia Transaccional
+    // Validar si existe un reembolso en progreso
+    const { data: inFlightRefund } = await supabaseAdmin
+      .from("refunds")
+      .select("id, status, created_at")
+      .eq("order_id", orderId)
+      .eq("status", "processing")
+      .maybeSingle();
+
+    if (inFlightRefund) {
+      const lockAgeSeconds = (Date.now() - new Date(inFlightRefund.created_at).getTime()) / 1000;
+      if (lockAgeSeconds < 120) {
+        throw new Error("Hay una operación de reembolso en proceso para esta orden. Por favor espera a que finalice.");
+      }
+    }
+
+    // Registrar intención de reembolso en progreso
+    const { data: lockRecord, error: lockErr } = await supabaseAdmin
+      .from("refunds")
+      .insert({
+        order_id: orderId,
+        suborder_id: suborderId || null,
+        provider: order.payment_method,
+        amount: amount || Number(order.total_amount),
+        reason: reason || "Intención de reembolso en proceso",
+        status: "processing",
+        requested_by: requestedBy,
+        api_response: {
+          idempotency_key: idempotencyKey || undefined,
+          lock_timestamp: new Date().toISOString()
+        }
+      })
+      .select("id")
+      .single();
+
+    const processingRefundId = lockRecord?.id || null;
+
     // 2. Fetch Suborders
     const { data: suborders, error: subordersErr } = await supabaseAdmin
       .from("order_suborders")
@@ -448,31 +485,56 @@ Deno.serve(async (req: Request) => {
 
     if (refundSuccess) {
       // A. SUCCESSFUL REVERSAL FLOW
-      const { data: dbRefund, error: refundInsertErr } = await supabaseAdmin
-        .from("refunds")
-        .insert({
-          order_id: orderId,
-          suborder_id: suborderId || null,
-          vendor_id: vendorId,
-          payment_id: paymentIdUuid,
-          provider: order.payment_method,
-          provider_refund_id: gatewayRefundId,
-          amount: refundAmount,
-          reason: reason || "Cancelación / Reembolso procesado por administrador",
-          status: "completed",
-          requested_by: requestedBy,
-          processed_at: new Date().toISOString(),
-          api_response: {
-            ...refundDetails,
-            idempotency_key: idempotencyKey || undefined
-          }
-        })
-        .select("id")
-        .single();
+      let dbRefund: any = null;
+      if (processingRefundId) {
+        const { data: updatedRefund, error: refundUpdateErr } = await supabaseAdmin
+          .from("refunds")
+          .update({
+            suborder_id: suborderId || null,
+            vendor_id: vendorId,
+            payment_id: paymentIdUuid,
+            provider: order.payment_method,
+            provider_refund_id: gatewayRefundId,
+            amount: refundAmount,
+            reason: reason || "Cancelación / Reembolso procesado",
+            status: "completed",
+            processed_at: new Date().toISOString(),
+            api_response: {
+              ...refundDetails,
+              idempotency_key: idempotencyKey || undefined
+            }
+          })
+          .eq("id", processingRefundId)
+          .select("id")
+          .single();
 
-      if (refundInsertErr) {
-        console.error("Error creating refund record:", refundInsertErr);
-        throw new Error("Error al persistir el registro del reembolso.");
+        if (refundUpdateErr) throw refundUpdateErr;
+        dbRefund = updatedRefund;
+      } else {
+        const { data: insertedRefund, error: refundInsertErr } = await supabaseAdmin
+          .from("refunds")
+          .insert({
+            order_id: orderId,
+            suborder_id: suborderId || null,
+            vendor_id: vendorId,
+            payment_id: paymentIdUuid,
+            provider: order.payment_method,
+            provider_refund_id: gatewayRefundId,
+            amount: refundAmount,
+            reason: reason || "Cancelación / Reembolso procesado",
+            status: "completed",
+            requested_by: requestedBy,
+            processed_at: new Date().toISOString(),
+            api_response: {
+              ...refundDetails,
+              idempotency_key: idempotencyKey || undefined
+            }
+          })
+          .select("id")
+          .single();
+
+        if (refundInsertErr) throw refundInsertErr;
+        dbRefund = insertedRefund;
       }
 
       // Create Vendor Financial Adjustments if any suborder was already paid
@@ -930,6 +992,22 @@ Deno.serve(async (req: Request) => {
   } catch (error: any) {
     console.error("refund-order error:", error.message);
     
+    // Si existía un lock de procesamiento, marcarlo como fallido para liberar el pedido
+    if (processingRefundId) {
+      try {
+        await supabaseAdmin
+          .from("refunds")
+          .update({
+            status: "failed",
+            api_response: {
+              error: error.message,
+              failed_at: new Date().toISOString()
+            }
+          })
+          .eq("id", processingRefundId);
+      } catch (_) {}
+    }
+
     // Log failure event
     try {
       await supabaseAdmin.from("payment_audit_logs").insert({
