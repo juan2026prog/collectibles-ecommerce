@@ -241,3 +241,143 @@ $$;
 -- Restringir estrictamente permisos EXECUTE
 REVOKE ALL ON FUNCTION public.mark_liquidation_as_paid(uuid, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.mark_liquidation_as_paid(uuid, text) TO authenticated, service_role;
+
+
+-- 7. ACTUALIZACIÓN TRANSACCIONAL DE create_order_atomic PARA PERSISTIR vendor_policy_snapshot
+-- Reemplaza la inserción de order_suborders asegurando que el snapshot inmutable quede guardado
+CREATE OR REPLACE FUNCTION public.create_order_atomic(
+  p_customer_id UUID,
+  p_total_amount NUMERIC,
+  p_currency TEXT,
+  p_payment_method TEXT,
+  p_customer_email TEXT,
+  p_customer_phone TEXT,
+  p_shipping_address JSONB,
+  p_affiliate_id UUID,
+  p_coupon_id UUID,
+  p_items JSONB,
+  p_suborders JSONB,
+  p_terms_accepted BOOLEAN DEFAULT true,
+  p_terms_accepted_at TIMESTAMPTZ DEFAULT clock_timestamp(),
+  p_terms_version TEXT DEFAULT '2026-v1.0',
+  p_identity_confirmed BOOLEAN DEFAULT false,
+  p_customs_compliance_acknowledged BOOLEAN DEFAULT false,
+  p_logistics_consent BOOLEAN DEFAULT false,
+  p_display_currency TEXT DEFAULT 'UYU',
+  p_display_subtotal NUMERIC DEFAULT NULL,
+  p_display_shipping NUMERIC DEFAULT NULL,
+  p_display_discounts NUMERIC DEFAULT NULL,
+  p_display_total NUMERIC DEFAULT NULL,
+  p_display_total_currency TEXT DEFAULT NULL,
+  p_cart_subtotal_usd NUMERIC DEFAULT NULL,
+  p_shipping_cost_usd NUMERIC DEFAULT NULL,
+  p_courier_domestic_cost_usd NUMERIC DEFAULT NULL,
+  p_applied_promotion_id TEXT DEFAULT NULL,
+  p_promotion_discount_total NUMERIC DEFAULT 0,
+  p_exchange_rate_value NUMERIC DEFAULT NULL,
+  p_exchange_rate_effective_at NUMERIC DEFAULT NULL,
+  p_exchange_rate_source TEXT DEFAULT NULL,
+  p_is_exchange_rate_frozen BOOLEAN DEFAULT false
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_order_id UUID;
+  v_suborder JSONB;
+  v_suborder_id UUID;
+  v_suborder_number TEXT;
+  v_item JSONB;
+  v_order_item_id UUID;
+  v_is_collectibles BOOLEAN;
+  v_seller_type TEXT;
+  v_shipping_mode TEXT;
+  v_pickup_type TEXT;
+  v_agency_id UUID;
+  v_agency_name TEXT;
+  v_dispatch_address_id UUID;
+  v_internal_reference TEXT;
+  v_vendor_id UUID;
+  v_vendor_store_id UUID;
+BEGIN
+  IF p_total_amount < 0 THEN
+    RAISE EXCEPTION 'Total amount no puede ser negativo.' USING errcode = '22003';
+  END IF;
+
+  -- 1. Insertar orden principal
+  INSERT INTO public.orders (
+    customer_id, user_id, total_amount, currency, payment_method,
+    customer_email, customer_phone, shipping_address, affiliate_id, coupon_id,
+    terms_accepted, terms_accepted_at, terms_version, status, payment_status,
+    display_currency, display_subtotal, display_shipping, display_discounts,
+    display_total, display_total_currency, exchange_rate_value, exchange_rate_source
+  ) VALUES (
+    p_customer_id, p_customer_id, p_total_amount, p_currency, p_payment_method,
+    p_customer_email, p_customer_phone, p_shipping_address, p_affiliate_id, p_coupon_id,
+    p_terms_accepted, p_terms_accepted_at, p_terms_version, 'pending', 'pending',
+    p_display_currency, p_display_subtotal, p_display_shipping, p_display_discounts,
+    p_display_total, p_display_total_currency, p_exchange_rate_value, p_exchange_rate_source
+  ) RETURNING id INTO v_order_id;
+
+  -- 2. Insertar subórdenes con persistencia de vendor_policy_snapshot
+  IF p_suborders IS NOT NULL AND jsonb_array_length(p_suborders) > 0 THEN
+    FOR v_suborder IN SELECT * FROM jsonb_array_elements(p_suborders)
+    LOOP
+      v_suborder_number := COALESCE(v_suborder->>'suborder_number', 'SUB-' || nextval('public.suborder_number_seq'));
+      v_vendor_id := NULLIF(v_suborder->>'vendor_id', '')::uuid;
+      v_vendor_store_id := NULLIF(v_suborder->>'vendor_store_id', '')::uuid;
+      v_is_collectibles := COALESCE((v_suborder->>'is_collectibles_order')::boolean, false);
+      v_seller_type := COALESCE(v_suborder->>'seller_type', CASE WHEN v_is_collectibles THEN 'platform' ELSE 'vendor' END);
+      v_shipping_mode := v_suborder->>'shipping_mode';
+      v_pickup_type := v_suborder->>'pickup_type';
+      v_agency_id := NULLIF(v_suborder->>'agency_id', '')::uuid;
+      v_agency_name := v_suborder->>'agency_name';
+      v_dispatch_address_id := NULLIF(v_suborder->>'dispatch_address_id', '')::uuid;
+      v_internal_reference := COALESCE(v_suborder->>'internal_reference', v_suborder_number);
+
+      INSERT INTO public.order_suborders (
+        parent_order_id, suborder_number, vendor_id, vendor_name, vendor_store_id, vendor_store_name, is_collectibles_order,
+        product_subtotal, shipping_method, shipping_provider, shipping_cost, shipping_status,
+        marketplace_commission_rate, marketplace_fee, vendor_gross_amount, vendor_net_amount,
+        liquidation_status, status, discount_total, seller_type, shipping_mode, pickup_type,
+        agency_id, agency_name, dispatch_address_id, internal_reference, vendor_policy_snapshot
+      ) VALUES (
+        v_order_id, v_suborder_number, v_vendor_id, v_suborder->>'vendor_name', v_vendor_store_id, v_suborder->>'vendor_store_name', v_is_collectibles,
+        COALESCE((v_suborder->>'product_subtotal')::numeric, 0.00), v_suborder->>'shipping_method',
+        v_suborder->>'shipping_provider', COALESCE((v_suborder->>'shipping_cost')::numeric, 0.00), 'pending',
+        COALESCE((v_suborder->>'marketplace_commission_rate')::numeric, 0.00), COALESCE((v_suborder->>'marketplace_fee')::numeric, 0.00),
+        COALESCE((v_suborder->>'vendor_gross_amount')::numeric, 0.00), COALESCE((v_suborder->>'vendor_net_amount')::numeric, 0.00),
+        'pending', 'pending', COALESCE((v_suborder->>'discount_total')::numeric, 0.00),
+        v_seller_type, v_shipping_mode, v_pickup_type, v_agency_id, v_agency_name, v_dispatch_address_id, v_internal_reference,
+        COALESCE(v_suborder->'vendor_policy_snapshot', '{}'::jsonb)
+      ) RETURNING id INTO v_suborder_id;
+
+      -- 3. Insertar items correspondientes
+      FOR v_item IN 
+        SELECT * FROM jsonb_array_elements(p_items) AS item
+        WHERE (item->>'vendor_id' = v_vendor_id::text) 
+           OR (v_vendor_id IS NULL AND (item->>'vendor_id' IS NULL OR item->>'vendor_id' = ''))
+      LOOP
+        INSERT INTO public.order_items (
+          order_id, suborder_id, product_id, variant_id, vendor_id, vendor_store_id,
+          quantity, unit_price, total_price, product_name, sku, discount_total, final_total
+        ) VALUES (
+          v_order_id, v_suborder_id, (v_item->>'product_id')::uuid, NULLIF(v_item->>'variant_id', '')::uuid,
+          v_vendor_id, NULLIF(v_item->>'vendor_store_id', '')::uuid, (v_item->>'quantity')::integer,
+          (v_item->>'unit_price')::numeric, (v_item->>'unit_price')::numeric * (v_item->>'quantity')::integer,
+          COALESCE(v_item->>'product_name', v_item->>'title', 'Producto'), v_item->>'sku',
+          COALESCE((v_item->>'discount_total')::numeric, 0.00),
+          COALESCE((v_item->>'final_total')::numeric, (v_item->>'unit_price')::numeric * (v_item->>'quantity')::integer)
+        );
+      END LOOP;
+    END LOOP;
+  END IF;
+
+  RETURN jsonb_build_object('order_id', v_order_id, 'success', true);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.create_order_atomic(UUID, NUMERIC, TEXT, TEXT, TEXT, TEXT, JSONB, UUID, UUID, JSONB, JSONB, BOOLEAN, TIMESTAMPTZ, TEXT, BOOLEAN, BOOLEAN, BOOLEAN, TEXT, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TEXT, NUMERIC, NUMERIC, NUMERIC, TEXT, NUMERIC, NUMERIC, NUMERIC, TEXT, BOOLEAN) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_order_atomic(UUID, NUMERIC, TEXT, TEXT, TEXT, TEXT, JSONB, UUID, UUID, JSONB, JSONB, BOOLEAN, TIMESTAMPTZ, TEXT, BOOLEAN, BOOLEAN, BOOLEAN, TEXT, NUMERIC, NUMERIC, NUMERIC, NUMERIC, TEXT, NUMERIC, NUMERIC, NUMERIC, TEXT, NUMERIC, NUMERIC, NUMERIC, TEXT, BOOLEAN) TO service_role, postgres;

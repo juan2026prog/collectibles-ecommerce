@@ -302,8 +302,8 @@ Deno.serve(async (req: Request) => {
       const anySentToZinc = intlItems.some((item: any) => item.zinc_order_id);
 
       if (!anySentToZinc) {
-        // 1. Cancelar en order_execution_jobs para que el worker no lo tome
-        await supabaseAdmin
+        // 1. Cancelar en order_execution_jobs validando estados previos no irreversibles
+        const { data: cancelledJobs, error: jobErr } = await supabaseAdmin
           .from("order_execution_jobs")
           .update({
             status: 'CANCELLED',
@@ -311,7 +311,49 @@ Deno.serve(async (req: Request) => {
             updated_at: new Date().toISOString()
           })
           .eq("order_id", orderId)
-          .in("job_type", ["zinc_fulfillment", "zinc_purchase", "post_payment_execution"]);
+          .in("job_type", ["zinc_fulfillment", "zinc_purchase", "post_payment_execution"])
+          .in("status", ["PENDING", "RETRYING", "QUEUED", "WAITING"])
+          .select("id, status");
+
+        // Comprobar si algún job ya estaba en PROCESSING
+        const { data: processingJobs } = await supabaseAdmin
+          .from("order_execution_jobs")
+          .select("id, status")
+          .eq("order_id", orderId)
+          .in("job_type", ["zinc_fulfillment", "zinc_purchase", "post_payment_execution"])
+          .eq("status", "PROCESSING");
+
+        if (processingJobs && processingJobs.length > 0) {
+          // El worker ya reclamó el pedido: marcar como CANCELLATION_PENDING para no asumir confirmación
+          const { data: pendingIntlReq } = await supabaseAdmin
+            .from("unified_order_requests")
+            .insert({
+              order_id: orderId,
+              suborder_id: targetSuborder?.id || null,
+              customer_id: user.id,
+              business_model: businessModel,
+              request_type: requestType,
+              status: "CANCELLATION_PENDING",
+              amount_requested: order.total_amount,
+              reason: reason,
+              customer_notes: notes,
+              admin_notes: "Worker en proceso de compra. Se notificó solicitud de cancelación.",
+              idempotency_key: stableIdempotencyKey
+            })
+            .select()
+            .single();
+
+          return new Response(JSON.stringify({
+            success: false,
+            zincConfirmed: false,
+            cancellationPending: true,
+            message: "La orden se encuentra siendo procesada en este momento por el sistema de compras. Su solicitud quedó en revisión para confirmar si pudo detenerse.",
+            request: pendingIntlReq
+          }), {
+            status: 202,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
 
         // 2. Actualizar purchase_status de ítems internacionales
         await supabaseAdmin
@@ -344,8 +386,9 @@ Deno.serve(async (req: Request) => {
 
         return new Response(JSON.stringify({
           success: true,
-          zincConfirmed: true,
-          message: "Compra internacional detenida y cancelada con éxito en cola de ejecución.",
+          zincConfirmed: false,
+          localCancellationConfirmed: true,
+          message: "Compra internacional cancelada localmente antes de ser enviada al proveedor.",
           request: intlReq
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }

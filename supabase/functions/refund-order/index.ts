@@ -22,6 +22,7 @@ Deno.serve(async (req: Request) => {
 
   let order: any = null;
   let refundAmount = 0;
+  let processingRefundId: string | null = null;
 
   try {
     // SECURITY: Only admins can process refunds
@@ -93,7 +94,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Registrar intención de reembolso en progreso
+    // Registrar intención de reembolso en progreso de manera atómica
     const { data: lockRecord, error: lockErr } = await supabaseAdmin
       .from("refunds")
       .insert({
@@ -112,7 +113,12 @@ Deno.serve(async (req: Request) => {
       .select("id")
       .single();
 
-    const processingRefundId = lockRecord?.id || null;
+    if (lockErr || !lockRecord) {
+      console.error("[Refund] Error adquiriendo lock transaccional:", lockErr);
+      throw new Error("No se pudo iniciar el proceso de reembolso de manera segura. Intente nuevamente.");
+    }
+
+    processingRefundId = lockRecord.id;
 
     // 2. Fetch Suborders
     const { data: suborders, error: subordersErr } = await supabaseAdmin
@@ -474,10 +480,10 @@ Deno.serve(async (req: Request) => {
       refundDetails = { error: "Esta pasarela requiere devolución manual." };
     } 
     else {
-      console.log(`[Refund] Offline payment method "${order.payment_method}". Treating as manual refund.`);
-      refundSuccess = true;
-      gatewayRefundId = "MANUAL-" + Math.floor(Math.random() * 1000000);
-      refundDetails = { manual: true };
+      console.log(`[Refund] Offline payment method "${order.payment_method}". Requires administrative confirmation.`);
+      isManualRefundRequired = true;
+      refundSuccess = false;
+      refundDetails = { manual_offline: true, note: "Pago offline requiere verificación y comprobante antes de marcar reembolsado." };
     }
 
     // ═════ DATABASE UPDATES (TRANSACTIONAL WORKFLOW) ═════
@@ -992,15 +998,21 @@ Deno.serve(async (req: Request) => {
   } catch (error: any) {
     console.error("refund-order error:", error.message);
     
-    // Si existía un lock de procesamiento, marcarlo como fallido para liberar el pedido
+    // Si el reembolso en la pasarela externa ya fue exitoso (refundSuccess === true),
+    // NO marcar el lock como fallido para evitar que reintentos causen un doble reembolso.
+    // En su lugar, registrar como 'unknown_gateway_reversal_requires_reconciliation'
     if (processingRefundId) {
       try {
+        const nextLockStatus = refundSuccess ? "reconciliation_required" : "failed";
         await supabaseAdmin
           .from("refunds")
           .update({
-            status: "failed",
+            status: nextLockStatus,
             api_response: {
               error: error.message,
+              external_refund_success: refundSuccess,
+              gateway_refund_id: gatewayRefundId,
+              requires_manual_reconciliation: refundSuccess,
               failed_at: new Date().toISOString()
             }
           })
