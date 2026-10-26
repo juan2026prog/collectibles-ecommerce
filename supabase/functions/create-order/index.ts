@@ -1119,11 +1119,23 @@ function sanitizePayloadForLogging(data: any) {
       let vendorId: string | null = null;
       let vendorStoreId: string | null = null;
       let vendorName = "Vendor";
+      let vendorPolicySnapshot: any = {};
 
       if (groupKey === null) {
         vendorName = "Collectibles";
+        vendorPolicySnapshot = {
+          model: 'collectibles_national',
+          cancellation_window_minutes: 10,
+          return_window_days: 0,
+          return_product_condition: 'sealed_only'
+        };
       } else if (groupKey === "international") {
         vendorName = "Importación Amazon USA";
+        vendorPolicySnapshot = {
+          model: 'collectibles_international',
+          cancellation_rule: 'zinc_confirmation_required',
+          physical_return: false
+        };
       } else {
         const { data: storeData } = await supabase
           .from('vendor_stores')
@@ -1137,12 +1149,28 @@ function sanitizePayloadForLogging(data: any) {
           vendorName = storeData.store_name;
         } else {
           vendorId = groupKey;
+        }
+
+        if (vendorId) {
           const { data: vendorData } = await supabase
             .from('vendors')
-            .select('store_name')
+            .select('store_name, cancellation_policy, cancellation_window_hours, return_window_days, return_product_condition, return_shipping_payer, return_instructions')
             .eq('id', vendorId)
             .maybeSingle();
-          vendorName = vendorData?.store_name || "Vendor";
+
+          if (vendorData) {
+            vendorName = vendorData.store_name || vendorName;
+            vendorPolicySnapshot = {
+              model: 'vendor_national',
+              cancellation_policy: vendorData.cancellation_policy || 'before_dispatch',
+              cancellation_window_hours: vendorData.cancellation_window_hours || 2,
+              return_window_days: vendorData.return_window_days || 0,
+              return_product_condition: vendorData.return_product_condition || 'sealed_only',
+              return_shipping_payer: vendorData.return_shipping_payer || 'buyer',
+              return_instructions: vendorData.return_instructions || null,
+              snapshot_at: new Date().toISOString()
+            };
+          }
         }
       }
 
@@ -1407,7 +1435,8 @@ function sanitizePayloadForLogging(data: any) {
         pickup_type: pickupType,
         agency_id: suborderDacOfficeId,
         agency_name: suborderDacOfficeName,
-        dispatch_address_id: vendorAddress?.id || null
+        dispatch_address_id: vendorAddress?.id || null,
+        vendor_policy_snapshot: vendorPolicySnapshot
       });
     }
 

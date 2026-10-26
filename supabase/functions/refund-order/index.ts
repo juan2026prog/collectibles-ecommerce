@@ -34,8 +34,32 @@ Deno.serve(async (req: Request) => {
     amount = payload.amount;
     reason = payload.reason;
     bypassLiquidationCheck = payload.bypassLiquidationCheck || false;
+    const idempotencyKey = payload.idempotencyKey || null;
 
     if (!orderId) throw new Error("Falta el ID de la orden");
+
+    // Idempotency check: if refund already completed for this order / suborder / idempotencyKey
+    if (idempotencyKey) {
+      const { data: existingRefund } = await supabaseAdmin
+        .from("refunds")
+        .select("*")
+        .eq("order_id", orderId)
+        .eq("status", "completed")
+        .filter("api_response->idempotency_key", "eq", idempotencyKey)
+        .maybeSingle();
+
+      if (existingRefund) {
+        console.log(`[Refund] Idempotent replay detected for key: ${idempotencyKey}`);
+        return new Response(JSON.stringify({ 
+          success: true, 
+          refundSuccess: true, 
+          idempotent: true, 
+          refundDetails: existingRefund.api_response 
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    }
 
     // 1. Fetch Order
     const { data: fetchedOrder, error: orderErr } = await supabaseAdmin
@@ -216,8 +240,18 @@ Deno.serve(async (req: Request) => {
                 headers: { 'Authorization': `Bearer ${ZINC_API_KEY}` }
               });
               
-              if (!cancelRes.ok) {
-                console.error(`[Refund] Zinc cancellation API error: ${cancelRes.status}`);
+              if (cancelRes.status === 204) {
+                // Zinc 2.0 Cancellation Protocol: HTTP 204 No Content confirms cancellation
+                console.log(`[Refund] Zinc 2.0 cancellation confirmed with HTTP 204 for order ${intlItem.zinc_order_id}`);
+                
+                await supabaseAdmin.from("international_order_items").update({
+                  purchase_status: 'cancelled',
+                  review_reason_code: 'ZINC_204_CANCELLED',
+                  updated_at: new Date().toISOString()
+                }).eq("id", intlItem.id);
+              } else {
+                const errText = await cancelRes.text().catch(() => '');
+                console.error(`[Refund] Zinc cancellation API error: ${cancelRes.status}`, errText);
                 
                 await supabaseAdmin.from("international_order_items").update({
                   purchase_status: 'cancellation_requires_review'
@@ -237,14 +271,6 @@ Deno.serve(async (req: Request) => {
                 
                 throw new Error("Zinc no pudo cancelar la compra en Amazon. Cancelación automática bloqueada. Se requiere revisión manual.");
               }
-              
-              const cancelData = await cancelRes.json();
-              console.log(`[Refund] Zinc cancellation response:`, cancelData);
-              
-              await supabaseAdmin.from("international_order_items").update({
-                purchase_status: 'cancelled',
-                updated_at: new Date().toISOString()
-              }).eq("id", intlItem.id);
               
             } catch (err: any) {
               console.error(`[Refund] Error calling Zinc cancellation API:`, err.message);
@@ -436,7 +462,10 @@ Deno.serve(async (req: Request) => {
           status: "completed",
           requested_by: requestedBy,
           processed_at: new Date().toISOString(),
-          api_response: refundDetails
+          api_response: {
+            ...refundDetails,
+            idempotency_key: idempotencyKey || undefined
+          }
         })
         .select("id")
         .single();
@@ -771,7 +800,10 @@ Deno.serve(async (req: Request) => {
           reason: reason || "Reembolso manual pendiente de confirmación",
           status: "manual_refund_required",
           requested_by: requestedBy,
-          api_response: refundDetails
+          api_response: {
+            ...refundDetails,
+            idempotency_key: idempotencyKey || undefined
+          }
         })
         .select("id")
         .single();

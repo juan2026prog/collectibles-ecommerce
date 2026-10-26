@@ -1,5 +1,5 @@
--- 20271026000000_cancellations_returns_unified_engine.sql
--- Motor unificado de Cancelaciones, Devoluciones, Reclamaciones, Políticas de Vendor y Normalización de Liquidaciones
+-- 20261026000000_cancellations_returns_unified_engine.sql
+-- Motor unificado de Cancelaciones, Devoluciones, Reclamaciones, Políticas de Vendor y Liquidaciones Hardenizadas
 
 -- 1. Ampliar tabla vendors con políticas comerciales configurables
 ALTER TABLE public.vendors
@@ -11,7 +11,7 @@ ALTER TABLE public.vendors
   ADD COLUMN IF NOT EXISTS return_instructions TEXT,
   ADD COLUMN IF NOT EXISTS return_address TEXT;
 
--- 2. Asegurar snapshot inmutable de política en la suborden
+-- 2. Snapshot inmutable de política en la suborden y campos de cancelación
 ALTER TABLE public.order_suborders
   ADD COLUMN IF NOT EXISTS vendor_policy_snapshot JSONB DEFAULT '{}'::jsonb,
   ADD COLUMN IF NOT EXISTS cancellation_requested_at TIMESTAMPTZ,
@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS public.unified_order_requests (
   zinc_order_id TEXT,
   zinc_cancellation_status TEXT,
   zinc_response_payload JSONB DEFAULT '{}'::jsonb,
+  zinc_refund_credited_to_wallet BOOLEAN DEFAULT false,
   courier_claim_reference TEXT,
   courier_claim_status TEXT,
   idempotency_key TEXT UNIQUE,
@@ -81,26 +82,53 @@ CREATE TABLE IF NOT EXISTS public.unified_order_requests (
 -- Habilitar RLS en unified_order_requests
 ALTER TABLE public.unified_order_requests ENABLE ROW LEVEL SECURITY;
 
--- Políticas de RLS
+-- 4. POLÍTICAS RLS ESTRICTAS
+
+-- A. Admins: Control total validando public.is_admin() (sin confiar en inputs)
 DROP POLICY IF EXISTS "Admins manage all unified_order_requests" ON public.unified_order_requests;
 CREATE POLICY "Admins manage all unified_order_requests" ON public.unified_order_requests
   FOR ALL
   TO authenticated
-  USING (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_admin = true))
-  WITH CHECK (EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_admin = true));
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
 
+-- B. Customers SELECT: Solo ver solicitudes donde son propietarios de la orden
 DROP POLICY IF EXISTS "Customers view own unified_order_requests" ON public.unified_order_requests;
 CREATE POLICY "Customers view own unified_order_requests" ON public.unified_order_requests
   FOR SELECT
   TO authenticated
-  USING (customer_id = auth.uid());
+  USING (
+    customer_id = auth.uid() OR
+    EXISTS (
+      SELECT 1 FROM public.orders o 
+      WHERE o.id = unified_order_requests.order_id 
+      AND (o.customer_id = auth.uid() OR o.user_id = auth.uid())
+    )
+  );
 
+-- C. Customers INSERT: Validar estrictamente que la orden y la suborden les pertenecen realmente
 DROP POLICY IF EXISTS "Customers create own unified_order_requests" ON public.unified_order_requests;
 CREATE POLICY "Customers create own unified_order_requests" ON public.unified_order_requests
   FOR INSERT
   TO authenticated
-  WITH CHECK (customer_id = auth.uid());
+  WITH CHECK (
+    customer_id = auth.uid() AND
+    EXISTS (
+      SELECT 1 FROM public.orders o 
+      WHERE o.id = unified_order_requests.order_id 
+      AND (o.customer_id = auth.uid() OR o.user_id = auth.uid())
+    ) AND
+    (
+      suborder_id IS NULL OR
+      EXISTS (
+        SELECT 1 FROM public.order_suborders os 
+        WHERE os.id = unified_order_requests.suborder_id 
+        AND os.parent_order_id = unified_order_requests.order_id
+      )
+    )
+  );
 
+-- D. Vendors SELECT: Solo solicitudes asociadas a su tienda/vendor_id autenticado
 DROP POLICY IF EXISTS "Vendors view requests for their suborders" ON public.unified_order_requests;
 CREATE POLICY "Vendors view requests for their suborders" ON public.unified_order_requests
   FOR SELECT
@@ -111,6 +139,8 @@ CREATE POLICY "Vendors view requests for their suborders" ON public.unified_orde
     )
   );
 
+-- E. Vendors UPDATE: Solo pueden actualizar sus propias notas/observaciones (vendor_notes).
+-- Jamás alterar amount_approved, status financiero, order_id, suborder_id ni resoluciones administrativas.
 DROP POLICY IF EXISTS "Vendors update response for their requests" ON public.unified_order_requests;
 CREATE POLICY "Vendors update response for their requests" ON public.unified_order_requests
   FOR UPDATE
@@ -123,28 +153,38 @@ CREATE POLICY "Vendors update response for their requests" ON public.unified_ord
   WITH CHECK (
     vendor_id IN (
       SELECT id FROM public.vendors WHERE user_id = auth.uid()
-    )
+    ) AND
+    amount_approved = (SELECT r.amount_approved FROM public.unified_order_requests r WHERE r.id = unified_order_requests.id) AND
+    order_id = (SELECT r.order_id FROM public.unified_order_requests r WHERE r.id = unified_order_requests.id) AND
+    customer_id = (SELECT r.customer_id FROM public.unified_order_requests r WHERE r.id = unified_order_requests.id)
   );
 
--- Indices para rendimiento óptimo
+-- Indices
 CREATE INDEX IF NOT EXISTS idx_unified_requests_order ON public.unified_order_requests(order_id);
 CREATE INDEX IF NOT EXISTS idx_unified_requests_vendor ON public.unified_order_requests(vendor_id);
 CREATE INDEX IF NOT EXISTS idx_unified_requests_customer ON public.unified_order_requests(customer_id);
 CREATE INDEX IF NOT EXISTS idx_unified_requests_status ON public.unified_order_requests(status);
 
--- 4. Normalizar RPC mark_liquidation_as_paid para consistencia con liquidation_status = 'paid'
-CREATE OR REPLACE FUNCTION public.mark_liquidation_as_paid(p_admin_id uuid, p_liquidation_id uuid, p_reference text)
+-- 5. SEGURIDAD FINANCIERA: mark_liquidation_as_paid
+-- Elimina completamente el parámetro p_admin_id inseguro.
+-- Solo valida identidad server-side auténtica mediante public.is_admin() o auth.uid()
+CREATE OR REPLACE FUNCTION public.mark_liquidation_as_paid(p_liquidation_id uuid, p_reference text)
 RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND is_admin = true) 
-     AND NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = p_admin_id AND is_admin = true) THEN
-    RAISE EXCEPTION 'Acceso denegado: Se requieren permisos de administrador.' USING errcode = '42501';
+  -- Verificar exclusivamente identidad autenticada server-side
+  IF NOT public.is_admin() THEN
+    RAISE EXCEPTION 'Acceso denegado: Se requieren privilegios de administrador autenticado.' USING errcode = '42501';
   END IF;
 
+  IF p_liquidation_id IS NULL THEN
+    RAISE EXCEPTION 'ID de liquidación no proporcionado.' USING errcode = '22023';
+  END IF;
+
+  -- 1. Actualizar liquidación a pagada con trazabilidad
   UPDATE public.vendor_liquidations
   SET status = 'paid',
       paid_at = now(),
@@ -152,7 +192,7 @@ BEGIN
       updated_at = now()
   WHERE id = p_liquidation_id;
 
-  -- Actualizar subórdenes con estado 'paid' consistente con el check de refund-order
+  -- 2. Actualizar subórdenes con estado 'paid' consistente con comprobaciones financieras
   UPDATE public.order_suborders
   SET liquidation_status = 'paid',
       updated_at = now()
@@ -162,6 +202,6 @@ BEGIN
 END;
 $$;
 
--- Permisos RPC
-REVOKE EXECUTE ON FUNCTION public.mark_liquidation_as_paid(uuid, uuid, text) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.mark_liquidation_as_paid(uuid, uuid, text) TO authenticated, service_role;
+-- Restringir estrictamente permisos EXECUTE
+REVOKE ALL ON FUNCTION public.mark_liquidation_as_paid(uuid, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.mark_liquidation_as_paid(uuid, text) TO authenticated, service_role;
