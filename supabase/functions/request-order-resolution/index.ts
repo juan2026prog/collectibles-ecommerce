@@ -247,7 +247,7 @@ Deno.serve(async (req: Request) => {
 
       if (reqInsertErr) throw reqInsertErr;
 
-      // B. Invocar refund-order pasando el stableIdempotencyKey
+      // B. Invocar refund-order pasando el stableIdempotencyKey y operationType explícito
       const refundRes = await fetch(`${supabaseUrl}/functions/v1/refund-order`, {
         method: "POST",
         headers: {
@@ -257,6 +257,8 @@ Deno.serve(async (req: Request) => {
         body: JSON.stringify({
           orderId,
           suborderId: targetSuborder?.id || null,
+          operationType: 'pre_dispatch_cancellation',
+          restoreStock: true,
           reason: `Cancelación inmediata 10 min cliente (${user.email || user.id})`,
           idempotencyKey: stableIdempotencyKey
         })
@@ -479,7 +481,7 @@ Deno.serve(async (req: Request) => {
           .select()
           .single();
 
-        // 3. Crear de forma controlada el reembolso aislado al comprador con idempotencia
+        // 3. Crear de forma controlada el reembolso aislado al comprador con idempotencia y operationType
         let buyerRefundResult: any = null;
         let refundTriggered = false;
         try {
@@ -493,6 +495,9 @@ Deno.serve(async (req: Request) => {
               orderId,
               suborderId: targetSuborder?.id || null,
               orderItemId: orderItemId || null,
+              quantity: targetOrderItem?.quantity || null,
+              operationType: 'pre_dispatch_cancellation',
+              restoreStock: false, // En compras internacionales canceladas localmente antes de Zinc no hay inventario físico nacional
               amount: targetRefundAmount,
               reason: `Cancelación internacional antes de envío a proveedor (${user.email || user.id})`,
               idempotencyKey: stableIdempotencyKey
@@ -630,6 +635,9 @@ Deno.serve(async (req: Request) => {
               orderId,
               suborderId: targetSuborder?.id || null,
               orderItemId: orderItemId || null,
+              quantity: targetOrderItem?.quantity || null,
+              operationType: 'pre_dispatch_cancellation',
+              restoreStock: false, // En Zinc 2.0 no hay reposición física nacional
               amount: targetRefundAmount,
               reason: `Reembolso por cancelación Zinc 2.0 HTTP 204 confirmada (${user.email || user.id})`,
               idempotencyKey: stableIdempotencyKey

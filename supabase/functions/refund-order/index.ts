@@ -51,9 +51,16 @@ Deno.serve(async (req: Request) => {
       )
     );
 
-    // Validación comercial de inventario: una compensación monetaria pura NUNCA repone stock físico
+    // Validación comercial de inventario:
+    // - Una compensación monetaria pura (monetary_compensation) NUNCA repone stock físico.
+    // - Una devolución física (physical_return) REQUIERE confirmación explícita de inspección física antes de reponer stock.
+    //   (payload.itemRestockable === true o payload.canRestock === true). Si el artículo está roto o dañado, no se repone.
+    const isPhysicalReturnApproved = operationType === 'physical_return' && (payload.itemRestockable === true || payload.canRestock === true);
+
     if (operationType === 'monetary_compensation') {
       restoreStock = false;
+    } else if (operationType === 'physical_return') {
+      restoreStock = isPhysicalReturnApproved;
     } else {
       restoreStock = payload.restoreStock !== undefined ? Boolean(payload.restoreStock) : true;
     }
@@ -328,11 +335,13 @@ Deno.serve(async (req: Request) => {
 
     // ═════ COURIER SHIPMENTS CHECK (FASE 1) ═════
     // En modalidad de compensación monetaria pura (monetary_compensation), el cliente CONSERVA el producto.
-    // Por tanto: NO se cancelan envíos, NO se anulan guías de transportistas y NO se repone inventario.
+    // En devolución física (physical_return), el despacho ya ocurrió y el cliente retornó el producto para inspección.
+    // Por tanto: NO se bloquea por haber sido despachado en physical_return.
+    // Solo en cancelaciones pre-despacho (pre_dispatch_cancellation) se exige que el paquete no haya salido.
     let hasDispatchedShipment = false;
     let hasLabelCreatedShipment = false;
 
-    if (operationType !== 'monetary_compensation') {
+    if (operationType === 'pre_dispatch_cancellation') {
       const shipmentQuery = supabaseAdmin
         .from("shipments")
         .select("*")
@@ -355,7 +364,7 @@ Deno.serve(async (req: Request) => {
       }
 
       if (hasDispatchedShipment) {
-        throw new Error("El envío ya fue despachado. Se requiere devolución física de los productos e intervención manual. No se puede realizar reembolso automático.");
+        throw new Error("El envío ya fue despachado. Se requiere devolución física de los productos e intervención manual. No se puede realizar reembolso automático pre-despacho.");
       }
 
       if (hasLabelCreatedShipment) {
@@ -758,15 +767,28 @@ Deno.serve(async (req: Request) => {
         ip_address: clientIp
       });
 
+      // Recalcular saldo total reembolsado acumulado sobre la orden (incluyendo el reembolso actual)
+      const { data: allOrderRefunds } = await supabaseAdmin
+        .from("refunds")
+        .select("amount, status")
+        .eq("order_id", orderId)
+        .eq("status", "completed");
+
+      const cumulativeOrderRefunded = (allOrderRefunds || []).reduce(
+        (sum: number, r: any) => sum + Number(r.amount || 0),
+        0
+      );
+      const isOrderFullyRefunded = cumulativeOrderRefunded >= (Number(order.total_amount || 0) - 0.01);
+
       // Update payments table
       if (paymentIdUuid) {
-        const nextPaymentStatus = suborderId ? "partially_refunded" : "refunded";
+        const nextPaymentStatus = isOrderFullyRefunded ? "refunded" : "partially_refunded";
         await supabaseAdmin
           .from("payments")
           .update({
             status: nextPaymentStatus,
             provider_refund_id: gatewayRefundId,
-            refund_amount: refundAmount,
+            refund_amount: cumulativeOrderRefunded,
             refund_date: new Date().toISOString(),
             updated_at: new Date().toISOString()
           })
@@ -795,7 +817,7 @@ Deno.serve(async (req: Request) => {
           })
           .eq("id", orderItemId);
 
-        // Actualizar order_suborders proporcionalmente SIN marcar toda la suborden como refunded si quedan otros ítems activos
+        // Actualizar order_suborders proporcionalmente SIN marcar toda la suborden como refunded si quedan otros ítems activos o saldo pendiente
         const { data: siblingItems } = await supabaseAdmin
           .from("order_items")
           .select("id, status, refunded_amount, final_total")
@@ -803,7 +825,7 @@ Deno.serve(async (req: Request) => {
 
         const allSiblingsRefunded = siblingItems && siblingItems.every((si: any) => si.status === 'refunded' || si.status === 'cancelled');
 
-        if (allSiblingsRefunded) {
+        if (allSiblingsRefunded && operationType !== 'monetary_compensation') {
           await supabaseAdmin
             .from("order_suborders")
             .update({
@@ -813,28 +835,33 @@ Deno.serve(async (req: Request) => {
             })
             .eq("id", targetOrderItem.suborder_id);
         } else {
+          // Si es compensación monetaria o quedan líneas activas, la suborden mantiene su ejecución y solo refleja estado financiero
           await supabaseAdmin
             .from("order_suborders")
             .update({
-              status: "partially_refunded",
+              status: allSiblingsRefunded ? "refunded" : "partially_refunded",
               updated_at: new Date().toISOString()
             })
             .eq("id", targetOrderItem.suborder_id);
         }
 
         // Actualizar estado general de la orden
+        // En compensación monetaria pura, NO cancelar el pedido logístico: mantener su status de cumplimiento salvo que todo esté cancelado/reembolsado
         const { data: allOrderItems } = await supabaseAdmin
           .from("order_items")
           .select("id, status")
           .eq("order_id", orderId);
 
         const allOrderItemsRefunded = allOrderItems && allOrderItems.every((oi: any) => oi.status === 'refunded' || oi.status === 'cancelled');
+        const nextOrderStatus = (isOrderFullyRefunded && allOrderItemsRefunded) 
+          ? "refunded" 
+          : (operationType === 'monetary_compensation' ? order.status : "partially_refunded");
 
         await supabaseAdmin
           .from("orders")
           .update({
-            payment_status: allOrderItemsRefunded ? "refunded" : "partially_refunded",
-            status: allOrderItemsRefunded ? "refunded" : "partially_refunded",
+            payment_status: isOrderFullyRefunded ? "refunded" : "partially_refunded",
+            status: nextOrderStatus,
             delivery_notes: order.delivery_notes 
               ? `${order.delivery_notes}\n[Refund Ítem] Artículo ${targetOrderItem.product_name || orderItemId} reembolsado ($${refundAmount}).`
               : `[Refund Ítem] Artículo ${targetOrderItem.product_name || orderItemId} reembolsado ($${refundAmount}).`,
@@ -842,7 +869,7 @@ Deno.serve(async (req: Request) => {
           })
           .eq("id", orderId);
 
-        // Restituir inventario del artículo reembolsado (SOLO si antes de despacho y si efectivamente hubo unidades devueltas/canceladas)
+        // Restituir inventario del artículo reembolsado (SOLO si antes de despacho o devolución física aprobada, y si efectivamente hubo unidades devueltas/canceladas)
         if (!hasDispatchedShipment && !hasLabelCreatedShipment && effectiveRefundQty > 0 && restoreStock) {
           const qtyToRestore = effectiveRefundQty;
           if (targetOrderItem.variant_id) {
@@ -876,38 +903,57 @@ Deno.serve(async (req: Request) => {
           }
         }
       } else if (suborderId) {
-        // Partial Suborder refund
-        await supabaseAdmin
-          .from("order_suborders")
-          .update({
-            status: "refunded",
-            liquidation_status: bypassLiquidationCheck ? "paid" : "cancelled", // Keep paid if bypassed to preserve accountant history
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", suborderId);
+        // Suborder refund: calcular saldo de suborden
+        const targetSub = suborders.find((s: any) => s.id === suborderId);
+        const suborderTotal = Number(targetSub.product_subtotal) + Number(targetSub.shipping_cost) - Number(targetSub.discount_total || 0);
+        
+        // Sumar reembolsos acumulados específicos de esta suborden
+        const { data: subRefunds } = await supabaseAdmin
+          .from("refunds")
+          .select("amount")
+          .eq("suborder_id", suborderId)
+          .eq("status", "completed");
+        
+        const cumulativeSubRefunded = (subRefunds || []).reduce(
+          (sum: number, r: any) => sum + Number(r.amount || 0),
+          0
+        );
+        const isSuborderFullyRefunded = cumulativeSubRefunded >= (suborderTotal - 0.01);
 
-        // Check if all/some suborders are now refunded/cancelled
-        const { data: updatedSubs } = await supabaseAdmin
-          .from("order_suborders")
-          .select("status")
-          .eq("parent_order_id", orderId);
+        // En compensación monetaria pura (monetary_compensation), la suborden NO anula su cumplimiento ni su liquidación
+        if (operationType === 'monetary_compensation') {
+          await supabaseAdmin
+            .from("order_suborders")
+            .update({
+              status: isSuborderFullyRefunded ? "refunded" : "partially_refunded",
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", suborderId);
+        } else {
+          await supabaseAdmin
+            .from("order_suborders")
+            .update({
+              status: isSuborderFullyRefunded ? "refunded" : "partially_refunded",
+              liquidation_status: isSuborderFullyRefunded ? (bypassLiquidationCheck ? "paid" : "cancelled") : targetSub.liquidation_status,
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", suborderId);
+        }
 
-        const allCancelledOrRefunded = updatedSubs && updatedSubs.every((s: any) => s.status === 'cancelled' || s.status === 'refunded');
-        const anyCancelledOrRefunded = updatedSubs && updatedSubs.some((s: any) => s.status === 'cancelled' || s.status === 'refunded');
-
+        // Actualizar orden maestra considerando importes acumulados reales
         let nextOrderStatus = order.status;
-        if (allCancelledOrRefunded) {
+        if (isOrderFullyRefunded && operationType !== 'monetary_compensation') {
           nextOrderStatus = "refunded";
-        } else if (anyCancelledOrRefunded) {
+        } else if (operationType !== 'monetary_compensation') {
           nextOrderStatus = "partially_refunded";
         }
 
         await supabaseAdmin
           .from("orders")
           .update({
-            payment_status: allCancelledOrRefunded ? "refunded" : "partially_refunded",
+            payment_status: isOrderFullyRefunded ? "refunded" : "partially_refunded",
             status: nextOrderStatus,
-            delivery_notes: order.delivery_notes ? `${order.delivery_notes}\n[Refund Parcial] Suborden ${targetSuborder?.suborder_number || ''} reembolsada.` : `[Refund Parcial] Suborden ${targetSuborder?.suborder_number || ''} reembolsada.`,
+            delivery_notes: order.delivery_notes ? `${order.delivery_notes}\n[Refund Parcial] Suborden ${targetSuborder?.suborder_number || ''} reembolsada ($${refundAmount}).` : `[Refund Parcial] Suborden ${targetSuborder?.suborder_number || ''} reembolsada ($${refundAmount}).`,
             updated_at: new Date().toISOString()
           })
           .eq("id", orderId);
@@ -962,25 +1008,42 @@ Deno.serve(async (req: Request) => {
         }
       } else {
         // Full Order Refund
-        await supabaseAdmin
-          .from("order_suborders")
-          .update({
-            status: "refunded",
-            liquidation_status: bypassLiquidationCheck ? "paid" : "cancelled",
-            updated_at: new Date().toISOString()
-          })
-          .eq("parent_order_id", orderId);
+        // Si el reembolso acumulado cubre el 100% de la orden y no es compensación monetaria pura:
+        if (isOrderFullyRefunded && operationType !== 'monetary_compensation') {
+          await supabaseAdmin
+            .from("order_suborders")
+            .update({
+              status: "refunded",
+              liquidation_status: bypassLiquidationCheck ? "paid" : "cancelled",
+              updated_at: new Date().toISOString()
+            })
+            .eq("parent_order_id", orderId);
 
-        const cancelNote = `Cancelada: ${reason || 'Sin razón'}. Reembolso total procesado exitosamente.`;
-        await supabaseAdmin
-          .from("orders")
-          .update({
-            status: "refunded",
-            payment_status: "refunded",
-            delivery_notes: order.delivery_notes ? `${order.delivery_notes}\n${cancelNote}` : cancelNote,
-            updated_at: new Date().toISOString()
-          })
-          .eq("id", orderId);
+          const cancelNote = `Cancelada: ${reason || 'Sin razón'}. Reembolso total procesado exitosamente.`;
+          await supabaseAdmin
+            .from("orders")
+            .update({
+              status: "refunded",
+              payment_status: "refunded",
+              delivery_notes: order.delivery_notes ? `${order.delivery_notes}\n${cancelNote}` : cancelNote,
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", orderId);
+        } else {
+          // Reembolso parcial de la orden o compensación monetaria de orden completa:
+          // El payment_status refleja si se completó monetariamente o no, pero el status de fulfillment NO se marca 'refunded' si es compensación
+          await supabaseAdmin
+            .from("orders")
+            .update({
+              payment_status: isOrderFullyRefunded ? "refunded" : "partially_refunded",
+              status: (isOrderFullyRefunded && operationType !== 'monetary_compensation') ? "refunded" : (operationType === 'monetary_compensation' ? order.status : "partially_refunded"),
+              delivery_notes: order.delivery_notes 
+                ? `${order.delivery_notes}\n[Refund Orden] Reembolso monetario procesado ($${refundAmount}).`
+                : `[Refund Orden] Reembolso monetario procesado ($${refundAmount}).`,
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", orderId);
+        }
 
         // Restore Stock for all items ONLY if pre-dispatch cancellation and restoreStock is authorized
         if (operationType !== 'monetary_compensation' && restoreStock && !hasDispatchedShipment && !hasLabelCreatedShipment) {
