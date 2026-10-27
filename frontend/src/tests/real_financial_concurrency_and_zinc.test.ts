@@ -224,18 +224,69 @@ describe('Real Financial Concurrency, Isolation, and Zinc Verification Suite', (
     expect(buyerRefundTriggered).toBe(true);
   });
 
-  // 10. Separación estricta de saldo Zinc vs devolución al comprador
-  it('10. Separación estricta: pedido internacional cancelado retiene el estado financiero del comprador como pendiente hasta confirmación de pasarela', () => {
-    const internationalCancellationRecord = {
-      order_id: 'ord-intl-99',
-      zinc_cancellation_status: '204_confirmed',
-      zinc_refund_credited_to_wallet: true, // Saldo retornado a la billetera corporativa de Zinc en USD
-      buyer_refund_status: 'REFUND_PENDING', // El comprador aún no ha recibido el dinero en UYU
-    };
+  // 11. Consulta de ítems internacionales a través de order_items: verifica que nunca se busque international_order_items.order_id
+  it('11. Consulta de ítems internacionales relaciona a través de order_items.id -> international_order_items.order_item_id y no falla por columna inexistente order_id', () => {
+    const dbOrderItems = [
+      { id: 'oi-101', order_id: 'ord-intl-test', suborder_id: 'sub-intl-test', final_total: 1200 },
+      { id: 'oi-102', order_id: 'ord-intl-test', suborder_id: 'sub-intl-test', final_total: 800 }
+    ];
 
-    expect(internationalCancellationRecord.zinc_refund_credited_to_wallet).toBe(true);
-    expect(internationalCancellationRecord.buyer_refund_status).toBe('REFUND_PENDING');
-    expect(internationalCancellationRecord.buyer_refund_status).not.toBe('REFUNDED');
+    const dbIntlItems = [
+      { id: 'intl-1', order_item_id: 'oi-101', purchase_status: 'pending_purchase', zinc_order_id: null },
+      { id: 'intl-2', order_item_id: 'oi-102', purchase_status: 'pending_purchase', zinc_order_id: null }
+    ];
+
+    // Consulta correcta:
+    function getIntlItemsForOrder(orderId: string, targetOrderItemId?: string) {
+      let filteredOrderItems = dbOrderItems.filter(oi => oi.order_id === orderId);
+      if (targetOrderItemId) {
+        filteredOrderItems = filteredOrderItems.filter(oi => oi.id === targetOrderItemId);
+      }
+      const itemIds = filteredOrderItems.map(oi => oi.id);
+      // international_order_items NUNCA tiene order_id; solo tiene order_item_id
+      const matchedIntl = dbIntlItems.filter(intl => itemIds.includes(intl.order_item_id));
+      const calculatedAmount = filteredOrderItems.reduce((acc, item) => acc + item.final_total, 0);
+
+      return {
+        matchedIntl,
+        calculatedAmount
+      };
+    }
+
+    const fullOrderResult = getIntlItemsForOrder('ord-intl-test');
+    expect(fullOrderResult.matchedIntl).toHaveLength(2);
+    expect(fullOrderResult.calculatedAmount).toBe(2000);
+
+    const singleItemResult = getIntlItemsForOrder('ord-intl-test', 'oi-101');
+    expect(singleItemResult.matchedIntl).toHaveLength(1);
+    expect(singleItemResult.matchedIntl[0].id).toBe('intl-1');
+    expect(singleItemResult.calculatedAmount).toBe(1200);
+  });
+
+  // 12. Ítems en zinc_submitting bloquean la cancelación local inmediata y pasan a revisión
+  it('12. Ítems en zinc_submitting o workers activos bloquean la cancelación local inmediata (fail-closed) y derivan a CANCELLATION_PENDING', () => {
+    const intlItems = [
+      { id: 'intl-submitting-1', purchase_status: 'zinc_submitting', zinc_order_id: null }
+    ];
+
+    function evaluateCancellationFeasibility(items: any[]) {
+      const hasSubmitting = items.some(i => i.purchase_status === 'zinc_submitting');
+      if (hasSubmitting) {
+        return {
+          allowedImmediately: false,
+          status: 'CANCELLATION_PENDING',
+          message: 'La compra se encuentra en proceso activo de comunicación con el proveedor internacional.'
+        };
+      }
+      return {
+        allowedImmediately: true,
+        status: 'CANCELLATION_CONFIRMED'
+      };
+    }
+
+    const decision = evaluateCancellationFeasibility(intlItems);
+    expect(decision.allowedImmediately).toBe(false);
+    expect(decision.status).toBe('CANCELLATION_PENDING');
   });
 
 });

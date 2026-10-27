@@ -85,59 +85,38 @@ Deno.serve(async (req: Request) => {
       throw new Error("La orden ya está completamente cancelada");
     }
 
-    // 1b. Bloquear si existe un reembolso pendiente de conciliación (reconciliation_required)
-    const { data: reconciliationRefund } = await supabaseAdmin
-      .from("refunds")
-      .select("id, status, created_at, provider_refund_id, api_response")
-      .eq("order_id", orderId)
-      .eq("status", "reconciliation_required")
-      .maybeSingle();
+    // Adquisición atómica del lock y reserva transaccional de saldo en PostgreSQL
+    const { data: lockResult, error: lockRpcErr } = await supabaseAdmin.rpc("acquire_refund_lock_atomic", {
+      p_order_id: orderId,
+      p_suborder_id: suborderId || null,
+      p_amount: amount || Number(order.total_amount),
+      p_idempotency_key: idempotencyKey,
+      p_provider: order.payment_method,
+      p_reason: reason || "Intención de reembolso en proceso",
+      p_requested_by: requestedBy
+    });
 
-    if (reconciliationRefund) {
-      throw new Error("Operación bloqueada: la orden tiene un reembolso previo en estado 'reconciliation_required'. Se requiere conciliación administrativa antes de reintentar.");
+    if (lockRpcErr) {
+      console.error("[Refund] Error RPC acquire_refund_lock_atomic:", lockRpcErr.message);
+      throw new Error(`Error en el bloqueo transaccional de reembolso: ${lockRpcErr.message}`);
     }
 
-    // 1c. Validar si existe un reembolso en progreso (processing lock)
-    const { data: inFlightRefund } = await supabaseAdmin
-      .from("refunds")
-      .select("id, status, created_at")
-      .eq("order_id", orderId)
-      .eq("status", "processing")
-      .maybeSingle();
-
-    if (inFlightRefund) {
-      const lockAgeSeconds = (Date.now() - new Date(inFlightRefund.created_at).getTime()) / 1000;
-      if (lockAgeSeconds < 120) {
-        throw new Error("Hay una operación de reembolso en proceso para esta orden. Por favor espera a que finalice.");
+    if (!lockResult || lockResult.success !== true) {
+      if (lockResult?.idempotent === true) {
+        console.log(`[Refund] RPC Idempotent replay detected for key: ${idempotencyKey}`);
+        return new Response(JSON.stringify({ 
+          success: true, 
+          refundSuccess: true, 
+          idempotent: true, 
+          refundDetails: lockResult.refund_details 
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
       }
+      throw new Error(lockResult?.error || "No se pudo adquirir el lock de reembolso.");
     }
 
-    // Registrar intención de reembolso en progreso de manera atómica
-    const { data: lockRecord, error: lockErr } = await supabaseAdmin
-      .from("refunds")
-      .insert({
-        order_id: orderId,
-        suborder_id: suborderId || null,
-        provider: order.payment_method,
-        amount: amount || Number(order.total_amount),
-        reason: reason || "Intención de reembolso en proceso",
-        status: "processing",
-        idempotency_key: idempotencyKey || null,
-        requested_by: requestedBy,
-        api_response: {
-          idempotency_key: idempotencyKey || undefined,
-          lock_timestamp: new Date().toISOString()
-        }
-      })
-      .select("id")
-      .single();
-
-    if (lockErr || !lockRecord) {
-      console.error("[Refund] Error adquiriendo lock transaccional:", lockErr);
-      throw new Error("No se pudo iniciar el proceso de reembolso de manera segura. Intente nuevamente.");
-    }
-
-    processingRefundId = lockRecord.id;
+    processingRefundId = lockResult.lock_id;
 
     // 2. Fetch Suborders
     const { data: suborders, error: subordersErr } = await supabaseAdmin
