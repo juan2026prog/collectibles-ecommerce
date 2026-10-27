@@ -347,6 +347,11 @@ Deno.serve(async (req: Request) => {
 
       const intlItemIds = intlItems.map((i: any) => i.id);
 
+      // Si se especificó orderItemId, buscar y validar el artículo individual exacto
+      const targetOrderItem = orderItemId 
+        ? matchedOrderItems.find((item: any) => item.id === orderItemId) || null
+        : null;
+
       // Calcular monto exacto y aislado correspondiente a los ítems cancelados
       const calculatedRefundAmount = matchedOrderItems.reduce((acc: number, item: any) => {
         const itemVal = Number(item.final_total || item.total_price || (item.unit_price * (item.quantity || 1)));

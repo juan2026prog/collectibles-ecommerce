@@ -53,14 +53,29 @@ Deno.serve(async (req: Request) => {
 
     // Validación comercial de inventario:
     // - Una compensación monetaria pura (monetary_compensation) NUNCA repone stock físico.
-    // - Una devolución física (physical_return) REQUIERE confirmación explícita de inspección física antes de reponer stock.
-    //   (payload.itemRestockable === true o payload.canRestock === true). Si el artículo está roto o dañado, no se repone.
-    const isPhysicalReturnApproved = operationType === 'physical_return' && (payload.itemRestockable === true || payload.canRestock === true);
+    // - Una devolución física (physical_return) REQUIERE recepción e inspección técnica verificable antes de reponer stock.
+    //   La inspección no puede ser un booleano sin evidencia. Requiere:
+    //   1) Confirmación técnica explícita (itemRestockable === true o canRestock === true)
+    //   2) Referencia o identificador persistido de inspección/evidencia (inspectionId, returnEvidenceId, o inspectionVerified === true con evidence)
+    //   Si no cuenta con evidencia persistida, la reposición automática de inventario se BLOQUEA (restoreStock = false) y se mantiene para revisión.
+    const hasVerifiableInspectionEvidence = Boolean(
+      payload.inspectionId || 
+      payload.returnEvidenceId || 
+      payload.evidenceUrl || 
+      (Array.isArray(payload.evidenceImages) && payload.evidenceImages.length > 0) ||
+      (payload.inspectionNotes && String(payload.inspectionNotes).trim().length > 5)
+    );
+    const isPhysicalReturnApproved = operationType === 'physical_return' && 
+      (payload.itemRestockable === true || payload.canRestock === true) && 
+      hasVerifiableInspectionEvidence;
 
     if (operationType === 'monetary_compensation') {
       restoreStock = false;
     } else if (operationType === 'physical_return') {
       restoreStock = isPhysicalReturnApproved;
+      if (!isPhysicalReturnApproved && (payload.itemRestockable === true || payload.canRestock === true)) {
+        console.warn(`[Refund] Devolución física sin evidencia verificable de inspección: reposición automática bloqueada. Se mantiene en revisión manual.`);
+      }
     } else {
       restoreStock = payload.restoreStock !== undefined ? Boolean(payload.restoreStock) : true;
     }
@@ -384,22 +399,53 @@ Deno.serve(async (req: Request) => {
       }
 
       if (!hasDispatchedShipment && !hasLabelCreatedShipment && orderShipments && orderShipments.length > 0) {
-        // Caso A: La etiqueta todavía NO fue creada. Cancelar shipments en DB solo en cancelaciones pre-despacho.
-        for (const ship of orderShipments) {
-          await supabaseAdmin
-            .from("shipments")
-            .update({ shipping_status: "cancelled", updated_at: new Date().toISOString() })
-            .eq("id", ship.id);
+        // PROTECCIÓN DE ENVÍOS COMPARTIDOS:
+        // Si el reembolso es de un ítem individual (orderItemId), comprobar si la suborden/orden contiene otros ítems activos
+        let canCancelShipments = true;
+
+        if (orderItemId) {
+          // Consultar los ítems hermanos del mismo suborder o de la orden
+          const siblingQuery = supabaseAdmin
+            .from("order_items")
+            .select("id, status")
+            .neq("id", orderItemId);
+
+          if (suborderId) {
+            siblingQuery.eq("suborder_id", suborderId);
+          } else {
+            siblingQuery.eq("order_id", orderId);
+          }
+
+          const { data: siblings } = await siblingQuery;
+          const hasActiveSiblings = siblings && siblings.some((si: any) => si.status !== 'cancelled' && si.status !== 'refunded');
+
+          if (hasActiveSiblings) {
+            // El shipment es compartido con artículos hermanos que siguen activos.
+            // NUNCA cancelar el shipment del paquete si no todos los artículos están autorizados para cancelación.
+            console.log(`[Refund] Envío compartido detectado: el artículo ${orderItemId} tiene ítems activos hermanos. Se preserva el envío y NO se cancela la guía.`);
+            canCancelShipments = false;
+          }
+        }
+
+        if (canCancelShipments) {
+          // Solo cancelar el shipment si toda la suborden/orden o todos los ítems del envío son cancelados
+          for (const ship of orderShipments) {
+            await supabaseAdmin
+              .from("shipments")
+              .update({ shipping_status: "cancelled", updated_at: new Date().toISOString() })
+              .eq("id", ship.id);
+          }
         }
       }
     }
 
     // ═════ INTERNATIONAL ZINC ORDER CHECK (FASE 2) ═════
-    // En una compensación monetaria pura, NO se cancela la compra internacional en Zinc (el cliente conserva el bien).
+    // En una compensación monetaria pura (monetary_compensation), el cliente conserva el bien -> NO se cancela la compra en Zinc.
+    // En una devolución física (physical_return), la compra ya fue entregada y devuelta -> NO se vuelve a cancelar Zinc.
     let hasPurchasedIntlItem = false;
     const ZINC_API_KEY = Deno.env.get("ZINC_API_KEY");
 
-    if (operationType !== 'monetary_compensation') {
+    if (operationType === 'pre_dispatch_cancellation') {
       const { data: orderItems } = await supabaseAdmin
         .from("order_items")
         .select("id, suborder_id")
@@ -795,6 +841,8 @@ Deno.serve(async (req: Request) => {
           .eq("id", paymentIdUuid);
       }
 
+      const restoredProductIds: string[] = [];
+
       // Update Order, Suborders, and Items
       if (orderItemId && targetOrderItem) {
         // ─── GRANULAR ITEM-LEVEL REFUND ───
@@ -825,7 +873,11 @@ Deno.serve(async (req: Request) => {
 
         const allSiblingsRefunded = siblingItems && siblingItems.every((si: any) => si.status === 'refunded' || si.status === 'cancelled');
 
-        if (allSiblingsRefunded && operationType !== 'monetary_compensation') {
+        if (operationType === 'monetary_compensation') {
+          // Compensación monetaria: NUNCA sustituir order_suborders.status si ese campo controla preparación/logística.
+          // La suborden mantiene su estado de cumplimiento intacto y no altera su liquidación.
+          console.log(`[Refund] Compensación monetaria sobre ítem: suborden ${targetOrderItem.suborder_id} mantiene status comercial sin alteración.`);
+        } else if (allSiblingsRefunded) {
           await supabaseAdmin
             .from("order_suborders")
             .update({
@@ -835,11 +887,11 @@ Deno.serve(async (req: Request) => {
             })
             .eq("id", targetOrderItem.suborder_id);
         } else {
-          // Si es compensación monetaria o quedan líneas activas, la suborden mantiene su ejecución y solo refleja estado financiero
+          // Si quedan líneas activas en una cancelación física/pre-despacho, reflejar status financiero de suborden
           await supabaseAdmin
             .from("order_suborders")
             .update({
-              status: allSiblingsRefunded ? "refunded" : "partially_refunded",
+              status: "partially_refunded",
               updated_at: new Date().toISOString()
             })
             .eq("id", targetOrderItem.suborder_id);
@@ -922,13 +974,8 @@ Deno.serve(async (req: Request) => {
 
         // En compensación monetaria pura (monetary_compensation), la suborden NO anula su cumplimiento ni su liquidación
         if (operationType === 'monetary_compensation') {
-          await supabaseAdmin
-            .from("order_suborders")
-            .update({
-              status: isSuborderFullyRefunded ? "refunded" : "partially_refunded",
-              updated_at: new Date().toISOString()
-            })
-            .eq("id", suborderId);
+          // Mantener el estado logístico/comercial anterior de la suborden y de la liquidación
+          console.log(`[Refund] Compensación monetaria sobre suborden ${suborderId}: se preserva status comercial ${targetSub?.status || ''}.`);
         } else {
           await supabaseAdmin
             .from("order_suborders")
@@ -959,8 +1006,6 @@ Deno.serve(async (req: Request) => {
           .eq("id", orderId);
 
         // Restore Stock for Suborder Items ONLY if pre-dispatch cancellation and restoreStock is authorized
-        const restoredProductIds: string[] = [];
-
         if (operationType !== 'monetary_compensation' && restoreStock && !hasDispatchedShipment && !hasLabelCreatedShipment) {
           const { data: subItems } = await supabaseAdmin
             .from("order_items")
