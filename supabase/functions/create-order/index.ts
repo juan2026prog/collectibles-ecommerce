@@ -1412,7 +1412,9 @@ function sanitizePayloadForLogging(data: any) {
         return p?.is_international === true;
       });
 
+      const groupKeyStr = String(groupKey ?? 'null');
       subordersList.push({
+        group_key: groupKeyStr,
         vendor_id: vendorId,
         vendor_name: vendorName,
         vendor_store_id: vendorStoreId,
@@ -1717,9 +1719,11 @@ function sanitizePayloadForLogging(data: any) {
 
     const orderItems = [];
     for (const [groupKey, groupItems] of groups.entries()) {
+      const groupKeyStr = String(groupKey ?? 'null');
       for (const item of groupItems) {
         const itemDiscount = subtotal > 0 ? (totalDiscounts * (item.price * item.quantity) / subtotal) : 0;
         orderItems.push({
+          group_key: groupKeyStr,
           product_id: item.product_id,
           variant_id: item.variant_id || null,
           vendor_id: item.vendor_id || null,

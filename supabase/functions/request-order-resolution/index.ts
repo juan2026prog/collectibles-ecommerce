@@ -440,7 +440,7 @@ Deno.serve(async (req: Request) => {
           console.log(`[Resolution] Cancelación parcial de ítem(s): otros artículos internacionales activos continúan en el job zinc_fulfillment.`);
         }
 
-        // 2. Actualizar purchase_status de los ítems internacionales seleccionados
+        // 2. Actualizar purchase_status de los ítems internacionales seleccionados a 'cancelled'
         await supabaseAdmin
           .from("international_order_items")
           .update({
@@ -451,11 +451,11 @@ Deno.serve(async (req: Request) => {
           .in("id", intlItemIds);
 
         // Actualizar order_items a status = 'cancelled'
+        // NOTA: NO inflar refunded_amount aquí; refunded_amount solo debe incrementarse cuando el reembolso financiero esté confirmado en refund-order
         await supabaseAdmin
           .from("order_items")
           .update({
-            status: 'cancelled',
-            refunded_amount: targetRefundAmount
+            status: 'cancelled'
           })
           .in("id", orderItemIds);
 

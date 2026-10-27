@@ -266,17 +266,17 @@ export default function CustomerPortal() {
   const loadOrders = async () => {
     if (!user) return;
     const orderSelect = `
-      id, total_amount, currency, status, created_at, paid_at, payment_method, customer_id, user_id, customer_email, shipping_address, total_shipping,
+      id, total_amount, currency, status, created_at, paid_at, payment_method, customer_id, user_id, customer_email, shipping_address, total_shipping, is_international,
       payments(id, status, payment_url, created_at),
       order_items (
-        quantity, unit_price, total_price, product_id, variant_id, vendor_id, vendor_store_id, sku,
+        id, suborder_id, quantity, unit_price, total_price, product_id, variant_id, vendor_id, vendor_store_id, sku, product_name, final_total, status, refunded_quantity, refunded_amount,
         vendor:vendors(store_name, slug, logo_url, promotions_opt_in, company_name),
         vendor_store:vendor_stores(store_name, slug, logo_url),
-        products (title, slug, images:product_images(url)),
+        products (title, slug, is_international, images:product_images(url)),
         international_order_items (id, purchase_status, zinc_order_id, tracking_number, carrier, tracking_url, final_price_usd, estimated_delivery_to_courier)
       ),
       order_suborders (
-        id, suborder_number, status, is_collectibles_order, vendor_id, shipping_method, shipping_provider, shipping_cost, tracking_number, tracking_url, exchange_rate_value,
+        id, suborder_number, status, is_collectibles_order, is_international, product_subtotal, vendor_policy_snapshot, vendor_id, shipping_method, shipping_provider, shipping_cost, tracking_number, tracking_url, exchange_rate_value,
         shipments(id, tracking_code, external_guide, shipping_status, package_number, total_packages),
         vendor:vendors(store_name, slug, logo_url),
         vendor_store:vendor_stores(store_name, slug, logo_url)
