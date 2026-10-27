@@ -18,6 +18,7 @@ Deno.serve(async (req: Request) => {
   let suborderId: string | null = null;
   let orderItemId: string | null = null;
   let refundQuantity: number | null = null;
+  let effectiveRefundQty = 1;
   let amount: number | null = null;
   let reason: string | null = null;
   let bypassLiquidationCheck = false;
@@ -197,12 +198,40 @@ Deno.serve(async (req: Request) => {
       const alreadyRefundedItem = Number(targetOrderItem.refunded_amount || 0);
       const remainingItemAmount = Math.max(0, itemTotal - alreadyRefundedItem);
 
+      const itemQty = Number(targetOrderItem.quantity || 1);
+      const alreadyRefundedQty = Number(targetOrderItem.refunded_quantity || 0);
+      const remainingQty = Math.max(0, itemQty - alreadyRefundedQty);
+
+      if (remainingQty <= 0 && remainingItemAmount <= 0.01) {
+        throw new Error("El artículo ya ha sido completamente reembolsado tanto en cantidad como en importe.");
+      }
+
+      if (refundQuantity !== null && refundQuantity !== undefined) {
+        if (refundQuantity <= 0) {
+          throw new Error("La cantidad a reembolsar debe ser mayor a 0.");
+        }
+        if (refundQuantity > remainingQty) {
+          throw new Error(`La cantidad solicitada (${refundQuantity}) supera las unidades disponibles para reembolso (${remainingQty}) del artículo.`);
+        }
+      }
+
       if (amount) {
         refundAmount = Number(amount);
-      } else if (refundQuantity && targetOrderItem.quantity > 0) {
-        const perUnit = itemTotal / targetOrderItem.quantity;
+        // Si no se especificó refundQuantity explícito pero se envía amount, calcular unidades enteras liberadas
+        if (!refundQuantity && itemQty > 0) {
+          const perUnit = itemTotal / itemQty;
+          const calculatedQty = Math.floor((refundAmount + 0.01) / perUnit);
+          effectiveRefundQty = Math.min(remainingQty, Math.max(1, calculatedQty));
+        } else {
+          effectiveRefundQty = refundQuantity || 1;
+        }
+      } else if (refundQuantity && itemQty > 0) {
+        effectiveRefundQty = refundQuantity;
+        const perUnit = itemTotal / itemQty;
         refundAmount = Math.min(remainingItemAmount, perUnit * refundQuantity);
       } else {
+        // Reembolso total de la línea restante
+        effectiveRefundQty = remainingQty > 0 ? remainingQty : 1;
         refundAmount = remainingItemAmount;
       }
 
@@ -564,7 +593,7 @@ Deno.serve(async (req: Request) => {
           .update({
             suborder_id: suborderId || null,
             order_item_id: orderItemId || null,
-            quantity: refundQuantity || 1,
+            quantity: effectiveRefundQty,
             vendor_id: vendorId,
             payment_id: paymentIdUuid,
             provider: order.payment_method,
@@ -593,7 +622,7 @@ Deno.serve(async (req: Request) => {
             order_id: orderId,
             suborder_id: suborderId || null,
             order_item_id: orderItemId || null,
-            quantity: refundQuantity || 1,
+            quantity: effectiveRefundQty,
             vendor_id: vendorId,
             payment_id: paymentIdUuid,
             provider: order.payment_method,
@@ -679,11 +708,12 @@ Deno.serve(async (req: Request) => {
       if (orderItemId && targetOrderItem) {
         // ─── GRANULAR ITEM-LEVEL REFUND ───
         const currentRefQty = Number(targetOrderItem.refunded_quantity || 0);
-        const newRefQty = currentRefQty + (refundQuantity || targetOrderItem.quantity || 1);
+        const itemOrderedQty = Number(targetOrderItem.quantity || 1);
+        const newRefQty = Math.min(itemOrderedQty, currentRefQty + effectiveRefundQty);
         const currentRefAmt = Number(targetOrderItem.refunded_amount || 0);
         const newRefAmt = currentRefAmt + refundAmount;
 
-        const isItemFullyRefunded = newRefAmt >= Number(targetOrderItem.final_total || targetOrderItem.total_price || 0) - 0.01;
+        const isItemFullyRefunded = (newRefAmt >= Number(targetOrderItem.final_total || targetOrderItem.total_price || 0) - 0.01) || (newRefQty >= itemOrderedQty);
 
         await supabaseAdmin
           .from("order_items")
@@ -743,7 +773,7 @@ Deno.serve(async (req: Request) => {
 
         // Restituir inventario del artículo reembolsado (SOLO si antes de despacho)
         if (!hasDispatchedShipment && !hasLabelCreatedShipment) {
-          const qtyToRestore = refundQuantity || targetOrderItem.quantity || 1;
+          const qtyToRestore = effectiveRefundQty;
           if (targetOrderItem.variant_id) {
             const { data: v } = await supabaseAdmin.from('product_variants').select('inventory_count').eq('id', targetOrderItem.variant_id).single();
             if (v) {

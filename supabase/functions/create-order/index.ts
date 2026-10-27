@@ -1721,7 +1721,10 @@ function sanitizePayloadForLogging(data: any) {
     for (const [groupKey, groupItems] of groups.entries()) {
       const groupKeyStr = String(groupKey ?? 'null');
       for (const item of groupItems) {
-        const itemDiscount = subtotal > 0 ? (totalDiscounts * (item.price * item.quantity) / subtotal) : 0;
+        const itemLineTotal = item.price * item.quantity;
+        const itemDiscount = subtotal > 0 ? (totalDiscounts * itemLineTotal / subtotal) : 0;
+        const finalLineTotal = Math.max(itemLineTotal - itemDiscount, 0);
+
         orderItems.push({
           group_key: groupKeyStr,
           product_id: item.product_id,
@@ -1730,10 +1733,11 @@ function sanitizePayloadForLogging(data: any) {
           vendor_store_id: item.vendor_store_id || null,
           quantity: item.quantity,
           unit_price: item.price,
+          total_price: itemLineTotal,
           product_name: item.product_name,
           sku: item.sku,
           discount_total: itemDiscount,
-          final_total: Math.max(item.price - (item.quantity > 0 ? (itemDiscount / item.quantity) : 0), 0)
+          final_total: finalLineTotal
         });
       }
     }
