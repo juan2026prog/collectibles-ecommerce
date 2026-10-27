@@ -1407,12 +1407,18 @@ function sanitizePayloadForLogging(data: any) {
       const shippingMode = selectedMethod === 'pickup' ? 'pickup' : (selectedMethod === 'dac_agency' ? 'agency' : 'home');
       const pickupType = selectedMethod === 'pickup' ? 'local' : (selectedMethod === 'dac_agency' ? 'agency' : null);
 
+      const isSuborderIntl = groupKey === "international" || groupItems.some((i: any) => {
+        const p = productsList.find(prod => prod.id === i.product_id);
+        return p?.is_international === true;
+      });
+
       subordersList.push({
         vendor_id: vendorId,
         vendor_name: vendorName,
         vendor_store_id: vendorStoreId,
         vendor_store_name: vendorStoreId ? vendorName : null,
         is_collectibles_order: vendorId === null,
+        is_international: isSuborderIntl,
         product_subtotal: groupSubtotal,
         shipping_method: selectedMethod,
         shipping_provider: shippingProvider,

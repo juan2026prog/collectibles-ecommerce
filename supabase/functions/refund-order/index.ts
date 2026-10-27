@@ -16,6 +16,8 @@ Deno.serve(async (req: Request) => {
   let clientIp = req.headers.get("x-real-ip") || req.headers.get("x-forwarded-for") || "";
   let orderId: string | null = null;
   let suborderId: string | null = null;
+  let orderItemId: string | null = null;
+  let refundQuantity: number | null = null;
   let amount: number | null = null;
   let reason: string | null = null;
   let bypassLiquidationCheck = false;
@@ -36,6 +38,8 @@ Deno.serve(async (req: Request) => {
     const payload = await req.json();
     orderId = payload.orderId;
     suborderId = payload.suborderId;
+    orderItemId = payload.orderItemId || null;
+    refundQuantity = payload.quantity ? Number(payload.quantity) : null;
     amount = payload.amount;
     reason = payload.reason;
     bypassLiquidationCheck = payload.bypassLiquidationCheck || false;
@@ -81,7 +85,7 @@ Deno.serve(async (req: Request) => {
       throw new Error("Orden no encontrada");
     }
     order = fetchedOrder;
-    if (order.status === "cancelada" && !suborderId) {
+    if (order.status === "cancelada" && !suborderId && !orderItemId) {
       throw new Error("La orden ya está completamente cancelada");
     }
 
@@ -93,7 +97,8 @@ Deno.serve(async (req: Request) => {
       p_idempotency_key: idempotencyKey,
       p_provider: order.payment_method,
       p_reason: reason || "Intención de reembolso en proceso",
-      p_requested_by: requestedBy
+      p_requested_by: requestedBy,
+      p_order_item_id: orderItemId || null
     });
 
     if (lockRpcErr) {
@@ -101,18 +106,20 @@ Deno.serve(async (req: Request) => {
       throw new Error(`Error en el bloqueo transaccional de reembolso: ${lockRpcErr.message}`);
     }
 
+    // Si lockResult indica idempotent === true, terminar INMEDIATAMENTE sin llamar a ninguna pasarela
+    if (lockResult?.idempotent === true) {
+      console.log(`[Refund] RPC Idempotent replay detected for key: ${idempotencyKey}. No gateway called.`);
+      return new Response(JSON.stringify({ 
+        success: true, 
+        refundSuccess: true, 
+        idempotent: true, 
+        refundDetails: lockResult.refund_details 
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     if (!lockResult || lockResult.success !== true) {
-      if (lockResult?.idempotent === true) {
-        console.log(`[Refund] RPC Idempotent replay detected for key: ${idempotencyKey}`);
-        return new Response(JSON.stringify({ 
-          success: true, 
-          refundSuccess: true, 
-          idempotent: true, 
-          refundDetails: lockResult.refund_details 
-        }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
       throw new Error(lockResult?.error || "No se pudo adquirir el lock de reembolso.");
     }
 
@@ -158,9 +165,51 @@ Deno.serve(async (req: Request) => {
 
     // 5. Calculate Refund Amount
     let targetSuborder: any = null;
+    let targetOrderItem: any = null;
     let vendorId: string | null = null;
 
-    if (suborderId) {
+    if (orderItemId) {
+      const { data: itemData, error: itemErr } = await supabaseAdmin
+        .from("order_items")
+        .select("id, order_id, suborder_id, product_id, variant_id, vendor_id, quantity, unit_price, total_price, final_total, discount_total, refunded_quantity, refunded_amount")
+        .eq("id", orderItemId)
+        .eq("order_id", orderId)
+        .single();
+
+      if (itemErr || !itemData) {
+        throw new Error("El artículo a reembolsar no pertenece a esta orden.");
+      }
+      targetOrderItem = itemData;
+
+      if (suborderId && targetOrderItem.suborder_id && targetOrderItem.suborder_id !== suborderId) {
+        throw new Error("El artículo no coincide con la suborden seleccionada.");
+      }
+      if (!suborderId && targetOrderItem.suborder_id) {
+        suborderId = targetOrderItem.suborder_id;
+      }
+
+      if (suborderId) {
+        targetSuborder = suborders.find(s => s.id === suborderId);
+        vendorId = targetSuborder?.vendor_id || targetOrderItem.vendor_id || null;
+      }
+
+      const itemTotal = Number(targetOrderItem.final_total || targetOrderItem.total_price || (targetOrderItem.unit_price * (targetOrderItem.quantity || 1)));
+      const alreadyRefundedItem = Number(targetOrderItem.refunded_amount || 0);
+      const remainingItemAmount = Math.max(0, itemTotal - alreadyRefundedItem);
+
+      if (amount) {
+        refundAmount = Number(amount);
+      } else if (refundQuantity && targetOrderItem.quantity > 0) {
+        const perUnit = itemTotal / targetOrderItem.quantity;
+        refundAmount = Math.min(remainingItemAmount, perUnit * refundQuantity);
+      } else {
+        refundAmount = remainingItemAmount;
+      }
+
+      if (refundAmount > remainingItemAmount + 0.01) {
+        throw new Error(`El importe solicitado ($${refundAmount}) supera el saldo disponible del artículo ($${remainingItemAmount}).`);
+      }
+    } else if (suborderId) {
       targetSuborder = suborders.find(s => s.id === suborderId);
       vendorId = targetSuborder.vendor_id;
       const suborderTotal = Number(targetSuborder.product_subtotal) + Number(targetSuborder.shipping_cost) - Number(targetSuborder.discount_total || 0);
@@ -514,6 +563,8 @@ Deno.serve(async (req: Request) => {
           .from("refunds")
           .update({
             suborder_id: suborderId || null,
+            order_item_id: orderItemId || null,
+            quantity: refundQuantity || 1,
             vendor_id: vendorId,
             payment_id: paymentIdUuid,
             provider: order.payment_method,
@@ -525,7 +576,8 @@ Deno.serve(async (req: Request) => {
             processed_at: new Date().toISOString(),
             api_response: {
               ...refundDetails,
-              idempotency_key: idempotencyKey || undefined
+              idempotency_key: idempotencyKey || undefined,
+              order_item_id: orderItemId || undefined
             }
           })
           .eq("id", processingRefundId)
@@ -540,6 +592,8 @@ Deno.serve(async (req: Request) => {
           .insert({
             order_id: orderId,
             suborder_id: suborderId || null,
+            order_item_id: orderItemId || null,
+            quantity: refundQuantity || 1,
             vendor_id: vendorId,
             payment_id: paymentIdUuid,
             provider: order.payment_method,
@@ -551,7 +605,8 @@ Deno.serve(async (req: Request) => {
             processed_at: new Date().toISOString(),
             api_response: {
               ...refundDetails,
-              idempotency_key: idempotencyKey || undefined
+              idempotency_key: idempotencyKey || undefined,
+              order_item_id: orderItemId || undefined
             }
           })
           .select("id")
@@ -620,8 +675,106 @@ Deno.serve(async (req: Request) => {
           .eq("id", paymentIdUuid);
       }
 
-      // Update Order and Suborders
-      if (suborderId) {
+      // Update Order, Suborders, and Items
+      if (orderItemId && targetOrderItem) {
+        // ─── GRANULAR ITEM-LEVEL REFUND ───
+        const currentRefQty = Number(targetOrderItem.refunded_quantity || 0);
+        const newRefQty = currentRefQty + (refundQuantity || targetOrderItem.quantity || 1);
+        const currentRefAmt = Number(targetOrderItem.refunded_amount || 0);
+        const newRefAmt = currentRefAmt + refundAmount;
+
+        const isItemFullyRefunded = newRefAmt >= Number(targetOrderItem.final_total || targetOrderItem.total_price || 0) - 0.01;
+
+        await supabaseAdmin
+          .from("order_items")
+          .update({
+            status: isItemFullyRefunded ? "refunded" : "active",
+            refunded_quantity: newRefQty,
+            refunded_amount: newRefAmt
+          })
+          .eq("id", orderItemId);
+
+        // Actualizar order_suborders proporcionalmente SIN marcar toda la suborden como refunded si quedan otros ítems activos
+        const { data: siblingItems } = await supabaseAdmin
+          .from("order_items")
+          .select("id, status, refunded_amount, final_total")
+          .eq("suborder_id", targetOrderItem.suborder_id);
+
+        const allSiblingsRefunded = siblingItems && siblingItems.every((si: any) => si.status === 'refunded' || si.status === 'cancelled');
+
+        if (allSiblingsRefunded) {
+          await supabaseAdmin
+            .from("order_suborders")
+            .update({
+              status: "refunded",
+              liquidation_status: bypassLiquidationCheck ? "paid" : "cancelled",
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", targetOrderItem.suborder_id);
+        } else {
+          await supabaseAdmin
+            .from("order_suborders")
+            .update({
+              status: "partially_refunded",
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", targetOrderItem.suborder_id);
+        }
+
+        // Actualizar estado general de la orden
+        const { data: allOrderItems } = await supabaseAdmin
+          .from("order_items")
+          .select("id, status")
+          .eq("order_id", orderId);
+
+        const allOrderItemsRefunded = allOrderItems && allOrderItems.every((oi: any) => oi.status === 'refunded' || oi.status === 'cancelled');
+
+        await supabaseAdmin
+          .from("orders")
+          .update({
+            payment_status: allOrderItemsRefunded ? "refunded" : "partially_refunded",
+            status: allOrderItemsRefunded ? "refunded" : "partially_refunded",
+            delivery_notes: order.delivery_notes 
+              ? `${order.delivery_notes}\n[Refund Ítem] Artículo ${targetOrderItem.product_name || orderItemId} reembolsado ($${refundAmount}).`
+              : `[Refund Ítem] Artículo ${targetOrderItem.product_name || orderItemId} reembolsado ($${refundAmount}).`,
+            updated_at: new Date().toISOString()
+          })
+          .eq("id", orderId);
+
+        // Restituir inventario del artículo reembolsado (SOLO si antes de despacho)
+        if (!hasDispatchedShipment && !hasLabelCreatedShipment) {
+          const qtyToRestore = refundQuantity || targetOrderItem.quantity || 1;
+          if (targetOrderItem.variant_id) {
+            const { data: v } = await supabaseAdmin.from('product_variants').select('inventory_count').eq('id', targetOrderItem.variant_id).single();
+            if (v) {
+              await supabaseAdmin.from('product_variants').update({ inventory_count: (v.inventory_count || 0) + qtyToRestore }).eq('id', targetOrderItem.variant_id);
+            }
+          }
+          if (targetOrderItem.vendor_id && targetOrderItem.product_id && targetOrderItem.variant_id) {
+            const { data: vp } = await supabaseAdmin
+              .from("vendor_products")
+              .select("id")
+              .eq("vendor_id", targetOrderItem.vendor_id)
+              .eq("product_id", targetOrderItem.product_id)
+              .maybeSingle();
+            if (vp) {
+              const { data: vpv } = await supabaseAdmin
+                .from("vendor_product_variants")
+                .select("inventory_count")
+                .eq("vendor_product_id", vp.id)
+                .eq("variant_id", targetOrderItem.variant_id)
+                .maybeSingle();
+              if (vpv) {
+                await supabaseAdmin
+                  .from("vendor_product_variants")
+                  .update({ inventory_count: (vpv.inventory_count || 0) + qtyToRestore })
+                  .eq("vendor_product_id", vp.id)
+                  .eq("variant_id", targetOrderItem.variant_id);
+              }
+            }
+          }
+        }
+      } else if (suborderId) {
         // Partial Suborder refund
         await supabaseAdmin
           .from("order_suborders")

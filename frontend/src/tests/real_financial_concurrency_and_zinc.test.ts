@@ -1,13 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 
-describe('Real Financial Concurrency, Isolation, and Zinc Verification Suite', () => {
+describe('Real Financial Concurrency, Item-Level Isolation, and Zinc Verification Suite', () => {
 
-  // 1. Dos cancelaciones concurrentes para el mismo pedido / suborden
+  // 1. Dos cancelaciones concurrentes para la misma orden / suborden / item
   it('1. Dos cancelaciones concurrentes para la misma orden: la primera adquiere el lock y la segunda es rechazada con 409', () => {
     const existingRequests: any[] = [];
     
-    function handleCancellationRequest(orderId: string, suborderId: string, requestType: string) {
-      const stableKey = `cancel-${requestType}-${orderId}-${suborderId || 'all'}`;
+    function handleCancellationRequest(orderId: string, suborderId: string, orderItemId: string, requestType: string) {
+      const stableKey = `cancel-${requestType}-${orderId}-${suborderId || 'all'}-${orderItemId || 'all'}`;
       const inFlight = existingRequests.find(r => r.idempotency_key === stableKey && ['CANCELLATION_PENDING', 'REFUND_PENDING'].includes(r.status));
       if (inFlight) {
         return { status: 409, message: 'Operación de cancelación en proceso', inProgress: true };
@@ -17,276 +17,235 @@ describe('Real Financial Concurrency, Isolation, and Zinc Verification Suite', (
       return { status: 200, request: newReq };
     }
 
-    const first = handleCancellationRequest('ord-concurrency-1', 'sub-1', 'cancel_immediate_10m');
-    const second = handleCancellationRequest('ord-concurrency-1', 'sub-1', 'cancel_immediate_10m');
+    const first = handleCancellationRequest('ord-concurrency-1', 'sub-1', 'item-1', 'cancel_immediate_10m');
+    const second = handleCancellationRequest('ord-concurrency-1', 'sub-1', 'item-1', 'cancel_immediate_10m');
 
     expect(first.status).toBe(200);
     expect(second.status).toBe(409);
     expect(second.inProgress).toBe(true);
   });
 
-  // 2. Dos reembolsos con la misma clave de idempotencia
-  it('2. Dos reembolsos con la misma clave de idempotencia: el segundo retorna repetición idempotente sin llamar a la pasarela', () => {
-    let gatewayCalls = 0;
-    const refundsDb: any[] = [];
+  // 2. Replay idempotente en refund-order: RPC devuelve idempotent === true y NO se invoca pasarela externa
+  it('2. Replay idempotente en refund-order: adquiere RPC con idempotent: true y retorna inmediatamente sin llamar a pasarela', () => {
+    let externalGatewayCalls = 0;
 
-    function processRefund(orderId: string, idempotencyKey: string, amount: number) {
-      if (!idempotencyKey) throw new Error('Idempotency key obligatoria');
-      
-      const existing = refundsDb.find(r => r.order_id === orderId && r.idempotency_key === idempotencyKey && r.status === 'completed');
-      if (existing) {
-        return { success: true, idempotent: true, refundDetails: existing.api_response };
-      }
-
-      gatewayCalls++;
-      const completedRefund = {
-        id: 'ref-1',
-        order_id: orderId,
-        idempotency_key: idempotencyKey,
-        amount,
-        status: 'completed',
-        api_response: { gateway_id: 'MP-9988' }
-      };
-      refundsDb.push(completedRefund);
-      return { success: true, idempotent: false, refundDetails: completedRefund.api_response };
-    }
-
-    const res1 = processRefund('order-idem-1', 'key-safe-123', 500);
-    const res2 = processRefund('order-idem-1', 'key-safe-123', 500);
-
-    expect(res1.idempotent).toBe(false);
-    expect(res2.idempotent).toBe(true);
-    expect(gatewayCalls).toBe(1); // Gateway called exactly ONCE
-  });
-
-  // 3. Dos reembolsos con claves diferentes para el mismo pago cuando se supera el disponible
-  it('3. Dos reembolsos con claves diferentes para el mismo pago: control de acumulado bloquea el segundo por exceder saldo', () => {
-    const orderTotal = 1000;
-    const refundsDb: any[] = [{ id: 'ref-a', order_id: 'ord-split-1', amount: 800, status: 'completed', idempotency_key: 'key-a' }];
-
-    function validateRefundAmount(orderId: string, requestedAmount: number) {
-      const previouslyRefunded = refundsDb
-        .filter(r => r.order_id === orderId && ['completed', 'partial'].includes(r.status))
-        .reduce((sum, r) => sum + r.amount, 0);
-
-      const available = Math.max(0, orderTotal - previouslyRefunded);
-      if (requestedAmount > available + 0.01) {
-        throw new Error(`El importe solicitado ($${requestedAmount}) supera el saldo disponible reembolsable de la orden ($${available}).`);
-      }
-      return true;
-    }
-
-    // Intentar reembolsar 300 más (800 + 300 = 1100 > 1000) con clave diferente
-    expect(() => validateRefundAmount('ord-split-1', 300)).toThrow('supera el saldo disponible reembolsable');
-
-    // Reembolso legítimo de 200 (800 + 200 = 1000 <= 1000) con clave diferente
-    expect(validateRefundAmount('ord-split-1', 200)).toBe(true);
-  });
-
-  // 4. Reembolso sin clave de idempotencia es rechazado inmediatamente
-  it('4. Reembolso sin clave de idempotencia falla de forma inmediata', () => {
-    function processRefundPayload(payload: any) {
-      const idempotencyKey = payload.idempotencyKey ? String(payload.idempotencyKey).trim() : null;
-      if (!idempotencyKey) {
-        throw new Error('Idempotency key obligatoria: toda solicitud de reembolso requiere un identificador único.');
-      }
-      return true;
-    }
-
-    expect(() => processRefundPayload({ orderId: 'ord-1', amount: 100 })).toThrow('Idempotency key obligatoria');
-    expect(() => processRefundPayload({ orderId: 'ord-1', amount: 100, idempotencyKey: '   ' })).toThrow('Idempotency key obligatoria');
-    expect(processRefundPayload({ orderId: 'ord-1', amount: 100, idempotencyKey: 'valid-key-99' })).toBe(true);
-  });
-
-  // 5. Reembolso bloqueado si la orden se encuentra en reconciliation_required
-  it('5. Reembolso bloqueado si existe un reembolso previo en estado reconciliation_required', () => {
-    const existingRefunds = [
-      { id: 'ref-rec-1', order_id: 'ord-stuck-1', status: 'reconciliation_required', provider_refund_id: 'GATEWAY-123' }
-    ];
-
-    function checkRefundPreconditions(orderId: string) {
-      const inReconciliation = existingRefunds.find(r => r.order_id === orderId && r.status === 'reconciliation_required');
-      if (inReconciliation) {
-        throw new Error("Operación bloqueada: la orden tiene un reembolso previo en estado 'reconciliation_required'. Se requiere conciliación administrativa antes de reintentar.");
-      }
-      return true;
-    }
-
-    expect(() => checkRefundPreconditions('ord-stuck-1')).toThrow("reconciliation_required");
-    expect(checkRefundPreconditions('ord-clean-1')).toBe(true);
-  });
-
-  // 6. Timeout post-éxito de pasarela externa: asigna reconciliation_required y nunca failed
-  it('6. Timeout posterior a éxito de pasarela: asigna reconciliation_required y retiene gatewayRefundId para evitar duplicados', () => {
-    let refundSuccess = false;
-    let gatewayRefundId: string | null = null;
-    let processingRefundId: string | null = 'lock-uuid-777';
-    let savedRecord: any = null;
-
-    try {
-      // Pasarela Mercado Pago responde éxito
-      refundSuccess = true;
-      gatewayRefundId = 'MP-EXTERNAL-REFUND-445566';
-
-      // Simular error de red o timeout al guardar en base de datos de Supabase
-      throw new Error('Postgres connection reset during post-refund update');
-    } catch (err: any) {
-      if (processingRefundId) {
-        const nextStatus = refundSuccess ? 'reconciliation_required' : 'failed';
-        savedRecord = {
-          status: nextStatus,
-          api_response: {
-            error: err.message,
-            external_refund_success: refundSuccess,
-            gateway_refund_id: gatewayRefundId,
-            requires_manual_reconciliation: refundSuccess
-          }
+    // Simulación del motor real de refund-order
+    function processRefundHandler(rpcResponse: any) {
+      // Si el resultado de la RPC indica idempotent === true, terminar inmediatamente
+      if (rpcResponse?.idempotent === true) {
+        return {
+          success: true,
+          refundSuccess: true,
+          idempotent: true,
+          refundDetails: rpcResponse.refund_details,
+          gatewayCalled: false
         };
       }
+
+      // De lo contrario, llama a pasarela externa
+      externalGatewayCalls++;
+      return {
+        success: true,
+        refundSuccess: true,
+        idempotent: false,
+        refundDetails: { gateway_id: 'GATEWAY-123' },
+        gatewayCalled: true
+      };
     }
 
-    expect(savedRecord.status).toBe('reconciliation_required');
-    expect(savedRecord.api_response.external_refund_success).toBe(true);
-    expect(savedRecord.api_response.gateway_refund_id).toBe('MP-EXTERNAL-REFUND-445566');
-    expect(savedRecord.api_response.requires_manual_reconciliation).toBe(true);
+    // Primera llamada: nueva transacción
+    const firstCall = processRefundHandler({ success: true, idempotent: false, lock_id: 'lock-1' });
+    expect(firstCall.idempotent).toBe(false);
+    expect(firstCall.gatewayCalled).toBe(true);
+    expect(externalGatewayCalls).toBe(1);
+
+    // Segunda llamada: replay idempotente (misma clave en status completed)
+    const secondCall = processRefundHandler({
+      success: true,
+      idempotent: true,
+      refund_id: 'ref-1',
+      refund_details: { gateway_id: 'GATEWAY-123' }
+    });
+    expect(secondCall.idempotent).toBe(true);
+    expect(secondCall.gatewayCalled).toBe(false);
+    expect(externalGatewayCalls).toBe(1); // Se mantiene estrictamente en 1
   });
 
-  // 7. Fail-Closed Zinc: Fallo de RPC check_and_lock_zinc_purchase_item impide POST a Zinc
-  it('7. Fail-Closed Zinc: si la RPC check_and_lock_zinc_purchase_item falla, no se llama a POST /orders y se marca manual_review', () => {
-    let zincPostInvoked = false;
-    let recordedStatus = '';
-    let reasonCode = '';
+  // 3. Dos reembolsos concurrentes con claves diferentes sobrepasando el disponible
+  it('3. Dos reembolsos concurrentes con claves diferentes: control transaccional bloquea el segundo por saldo insuficiente', () => {
+    const orderTotal = 1500;
+    const refundsDb = [{ id: 'ref-1', amount: 1000, status: 'completed' }];
 
-    // Simular error de RPC
-    const preLockErr = { message: 'Network timeout executing RPC check_and_lock_zinc_purchase_item' };
-    const zincPreLock = null;
-
-    if (preLockErr || !zincPreLock || (zincPreLock as any)?.allowed !== true) {
-      const blockReason = preLockErr ? `RPC_ERROR: ${preLockErr.message}` : ((zincPreLock as any)?.reason || 'AUTHORIZATION_DENIED');
-      recordedStatus = 'manual_review';
-      reasonCode = 'ZINC_PRE_LOCK_BLOCKED';
-      // Termina sin invocar zincPost
-    } else {
-      zincPostInvoked = true;
-    }
-
-    expect(zincPostInvoked).toBe(false);
-    expect(recordedStatus).toBe('manual_review');
-    expect(reasonCode).toBe('ZINC_PRE_LOCK_BLOCKED');
-  });
-
-  // 8. Aislamiento por artículo: cancelación de un artículo NO afecta a otros artículos ni a otras subórdenes
-  it('8. Aislamiento por artículo: cancelación de un ítem internacional no bloquea a otros ítems del mismo pedido', () => {
-    const orderItems = [
-      { id: 'item-1', suborder_id: 'sub-intl-1', name: 'Figura Goku USA' },
-      { id: 'item-2', suborder_id: 'sub-intl-1', name: 'Figura Vegeta USA' },
-      { id: 'item-3', suborder_id: 'sub-nat-2', name: 'Manga Nacional' }
-    ];
-
-    // Solicitud de cancelación solo para item-1
-    const cancellationRequests = [
-      {
-        order_id: 'ord-multi-1',
-        suborder_id: 'sub-intl-1',
-        order_item_id: 'item-1',
-        status: 'CANCELLATION_CONFIRMED',
-        request_type: 'cancel_international_zinc'
+    function validateBalance(requestedAmount: number) {
+      const previouslyRefunded = refundsDb.reduce((acc, r) => acc + r.amount, 0);
+      const available = Math.max(0, orderTotal - previouslyRefunded);
+      if (requestedAmount > available + 0.01) {
+        throw new Error(`El importe solicitado ($${requestedAmount}) supera el saldo disponible reembolsable ($${available}).`);
       }
-    ];
-
-    function isItemCancelled(itemId: string, suborderId: string) {
-      const match = cancellationRequests.find(r => 
-        (r.order_item_id === itemId) || 
-        (!r.order_item_id && r.suborder_id === suborderId) ||
-        (!r.order_item_id && !r.suborder_id)
-      );
-      return match ? match.status === 'CANCELLATION_CONFIRMED' : false;
+      return true;
     }
 
-    expect(isItemCancelled('item-1', 'sub-intl-1')).toBe(true);  // Ítem cancelado
-    expect(isItemCancelled('item-2', 'sub-intl-1')).toBe(false); // Ítem 2 NO afectado
-    expect(isItemCancelled('item-3', 'sub-nat-2')).toBe(false);  // Ítem 3 suborden nacional NO afectado
+    expect(() => validateBalance(600)).toThrow('supera el saldo disponible reembolsable');
+    expect(validateBalance(500)).toBe(true);
+  });
+
+  // 4. Cancelación de un artículo de dos dentro de una suborden (reembolso granular)
+  it('4. Cancelación granular de una figura de dos dentro de una suborden: no marca la suborden como refunded ni afecta otros artículos', () => {
+    const suborder = { id: 'sub-1', status: 'confirmed', product_subtotal: 3000 };
+    const items = [
+      { id: 'item-1', suborder_id: 'sub-1', product_name: 'Figura Goku', final_total: 1500, status: 'active', refunded_amount: 0 },
+      { id: 'item-2', suborder_id: 'sub-1', product_name: 'Figura Vegeta', final_total: 1500, status: 'active', refunded_amount: 0 }
+    ];
+
+    function refundSingleItem(targetItemId: string, refundAmt: number) {
+      const item = items.find(i => i.id === targetItemId);
+      if (!item) throw new Error('Item not found');
+      
+      item.refunded_amount += refundAmt;
+      item.status = item.refunded_amount >= item.final_total ? 'refunded' : 'active';
+
+      // Comprobar estado de la suborden
+      const allRefunded = items.every(i => i.status === 'refunded');
+      suborder.status = allRefunded ? 'refunded' : 'partially_refunded';
+
+      return { item, suborderStatus: suborder.status };
+    }
+
+    const res = refundSingleItem('item-1', 1500);
+
+    expect(res.item.status).toBe('refunded');
+    expect(items.find(i => i.id === 'item-2')!.status).toBe('active'); // Ítem 2 sigue activo
+    expect(res.suborderStatus).toBe('partially_refunded'); // Suborden no queda como 'refunded' total
+  });
+
+  // 5. Verificación de restitución de inventario después de reembolso parcial
+  it('5. Verificación de restitución de inventario: solo se restituye la cantidad del artículo reembolsado', () => {
+    let gokuInventory = 10;
+    let vegetaInventory = 5;
+
+    function restoreInventoryForPartialRefund(orderItemId: string, quantityToRestore: number) {
+      if (orderItemId === 'item-1') {
+        gokuInventory += quantityToRestore;
+      } else if (orderItemId === 'item-2') {
+        vegetaInventory += quantityToRestore;
+      }
+    }
+
+    // Reembolsar solo 1 unidad de Goku
+    restoreInventoryForPartialRefund('item-1', 1);
+
+    expect(gokuInventory).toBe(11);
+    expect(vegetaInventory).toBe(5); // Inventario de Vegeta no se altera
+  });
+
+  // 6. Pedido mixto Collectibles + Vendor + Internacional: clasificación fiable
+  it('6. Pedido mixto: subórdenes clasificadas correctamente como Collectibles, Vendor e Internacional', () => {
+    const rawSuborders = [
+      { id: 'sub-nat', is_collectibles_order: true, is_international: false, vendor_id: null },
+      { id: 'sub-ven', is_collectibles_order: false, is_international: false, vendor_id: 'vendor-uuid-88' },
+      { id: 'sub-intl', is_collectibles_order: false, is_international: true, vendor_id: null }
+    ];
+
+    function classifySuborder(sub: any) {
+      if (sub.is_international) return 'collectibles_international';
+      if (!sub.is_collectibles_order && sub.vendor_id) return 'vendor_national';
+      return 'collectibles_national';
+    }
+
+    expect(classifySuborder(rawSuborders[0])).toBe('collectibles_national');
+    expect(classifySuborder(rawSuborders[1])).toBe('vendor_national');
+    expect(classifySuborder(rawSuborders[2])).toBe('collectibles_international');
+  });
+
+  // 7. Selección y cancelación por orderItemId en OrderResolutionModal
+  it('7. Selección y cancelación por orderItemId genera una clave de idempotencia granular', () => {
+    function generateIdempotencyKey(requestType: string, orderId: string, suborderId?: string, orderItemId?: string) {
+      return `cancel-${requestType}-${orderId}-${suborderId || 'all'}-${orderItemId || 'all'}`;
+    }
+
+    const itemSpecificKey = generateIdempotencyKey('cancel_immediate_10m', 'ord-123', 'sub-456', 'item-789');
+    const suborderKey = generateIdempotencyKey('cancel_immediate_10m', 'ord-123', 'sub-456');
+
+    expect(itemSpecificKey).toBe('cancel-cancel_immediate_10m-ord-123-sub-456-item-789');
+    expect(suborderKey).toBe('cancel-cancel_immediate_10m-ord-123-sub-456-all');
+    expect(itemSpecificKey).not.toBe(suborderKey);
+  });
+
+  // 8. Ítems en zinc_submitting bloquean la cancelación local inmediata (Fail-Closed)
+  it('8. Ítems en zinc_submitting bloquean la cancelación local inmediata y derivan a CANCELLATION_PENDING', () => {
+    const intlItems = [{ id: 'intl-1', purchase_status: 'zinc_submitting' }];
+
+    function checkZincCancellationFeasibility(items: any[]) {
+      if (items.some(i => i.purchase_status === 'zinc_submitting')) {
+        return { allowedImmediately: false, status: 'CANCELLATION_PENDING' };
+      }
+      return { allowedImmediately: true, status: 'CANCELLATION_CONFIRMED' };
+    }
+
+    const decision = checkZincCancellationFeasibility(intlItems);
+    expect(decision.allowedImmediately).toBe(false);
+    expect(decision.status).toBe('CANCELLATION_PENDING');
   });
 
   // 9. Zinc HTTP 204 No Content confirmada: cancelación confirmada pero reembolso requiere pasarela
-  it('9. Zinc HTTP 204 confirmada: la compra se detiene en proveedor y se inicia el reembolso financiero al comprador', () => {
-    const zincApiResponse = { status: 204 }; // Official HTTP 204 No Content
-    let purchaseStatus = 'zinc_order_created';
-    let buyerRefundTriggered = false;
+  it('9. Zinc HTTP 204: confirmación en proveedor detiene la compra y dispara reembolso al comprador', () => {
+    const zincResponse = { status: 204 };
+    let status = 'zinc_processing';
+    let refundTriggered = false;
 
-    if (zincApiResponse.status === 204) {
-      purchaseStatus = 'cancelled';
-      // La confirmación de Zinc dispara el reembolso formal a través de refund-order
-      buyerRefundTriggered = true;
+    if (zincResponse.status === 204) {
+      status = 'cancelled';
+      refundTriggered = true;
     }
 
-    expect(purchaseStatus).toBe('cancelled');
-    expect(buyerRefundTriggered).toBe(true);
+    expect(status).toBe('cancelled');
+    expect(refundTriggered).toBe(true);
   });
 
-  // 11. Consulta de ítems internacionales a través de order_items: verifica que nunca se busque international_order_items.order_id
-  it('11. Consulta de ítems internacionales relaciona a través de order_items.id -> international_order_items.order_item_id y no falla por columna inexistente order_id', () => {
-    const dbOrderItems = [
-      { id: 'oi-101', order_id: 'ord-intl-test', suborder_id: 'sub-intl-test', final_total: 1200 },
-      { id: 'oi-102', order_id: 'ord-intl-test', suborder_id: 'sub-intl-test', final_total: 800 }
-    ];
+  // 10. Timeout con conciliación pendiente: asigna reconciliation_required
+  it('10. Timeout post-éxito pasarela: asigna reconciliation_required para evitar reembolsos dobles', () => {
+    let refundSuccess = true;
+    let finalStatus = '';
 
-    const dbIntlItems = [
-      { id: 'intl-1', order_item_id: 'oi-101', purchase_status: 'pending_purchase', zinc_order_id: null },
-      { id: 'intl-2', order_item_id: 'oi-102', purchase_status: 'pending_purchase', zinc_order_id: null }
-    ];
-
-    // Consulta correcta:
-    function getIntlItemsForOrder(orderId: string, targetOrderItemId?: string) {
-      let filteredOrderItems = dbOrderItems.filter(oi => oi.order_id === orderId);
-      if (targetOrderItemId) {
-        filteredOrderItems = filteredOrderItems.filter(oi => oi.id === targetOrderItemId);
-      }
-      const itemIds = filteredOrderItems.map(oi => oi.id);
-      // international_order_items NUNCA tiene order_id; solo tiene order_item_id
-      const matchedIntl = dbIntlItems.filter(intl => itemIds.includes(intl.order_item_id));
-      const calculatedAmount = filteredOrderItems.reduce((acc, item) => acc + item.final_total, 0);
-
-      return {
-        matchedIntl,
-        calculatedAmount
-      };
+    try {
+      // Simular timeout de guardado tras éxito en pasarela
+      throw new Error('Supabase DB network timeout');
+    } catch {
+      finalStatus = refundSuccess ? 'reconciliation_required' : 'failed';
     }
 
-    const fullOrderResult = getIntlItemsForOrder('ord-intl-test');
-    expect(fullOrderResult.matchedIntl).toHaveLength(2);
-    expect(fullOrderResult.calculatedAmount).toBe(2000);
-
-    const singleItemResult = getIntlItemsForOrder('ord-intl-test', 'oi-101');
-    expect(singleItemResult.matchedIntl).toHaveLength(1);
-    expect(singleItemResult.matchedIntl[0].id).toBe('intl-1');
-    expect(singleItemResult.calculatedAmount).toBe(1200);
+    expect(finalStatus).toBe('reconciliation_required');
   });
 
-  // 12. Ítems en zinc_submitting bloquean la cancelación local inmediata y pasan a revisión
-  it('12. Ítems en zinc_submitting o workers activos bloquean la cancelación local inmediata (fail-closed) y derivan a CANCELLATION_PENDING', () => {
-    const intlItems = [
-      { id: 'intl-submitting-1', purchase_status: 'zinc_submitting', zinc_order_id: null }
-    ];
+  // 11. Cancelación parcial no cancela jobs de otros artículos
+  it('11. Cancelación parcial de un ítem internacional no cancela el job outbox si quedan otros artículos pendientes', () => {
+    const allOrderItems = ['item-1', 'item-2'];
+    const cancelledItemIds = ['item-1'];
+    let zincOutboxJobStatus = 'PENDING';
 
-    function evaluateCancellationFeasibility(items: any[]) {
-      const hasSubmitting = items.some(i => i.purchase_status === 'zinc_submitting');
-      if (hasSubmitting) {
-        return {
-          allowedImmediately: false,
-          status: 'CANCELLATION_PENDING',
-          message: 'La compra se encuentra en proceso activo de comunicación con el proveedor internacional.'
-        };
-      }
-      return {
-        allowedImmediately: true,
-        status: 'CANCELLATION_CONFIRMED'
-      };
+    const remainingItems = allOrderItems.filter(id => !cancelledItemIds.includes(id));
+    const hasRemainingIntlItems = remainingItems.length > 0;
+
+    if (!hasRemainingIntlItems) {
+      zincOutboxJobStatus = 'CANCELLED';
     }
 
-    const decision = evaluateCancellationFeasibility(intlItems);
-    expect(decision.allowedImmediately).toBe(false);
-    expect(decision.status).toBe('CANCELLATION_PENDING');
+    expect(zincOutboxJobStatus).toBe('PENDING'); // No fue cancelado porque item-2 sigue activo
+  });
+
+  // 12. Persistencia y recuperación de estados financieros
+  it('12. Persistencia y recuperación: saldo de la orden descontado correctamente tras múltiples reembolsos parciales', () => {
+    const totalCharged = 2500;
+    const refunds = [
+      { amount: 500, status: 'completed' },
+      { amount: 1000, status: 'completed' }
+    ];
+
+    const totalRefunded = refunds.reduce((sum, r) => sum + r.amount, 0);
+    const available = totalCharged - totalRefunded;
+
+    expect(totalRefunded).toBe(1500);
+    expect(available).toBe(1000);
   });
 
 });

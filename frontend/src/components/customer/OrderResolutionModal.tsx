@@ -28,12 +28,28 @@ export default function OrderResolutionModal({
 
   const selectedSuborder = suborders.find((s: any) => s.id === selectedSuborderId) || suborders[0] || null;
 
-  // Determinar modelo comercial de la selección de forma fiable:
-  // Si los items de la orden contienen international_order_items -> Internacional
-  const hasIntlItems = (order?.order_items || []).some((it: any) => 
-    it.international_order_items && it.international_order_items.length > 0
+  // Items de la orden filtrados por la suborden seleccionada (o todos si no hay suborden definida)
+  const orderItems = (order?.order_items || []).filter((item: any) => 
+    selectedSuborder ? item.suborder_id === selectedSuborder.id : true
   );
-  const isInternational = hasIntlItems || Boolean(selectedSuborder?.is_international);
+
+  const [selectedOrderItemId, setSelectedOrderItemId] = useState<string>('');
+
+  const selectedOrderItem = orderItems.find((it: any) => it.id === selectedOrderItemId) || null;
+
+  // Determinar modelo comercial de la selección de forma fiable:
+  // Si el item seleccionado o la suborden tiene registros internacionales
+  const hasIntlItemsInSuborder = orderItems.some((it: any) => 
+    (it.international_order_items && it.international_order_items.length > 0) ||
+    Boolean(it.product?.is_international)
+  );
+
+  const isInternational = Boolean(selectedSuborder?.is_international) || (
+    selectedOrderItem 
+      ? Boolean(selectedOrderItem.international_order_items?.length > 0 || selectedOrderItem.product?.is_international)
+      : hasIntlItemsInSuborder
+  );
+
   const isVendor = Boolean(!isInternational && selectedSuborder && !selectedSuborder.is_collectibles_order && selectedSuborder.vendor_id);
   const isCollectiblesNational = !isInternational && !isVendor;
 
@@ -79,7 +95,6 @@ export default function OrderResolutionModal({
       if (error) throw error;
 
       // Generar Signed URL temporal de 24 horas para visualización segura sin bucket público
-      // Generar Signed URL temporal solo para la vista previa local inmediata
       const { data: signData } = await supabase.storage
         .from('order-dispute-evidence')
         .createSignedUrl(filePath, 3600);
@@ -122,6 +137,7 @@ export default function OrderResolutionModal({
         body: JSON.stringify({
           orderId: order.id,
           suborderId: selectedSuborder?.id || null,
+          orderItemId: selectedOrderItemId || null,
           requestType,
           reason,
           notes,
@@ -176,7 +192,10 @@ export default function OrderResolutionModal({
               </label>
               <select
                 value={selectedSuborderId}
-                onChange={(e) => setSelectedSuborderId(e.target.value)}
+                onChange={(e) => {
+                  setSelectedSuborderId(e.target.value);
+                  setSelectedOrderItemId('');
+                }}
                 className="w-full bg-zinc-800 border border-white/10 rounded-xl px-3 py-2 text-white font-medium focus:outline-none focus:border-rose-500"
               >
                 {suborders.map((sub: any, idx: number) => {
@@ -184,6 +203,30 @@ export default function OrderResolutionModal({
                   return (
                     <option key={sub.id} value={sub.id}>
                       Paquete #{idx + 1} — {sModel} (${sub.product_subtotal || 0} {order.currency || 'UYU'})
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          )}
+
+          {/* Selector de Artículo Específico (Cancelación o Devolución Granular) */}
+          {orderItems.length > 0 && (
+            <div>
+              <label className="block text-zinc-300 font-semibold mb-1.5">
+                Artículo a Gestionar (Opcional - por defecto todo el paquete):
+              </label>
+              <select
+                value={selectedOrderItemId}
+                onChange={(e) => setSelectedOrderItemId(e.target.value)}
+                className="w-full bg-zinc-800 border border-white/10 rounded-xl px-3 py-2 text-white font-medium focus:outline-none focus:border-rose-500"
+              >
+                <option value="">Todo el paquete completo</option>
+                {orderItems.map((item: any) => {
+                  const itemPrice = item.final_total || item.total_price || (item.unit_price * (item.quantity || 1));
+                  return (
+                    <option key={item.id} value={item.id}>
+                      {item.product_name || item.product?.title || 'Artículo'} (x{item.quantity}) — ${itemPrice} {order.currency || 'UYU'}
                     </option>
                   );
                 })}

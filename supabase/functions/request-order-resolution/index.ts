@@ -104,20 +104,42 @@ Deno.serve(async (req: Request) => {
       targetSuborder = order.suborders[0];
     }
 
+    // Comprobar si los order_items seleccionados o de la suborden son internacionales mediante relaciones
+    let itemsQueryForIntlCheck = supabaseAdmin
+      .from("order_items")
+      .select("id, suborder_id, product_id")
+      .eq("order_id", orderId);
+
+    if (orderItemId) {
+      itemsQueryForIntlCheck = itemsQueryForIntlCheck.eq("id", orderItemId);
+    } else if (targetSuborder?.id) {
+      itemsQueryForIntlCheck = itemsQueryForIntlCheck.eq("suborder_id", targetSuborder.id);
+    }
+
+    const { data: queriedOrderItems } = await itemsQueryForIntlCheck;
+    const queriedItemIds = (queriedOrderItems || []).map((i: any) => i.id);
+
+    let hasIntlRelationalRecords = false;
+    if (queriedItemIds.length > 0) {
+      const { data: intlCheckItems } = await supabaseAdmin
+        .from("international_order_items")
+        .select("id")
+        .in("order_item_id", queriedItemIds);
+      hasIntlRelationalRecords = Boolean(intlCheckItems && intlCheckItems.length > 0);
+    }
+
     let businessModel = "collectibles_national";
-    if (targetSuborder) {
-      if (targetSuborder.is_international) {
-        businessModel = "collectibles_international";
-      } else if (!targetSuborder.is_collectibles_order && targetSuborder.vendor_id) {
+    if (hasIntlRelationalRecords || targetSuborder?.is_international || (order.is_international && (!targetSuborder || order.suborders?.length === 1))) {
+      businessModel = "collectibles_international";
+    } else if (targetSuborder) {
+      if (!targetSuborder.is_collectibles_order && targetSuborder.vendor_id) {
         businessModel = "vendor_national";
       }
-    } else if (order.is_international) {
-      businessModel = "collectibles_international";
     }
 
     // IDEMPOTENCY KEY ESTABLE Y DETERMINÍSTICA
-    // Formato: cancel-{requestType}-{orderId}-{suborderId || 'all'}
-    const stableIdempotencyKey = `cancel-${requestType}-${orderId}-${suborderId || 'all'}`;
+    // Formato: cancel-{requestType}-{orderId}-{suborderId || 'all'}-{orderItemId || 'all'}
+    const stableIdempotencyKey = `cancel-${requestType}-${orderId}-${suborderId || 'all'}-${orderItemId || 'all'}`;
 
     // Verificar si ya existe una solicitud activa o procesada con esta clave
     const { data: existingRequest } = await supabaseAdmin
@@ -382,17 +404,41 @@ Deno.serve(async (req: Request) => {
       const anySentToZinc = intlItems.some((item: any) => item.zinc_order_id);
 
       if (!anySentToZinc) {
-        // 1. Cancelar en order_execution_jobs validando estados previos no irreversibles
-        await supabaseAdmin
-          .from("order_execution_jobs")
-          .update({
-            status: 'CANCELLED',
-            last_error: `Cancelado por solicitud del comprador antes de ejecución Zinc (${user.email || user.id})`,
-            updated_at: new Date().toISOString()
-          })
-          .eq("order_id", orderId)
-          .in("job_type", ["zinc_fulfillment", "zinc_purchase", "post_payment_execution"])
-          .in("status", ["PENDING", "RETRYING", "QUEUED", "WAITING"]);
+        // 1. Coordinar order_execution_jobs:
+        // Si la cancelación es de toda la orden o de todos los ítems internacionales pendientes, cancelar el job zinc_fulfillment
+        const { data: allOrderItems } = await supabaseAdmin
+          .from("order_items")
+          .select("id")
+          .eq("order_id", orderId);
+
+        const allOrderItemIds = (allOrderItems || []).map((i: any) => i.id);
+        const remainingItemIds = allOrderItemIds.filter((id: string) => !orderItemIds.includes(id));
+
+        let hasRemainingIntlItems = false;
+        if (remainingItemIds.length > 0) {
+          const { data: remainingIntl } = await supabaseAdmin
+            .from("international_order_items")
+            .select("id")
+            .in("order_item_id", remainingItemIds)
+            .neq("purchase_status", "cancelled");
+          hasRemainingIntlItems = Boolean(remainingIntl && remainingIntl.length > 0);
+        }
+
+        // Si NO quedan otros artículos internacionales pendientes, cancelar los jobs a nivel orden
+        if (!hasRemainingIntlItems) {
+          await supabaseAdmin
+            .from("order_execution_jobs")
+            .update({
+              status: 'CANCELLED',
+              last_error: `Cancelado por solicitud del comprador antes de ejecución Zinc (${user.email || user.id})`,
+              updated_at: new Date().toISOString()
+            })
+            .eq("order_id", orderId)
+            .in("job_type", ["zinc_fulfillment", "zinc_purchase"])
+            .in("status", ["PENDING", "RETRYING", "QUEUED", "WAITING"]);
+        } else {
+          console.log(`[Resolution] Cancelación parcial de ítem(s): otros artículos internacionales activos continúan en el job zinc_fulfillment.`);
+        }
 
         // 2. Actualizar purchase_status de los ítems internacionales seleccionados
         await supabaseAdmin
@@ -403,6 +449,15 @@ Deno.serve(async (req: Request) => {
             updated_at: new Date().toISOString()
           })
           .in("id", intlItemIds);
+
+        // Actualizar order_items a status = 'cancelled'
+        await supabaseAdmin
+          .from("order_items")
+          .update({
+            status: 'cancelled',
+            refunded_amount: targetRefundAmount
+          })
+          .in("id", orderItemIds);
 
         const { data: intlReq } = await supabaseAdmin
           .from("unified_order_requests")
@@ -437,6 +492,7 @@ Deno.serve(async (req: Request) => {
             body: JSON.stringify({
               orderId,
               suborderId: targetSuborder?.id || null,
+              orderItemId: orderItemId || null,
               amount: targetRefundAmount,
               reason: `Cancelación internacional antes de envío a proveedor (${user.email || user.id})`,
               idempotencyKey: stableIdempotencyKey
@@ -573,6 +629,7 @@ Deno.serve(async (req: Request) => {
             body: JSON.stringify({
               orderId,
               suborderId: targetSuborder?.id || null,
+              orderItemId: orderItemId || null,
               amount: targetRefundAmount,
               reason: `Reembolso por cancelación Zinc 2.0 HTTP 204 confirmada (${user.email || user.id})`,
               idempotencyKey: stableIdempotencyKey
