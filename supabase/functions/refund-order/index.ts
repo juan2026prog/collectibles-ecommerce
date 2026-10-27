@@ -42,7 +42,22 @@ Deno.serve(async (req: Request) => {
     suborderId = payload.suborderId;
     orderItemId = payload.orderItemId || null;
     refundQuantity = payload.quantity !== undefined && payload.quantity !== null ? Number(payload.quantity) : null;
-    restoreStock = payload.restoreStock !== undefined ? Boolean(payload.restoreStock) : true; // Por defecto true si cancela unidades
+    
+    // Operation Type: 'monetary_compensation', 'pre_dispatch_cancellation', 'physical_return'
+    // Permite al administrador o llamador indicar explícitamente el tipo de operación.
+    const operationType: string = payload.operationType || (
+      payload.isMonetaryCompensation ? 'monetary_compensation' : (
+        (refundQuantity !== null && refundQuantity > 0) ? 'pre_dispatch_cancellation' : 'monetary_compensation'
+      )
+    );
+
+    // Validación comercial de inventario: una compensación monetaria pura NUNCA repone stock físico
+    if (operationType === 'monetary_compensation') {
+      restoreStock = false;
+    } else {
+      restoreStock = payload.restoreStock !== undefined ? Boolean(payload.restoreStock) : true;
+    }
+
     amount = payload.amount;
     reason = payload.reason;
     bypassLiquidationCheck = payload.bypassLiquidationCheck || false;
@@ -312,113 +327,159 @@ Deno.serve(async (req: Request) => {
     isManualRefundRequired = false;
 
     // ═════ COURIER SHIPMENTS CHECK (FASE 1) ═════
-    const shipmentQuery = supabaseAdmin
-      .from("shipments")
-      .select("*")
-      .eq("order_id", orderId);
-    
-    if (suborderId) {
-      shipmentQuery.eq("suborder_id", suborderId);
-    }
-    const { data: orderShipments } = await shipmentQuery;
-
+    // En modalidad de compensación monetaria pura (monetary_compensation), el cliente CONSERVA el producto.
+    // Por tanto: NO se cancelan envíos, NO se anulan guías de transportistas y NO se repone inventario.
     let hasDispatchedShipment = false;
     let hasLabelCreatedShipment = false;
 
-    if (orderShipments && orderShipments.length > 0) {
-      for (const ship of orderShipments) {
-        const status = ship.shipping_status;
-        if (['in_transit', 'out_for_delivery', 'delivered', 'shipped', 'rejected'].includes(status)) {
-          hasDispatchedShipment = true;
-        } else if (['documented', 'ready_to_ship', 'label_created'].includes(status)) {
-          hasLabelCreatedShipment = true;
-        }
+    if (operationType !== 'monetary_compensation') {
+      const shipmentQuery = supabaseAdmin
+        .from("shipments")
+        .select("*")
+        .eq("order_id", orderId);
+      
+      if (suborderId) {
+        shipmentQuery.eq("suborder_id", suborderId);
       }
-    }
+      const { data: orderShipments } = await shipmentQuery;
 
-    if (hasDispatchedShipment) {
-      throw new Error("El envío ya fue despachado. Se requiere devolución física de los productos e intervención manual. No se puede realizar reembolso automático.");
-    }
-
-    if (hasLabelCreatedShipment) {
-      // Set shipment status to label_created
-      if (orderShipments) {
+      if (orderShipments && orderShipments.length > 0) {
         for (const ship of orderShipments) {
-          if (['documented', 'ready_to_ship', 'label_created'].includes(ship.shipping_status)) {
-            await supabaseAdmin
-              .from("shipments")
-              .update({ shipping_status: "label_created", updated_at: new Date().toISOString() })
-              .eq("id", ship.id);
+          const status = ship.shipping_status;
+          if (['in_transit', 'out_for_delivery', 'delivered', 'shipped', 'rejected'].includes(status)) {
+            hasDispatchedShipment = true;
+          } else if (['documented', 'ready_to_ship', 'label_created'].includes(status)) {
+            hasLabelCreatedShipment = true;
           }
         }
       }
-      isManualRefundRequired = true;
-      refundDetails = { error: "La etiqueta de envío ya fue generada. Se requiere cancelación manual de la guía en el transportista." };
-    }
 
-    if (!hasDispatchedShipment && !hasLabelCreatedShipment && orderShipments && orderShipments.length > 0) {
-      // Caso A: La etiqueta todavía NO fue creada. Cancelar shipments en DB.
-      for (const ship of orderShipments) {
-        await supabaseAdmin
-          .from("shipments")
-          .update({ shipping_status: "cancelled", updated_at: new Date().toISOString() })
-          .eq("id", ship.id);
+      if (hasDispatchedShipment) {
+        throw new Error("El envío ya fue despachado. Se requiere devolución física de los productos e intervención manual. No se puede realizar reembolso automático.");
+      }
+
+      if (hasLabelCreatedShipment) {
+        // Set shipment status to label_created
+        if (orderShipments) {
+          for (const ship of orderShipments) {
+            if (['documented', 'ready_to_ship', 'label_created'].includes(ship.shipping_status)) {
+              await supabaseAdmin
+                .from("shipments")
+                .update({ shipping_status: "label_created", updated_at: new Date().toISOString() })
+                .eq("id", ship.id);
+            }
+          }
+        }
+        isManualRefundRequired = true;
+        refundDetails = { error: "La etiqueta de envío ya fue generada. Se requiere cancelación manual de la guía en el transportista." };
+      }
+
+      if (!hasDispatchedShipment && !hasLabelCreatedShipment && orderShipments && orderShipments.length > 0) {
+        // Caso A: La etiqueta todavía NO fue creada. Cancelar shipments en DB solo en cancelaciones pre-despacho.
+        for (const ship of orderShipments) {
+          await supabaseAdmin
+            .from("shipments")
+            .update({ shipping_status: "cancelled", updated_at: new Date().toISOString() })
+            .eq("id", ship.id);
+        }
       }
     }
 
     // ═════ INTERNATIONAL ZINC ORDER CHECK (FASE 2) ═════
-    const { data: orderItems } = await supabaseAdmin
-      .from("order_items")
-      .select("id, suborder_id")
-      .eq("order_id", orderId);
-
-    const orderItemIds = orderItems?.map((i: any) => i.id) || [];
+    // En una compensación monetaria pura, NO se cancela la compra internacional en Zinc (el cliente conserva el bien).
     let hasPurchasedIntlItem = false;
     const ZINC_API_KEY = Deno.env.get("ZINC_API_KEY");
 
-    if (orderItemIds.length > 0) {
-      const { data: intlItems } = await supabaseAdmin
-        .from("international_order_items")
-        .select("*, order_item:order_items(suborder_id)")
-        .in("order_item_id", orderItemIds);
+    if (operationType !== 'monetary_compensation') {
+      const { data: orderItems } = await supabaseAdmin
+        .from("order_items")
+        .select("id, suborder_id")
+        .eq("order_id", orderId);
 
-      if (intlItems && intlItems.length > 0) {
-        for (const intlItem of intlItems) {
-          const itemSuborderId = intlItem.order_item?.suborder_id;
-          if (suborderId && itemSuborderId !== suborderId) {
-            continue;
-          }
-          const purchaseStatus = intlItem.purchase_status;
-          
-          if (['purchased', 'warehouse_received', 'shipped', 'delivered', 'shipped_to_courier', 'delivered_to_courier'].includes(purchaseStatus)) {
-            hasPurchasedIntlItem = true;
-            break;
-          }
+      // AISLAMIENTO ESTRICTO: si orderItemId fue especificado, aislar SOLO a ese ítem
+      let scopedItemIds: string[] = [];
+      if (orderItemId) {
+        scopedItemIds = [orderItemId];
+      } else if (orderItems && orderItems.length > 0) {
+        scopedItemIds = orderItems.map((i: any) => i.id);
+      }
 
-          if (['zinc_order_created', 'zinc_processing'].includes(purchaseStatus) && intlItem.zinc_order_id) {
-            if (!ZINC_API_KEY) {
-              throw new Error("ZINC_API_KEY no configurada para procesar la cancelación internacional.");
+      if (scopedItemIds.length > 0) {
+        const { data: intlItems } = await supabaseAdmin
+          .from("international_order_items")
+          .select("*, order_item:order_items(suborder_id)")
+          .in("order_item_id", scopedItemIds);
+
+        if (intlItems && intlItems.length > 0) {
+          for (const intlItem of intlItems) {
+            const itemSuborderId = intlItem.order_item?.suborder_id;
+            if (suborderId && itemSuborderId !== suborderId) {
+              continue;
             }
+            const purchaseStatus = intlItem.purchase_status;
             
-            console.log(`[Refund] Attempting to cancel Zinc order ${intlItem.zinc_order_id} for item ${intlItem.id}...`);
-            try {
-              const cancelRes = await fetch(`https://api.zinc.com/orders/${intlItem.zinc_order_id}/cancel`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${ZINC_API_KEY}` }
-              });
+            // Si request-order-resolution u otro proceso ya confirmó la cancelación en Zinc o antes de submission:
+            if (purchaseStatus === 'cancelled') {
+              console.log(`[Refund] El ítem internacional ${intlItem.id} ya se encuentra formalmente cancelado (${intlItem.review_reason_code || 'CANCELLED'}). No se requiere llamada externa adicional.`);
+              continue;
+            }
+
+            if (['purchased', 'warehouse_received', 'shipped', 'delivered', 'shipped_to_courier', 'delivered_to_courier'].includes(purchaseStatus)) {
+              hasPurchasedIntlItem = true;
+              break;
+            }
+
+            // Estado ambiguo o en revisión manual: bloquear reembolso automático y exigir conciliación
+            if (purchaseStatus === 'cancellation_requires_review' || purchaseStatus === 'requires_manual_review') {
+              throw new Error(`El artículo internacional ${intlItem.id} se encuentra en estado ambiguo (${purchaseStatus}). Reembolso automático bloqueado por seguridad financiera. Se requiere conciliación manual.`);
+            }
+
+            if (['zinc_order_created', 'zinc_processing'].includes(purchaseStatus) && intlItem.zinc_order_id) {
+              if (!ZINC_API_KEY) {
+                throw new Error("ZINC_API_KEY no configurada para procesar la cancelación internacional.");
+              }
               
-              if (cancelRes.status === 204) {
-                // Zinc 2.0 Cancellation Protocol: HTTP 204 No Content confirms cancellation
-                console.log(`[Refund] Zinc 2.0 cancellation confirmed with HTTP 204 for order ${intlItem.zinc_order_id}`);
+              console.log(`[Refund] Attempting to cancel Zinc order ${intlItem.zinc_order_id} for isolated item ${intlItem.id}...`);
+              try {
+                const cancelRes = await fetch(`https://api.zinc.com/orders/${intlItem.zinc_order_id}/cancel`, {
+                  method: 'POST',
+                  headers: { 'Authorization': `Bearer ${ZINC_API_KEY}` }
+                });
                 
-                await supabaseAdmin.from("international_order_items").update({
-                  purchase_status: 'cancelled',
-                  review_reason_code: 'ZINC_204_CANCELLED',
-                  updated_at: new Date().toISOString()
-                }).eq("id", intlItem.id);
-              } else {
-                const errText = await cancelRes.text().catch(() => '');
-                console.error(`[Refund] Zinc cancellation API error: ${cancelRes.status}`, errText);
+                if (cancelRes.status === 204) {
+                  // Zinc 2.0 Cancellation Protocol: HTTP 204 No Content confirms cancellation
+                  console.log(`[Refund] Zinc 2.0 cancellation confirmed with HTTP 204 for order ${intlItem.zinc_order_id}`);
+                  
+                  await supabaseAdmin.from("international_order_items").update({
+                    purchase_status: 'cancelled',
+                    review_reason_code: 'ZINC_204_CANCELLED',
+                    updated_at: new Date().toISOString()
+                  }).eq("id", intlItem.id);
+                } else {
+                  const errText = await cancelRes.text().catch(() => '');
+                  console.error(`[Refund] Zinc cancellation API error: ${cancelRes.status}`, errText);
+                  
+                  await supabaseAdmin.from("international_order_items").update({
+                    purchase_status: 'cancellation_requires_review'
+                  }).eq("id", intlItem.id);
+                  
+                  if (itemSuborderId) {
+                    await supabaseAdmin.from("order_suborders").update({
+                      status: 'cancellation_requires_review',
+                      updated_at: new Date().toISOString()
+                    }).eq("id", itemSuborderId);
+                  }
+                  
+                  await supabaseAdmin.from("orders").update({
+                    status: 'cancellation_requires_review',
+                    updated_at: new Date().toISOString()
+                  }).eq("id", orderId);
+                  
+                  throw new Error("Zinc no pudo cancelar la compra en Amazon. Cancelación automática bloqueada. Se requiere revisión manual.");
+                }
+                
+              } catch (err: any) {
+                console.error(`[Refund] Error calling Zinc cancellation API:`, err.message);
                 
                 await supabaseAdmin.from("international_order_items").update({
                   purchase_status: 'cancellation_requires_review'
@@ -436,37 +497,16 @@ Deno.serve(async (req: Request) => {
                   updated_at: new Date().toISOString()
                 }).eq("id", orderId);
                 
-                throw new Error("Zinc no pudo cancelar la compra en Amazon. Cancelación automática bloqueada. Se requiere revisión manual.");
+                throw new Error(`Error llamando a la API de cancelación de Zinc: ${err.message}`);
               }
-              
-            } catch (err: any) {
-              console.error(`[Refund] Error calling Zinc cancellation API:`, err.message);
-              
-              await supabaseAdmin.from("international_order_items").update({
-                purchase_status: 'cancellation_requires_review'
-              }).eq("id", intlItem.id);
-              
-              if (itemSuborderId) {
-                await supabaseAdmin.from("order_suborders").update({
-                  status: 'cancellation_requires_review',
-                  updated_at: new Date().toISOString()
-                }).eq("id", itemSuborderId);
-              }
-              
-              await supabaseAdmin.from("orders").update({
-                status: 'cancellation_requires_review',
-                updated_at: new Date().toISOString()
-              }).eq("id", orderId);
-              
-              throw new Error(`Error llamando a la API de cancelación de Zinc: ${err.message}`);
             }
           }
         }
       }
-    }
 
-    if (hasPurchasedIntlItem) {
-      throw new Error("El proveedor internacional ya procesó la compra. Reembolso automático bloqueado para evitar pérdidas financieras.");
+      if (hasPurchasedIntlItem) {
+        throw new Error("El proveedor internacional ya procesó la compra. Reembolso automático bloqueado para evitar pérdidas financieras.");
+      }
     }
 
     // ═════ REFUND PROCESSING BY METHOD ═════
@@ -872,10 +912,10 @@ Deno.serve(async (req: Request) => {
           })
           .eq("id", orderId);
 
-        // Restore Stock for Suborder Items ONLY if BEFORE dispatch (Fase 3)
+        // Restore Stock for Suborder Items ONLY if pre-dispatch cancellation and restoreStock is authorized
         const restoredProductIds: string[] = [];
 
-        if (!hasDispatchedShipment && !hasLabelCreatedShipment) {
+        if (operationType !== 'monetary_compensation' && restoreStock && !hasDispatchedShipment && !hasLabelCreatedShipment) {
           const { data: subItems } = await supabaseAdmin
             .from("order_items")
             .select("*")
@@ -942,8 +982,8 @@ Deno.serve(async (req: Request) => {
           })
           .eq("id", orderId);
 
-        // Restore Stock for all items ONLY if BEFORE dispatch (Fase 3)
-        if (!hasDispatchedShipment && !hasLabelCreatedShipment) {
+        // Restore Stock for all items ONLY if pre-dispatch cancellation and restoreStock is authorized
+        if (operationType !== 'monetary_compensation' && restoreStock && !hasDispatchedShipment && !hasLabelCreatedShipment) {
           const { data: orderItems } = await supabaseAdmin
             .from("order_items")
             .select("*")

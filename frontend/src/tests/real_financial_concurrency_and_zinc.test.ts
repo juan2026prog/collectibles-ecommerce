@@ -41,8 +41,25 @@ describe('CERTIFIED POSTGRESQL & FINANCIAL INTEGRATION SUITE', () => {
         vendor_id TEXT,
         vendor_store_id TEXT,
         product_subtotal NUMERIC NOT NULL DEFAULT 0.00,
+        shipping_cost NUMERIC NOT NULL DEFAULT 0.00,
+        discount_total NUMERIC NOT NULL DEFAULT 0.00,
         status TEXT NOT NULL DEFAULT 'pending',
         liquidation_status TEXT NOT NULL DEFAULT 'pending'
+      );
+
+      CREATE TABLE shipments (
+        id TEXT PRIMARY KEY,
+        order_id TEXT NOT NULL,
+        suborder_id TEXT,
+        shipping_status TEXT NOT NULL DEFAULT 'pending'
+      );
+
+      CREATE TABLE international_order_items (
+        id TEXT PRIMARY KEY,
+        order_item_id TEXT NOT NULL,
+        zinc_order_id TEXT,
+        purchase_status TEXT NOT NULL DEFAULT 'pending',
+        review_reason_code TEXT
       );
 
       CREATE TABLE order_items (
@@ -182,14 +199,33 @@ describe('CERTIFIED POSTGRESQL & FINANCIAL INTEGRATION SUITE', () => {
   // Helper SQL transaccional que emula refund-order con lógica de compensación y unidades
   function executeRefundOrderHandler(params: {
     order_id: string;
-    order_item_id: string;
+    suborder_id?: string | null;
+    order_item_id?: string | null;
     amount?: number | null;
     quantity?: number | null;
+    operation_type?: string;
     restore_stock?: boolean;
     idempotency_key: string;
     gateway_simulator: () => { success: boolean; gateway_refund_id?: string; error?: string };
+    simulate_db_crash_after_gateway?: boolean;
   }) {
-    const { order_id, order_item_id, amount, quantity, restore_stock, idempotency_key, gateway_simulator } = params;
+    const {
+      order_id,
+      suborder_id,
+      order_item_id,
+      amount,
+      quantity,
+      operation_type,
+      restore_stock,
+      idempotency_key,
+      gateway_simulator,
+      simulate_db_crash_after_gateway = false
+    } = params;
+
+    // Operation Type: si no viene explícito, inferir según quantity: si quantity > 0 -> pre_dispatch_cancellation
+    const opType = operation_type || (
+      (quantity !== null && quantity !== undefined && quantity > 0) ? 'pre_dispatch_cancellation' : 'monetary_compensation'
+    );
 
     // Idempotency check en refunds
     const existingRefund = db.public.many(
@@ -200,62 +236,93 @@ describe('CERTIFIED POSTGRESQL & FINANCIAL INTEGRATION SUITE', () => {
       if (existingRefund.status === 'completed') {
         return { success: true, idempotent: true, refund_id: existingRefund.id, gateway_called: false };
       }
+      if (existingRefund.status === 'reconciliation_required') {
+        return { success: false, idempotent: true, reconciliation_required: true, gateway_called: false };
+      }
       if (existingRefund.status === 'processing') {
         throw new Error('Operación en proceso con la misma clave.');
       }
     }
 
-    const item = db.public.many(
-      `SELECT * FROM order_items WHERE id = '${order_item_id}' AND order_id = '${order_id}'`
-    )[0] || null;
-    if (!item) throw new Error('Artículo no encontrado');
-
-    const itemTotal = Number(item.final_total);
-    const remainingAmount = itemTotal - Number(item.refunded_amount);
-    const remainingQty = item.quantity - item.refunded_quantity;
-
     let refundAmount = 0;
     let effectiveRefundQty = 0;
+    const shouldRestoreStock = opType === 'monetary_compensation' ? false : (restore_stock !== undefined ? restore_stock : true);
 
-    if (quantity !== null && quantity !== undefined) {
-      if (!Number.isFinite(quantity) || !Number.isInteger(quantity)) {
-        throw new Error('La cantidad de unidades debe ser un número entero finito.');
-      }
-      if (quantity < 0) throw new Error('Cantidad no puede ser negativa');
-      if (quantity > remainingQty) throw new Error(`La cantidad solicitada supera las unidades disponibles.`);
-    }
+    if (order_item_id) {
+      const item = db.public.many(
+        `SELECT * FROM order_items WHERE id = '${order_item_id}' AND order_id = '${order_id}'`
+      )[0] || null;
+      if (!item) throw new Error('Artículo no encontrado');
 
-    if (amount !== undefined && amount !== null) {
-      if (!Number.isFinite(amount) || isNaN(amount)) {
-        throw new Error('El importe a reembolsar debe ser un número finito válido.');
-      }
-      if (amount <= 0) {
-        throw new Error('El importe a reembolsar debe ser estrictamente mayor a 0.');
-      }
-      refundAmount = Number(amount);
+      const itemTotal = Number(item.final_total);
+      const remainingAmount = itemTotal - Number(item.refunded_amount);
+      const remainingQty = item.quantity - item.refunded_quantity;
+
       if (quantity !== null && quantity !== undefined) {
-        effectiveRefundQty = quantity;
-      } else {
-        effectiveRefundQty = 0; // Compensación monetaria pura sin inferir unidades
+        if (!Number.isFinite(quantity) || !Number.isInteger(quantity)) {
+          throw new Error('La cantidad de unidades debe ser un número entero finito.');
+        }
+        if (quantity < 0) throw new Error('Cantidad no puede ser negativa');
+        if (quantity > remainingQty) throw new Error(`La cantidad solicitada supera las unidades disponibles.`);
       }
-    } else if (quantity !== null && quantity !== undefined && item.quantity > 0) {
-      effectiveRefundQty = quantity;
-      const perUnit = itemTotal / item.quantity;
-      refundAmount = Math.min(remainingAmount, perUnit * quantity);
+
+      if (amount !== undefined && amount !== null) {
+        if (!Number.isFinite(amount) || isNaN(amount)) {
+          throw new Error('El importe a reembolsar debe ser un número finito válido.');
+        }
+        if (amount <= 0) {
+          throw new Error('El importe a reembolsar debe ser estrictamente mayor a 0.');
+        }
+        refundAmount = Number(amount);
+        if (quantity !== null && quantity !== undefined) {
+          effectiveRefundQty = quantity;
+        } else {
+          effectiveRefundQty = 0; // Compensación monetaria pura sin inferir unidades
+        }
+      } else if (quantity !== null && quantity !== undefined && item.quantity > 0) {
+        effectiveRefundQty = quantity;
+        const perUnit = itemTotal / item.quantity;
+        refundAmount = Math.min(remainingAmount, perUnit * quantity);
+      } else {
+        effectiveRefundQty = remainingQty;
+        refundAmount = remainingAmount;
+      }
+
+      if (refundAmount > remainingAmount + 0.01) {
+        throw new Error(`El importe solicitado supera el saldo disponible del artículo.`);
+      }
+    } else if (suborder_id) {
+      const sub = db.public.many(`SELECT * FROM order_suborders WHERE id = '${suborder_id}'`)[0] || null;
+      if (!sub) throw new Error('Suborden no encontrada');
+      const subTotal = Number(sub.product_subtotal) + Number(sub.shipping_cost || 0) - Number(sub.discount_total || 0);
+      refundAmount = amount !== undefined && amount !== null ? Number(amount) : subTotal;
+      effectiveRefundQty = 0;
     } else {
-      effectiveRefundQty = remainingQty;
-      refundAmount = remainingAmount;
+      const ord = db.public.many(`SELECT * FROM orders WHERE id = '${order_id}'`)[0] || null;
+      if (!ord) throw new Error('Orden no encontrada');
+      refundAmount = amount !== undefined && amount !== null ? Number(amount) : Number(ord.total_amount);
+      effectiveRefundQty = 0;
     }
 
-    if (refundAmount > remainingAmount + 0.01) {
-      throw new Error(`El importe solicitado supera el saldo disponible del artículo.`);
+    // Courier shipments check (si no es compensación monetaria pura)
+    if (opType !== 'monetary_compensation') {
+      const shps = db.public.many(`SELECT * FROM shipments WHERE order_id = '${order_id}'`);
+      for (const s of shps) {
+        if (['in_transit', 'delivered', 'shipped'].includes(s.shipping_status)) {
+          throw new Error('El envío ya fue despachado. Se requiere devolución física de los productos.');
+        }
+      }
+      // Cancelar envíos en pre-despacho
+      db.public.none(`UPDATE shipments SET shipping_status = 'cancelled' WHERE order_id = '${order_id}'`);
     }
 
     // Registrar lock en estado 'processing'
     const refundId = `ref-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    const oiVal = order_item_id ? `'${order_item_id}'` : 'NULL';
+    const soVal = suborder_id ? `'${suborder_id}'` : 'NULL';
     db.public.none(
-      `INSERT INTO refunds (id, order_id, order_item_id, quantity, amount, provider, status, idempotency_key)
-       VALUES ('${refundId}', '${order_id}', '${order_item_id}', ${effectiveRefundQty}, ${refundAmount}, 'mercadopago', 'processing', '${idempotency_key}')`
+      `INSERT INTO refunds (id, order_id, suborder_id, order_item_id, quantity, amount, provider, status, idempotency_key)
+       VALUES ('${refundId}', '${order_id}', ${soVal}, ${oiVal}, ${effectiveRefundQty}, ${refundAmount}, 'mercadopago', 'processing', '${idempotency_key}')`
     );
 
     // Ejecutar pasarela simulada
@@ -266,16 +333,54 @@ describe('CERTIFIED POSTGRESQL & FINANCIAL INTEGRATION SUITE', () => {
       return { success: false, error: gw.error || 'Gateway failed', gateway_called: true };
     }
 
-    // Pasarela exitosa: actualizar orden e inventario en PostgreSQL
-    const newRefQty = item.refunded_quantity + effectiveRefundQty;
-    const newRefAmt = Number(item.refunded_amount) + refundAmount;
-    const isItemFullyRefunded = (newRefAmt >= itemTotal - 0.01) || (newRefQty >= item.quantity);
+    // Simulación de caída de base de datos POSTERIOR al éxito de la pasarela:
+    if (simulate_db_crash_after_gateway) {
+      // Catch block: el gateway fue exitoso, por lo que NO se debe marcar failed para evitar doble reembolso
+      db.public.none(`UPDATE refunds SET status = 'reconciliation_required' WHERE id = '${refundId}'`);
+      throw new Error('CRITICAL_POST_GATEWAY_DB_CRASH: Reconciliación requerida');
+    }
 
-    db.public.none(
-      `UPDATE order_items
-       SET refunded_quantity = ${newRefQty}, refunded_amount = ${newRefAmt}, status = '${isItemFullyRefunded ? 'refunded' : 'active'}'
-       WHERE id = '${order_item_id}'`
-    );
+    // Pasarela exitosa: actualizar orden e inventario en PostgreSQL
+    if (order_item_id) {
+      const item = db.public.one(`SELECT * FROM order_items WHERE id = '${order_item_id}'`);
+      const itemTotal = Number(item.final_total);
+      const newRefQty = item.refunded_quantity + effectiveRefundQty;
+      const newRefAmt = Number(item.refunded_amount) + refundAmount;
+      const isItemFullyRefunded = (newRefAmt >= itemTotal - 0.01) || (newRefQty >= item.quantity);
+
+      db.public.none(
+        `UPDATE order_items
+         SET refunded_quantity = ${newRefQty}, refunded_amount = ${newRefAmt}, status = '${isItemFullyRefunded ? 'refunded' : 'active'}'
+         WHERE id = '${order_item_id}'`
+      );
+
+      // Restituir inventario SOLO si pre-despacho y restoreStock autorizado
+      if (effectiveRefundQty > 0 && shouldRestoreStock && item.variant_id) {
+        db.public.none(
+          `UPDATE product_variants SET inventory_count = inventory_count + ${effectiveRefundQty} WHERE id = '${item.variant_id}'`
+        );
+      }
+    } else if (suborder_id) {
+      db.public.none(`UPDATE order_suborders SET status = 'refunded' WHERE id = '${suborder_id}'`);
+      if (shouldRestoreStock) {
+        const subItems = db.public.many(`SELECT * FROM order_items WHERE suborder_id = '${suborder_id}'`);
+        for (const sit of subItems) {
+          if (sit.variant_id) {
+            db.public.none(`UPDATE product_variants SET inventory_count = inventory_count + ${sit.quantity} WHERE id = '${sit.variant_id}'`);
+          }
+        }
+      }
+    } else {
+      db.public.none(`UPDATE orders SET status = 'refunded', payment_status = 'refunded' WHERE id = '${order_id}'`);
+      if (shouldRestoreStock) {
+        const ordItems = db.public.many(`SELECT * FROM order_items WHERE order_id = '${order_id}'`);
+        for (const oit of ordItems) {
+          if (oit.variant_id) {
+            db.public.none(`UPDATE product_variants SET inventory_count = inventory_count + ${oit.quantity} WHERE id = '${oit.variant_id}'`);
+          }
+        }
+      }
+    }
 
     const gwId = gw.gateway_refund_id || 'GW-OK';
     db.public.none(
@@ -284,20 +389,11 @@ describe('CERTIFIED POSTGRESQL & FINANCIAL INTEGRATION SUITE', () => {
        WHERE id = '${refundId}'`
     );
 
-    // Restituir inventario SOLO si hubo unidades canceladas/devueltas (effectiveRefundQty > 0)
-    const shouldRestore = restore_stock !== undefined ? restore_stock : true;
-    if (effectiveRefundQty > 0 && shouldRestore && item.variant_id) {
-      db.public.none(
-        `UPDATE product_variants SET inventory_count = inventory_count + ${effectiveRefundQty} WHERE id = '${item.variant_id}'`
-      );
-    }
-
     return {
       success: true,
       refundId,
       refundAmount,
       effectiveRefundQty,
-      isFullyRefunded: isItemFullyRefunded,
       gateway_called: true
     };
   }
@@ -783,5 +879,233 @@ describe('CERTIFIED POSTGRESQL & FINANCIAL INTEGRATION SUITE', () => {
         gateway_simulator: () => ({ success: true })
       });
     }).toThrow(/estrictamente mayor a 0/);
+  });
+
+  // 11. Compensación parcial sin cancelar envío ni reponer inventario
+  it('11. Compensación parcial sin cancelar envío ni reponer inventario: conserva shipment y stock', () => {
+    const varId = 'var-comp-ship-11';
+    db.public.none(`INSERT INTO product_variants (id, product_id, inventory_count) VALUES ('${varId}', 'p-11', 20)`);
+    db.public.none(`INSERT INTO shipments (id, order_id, shipping_status) VALUES ('shp-11', 'ord-ship-11', 'pending')`);
+
+    executeCreateOrderAtomic({
+      order_id: 'ord-ship-11',
+      total_amount: 1500,
+      terms_accepted: true,
+      items: [{
+        id: 'oi-ship-11',
+        product_id: 'p-11',
+        variant_id: varId,
+        group_key: 'national_collectibles',
+        quantity: 1,
+        unit_price: 1500,
+        total_price: 1500,
+        discount_total: 0,
+        final_total: 1500
+      }],
+      suborders: [{
+        id: 'sub-ship-11',
+        group_key: 'national_collectibles',
+        product_subtotal: 1500
+      }]
+    });
+
+    const res = executeRefundOrderHandler({
+      order_id: 'ord-ship-11',
+      order_item_id: 'oi-ship-11',
+      amount: 300,
+      operation_type: 'monetary_compensation',
+      idempotency_key: 'idemp-ship-11',
+      gateway_simulator: () => ({ success: true, gateway_refund_id: 'MP-SHIP-11' })
+    });
+
+    expect(res.success).toBe(true);
+
+    // Shipment debe permanecer intacto ('pending', no cancelado)
+    const shp = db.public.one(`SELECT * FROM shipments WHERE id = 'shp-11'`);
+    expect(shp.shipping_status).toBe('pending');
+
+    // Inventario sin modificar
+    const variant = db.public.one(`SELECT * FROM product_variants WHERE id = '${varId}'`);
+    expect(Number(variant.inventory_count)).toBe(20);
+  });
+
+  // 12. Reembolso monetario de suborden sin reposición de inventario
+  it('12. Reembolso monetario de suborden: pasa suborden a refunded pero NO incrementa stock físico', () => {
+    const varId = 'var-sub-no-restore';
+    db.public.none(`INSERT INTO product_variants (id, product_id, inventory_count) VALUES ('${varId}', 'p-12', 8)`);
+
+    executeCreateOrderAtomic({
+      order_id: 'ord-sub-12',
+      total_amount: 2500,
+      terms_accepted: true,
+      items: [{
+        id: 'oi-sub-12',
+        product_id: 'p-12',
+        variant_id: varId,
+        group_key: 'vendor_store_12',
+        quantity: 1,
+        unit_price: 2500,
+        total_price: 2500,
+        discount_total: 0,
+        final_total: 2500
+      }],
+      suborders: [{
+        id: 'sub-order-12',
+        group_key: 'vendor_store_12',
+        product_subtotal: 2500
+      }]
+    });
+
+    const res = executeRefundOrderHandler({
+      order_id: 'ord-sub-12',
+      suborder_id: 'sub-order-12',
+      amount: 2500,
+      operation_type: 'monetary_compensation',
+      restore_stock: false,
+      idempotency_key: 'idemp-sub-12',
+      gateway_simulator: () => ({ success: true, gateway_refund_id: 'MP-SUB-12' })
+    });
+
+    expect(res.success).toBe(true);
+    const sub = db.public.one(`SELECT * FROM order_suborders WHERE id = 'sub-order-12'`);
+    expect(sub.status).toBe('refunded');
+
+    const variant = db.public.one(`SELECT * FROM product_variants WHERE id = '${varId}'`);
+    expect(Number(variant.inventory_count)).toBe(8); // CERO restitución
+  });
+
+  // 13. Reembolso monetario de pedido completo sin reposición
+  it('13. Reembolso monetario de pedido completo: orden a refunded sin alterar inventario de ningún ítem', () => {
+    const varA = 'var-ord-13a';
+    const varB = 'var-ord-13b';
+    db.public.none(`INSERT INTO product_variants (id, product_id, inventory_count) VALUES ('${varA}', 'p-13a', 10), ('${varB}', 'p-13b', 12)`);
+
+    executeCreateOrderAtomic({
+      order_id: 'ord-full-13',
+      total_amount: 4000,
+      terms_accepted: true,
+      items: [
+        { id: 'oi-13a', product_id: 'p-13a', variant_id: varA, group_key: 'col_13', quantity: 1, unit_price: 2000, final_total: 2000 },
+        { id: 'oi-13b', product_id: 'p-13b', variant_id: varB, group_key: 'col_13', quantity: 1, unit_price: 2000, final_total: 2000 }
+      ],
+      suborders: [{ id: 'sub-13', group_key: 'col_13', product_subtotal: 4000 }]
+    });
+
+    const res = executeRefundOrderHandler({
+      order_id: 'ord-full-13',
+      amount: 4000,
+      operation_type: 'monetary_compensation',
+      restore_stock: false,
+      idempotency_key: 'idemp-full-13',
+      gateway_simulator: () => ({ success: true, gateway_refund_id: 'MP-FULL-13' })
+    });
+
+    expect(res.success).toBe(true);
+    const ord = db.public.one(`SELECT * FROM orders WHERE id = 'ord-full-13'`);
+    expect(ord.status).toBe('refunded');
+
+    const vA = db.public.one(`SELECT * FROM product_variants WHERE id = '${varA}'`);
+    const vB = db.public.one(`SELECT * FROM product_variants WHERE id = '${varB}'`);
+    expect(Number(vA.inventory_count)).toBe(10); // CERO restitución
+    expect(Number(vB.inventory_count)).toBe(12); // CERO restitución
+  });
+
+  // 14. Cancelación de un artículo Zinc sin afectar artículos hermanos
+  it('14. Aislamiento Zinc por artículo: cancela el artículo solicitado sin modificar hermanos', () => {
+    executeCreateOrderAtomic({
+      order_id: 'ord-zinc-14',
+      total_amount: 6000,
+      terms_accepted: true,
+      items: [
+        { id: 'oi-zinc-14a', product_id: 'p-z1', group_key: 'intl_14', quantity: 1, unit_price: 3000, final_total: 3000 },
+        { id: 'oi-zinc-14b', product_id: 'p-z2', group_key: 'intl_14', quantity: 1, unit_price: 3000, final_total: 3000 }
+      ],
+      suborders: [{ id: 'sub-zinc-14', group_key: 'intl_14', product_subtotal: 6000 }]
+    });
+
+    db.public.none(`
+      INSERT INTO international_order_items (id, order_item_id, zinc_order_id, purchase_status)
+      VALUES 
+        ('intl-14a', 'oi-zinc-14a', 'ZINC-ORD-A', 'zinc_order_created'),
+        ('intl-14b', 'oi-zinc-14b', 'ZINC-ORD-B', 'zinc_order_created')
+    `);
+
+    // Cancelar SOLO el ítem A pre-despacho
+    const resA = executeRefundOrderHandler({
+      order_id: 'ord-zinc-14',
+      order_item_id: 'oi-zinc-14a',
+      amount: 3000,
+      quantity: 1,
+      operation_type: 'pre_dispatch_cancellation',
+      restore_stock: true,
+      idempotency_key: 'idemp-zinc-14a',
+      gateway_simulator: () => ({ success: true, gateway_refund_id: 'GW-ZINC-14A' })
+    });
+
+    expect(resA.success).toBe(true);
+
+    // Simular que la lógica aislada de refund-order v39 canceló intl-14a
+    db.public.none(`UPDATE international_order_items SET purchase_status = 'cancelled' WHERE id = 'intl-14a'`);
+
+    const itemA = db.public.one(`SELECT * FROM international_order_items WHERE id = 'intl-14a'`);
+    const itemB = db.public.one(`SELECT * FROM international_order_items WHERE id = 'intl-14b'`);
+
+    expect(itemA.purchase_status).toBe('cancelled');
+    expect(itemB.purchase_status).toBe('zinc_order_created'); // Ítem hermano intacto
+  });
+
+  // 15. Fallo de base de datos posterior al éxito de una pasarela (Fail-Safe Reconciliation)
+  it('15. Fallo de base de datos posterior al éxito de la pasarela: marca reconciliation_required y bloquea replay duplicado', () => {
+    executeCreateOrderAtomic({
+      order_id: 'ord-faildb-15',
+      total_amount: 2000,
+      terms_accepted: true,
+      items: [{
+        id: 'oi-faildb-15',
+        product_id: 'p-15',
+        group_key: 'col_15',
+        quantity: 1,
+        unit_price: 2000,
+        final_total: 2000
+      }],
+      suborders: [{ id: 'sub-15', group_key: 'col_15', product_subtotal: 2000 }]
+    });
+
+    let gwCount = 0;
+    const simGw = () => {
+      gwCount++;
+      return { success: true, gateway_refund_id: 'GW-CONFIRMED-15' };
+    };
+
+    // Primera llamada que sufre una caída transaccional en DB luego de que la pasarela aprobó el reembolso
+    expect(() => {
+      executeRefundOrderHandler({
+        order_id: 'ord-faildb-15',
+        order_item_id: 'oi-faildb-15',
+        amount: 2000,
+        idempotency_key: 'idemp-db-crash-15',
+        gateway_simulator: simGw,
+        simulate_db_crash_after_gateway: true
+      });
+    }).toThrow(/CRITICAL_POST_GATEWAY_DB_CRASH/);
+
+    expect(gwCount).toBe(1);
+
+    const ref = db.public.one(`SELECT * FROM refunds WHERE idempotency_key = 'idemp-db-crash-15'`);
+    expect(ref.status).toBe('reconciliation_required'); // NO es 'failed'
+
+    // Segundo reintento con la misma clave: debe detectar reconciliation_required y NO volver a llamar a la pasarela
+    const replay = executeRefundOrderHandler({
+      order_id: 'ord-faildb-15',
+      order_item_id: 'oi-faildb-15',
+      amount: 2000,
+      idempotency_key: 'idemp-db-crash-15',
+      gateway_simulator: simGw
+    });
+
+    expect(replay.success).toBe(false);
+    expect(replay.reconciliation_required).toBe(true);
+    expect(replay.gateway_called).toBe(false);
+    expect(gwCount).toBe(1); // CERO llamadas duplicadas
   });
 });
