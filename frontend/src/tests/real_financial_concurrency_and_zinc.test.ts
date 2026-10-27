@@ -218,17 +218,25 @@ describe('CERTIFIED POSTGRESQL & FINANCIAL INTEGRATION SUITE', () => {
     let effectiveRefundQty = 0;
 
     if (quantity !== null && quantity !== undefined) {
+      if (!Number.isFinite(quantity) || !Number.isInteger(quantity)) {
+        throw new Error('La cantidad de unidades debe ser un número entero finito.');
+      }
       if (quantity < 0) throw new Error('Cantidad no puede ser negativa');
       if (quantity > remainingQty) throw new Error(`La cantidad solicitada supera las unidades disponibles.`);
     }
 
     if (amount !== undefined && amount !== null) {
+      if (!Number.isFinite(amount) || isNaN(amount)) {
+        throw new Error('El importe a reembolsar debe ser un número finito válido.');
+      }
+      if (amount <= 0) {
+        throw new Error('El importe a reembolsar debe ser estrictamente mayor a 0.');
+      }
       refundAmount = Number(amount);
       if (quantity !== null && quantity !== undefined) {
         effectiveRefundQty = quantity;
       } else {
-        const isFullMonetary = Math.abs(refundAmount - remainingAmount) <= 0.01;
-        effectiveRefundQty = isFullMonetary ? remainingQty : 0; // Compensación parcial = 0 unidades
+        effectiveRefundQty = 0; // Compensación monetaria pura sin inferir unidades
       }
     } else if (quantity !== null && quantity !== undefined && item.quantity > 0) {
       effectiveRefundQty = quantity;
@@ -669,5 +677,111 @@ describe('CERTIFIED POSTGRESQL & FINANCIAL INTEGRATION SUITE', () => {
     expect(call2.idempotent).toBe(true);
     expect(call2.gateway_called).toBe(false);
     expect(gatewayCallCount).toBe(1); // Exactamente 1 sola llamada a pasarela
+  });
+
+  // 9. Compensación monetaria al 100% con quantity: 0 y restore_stock: false
+  it('9. Compensación monetaria del 100% con quantity=0 y restore_stock=false: reembolsa la totalidad del dinero sin restituir stock físico', () => {
+    const varId = 'var-full-monetary-zero-qty';
+    db.public.none(`INSERT INTO product_variants (id, product_id, inventory_count) VALUES ('${varId}', 'p-9', 15)`);
+
+    executeCreateOrderAtomic({
+      order_id: 'ord-comp-100',
+      total_amount: 5000,
+      terms_accepted: true,
+      items: [{
+        id: 'oi-comp-100',
+        product_id: 'p-9',
+        variant_id: varId,
+        group_key: 'national_collectibles',
+        quantity: 2,
+        unit_price: 2500,
+        total_price: 5000,
+        discount_total: 0,
+        final_total: 5000
+      }],
+      suborders: [{
+        id: 'sub-comp-100',
+        group_key: 'national_collectibles',
+        product_subtotal: 5000
+      }]
+    });
+
+    const res = executeRefundOrderHandler({
+      order_id: 'ord-comp-100',
+      order_item_id: 'oi-comp-100',
+      amount: 5000, // 100% del dinero
+      quantity: 0,  // CERO unidades devueltas (el comprador retiene los productos dañados o retenidos)
+      restore_stock: false,
+      idempotency_key: 'idemp-comp-100pct',
+      gateway_simulator: () => ({ success: true, gateway_refund_id: 'MP-COMP-100' })
+    });
+
+    expect(res.success).toBe(true);
+    expect(res.effectiveRefundQty).toBe(0);
+    expect(res.refundAmount).toBe(5000);
+
+    const updatedItem = db.public.one(`SELECT * FROM order_items WHERE id = 'oi-comp-100'`);
+    expect(Number(updatedItem.refunded_amount)).toBe(5000);
+    expect(Number(updatedItem.refunded_quantity)).toBe(0); // CERO unidades devueltas
+    expect(updatedItem.status).toBe('refunded'); // Totalmente saldado financieramente
+
+    const variant = db.public.one(`SELECT * FROM product_variants WHERE id = '${varId}'`);
+    expect(Number(variant.inventory_count)).toBe(15); // Cero reposición en inventario
+  });
+
+  // 10. Validación estricta de límites numéricos (enteros, positivos y finitos)
+  it('10. Validación estricta de límites numéricos: rechaza decimales en quantity, negativos y no finitos', () => {
+    executeCreateOrderAtomic({
+      order_id: 'ord-limits-10',
+      total_amount: 1000,
+      terms_accepted: true,
+      items: [{
+        id: 'oi-limits-10',
+        product_id: 'p-10',
+        group_key: 'national_collectibles',
+        quantity: 2,
+        unit_price: 500,
+        total_price: 1000,
+        discount_total: 0,
+        final_total: 1000
+      }],
+      suborders: [{
+        id: 'sub-limits-10',
+        group_key: 'national_collectibles',
+        product_subtotal: 1000
+      }]
+    });
+
+    // Cantidad decimal
+    expect(() => {
+      executeRefundOrderHandler({
+        order_id: 'ord-limits-10',
+        order_item_id: 'oi-limits-10',
+        quantity: 1.5,
+        idempotency_key: 'k-dec-qty',
+        gateway_simulator: () => ({ success: true })
+      });
+    }).toThrow(/número entero finito/);
+
+    // Importe negativo o cero
+    expect(() => {
+      executeRefundOrderHandler({
+        order_id: 'ord-limits-10',
+        order_item_id: 'oi-limits-10',
+        amount: -50,
+        idempotency_key: 'k-neg-amt',
+        gateway_simulator: () => ({ success: true })
+      });
+    }).toThrow(/estrictamente mayor a 0/);
+
+    expect(() => {
+      executeRefundOrderHandler({
+        order_id: 'ord-limits-10',
+        order_item_id: 'oi-limits-10',
+        amount: 0,
+        idempotency_key: 'k-zero-amt',
+        gateway_simulator: () => ({ success: true })
+      });
+    }).toThrow(/estrictamente mayor a 0/);
   });
 });

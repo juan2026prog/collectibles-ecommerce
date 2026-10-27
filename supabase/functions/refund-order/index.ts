@@ -92,42 +92,6 @@ Deno.serve(async (req: Request) => {
       throw new Error("La orden ya está completamente cancelada");
     }
 
-    // Adquisición atómica del lock y reserva transaccional de saldo en PostgreSQL
-    const { data: lockResult, error: lockRpcErr } = await supabaseAdmin.rpc("acquire_refund_lock_atomic", {
-      p_order_id: orderId,
-      p_suborder_id: suborderId || null,
-      p_amount: amount || Number(order.total_amount),
-      p_idempotency_key: idempotencyKey,
-      p_provider: order.payment_method,
-      p_reason: reason || "Intención de reembolso en proceso",
-      p_requested_by: requestedBy,
-      p_order_item_id: orderItemId || null
-    });
-
-    if (lockRpcErr) {
-      console.error("[Refund] Error RPC acquire_refund_lock_atomic:", lockRpcErr.message);
-      throw new Error(`Error en el bloqueo transaccional de reembolso: ${lockRpcErr.message}`);
-    }
-
-    // Si lockResult indica idempotent === true, terminar INMEDIATAMENTE sin llamar a ninguna pasarela
-    if (lockResult?.idempotent === true) {
-      console.log(`[Refund] RPC Idempotent replay detected for key: ${idempotencyKey}. No gateway called.`);
-      return new Response(JSON.stringify({ 
-        success: true, 
-        refundSuccess: true, 
-        idempotent: true, 
-        refundDetails: lockResult.refund_details 
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-
-    if (!lockResult || lockResult.success !== true) {
-      throw new Error(lockResult?.error || "No se pudo adquirir el lock de reembolso.");
-    }
-
-    processingRefundId = lockResult.lock_id;
-
     // 2. Fetch Suborders
     const { data: suborders, error: subordersErr } = await supabaseAdmin
       .from("order_suborders")
@@ -166,7 +130,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // 5. Calculate Refund Amount
+    // 5. Calculate Refund Amount & Validate Financial and Quantity Bounds
     let targetSuborder: any = null;
     let targetOrderItem: any = null;
     let vendorId: string | null = null;
@@ -208,7 +172,11 @@ Deno.serve(async (req: Request) => {
         throw new Error("El artículo ya ha sido completamente reembolsado tanto en cantidad como en importe.");
       }
 
+      // Validar cantidad numérica con Number.isInteger y Number.isFinite
       if (refundQuantity !== null && refundQuantity !== undefined) {
+        if (!Number.isFinite(refundQuantity) || !Number.isInteger(refundQuantity)) {
+          throw new Error("La cantidad de unidades debe ser un número entero finito.");
+        }
         if (refundQuantity < 0) {
           throw new Error("La cantidad de unidades a reembolsar o cancelar no puede ser negativa.");
         }
@@ -217,20 +185,22 @@ Deno.serve(async (req: Request) => {
         }
       }
 
+      // Validar importe con Number.isFinite y exigir límites positivos
       if (amount !== undefined && amount !== null) {
+        if (!Number.isFinite(amount) || isNaN(amount)) {
+          throw new Error("El importe a reembolsar debe ser un número finito válido.");
+        }
+        if (amount <= 0) {
+          throw new Error("El importe a reembolsar debe ser estrictamente mayor a 0.");
+        }
         refundAmount = Number(amount);
         // Si el llamador especificó explícitamente refundQuantity (incluso 0 para compensación monetaria pura):
         if (refundQuantity !== null && refundQuantity !== undefined) {
           effectiveRefundQty = refundQuantity;
         } else {
-          // Si NO se especificó cantidad pero se reembolsa el total monetario restante, liberar todas las unidades restantes
-          const isFullMonetary = Math.abs(refundAmount - remainingItemAmount) <= 0.01;
-          if (isFullMonetary) {
-            effectiveRefundQty = remainingQty;
-          } else {
-            // Compensación / reembolso parcial de dinero sin cancelación explícita de unidades: NO inferir unidades ni restituir stock
-            effectiveRefundQty = 0;
-          }
+          // Si NO se especificó cantidad, es compensación monetaria sin cancelación de unidades (0 unidades)
+          // NUNCA inferir unidades devueltas solo porque el importe coincide con el total
+          effectiveRefundQty = 0;
         }
       } else if (refundQuantity !== null && refundQuantity !== undefined && itemQty > 0) {
         effectiveRefundQty = refundQuantity;
@@ -249,13 +219,65 @@ Deno.serve(async (req: Request) => {
       targetSuborder = suborders.find(s => s.id === suborderId);
       vendorId = targetSuborder.vendor_id;
       const suborderTotal = Number(targetSuborder.product_subtotal) + Number(targetSuborder.shipping_cost) - Number(targetSuborder.discount_total || 0);
-      refundAmount = amount ? Number(amount) : suborderTotal;
+      
+      if (amount !== undefined && amount !== null) {
+        if (!Number.isFinite(amount) || isNaN(amount) || amount <= 0) {
+          throw new Error("El importe a reembolsar debe ser un número finito estrictamente mayor a 0.");
+        }
+        refundAmount = Number(amount);
+      } else {
+        refundAmount = suborderTotal;
+      }
+
       if (refundAmount > suborderTotal) {
         throw new Error(`El importe de reembolso ($${refundAmount}) supera el total de la suborden ($${suborderTotal})`);
       }
     } else {
-      refundAmount = amount ? Number(amount) : Number(order.total_amount);
+      if (amount !== undefined && amount !== null) {
+        if (!Number.isFinite(amount) || isNaN(amount) || amount <= 0) {
+          throw new Error("El importe a reembolsar debe ser un número finito estrictamente mayor a 0.");
+        }
+        refundAmount = Number(amount);
+      } else {
+        refundAmount = Number(order.total_amount);
+      }
     }
+
+    // Adquisición atómica del lock y reserva transaccional de saldo en PostgreSQL usando EXACTAMENTE el importe validado
+    const { data: lockResult, error: lockRpcErr } = await supabaseAdmin.rpc("acquire_refund_lock_atomic", {
+      p_order_id: orderId,
+      p_suborder_id: suborderId || null,
+      p_amount: refundAmount,
+      p_idempotency_key: idempotencyKey,
+      p_provider: order.payment_method,
+      p_reason: reason || "Intención de reembolso en proceso",
+      p_requested_by: requestedBy,
+      p_order_item_id: orderItemId || null
+    });
+
+    if (lockRpcErr) {
+      console.error("[Refund] Error RPC acquire_refund_lock_atomic:", lockRpcErr.message);
+      throw new Error(`Error en el bloqueo transaccional de reembolso: ${lockRpcErr.message}`);
+    }
+
+    // Si lockResult indica idempotent === true, terminar INMEDIATAMENTE sin llamar a ninguna pasarela
+    if (lockResult?.idempotent === true) {
+      console.log(`[Refund] RPC Idempotent replay detected for key: ${idempotencyKey}. No gateway called.`);
+      return new Response(JSON.stringify({ 
+        success: true, 
+        refundSuccess: true, 
+        idempotent: true, 
+        refundDetails: lockResult.refund_details 
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    if (!lockResult || lockResult.success !== true) {
+      throw new Error(lockResult?.error || "No se pudo adquirir el lock de reembolso.");
+    }
+
+    processingRefundId = lockResult.lock_id;
 
     // 5b. Control estricto de reembolsos acumulados sobre la orden
     const { data: previousRefunds } = await supabaseAdmin
