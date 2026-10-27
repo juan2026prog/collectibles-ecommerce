@@ -39,9 +39,12 @@ Deno.serve(async (req: Request) => {
     amount = payload.amount;
     reason = payload.reason;
     bypassLiquidationCheck = payload.bypassLiquidationCheck || false;
-    const idempotencyKey = payload.idempotencyKey || null;
+    const idempotencyKey = payload.idempotencyKey ? String(payload.idempotencyKey).trim() : null;
 
     if (!orderId) throw new Error("Falta el ID de la orden");
+    if (!idempotencyKey) {
+      throw new Error("Idempotency key obligatoria: toda solicitud de reembolso requiere un identificador único.");
+    }
 
     // Idempotency check: if refund already completed for this order / suborder / idempotencyKey
     if (idempotencyKey) {
@@ -82,8 +85,19 @@ Deno.serve(async (req: Request) => {
       throw new Error("La orden ya está completamente cancelada");
     }
 
-    // Lock de Intención / Concurrencia Transaccional
-    // Validar si existe un reembolso en progreso
+    // 1b. Bloquear si existe un reembolso pendiente de conciliación (reconciliation_required)
+    const { data: reconciliationRefund } = await supabaseAdmin
+      .from("refunds")
+      .select("id, status, created_at, provider_refund_id, api_response")
+      .eq("order_id", orderId)
+      .eq("status", "reconciliation_required")
+      .maybeSingle();
+
+    if (reconciliationRefund) {
+      throw new Error("Operación bloqueada: la orden tiene un reembolso previo en estado 'reconciliation_required'. Se requiere conciliación administrativa antes de reintentar.");
+    }
+
+    // 1c. Validar si existe un reembolso en progreso (processing lock)
     const { data: inFlightRefund } = await supabaseAdmin
       .from("refunds")
       .select("id, status, created_at")
@@ -177,6 +191,25 @@ Deno.serve(async (req: Request) => {
       }
     } else {
       refundAmount = amount ? Number(amount) : Number(order.total_amount);
+    }
+
+    // 5b. Control estricto de reembolsos acumulados sobre la orden
+    const { data: previousRefunds } = await supabaseAdmin
+      .from("refunds")
+      .select("amount, status")
+      .eq("order_id", orderId)
+      .in("status", ["completed", "partial"]);
+
+    const totalPreviouslyRefunded = (previousRefunds || []).reduce(
+      (sum: number, r: any) => sum + Number(r.amount || 0), 
+      0
+    );
+
+    const orderTotal = Number(order.total_amount || 0);
+    const availableToRefund = Math.max(0, orderTotal - totalPreviouslyRefunded);
+
+    if (refundAmount > availableToRefund + 0.01) { // 1 cent threshold
+      throw new Error(`El importe solicitado ($${refundAmount.toFixed(2)}) supera el saldo disponible reembolsable de la orden ($${availableToRefund.toFixed(2)}). Total cobrado: $${orderTotal.toFixed(2)}, ya reembolsado: $${totalPreviouslyRefunded.toFixed(2)}.`);
     }
 
     // Get config for tokens

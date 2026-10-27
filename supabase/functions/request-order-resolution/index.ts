@@ -384,11 +384,34 @@ Deno.serve(async (req: Request) => {
           .select()
           .single();
 
+        // 3. Crear de forma controlada el reembolso al comprador con idempotencia
+        let buyerRefundResult: any = null;
+        try {
+          const refundRes = await fetch(`${supabaseUrl}/functions/v1/refund-order`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${supabaseServiceKey}`
+            },
+            body: JSON.stringify({
+              orderId,
+              suborderId: targetSuborder?.id || null,
+              reason: `Cancelación internacional antes de envío a proveedor (${user.email || user.id})`,
+              idempotencyKey: stableIdempotencyKey
+            })
+          });
+          buyerRefundResult = await refundRes.json().catch(() => null);
+        } catch (rfErr: any) {
+          console.error("Error disparando reembolso de comprador tras cancelación internacional local:", rfErr);
+        }
+
         return new Response(JSON.stringify({
           success: true,
           zincConfirmed: false,
           localCancellationConfirmed: true,
-          message: "Compra internacional cancelada localmente antes de ser enviada al proveedor.",
+          buyerRefundInitiated: true,
+          buyerRefundDetails: buyerRefundResult,
+          message: "Compra internacional cancelada localmente antes de ser enviada al proveedor. Reembolso al comprador iniciado.",
           request: intlReq
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -477,11 +500,36 @@ Deno.serve(async (req: Request) => {
         .select()
         .single();
 
+      // Si Zinc confirmó cancelación total, iniciar formalmente el reembolso de fondos al comprador
+      let zincBuyerRefund: any = null;
+      if (allZincCancelled) {
+        try {
+          const refundRes = await fetch(`${supabaseUrl}/functions/v1/refund-order`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${supabaseServiceKey}`
+            },
+            body: JSON.stringify({
+              orderId,
+              suborderId: targetSuborder?.id || null,
+              reason: `Reembolso por cancelación Zinc 2.0 HTTP 204 confirmada (${user.email || user.id})`,
+              idempotencyKey: stableIdempotencyKey
+            })
+          });
+          zincBuyerRefund = await refundRes.json().catch(() => null);
+        } catch (rfErr: any) {
+          console.error("Error disparando reembolso tras Zinc 204:", rfErr);
+        }
+      }
+
       return new Response(JSON.stringify({
         success: allZincCancelled,
         zincConfirmed: allZincCancelled,
+        buyerRefundInitiated: allZincCancelled,
+        buyerRefundDetails: zincBuyerRefund,
         message: allZincCancelled 
-          ? "Zinc 2.0 confirmó la cancelación (HTTP 204 No Content). Compra detenida en proveedor."
+          ? "Zinc 2.0 confirmó la cancelación (HTTP 204 No Content). Compra detenida en proveedor y reembolso iniciado."
           : "Zinc no pudo cancelar automáticamente alguno de los ítems. Caso derivado a revisión manual.",
         cancellationResults,
         request: zincReqRecord

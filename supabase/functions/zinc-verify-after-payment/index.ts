@@ -267,12 +267,20 @@ serve(async (req) => {
           p_item_id: intlOrderItem.id
         });
 
-        if (preLockErr) {
-          console.error("[Zinc Pre-Lock RPC Error]:", preLockErr.message);
-        } else if (zincPreLock && zincPreLock.allowed === false) {
-          console.warn(`[Zinc Pre-Lock Blocked]: Purchase cancelled before Zinc submission. Reason: ${zincPreLock.reason}`);
+        if (preLockErr || !zincPreLock || zincPreLock.allowed !== true) {
+          const blockReason = preLockErr ? `RPC_ERROR: ${preLockErr.message}` : (zincPreLock?.reason || 'AUTHORIZATION_DENIED');
+          console.error(`🚨 [Zinc Fail-Closed]: External purchase blocked before Zinc submission. Item ${intlOrderItem.id}. Reason: ${blockReason}`);
+          
+          // Registrar estado de revisión para conciliación segura sin ejecutar llamada HTTP externa
+          await serviceClient.from('international_order_items').update({
+            purchase_status: zincPreLock?.reason === 'CANCELLATION_AUTHORIZED' ? 'cancelled' : 'manual_review',
+            review_reason_code: zincPreLock?.reason === 'CANCELLATION_AUTHORIZED' ? 'CANCELLED_BEFORE_ZINC_SUBMISSION' : 'ZINC_PRE_LOCK_BLOCKED',
+            zinc_error_message: `Bloqueo de compra internacional previo a Zinc: ${blockReason}`,
+            updated_at: new Date().toISOString()
+          }).eq('id', intlOrderItem.id);
+
           allOk = false;
-          finalOrderStatus = 'cancelled';
+          finalOrderStatus = zincPreLock?.reason === 'CANCELLATION_AUTHORIZED' ? 'cancelled' : 'manual_review';
           continue;
         }
 
