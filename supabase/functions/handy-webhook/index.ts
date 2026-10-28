@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { extractHandyWebhookData } from "../_shared/handy.ts";
+import { extractHandyWebhookData, getFirstValue } from "../_shared/handy.ts";
 import { finalizeOrderIfNeeded } from "../_shared/order-payments.ts";
 
 const responseHeaders = {
@@ -10,6 +10,9 @@ const responseHeaders = {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { status: 204, headers: responseHeaders });
+  }
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: responseHeaders });
   }
 
   try {
@@ -47,6 +50,10 @@ Deno.serve(async (req: Request) => {
     }
 
     const webhookData = extractHandyWebhookData(payload);
+    if (webhookData.mappedStatus === "unknown") {
+      console.warn("[Handy Webhook] Unknown payment status. Not applying any financial changes.");
+      return new Response(JSON.stringify({ error: "Unknown payment status" }), { status: 422, headers: responseHeaders });
+    }
     if (!webhookData.transactionExternalId) {
       console.warn("[Handy Webhook] Missing TransactionExternalId", payload);
       return new Response(JSON.stringify({ received: true, skipped: true }), {
@@ -70,8 +77,8 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Idempotency: If payment was already approved and processed, acknowledge immediately
-    if (payment.status === "approved" && webhookData.mappedStatus === "approved") {
+    // An approved payment must not be downgraded by a late/out-of-order event.
+    if (payment.status === "approved" && webhookData.mappedStatus !== "refunded") {
       console.log(`[Handy Webhook] Payment ${payment.id} already approved. Skipping redundant finalization.`);
       return new Response(JSON.stringify({ received: true, already_processed: true }), {
         status: 200,
@@ -95,43 +102,24 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const receivedAmount = Number(getFirstValue(payload, [
-        "Amount",
-        "amount",
-        "TotalAmount",
-        "totalAmount",
-        "PurchaseData.Amount",
-        "purchaseData.amount",
-        "Cart.TotalAmount",
-        "cart.totalAmount"
-      ]) || payment.amount || 0);
+      // Official Handy v2 callbacks include PurchaseData.TotalAmount and Currency.
+      // Never synthesize missing values from the order itself.
+      const rawAmount = getFirstValue(payload, ["PurchaseData.TotalAmount", "purchaseData.totalAmount", "TotalAmount", "totalAmount"]);
+      const rawCurrency = getFirstValue(payload, ["PurchaseData.Currency", "purchaseData.currency", "Currency", "currency"]);
+      const receivedAmount = Number(rawAmount);
+      const receivedCurrency = Number(rawCurrency);
+      const orderAmount = Number(orderRecord.total_amount);
+      const expectedCurrency = String(orderRecord.currency || "").toUpperCase();
+      const expectedHandyCurrencyCode = expectedCurrency === "UYU" ? 858 : NaN;
 
-      const orderAmount = Number(orderRecord.total_amount || 0);
-      const expectedCurrency = String(orderRecord.currency || "UYU").toUpperCase();
-      const expectedHandyCurrencyCode = expectedCurrency === "USD" ? 840 : 858;
-
-      const receivedCurrency = Number(getFirstValue(payload, [
-        "Currency",
-        "currency",
-        "CurrencyCode",
-        "currencyCode",
-        "PurchaseData.Currency",
-        "purchaseData.currency",
-        "Cart.Currency",
-        "cart.currency"
-      ]) || 858);
-
-      if (receivedCurrency && receivedCurrency !== expectedHandyCurrencyCode) {
-        console.error(`🚨 [Handy Webhook] CURRENCY MISMATCH for order ${payment.order_id}: expected code ${expectedHandyCurrencyCode}, received ${receivedCurrency}`);
-        return new Response(JSON.stringify({ received: true, error: "Currency mismatch" }), {
-          status: 200,
-          headers: responseHeaders,
-        });
-      }
-
-      if (receivedAmount && Math.abs(receivedAmount - orderAmount) > 1.0) {
-        console.error(`🚨 [Handy Webhook] AMOUNT MISMATCH for order ${payment.order_id}: expected ${orderAmount}, received ${receivedAmount}`);
-        return new Response(JSON.stringify({ received: true, error: "Amount mismatch" }), {
+      if (rawAmount === undefined || rawCurrency === undefined ||
+          !Number.isFinite(receivedAmount) || receivedAmount <= 0 ||
+          !Number.isFinite(receivedCurrency) || receivedCurrency !== expectedHandyCurrencyCode ||
+          !Number.isFinite(orderAmount) || Math.abs(receivedAmount - orderAmount) > 0.01 ||
+          Math.abs(receivedAmount - Number(payment.amount)) > 0.01 ||
+          String(payment.currency || "").toUpperCase() !== expectedCurrency) {
+        console.error("[Handy Webhook] Financial verification failed; keeping order unpaid.", payment.order_id);
+        return new Response(JSON.stringify({ received: true, error: "Payment verification mismatch" }), {
           status: 200,
           headers: responseHeaders,
         });
