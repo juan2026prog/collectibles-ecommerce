@@ -1,12 +1,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { verifyOptionalAuth } from "../_shared/auth.ts";
+import { getGuestTokenSecret, verifyOrderAccessToken } from "../_shared/order-token.ts";
 import { getHandyProviderConfig } from "../_shared/handy.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 interface CreateHandyPaymentRequest {
   order_id: string;
   customer_email?: string;
+  order_token?: string;
 }
 
 function getCustomerName(order: Record<string, any>) {
@@ -36,6 +38,7 @@ Deno.serve(async (req: Request) => {
     const body = (await req.json()) as CreateHandyPaymentRequest;
     const orderId = body.order_id;
     const customerEmail = (body.customer_email || "").trim().toLowerCase();
+    const orderToken = body.order_token;
 
     console.log("order_id:", orderId);
 
@@ -47,16 +50,13 @@ Deno.serve(async (req: Request) => {
     
     console.log("Handy provider raw:", handy.provider);
 
-    if (handy.provider.is_active !== true) {
+    if (handy.provider.is_active !== true ||
+        String(handy.provider.status || "").toLowerCase() !== "active" ||
+        handy.environment !== "production") {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "Handy no está activo",
-          details: {
-            provider_key: handy.provider.provider_key,
-            is_active: handy.provider.is_active,
-            config: handy.provider.config
-          }
+          error: "Handy no está habilitado para cobros reales en Uruguay."
         }),
         {
           status: 400,
@@ -92,16 +92,25 @@ Deno.serve(async (req: Request) => {
     if (order.payment_method !== "handy") {
       throw new Error("La orden no fue creada con el metodo de pago Handy.");
     }
+    if (String(order.currency || "").toUpperCase() !== "UYU") {
+      throw new Error("Handy Uruguay solo puede procesar ordenes en pesos uruguayos.");
+    }
+    const orderCountry = String(order.shipping_address?.country || "").trim().toLowerCase();
+    if (orderCountry && !["uy", "uruguay"].includes(orderCountry)) {
+      throw new Error("Handy solamente esta habilitado para compras de Uruguay.");
+    }
 
     if (order.customer_id) {
       if (!user || user.id !== order.customer_id) {
         throw new Error("No tienes permisos para iniciar el pago de esta orden.");
       }
-    } else if (
-      !customerEmail ||
-      customerEmail !== String(order.customer_email || "").toLowerCase()
-    ) {
-      throw new Error("No se pudo validar el email de la orden.");
+    } else {
+      const guestSecret = await getGuestTokenSecret(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "");
+      const validGuest = await verifyOrderAccessToken(orderToken, orderId, guestSecret);
+      if (!validGuest || !customerEmail ||
+          customerEmail !== String(order.customer_email || "").trim().toLowerCase()) {
+        throw new Error("No se pudo verificar la autorizacion de pago de esta orden.");
+      }
     }
 
     const { data: existingPayment } = await supabaseAdmin
@@ -215,7 +224,8 @@ Deno.serve(async (req: Request) => {
         return val;
       }
       
-      return 68000000 + Math.floor(Math.random() * 900000);
+      // Invoice numbers are transaction identifiers: never use a random fallback.
+      throw new Error("HANDY_INVALID_INVOICE_NUMBER: falta identificador estable.");
     }
 
     const invoiceNumber = resolveHandyInvoiceNumber(order);
@@ -295,7 +305,7 @@ Deno.serve(async (req: Request) => {
       },
     };
 
-    console.log("Handy payload:", JSON.stringify(requestPayload, null, 2));
+    console.log("[Handy] Creating payment link", { orderId, currency: "UYU", invoiceNumber });
 
     const insertPayload = {
       order_id: orderId,
@@ -332,7 +342,7 @@ Deno.serve(async (req: Request) => {
 
     const handyText = await response.text();
     console.error("Handy status:", response.status);
-    console.error("Handy response:", handyText);
+    console.log("[Handy] Provider response HTTP status:", response.status);
 
     let responseBody: Record<string, any> = {};
     try {
@@ -362,12 +372,7 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "Handy devolvió 500",
-          details: {
-            handyStatus: response.status,
-            handyResponse: handyText,
-            sentPayload: requestPayload,
-          },
+          error: "No fue posible generar el pago Handy. Intentá más tarde o elegí otro medio.",
         }),
         {
           status: 200,
@@ -379,8 +384,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const paymentUrl = String(responseBody.url || responseBody.paymentUrl || "");
-    if (!paymentUrl) {
+    const paymentUrl = String(responseBody.url || "");
+    if (!paymentUrl || !paymentUrl.startsWith("https://")) {
       await supabaseAdmin
         .from("payments")
         .update({
