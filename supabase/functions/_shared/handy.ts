@@ -20,13 +20,16 @@ export function getFirstValue(payload: Record<string, any>, paths: string[]) {
 }
 
 export function mapHandyPaymentStatus(status: string | undefined) {
-  const normalized = (status || "").trim().toUpperCase();
-  if (["APPROVED", "AUTHORIZED", "PAID", "SUCCESS", "COMPLETED", "FINALIZADO", "FINALIZED", "COMPLETADO", "2"].includes(normalized)) return "approved";
-  if (["REJECTED", "DECLINED", "DENIED", "3"].includes(normalized)) return "rejected";
+  // Handy Boton de Pago v2: PurchaseData.Status 0=iniciado, 1=exitoso,
+  // 2=fallido, 3=pendiente. Never treat status 2 as approved.
+  const normalized = String(status ?? "").trim().toUpperCase();
+  if (["1", "APPROVED", "AUTHORIZED", "PAID", "SUCCESS", "COMPLETED", "FINALIZADO", "FINALIZED", "COMPLETADO"].includes(normalized)) return "approved";
+  if (["2", "FAILED", "FAILURE", "ERROR"].includes(normalized)) return "failed";
+  if (["0", "3", "PENDING", "CREATED", "INITIATED", "IN_PROCESS", "PROCESSING"].includes(normalized)) return "pending";
+  if (["REJECTED", "DECLINED", "DENIED"].includes(normalized)) return "rejected";
   if (["CANCELLED", "CANCELED", "VOIDED", "ABANDONED", "4"].includes(normalized)) return "cancelled";
   if (["REFUNDED", "REVERSED", "5"].includes(normalized)) return "refunded";
-  if (["PENDING", "CREATED", "IN_PROCESS", "PROCESSING", "1"].includes(normalized)) return "pending";
-  return "failed";
+  return "unknown"; // Unknown provider state must never trigger order confirmation.
 }
 
 export function extractHandyWebhookData(payload: Record<string, any>) {
