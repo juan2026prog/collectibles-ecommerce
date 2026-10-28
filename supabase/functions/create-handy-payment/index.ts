@@ -48,7 +48,7 @@ Deno.serve(async (req: Request) => {
 
     const handy = await getHandyProviderConfig(supabaseAdmin);
     
-    console.log("Handy provider raw:", handy.provider);
+    console.log("[Handy] Provider settings loaded; secrets are not logged.");
 
     if (handy.provider.is_active !== true ||
         String(handy.provider.status || "").toLowerCase() !== "active" ||
@@ -158,31 +158,22 @@ Deno.serve(async (req: Request) => {
 
     const transactionExternalId = order.id;
     const safeOrderItems = Array.isArray(orderItems) ? orderItems : [];
-    const isTesting = handy.environment === "testing";
 
-    // Products mapping with strict numeric constraints
-    const products = safeOrderItems.map((item: any) => {
-      const quantity = Number(item.quantity || 1);
-      const unitPrice = Number(item.unit_price || 0);
-      let productAmount = unitPrice * quantity;
-
-      // Rule: Product.Amount debe ser decimal mayor a 0. Probar con 5.00 en testing si es menor
-      if (isTesting && productAmount < 5.00) {
-        productAmount = 5.00;
-      }
-
-      return {
-        Name: String(item.product?.title || "Producto").trim() || "Producto",
-        Quantity: quantity,
-        Amount: productAmount,
-        TaxedAmount: 0.0, // Use 0 for TaxedAmount to avoid errors
-      };
-    });
-
-    // Enforce that total matches the sum of product amounts in testing
-    const sumProductsAmount = products.reduce((sum, p) => sum + p.Amount, 0);
-    const finalTotalAmount = isTesting ? Math.max(amount, sumProductsAmount, 5.00) : amount;
-    const currencyCode = order.currency?.toUpperCase() === "USD" ? 840 : 858;
+    // Handy requires a consistent Cart.TotalAmount and product breakdown.
+    // Discounts and shipping mean raw unit prices may not sum to the charged amount.
+    const lineItems = safeOrderItems.map((item: any) => ({
+      Name: String(item.product?.title || "Producto").trim() || "Producto",
+      Quantity: Number(item.quantity),
+      Amount: Math.round(Number(item.unit_price) * Number(item.quantity) * 100) / 100,
+      TaxedAmount: 0,
+    }));
+    const lineSum = lineItems.reduce((sum: number, p: any) => sum + p.Amount, 0);
+    const products = lineItems.every((p: any) => Number.isFinite(p.Amount) && p.Amount > 0 && Number.isInteger(p.Quantity) && p.Quantity > 0)
+      && Math.abs(lineSum - amount) <= 0.01
+      ? lineItems
+      : [{ Name: `Pedido Collectibles ${order.order_number}`, Quantity: 1, Amount: amount, TaxedAmount: 0 }];
+    const finalTotalAmount = amount;
+    const currencyCode = 858;
 
     // Helper function to extract numeric invoice number within 32-bit signed int limit (< 2,147,483,647)
     function resolveHandyInvoiceNumber(order: any): number {
@@ -272,8 +263,15 @@ Deno.serve(async (req: Request) => {
       ? handy.defaultImageUrl.trim()
       : undefined;
 
-    // CallbackUrl must be exactly:
-    const callbackUrl = "https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/handy-webhook";
+    // Handy sends asynchronous POST callbacks to the specified URL.
+    // Use a separate high-entropy webhook secret, not the merchant payment key.
+    const webhookSecret = (Deno.env.get("HANDY_WEBHOOK_SECRET") || "").trim();
+    if (webhookSecret.length < 24) {
+      throw new Error("HANDY_WEBHOOK_SECRET no configurado de forma segura.");
+    }
+    const callback = new URL(`${Deno.env.get("SUPABASE_URL")}/functions/v1/handy-webhook`);
+    callback.searchParams.set("token", webhookSecret);
+    const callbackUrl = callback.toString();
 
     const requestPayload = {
       Cart: {
@@ -290,13 +288,6 @@ Deno.serve(async (req: Request) => {
         SiteUrl: returnSuccessUrl,
       },
       CallbackURL: callbackUrl,
-      CallbackUrl: callbackUrl, // Send both casings to be absolutely foolproof
-      RedirectUrl: returnSuccessUrl,
-      RedirectURL: returnSuccessUrl,
-      ReturnUrl: returnSuccessUrl,
-      ReturnURL: returnSuccessUrl,
-      SuccessUrl: returnSuccessUrl,
-      SuccessURL: returnSuccessUrl,
       ResponseType: "Json",
       Customer: {
         Name: getCustomerName(order),
@@ -314,7 +305,7 @@ Deno.serve(async (req: Request) => {
       amount: finalTotalAmount,
       currency: order.currency || "UYU",
       status: "pending",
-      raw_request: requestPayload,
+      raw_request: { ...requestPayload, CallbackURL: "[REDACTED]" },
     };
 
     const { data: paymentRow, error: paymentInsertError } = await supabaseAdmin
@@ -341,8 +332,7 @@ Deno.serve(async (req: Request) => {
     });
 
     const handyText = await response.text();
-    console.error("Handy status:", response.status);
-    console.log("[Handy] Provider response HTTP status:", response.status);
+    console.log("[Handy] Provider HTTP status:", response.status);
 
     let responseBody: Record<string, any> = {};
     try {
