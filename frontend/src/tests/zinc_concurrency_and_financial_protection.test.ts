@@ -174,6 +174,51 @@ describe('FASE 4: REAL POSTGRESQL CONCURRENCY & ZINC FINANCIAL PROTECTION', () =
     return true;
   }
 
+  // Pre-Lock de compra Zinc corregido: check_and_lock_zinc_purchase_item
+  // Permite la transición zinc_processing -> zinc_submitting si el ítem fue legítimamente reclamado y no tiene cancelaciones
+  function sqlCheckAndLockZincPurchaseItem(p_item_id: string): { allowed: boolean; reason?: string; purchase_status?: string } {
+    const item = db.public.many(`SELECT * FROM international_order_items WHERE id = '${p_item_id}'`)[0];
+    if (!item) return { allowed: false, reason: 'ITEM_NOT_FOUND' };
+
+    if (item.purchase_status === 'cancelled') {
+      return { allowed: false, reason: 'ALREADY_CANCELLED' };
+    }
+
+    const alreadySubmitted = ['zinc_order_created', 'zinc_submitting', 'purchased', 'warehouse_received', 'shipped', 'delivered', 'shipped_to_courier', 'delivered_to_courier'];
+    if (item.zinc_order_id || alreadySubmitted.includes(item.purchase_status)) {
+      return { allowed: false, reason: 'ALREADY_SUBMITTED_TO_ZINC' };
+    }
+
+    // Exigir exactamente zinc_processing (reclamado por el worker)
+    if (item.purchase_status !== 'zinc_processing') {
+      return { allowed: false, reason: 'INVALID_PURCHASE_STATE_FOR_PRE_LOCK' };
+    }
+
+    const parent = db.public.many(`SELECT * FROM order_items WHERE id = '${item.order_item_id}'`)[0];
+    if (!parent) return { allowed: false, reason: 'PARENT_ORDER_ITEM_NOT_FOUND' };
+
+    // Verificar cancelaciones
+    const cancelledReq = db.public.many(`
+      SELECT * FROM unified_order_requests
+      WHERE order_id = '${parent.order_id}'
+        AND status IN ('CANCELLATION_CONFIRMED', 'APPROVED', 'REFUNDED', 'CANCELLATION_PENDING')
+        AND (order_item_id = '${parent.id}' OR order_item_id IS NULL)
+      LIMIT 1
+    `)[0];
+
+    if (cancelledReq) {
+      if (['CANCELLATION_CONFIRMED', 'APPROVED', 'REFUNDED'].includes(cancelledReq.status)) {
+        db.public.none(`UPDATE international_order_items SET purchase_status = 'cancelled', review_reason_code = 'CANCELLED_BEFORE_ZINC_SUBMISSION' WHERE id = '${p_item_id}'`);
+        return { allowed: false, reason: 'CANCELLATION_AUTHORIZED' };
+      } else {
+        return { allowed: false, reason: 'CANCELLATION_PENDING_REVIEW' };
+      }
+    }
+
+    db.public.none(`UPDATE international_order_items SET purchase_status = 'zinc_submitting', updated_at = now() WHERE id = '${p_item_id}'`);
+    return { allowed: true, purchase_status: 'zinc_submitting' };
+  }
+
   // Conexión Proceso 2 / Cancelación: authorize_and_confirm_zinc_cancellation
   function sqlAuthorizeAndConfirmCancellation(params: {
     order_id: string;
@@ -627,5 +672,70 @@ describe('FASE 4: REAL POSTGRESQL CONCURRENCY & ZINC FINANCIAL PROTECTION', () =
 
     const refunds = db.public.many(`SELECT * FROM refunds WHERE order_id = 'ord-g'`);
     expect(refunds.length).toBe(0); // CERO reembolsos
+  });
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // PRUEBAS DE ACEPTACIÓN ADICIONALES: TRANSICIÓN ZINC_PROCESSING Y EXCLUSIÓN MUTUA
+  // ═════════════════════════════════════════════════════════════════════════
+
+  // PRUEBA 1 — Compra normal sin cancelación:
+  // Flujo completo: claim exitoso (pending_purchase -> zinc_processing) -> prelock exitoso (zinc_processing -> zinc_submitting) -> zinc_order_created
+  // Confirmar que el worker NO marca manual_review ni ZINC_PRE_LOCK_BLOCKED.
+  it('Prueba 1 (Hotfix Quirúrgico) — Compra normal: claim exitoso, prelock exitoso a zinc_submitting sin bloqueo por manual_review', () => {
+    db.public.none(`INSERT INTO orders (id, total_amount) VALUES ('ord-norm-1', 4000)`);
+    db.public.none(`INSERT INTO order_items (id, order_id, product_id, quantity, unit_price, total_price, final_total) VALUES ('oi-norm-1', 'ord-norm-1', 'p-norm-1', 1, 4000, 4000, 4000)`);
+    db.public.none(`INSERT INTO international_order_items (id, order_item_id, purchase_status) VALUES ('intl-norm-1', 'oi-norm-1', 'pending_purchase')`);
+
+    // 1. Worker ejecuta claim_international_order_item_for_zinc
+    const claimed = sqlClaimZincItem('intl-norm-1');
+    expect(claimed).toBe(true);
+
+    let intl = db.public.one(`SELECT purchase_status FROM international_order_items WHERE id = 'intl-norm-1'`);
+    expect(intl.purchase_status).toBe('zinc_processing');
+
+    // 2. Previo al POST a Zinc, worker ejecuta check_and_lock_zinc_purchase_item
+    // Con la corrección, DEBE aceptar zinc_processing y avanzar a zinc_submitting
+    const preLock = sqlCheckAndLockZincPurchaseItem('intl-norm-1');
+    expect(preLock.allowed).toBe(true);
+    expect(preLock.purchase_status).toBe('zinc_submitting');
+
+    intl = db.public.one(`SELECT purchase_status FROM international_order_items WHERE id = 'intl-norm-1'`);
+    expect(intl.purchase_status).toBe('zinc_submitting');
+
+    // 3. Simular respuesta exitosa de Zinc API
+    db.public.none(`UPDATE international_order_items SET purchase_status = 'zinc_order_created', zinc_order_id = 'ZINC-PO-OK-1' WHERE id = 'intl-norm-1'`);
+    
+    intl = db.public.one(`SELECT purchase_status, zinc_order_id FROM international_order_items WHERE id = 'intl-norm-1'`);
+    expect(intl.purchase_status).toBe('zinc_order_created');
+    expect(intl.zinc_order_id).toBe('ZINC-PO-OK-1');
+  });
+
+  // PRUEBA 2 — No permitir que una llamada arbitraria a check_and_lock omita el claim inicial:
+  // Si el artículo sigue en pending_purchase, check_and_lock lo rechaza
+  it('Prueba 2 (Hotfix Quirúrgico) — Exigir claim previo: check_and_lock rechaza si el item no está en zinc_processing', () => {
+    db.public.none(`INSERT INTO orders (id, total_amount) VALUES ('ord-skip-1', 1500)`);
+    db.public.none(`INSERT INTO order_items (id, order_id, product_id, quantity, unit_price, total_price, final_total) VALUES ('oi-skip-1', 'ord-skip-1', 'p-skip-1', 1, 1500, 1500, 1500)`);
+    db.public.none(`INSERT INTO international_order_items (id, order_item_id, purchase_status) VALUES ('intl-skip-1', 'oi-skip-1', 'pending_purchase')`);
+
+    // Intentar check_and_lock directo sin claim previo
+    const preLock = sqlCheckAndLockZincPurchaseItem('intl-skip-1');
+    expect(preLock.allowed).toBe(false);
+    expect(preLock.reason).toBe('INVALID_PURCHASE_STATE_FOR_PRE_LOCK');
+  });
+
+  // PRUEBA 3 — Reintento no duplica compra si ya está en zinc_order_created o tiene zinc_order_id:
+  it('Prueba 3 (Hotfix Quirúrgico) — Reintento no duplica compras si ya tiene zinc_order_id', () => {
+    db.public.none(`INSERT INTO orders (id, total_amount) VALUES ('ord-re-1', 2000)`);
+    db.public.none(`INSERT INTO order_items (id, order_id, product_id, quantity, unit_price, total_price, final_total) VALUES ('oi-re-1', 'ord-re-1', 'p-re-1', 1, 2000, 2000, 2000)`);
+    db.public.none(`INSERT INTO international_order_items (id, order_item_id, zinc_order_id, purchase_status) VALUES ('intl-re-1', 'oi-re-1', 'ZINC-EXISTING', 'zinc_order_created')`);
+
+    // Intentar claim
+    const claimed = sqlClaimZincItem('intl-re-1');
+    expect(claimed).toBe(false);
+
+    // Intentar prelock
+    const preLock = sqlCheckAndLockZincPurchaseItem('intl-re-1');
+    expect(preLock.allowed).toBe(false);
+    expect(preLock.reason).toBe('ALREADY_SUBMITTED_TO_ZINC');
   });
 });
