@@ -348,11 +348,99 @@ Deno.serve(async (req: Request) => {
     gatewayRefundId = null;
     isManualRefundRequired = false;
 
-    // ═════ COURIER SHIPMENTS CHECK (FASE 1) ═════
-    // En modalidad de compensación monetaria pura (monetary_compensation), el cliente CONSERVA el producto.
-    // En devolución física (physical_return), el despacho ya ocurrió y el cliente retornó el producto para inspección.
-    // Por tanto: NO se bloquea por haber sido despachado en physical_return.
-    // Solo en cancelaciones pre-despacho (pre_dispatch_cancellation) se exige que el paquete no haya salido.
+    // ═════════════════════════════════════════════════════════════════════════
+    // FASE 2: ORDEN ESTRICTO DE VALIDACIÓN — ZINC & AUTORIZACIÓN ANTES DE SHIPMENTS
+    // ═════════════════════════════════════════════════════════════════════════
+    // Regla obligatoria:
+    // 1. Validar identidad, permisos y alcance de la operación.
+    // 2. Comprobar la elegibilidad comercial.
+    // 3. Verificar autorización transaccional para cancelar una compra internacional.
+    // 4. Confirmar que Zinc no la haya aprobado ni esté procesándola.
+    // 5. Confirmar que el artículo fue cancelado de manera segura antes de la compra.
+    // 6. Verificar que no se afecten artículos hermanos.
+    // 7. SOLO ENTONCES permitir modificaciones logísticas asociadas.
+    // 8. Ejecutar el reembolso autorizado mediante el circuito financiero idempotente.
+
+    // ─── PASO A: VALIDACIÓN ESTRICTA DE COMPRAS INTERNACIONALES ZINC ───
+    if (operationType === 'pre_dispatch_cancellation') {
+      const { data: orderItems } = await supabaseAdmin
+        .from("order_items")
+        .select("id, suborder_id")
+        .eq("order_id", orderId);
+
+      let scopedItemIds: string[] = [];
+      if (orderItemId) {
+        scopedItemIds = [orderItemId];
+      } else if (orderItems && orderItems.length > 0) {
+        scopedItemIds = orderItems.map((i: any) => i.id);
+      }
+
+      if (scopedItemIds.length > 0) {
+        const { data: intlItems } = await supabaseAdmin
+          .from("international_order_items")
+          .select("*, order_item:order_items(suborder_id)")
+          .in("order_item_id", scopedItemIds);
+
+        if (intlItems && intlItems.length > 0) {
+          for (const intlItem of intlItems) {
+            const itemSuborderId = intlItem.order_item?.suborder_id;
+            if (suborderId && itemSuborderId !== suborderId) {
+              continue;
+            }
+            const purchaseStatus = intlItem.purchase_status;
+
+            // POLÍTICA COMERCIAL DEFINITIVA ZINC:
+            // Una vez que Zinc confirma y aprueba la compra internacional, el cliente no puede cancelarla por arrepentimiento
+            // y el sistema NUNCA debe intentar cancelarla automáticamente ni llamar a POST /orders/{id}/cancel.
+            const approvedZincStatuses = [
+              'zinc_order_created',
+              'zinc_processing',
+              'purchased',
+              'warehouse_received',
+              'shipped',
+              'delivered',
+              'shipped_to_courier',
+              'delivered_to_courier'
+            ];
+
+            if (approvedZincStatuses.includes(purchaseStatus) || Boolean(intlItem.zinc_order_id)) {
+              throw new Error(`POLÍTICA ZINC: El artículo internacional ${intlItem.id} ya se encuentra confirmado o en procesamiento con el proveedor (${purchaseStatus}). La cancelación voluntaria y el reembolso automático están estrictamente prohibidos.`);
+            }
+
+            // Si está activamente enviándose (zinc_submitting):
+            if (purchaseStatus === 'zinc_submitting') {
+              throw new Error(`POLÍTICA ZINC: El artículo internacional ${intlItem.id} está enviándose al proveedor (zinc_submitting). Reembolso bloqueado mientras se verifica el resultado.`);
+            }
+
+            // Estado ambiguo o en revisión manual: bloquear reembolso automático y exigir conciliación
+            if (purchaseStatus === 'cancellation_requires_review' || purchaseStatus === 'requires_manual_review') {
+              throw new Error(`El artículo internacional ${intlItem.id} se encuentra en estado ambiguo (${purchaseStatus}). Reembolso automático bloqueado por seguridad financiera. Se requiere conciliación manual.`);
+            }
+
+            // SEGURIDAD FINANCIERA PRECOMPRA:
+            // Para reembolsar pre_dispatch_cancellation internacional, el ítem DEBE estar formalmente cancelado
+            // en base de datos mediante la autorización transaccional (status = 'cancelled').
+            // No confiar únicamente en lo que envíe el cliente en el payload.
+            if (purchaseStatus !== 'cancelled') {
+              // Validar si existe una solicitud autorizada en unified_order_requests
+              const { data: authReq } = await supabaseAdmin
+                .from("unified_order_requests")
+                .select("id, status")
+                .eq("order_id", orderId)
+                .in("status", ["CANCELLATION_CONFIRMED", "APPROVED"])
+                .or(`order_item_id.eq.${intlItem.order_item_id},order_item_id.is.null`)
+                .maybeSingle();
+
+              if (!authReq) {
+                throw new Error(`SEGURIDAD FINANCIERA: El artículo internacional ${intlItem.id} no posee una autorización de cancelación precompra confirmada. Se requiere autorización transaccional previa.`);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // ─── PASO B: MODIFICACIONES LOGÍSTICAS ASOCIADAS (SOLO TRAS SUPERAR LAS VALIDACIONES DE ZINC) ───
     let hasDispatchedShipment = false;
     let hasLabelCreatedShipment = false;
 
@@ -434,79 +522,6 @@ Deno.serve(async (req: Request) => {
               .from("shipments")
               .update({ shipping_status: "cancelled", updated_at: new Date().toISOString() })
               .eq("id", ship.id);
-          }
-        }
-      }
-    }
-
-    // ═════ INTERNATIONAL ZINC ORDER CHECK (FASE 2) ═════
-    // En una compensación monetaria pura (monetary_compensation), el cliente conserva el bien -> NO se cancela la compra en Zinc.
-    // En una devolución física (physical_return), la compra ya fue entregada y devuelta -> NO se vuelve a cancelar Zinc.
-    let hasPurchasedIntlItem = false;
-    const ZINC_API_KEY = Deno.env.get("ZINC_API_KEY");
-
-    if (operationType === 'pre_dispatch_cancellation') {
-      const { data: orderItems } = await supabaseAdmin
-        .from("order_items")
-        .select("id, suborder_id")
-        .eq("order_id", orderId);
-
-      // AISLAMIENTO ESTRICTO: si orderItemId fue especificado, aislar SOLO a ese ítem
-      let scopedItemIds: string[] = [];
-      if (orderItemId) {
-        scopedItemIds = [orderItemId];
-      } else if (orderItems && orderItems.length > 0) {
-        scopedItemIds = orderItems.map((i: any) => i.id);
-      }
-
-      if (scopedItemIds.length > 0) {
-        const { data: intlItems } = await supabaseAdmin
-          .from("international_order_items")
-          .select("*, order_item:order_items(suborder_id)")
-          .in("order_item_id", scopedItemIds);
-
-        if (intlItems && intlItems.length > 0) {
-          for (const intlItem of intlItems) {
-            const itemSuborderId = intlItem.order_item?.suborder_id;
-            if (suborderId && itemSuborderId !== suborderId) {
-              continue;
-            }
-            const purchaseStatus = intlItem.purchase_status;
-            
-            // Si request-order-resolution u otro proceso ya confirmó la cancelación en Zinc o antes de submission:
-            if (purchaseStatus === 'cancelled') {
-              console.log(`[Refund] El ítem internacional ${intlItem.id} ya se encuentra formalmente cancelado (${intlItem.review_reason_code || 'CANCELLED'}). No se requiere llamada externa adicional.`);
-              continue;
-            }
-
-            // POLÍTICA COMERCIAL DEFINITIVA ZINC:
-            // Una vez que Zinc confirma y aprueba la compra internacional, el cliente no puede cancelarla por arrepentimiento
-            // y el sistema NUNCA debe intentar cancelarla automáticamente ni llamar a POST /orders/{id}/cancel.
-            // Si la compra ya fue procesada, aprobada o enviada a Zinc:
-            const approvedZincStatuses = [
-              'zinc_order_created',
-              'zinc_processing',
-              'purchased',
-              'warehouse_received',
-              'shipped',
-              'delivered',
-              'shipped_to_courier',
-              'delivered_to_courier'
-            ];
-
-            if (approvedZincStatuses.includes(purchaseStatus)) {
-              throw new Error(`POLÍTICA ZINC: El artículo internacional ${intlItem.id} ya se encuentra confirmado o en procesamiento con el proveedor (${purchaseStatus}). La cancelación voluntaria y el reembolso automático están estrictamente prohibidos.`);
-            }
-
-            // Si está activamente enviándose (zinc_submitting):
-            if (purchaseStatus === 'zinc_submitting') {
-              throw new Error(`POLÍTICA ZINC: El artículo internacional ${intlItem.id} está enviándose al proveedor (zinc_submitting). Reembolso bloqueado mientras se verifica el resultado.`);
-            }
-
-            // Estado ambiguo o en revisión manual: bloquear reembolso automático y exigir conciliación
-            if (purchaseStatus === 'cancellation_requires_review' || purchaseStatus === 'requires_manual_review') {
-              throw new Error(`El artículo internacional ${intlItem.id} se encuentra en estado ambiguo (${purchaseStatus}). Reembolso automático bloqueado por seguridad financiera. Se requiere conciliación manual.`);
-            }
           }
         }
       }

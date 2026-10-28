@@ -363,168 +363,75 @@ Deno.serve(async (req: Request) => {
         : (targetSuborder ? Number(targetSuborder.product_subtotal || targetSuborder.subtotal) : Number(order.total_amount));
 
       // ═════════════════════════════════════════════════════════════════════════
-      // FASE 1 & FASE 2: POLÍTICA DEFINITIVA DE CANCELACIONES INTERNACIONALES ZINC
+      // FASE 1 & FASE 2: SEGURIDAD TRANSACCIONAL Y EXCLUSIÓN MUTUA ZINC
       // ═════════════════════════════════════════════════════════════════════════
-      // Regla comercial obligatoria:
-      // "UNA VEZ QUE ZINC CONFIRMA Y APRUEBA LA COMPRA INTERNACIONAL, EL CLIENTE
-      // NO PUEDE CANCELARLA POR ARREPENTIMIENTO Y EL SISTEMA NO DEBE INTENTAR
-      // CANCELARLA AUTOMÁTICAMENTE."
-      //
-      // Estados confirmados / aprobados en Zinc o irreversibles:
-      // - zinc_order_created (Zinc confirmó recepción y creación de orden de compra)
-      // - zinc_processing (Zinc procesando compra con retailer)
-      // - purchased (Compra confirmada en Amazon)
-      // - warehouse_received (En depósito de Miami)
-      // - shipped / shipped_to_courier (En tránsito hacia casilla)
-      // - delivered / delivered_to_courier (Entregado al casillero)
-      const approvedStatuses = [
-        'zinc_order_created',
-        'zinc_processing',
-        'purchased',
-        'warehouse_received',
-        'shipped',
-        'shipped_to_courier',
-        'delivered',
-        'delivered_to_courier'
-      ];
-
-      const hasApprovedZincItems = intlItems.some((item: any) => 
-        approvedStatuses.includes(item.purchase_status) || Boolean(item.zinc_order_id)
+      // Ejecución atómica mediante RPC authorize_and_confirm_zinc_cancellation
+      // Bloquea con FOR UPDATE los registros en PostgreSQL para evitar condiciones
+      // de carrera con zinc-verify-after-payment u order-execution-worker.
+      const { data: cancelAuthResult, error: cancelAuthErr } = await supabaseAdmin.rpc(
+        "authorize_and_confirm_zinc_cancellation",
+        {
+          p_order_id: orderId,
+          p_suborder_id: targetSuborder?.id || null,
+          p_order_item_id: orderItemId || null,
+          p_idempotency_key: stableIdempotencyKey,
+          p_reason: reason || "Cancelación internacional solicitada por el comprador",
+          p_customer_notes: notes || null,
+          p_customer_id: user.id
+        }
       );
 
-      if (hasApprovedZincItems) {
+      if (cancelAuthErr) {
+        console.error("[Resolution] Error RPC authorize_and_confirm_zinc_cancellation:", cancelAuthErr);
+        throw new Error(`Error en la autorización transaccional de cancelación: ${cancelAuthErr.message}`);
+      }
+
+      // Si la cancelación fue rechazada por política o en vuelo:
+      if (!cancelAuthResult || cancelAuthResult.success !== true) {
+        const statusCode = cancelAuthResult?.status_code || 400;
+        const errCode = cancelAuthResult?.error || "CANCELLATION_DENIED";
+
+        if (statusCode === 409 || errCode === "ZINC_PURCHASE_ALREADY_APPROVED") {
+          return new Response(JSON.stringify({
+            error: "ZINC_PURCHASE_ALREADY_APPROVED",
+            message: cancelAuthResult?.message || "Tu compra internacional ya fue confirmada y aprobada con el proveedor exterior (Amazon/Zinc). No admite cancelación voluntaria por arrepentimiento comercial.",
+            zincAllowed: false
+          }), {
+            status: 409,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
+        if (statusCode === 202 || cancelAuthResult?.cancellation_pending) {
+          return new Response(JSON.stringify({
+            success: false,
+            zincConfirmed: false,
+            cancellationPending: true,
+            message: cancelAuthResult?.message || "Tu compra internacional está siendo procesada por el proveedor. Estamos confirmando su estado.",
+            requestId: cancelAuthResult?.request_id
+          }), {
+            status: 202,
+            headers: { ...corsHeaders, "Content-Type": "application/json" }
+          });
+        }
+
         return new Response(JSON.stringify({
-          error: "ZINC_PURCHASE_ALREADY_APPROVED",
-          message: "Tu compra internacional ya fue confirmada y aprobada con el proveedor exterior (Amazon/Zinc). No admite cancelación voluntaria por arrepentimiento comercial. Podés realizar el seguimiento de tu paquete o ingresar un reclamo por incidencia si hubiera fallas de entrega.",
-          zincAllowed: false
+          error: errCode,
+          message: cancelAuthResult?.message || "No se pudo procesar la cancelación internacional."
         }), {
-          status: 409,
+          status: statusCode,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       }
 
-      // Comprobar si algún ítem está en zinc_submitting (envío en curso irreversible por el outbox worker)
-      const hasSubmittingItems = intlItems.some((item: any) => item.purchase_status === 'zinc_submitting');
+      // ═════════════════════════════════════════════════════════════════════════
+      // FASE 3: REEMBOLSO SEGURO ÚNICAMENTE TRAS CONFIRMACIÓN TRANSACCIONAL
+      // ═════════════════════════════════════════════════════════════════════════
+      // La cancelación precompra ya fue confirmada y persistida en base de datos.
+      const authorizedAmount = Number(cancelAuthResult.amount || targetRefundAmount);
+      const authorizedQty = cancelAuthResult.quantity || targetOrderItem?.quantity || null;
+      const cancellationRequestId = cancelAuthResult.request_id;
 
-      // Si algún ítem está activamente en zinc_submitting o hay jobs en PROCESSING, fail closed:
-      // No cancelar inmediatamente ni reembolsar; pasar a revisión / CANCELLATION_PENDING
-      const { data: processingJobs } = await supabaseAdmin
-        .from("order_execution_jobs")
-        .select("id, status")
-        .eq("order_id", orderId)
-        .in("job_type", ["zinc_fulfillment", "zinc_purchase", "post_payment_execution"])
-        .eq("status", "PROCESSING");
-
-      if (hasSubmittingItems || (processingJobs && processingJobs.length > 0)) {
-        const { data: pendingIntlReq } = await supabaseAdmin
-          .from("unified_order_requests")
-          .insert({
-            order_id: orderId,
-            suborder_id: targetSuborder?.id || null,
-            order_item_id: orderItemId || null,
-            customer_id: user.id,
-            business_model: businessModel,
-            request_type: requestType,
-            status: "CANCELLATION_PENDING",
-            amount_requested: targetRefundAmount,
-            currency: order.currency || "UYU",
-            reason: reason,
-            customer_notes: notes,
-            admin_notes: "Ítem en estado zinc_submitting o worker en ejecución activa. Solicitud enviada a revisión y retención.",
-            idempotency_key: stableIdempotencyKey
-          })
-          .select()
-          .single();
-
-        return new Response(JSON.stringify({
-          success: false,
-          zincConfirmed: false,
-          cancellationPending: true,
-          message: "Tu compra internacional está siendo procesada por el proveedor. Estamos confirmando su estado.",
-          request: pendingIntlReq
-        }), {
-          status: 202,
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
-
-      // Si llegamos aquí, los ítems seleccionados NUNCA fueron enviados a Zinc y NO tienen zinc_order_id:
-      // 1. Coordinar order_execution_jobs:
-      // Si la cancelación es de toda la orden o de todos los ítems internacionales pendientes, cancelar el job zinc_fulfillment
-      const { data: allOrderItems } = await supabaseAdmin
-        .from("order_items")
-        .select("id")
-        .eq("order_id", orderId);
-
-      const allOrderItemIds = (allOrderItems || []).map((i: any) => i.id);
-      const remainingItemIds = allOrderItemIds.filter((id: string) => !orderItemIds.includes(id));
-
-      let hasRemainingIntlItems = false;
-      if (remainingItemIds.length > 0) {
-        const { data: remainingIntl } = await supabaseAdmin
-          .from("international_order_items")
-          .select("id")
-          .in("order_item_id", remainingItemIds)
-          .neq("purchase_status", "cancelled");
-        hasRemainingIntlItems = Boolean(remainingIntl && remainingIntl.length > 0);
-      }
-
-      // Si NO quedan otros artículos internacionales pendientes, cancelar los jobs a nivel orden
-      if (!hasRemainingIntlItems) {
-        await supabaseAdmin
-          .from("order_execution_jobs")
-          .update({
-            status: 'CANCELLED',
-            last_error: `Cancelado por solicitud del comprador antes de ejecución Zinc (${user.email || user.id})`,
-            updated_at: new Date().toISOString()
-          })
-          .eq("order_id", orderId)
-          .in("job_type", ["zinc_fulfillment", "zinc_purchase"])
-          .in("status", ["PENDING", "RETRYING", "QUEUED", "WAITING"]);
-      } else {
-        console.log(`[Resolution] Cancelación parcial de ítem(s): otros artículos internacionales activos continúan en el job zinc_fulfillment.`);
-      }
-
-      // 2. Actualizar purchase_status de los ítems internacionales seleccionados a 'cancelled'
-      await supabaseAdmin
-        .from("international_order_items")
-        .update({
-          purchase_status: 'cancelled',
-          review_reason_code: 'CANCELLED_BEFORE_ZINC_SUBMISSION',
-          updated_at: new Date().toISOString()
-        })
-        .in("id", intlItemIds);
-
-      // Actualizar order_items a status = 'cancelled'
-      // NOTA: NO inflar refunded_amount aquí; refunded_amount solo debe incrementarse cuando el reembolso financiero esté confirmado en refund-order
-      await supabaseAdmin
-        .from("order_items")
-        .update({
-          status: 'cancelled'
-        })
-        .in("id", orderItemIds);
-
-      const { data: intlReq } = await supabaseAdmin
-        .from("unified_order_requests")
-        .insert({
-          order_id: orderId,
-          suborder_id: targetSuborder?.id || null,
-          order_item_id: orderItemId || null,
-          customer_id: user.id,
-          business_model: businessModel,
-          request_type: requestType,
-          status: "CANCELLATION_CONFIRMED",
-          amount_requested: targetRefundAmount,
-          amount_approved: targetRefundAmount,
-          currency: order.currency || "UYU",
-          reason: reason,
-          customer_notes: notes,
-          idempotency_key: stableIdempotencyKey
-        })
-        .select()
-        .single();
-
-      // 3. Crear de forma controlada el reembolso aislado al comprador con idempotencia y operationType
       let buyerRefundResult: any = null;
       let refundTriggered = false;
       try {
@@ -538,10 +445,10 @@ Deno.serve(async (req: Request) => {
             orderId,
             suborderId: targetSuborder?.id || null,
             orderItemId: orderItemId || null,
-            quantity: targetOrderItem?.quantity || null,
+            quantity: authorizedQty,
             operationType: 'pre_dispatch_cancellation',
             restoreStock: false, // En compras internacionales canceladas localmente antes de Zinc no hay inventario físico nacional
-            amount: targetRefundAmount,
+            amount: authorizedAmount,
             reason: `Cancelación internacional antes de envío a proveedor (${user.email || user.id})`,
             idempotencyKey: stableIdempotencyKey
           })
@@ -551,17 +458,17 @@ Deno.serve(async (req: Request) => {
           refundTriggered = true;
         }
       } catch (rfErr: any) {
-        console.error("Error disparando reembolso de comprador tras cancelación internacional local:", rfErr);
+        console.error("Error disparando reembolso de comprador tras cancelación internacional confirmada:", rfErr);
       }
 
-      if (refundTriggered) {
+      if (refundTriggered && cancellationRequestId) {
         await supabaseAdmin
           .from("unified_order_requests")
           .update({
             status: "REFUNDED",
             resolved_at: new Date().toISOString()
           })
-          .eq("id", intlReq.id);
+          .eq("id", cancellationRequestId);
       }
 
       return new Response(JSON.stringify({
@@ -573,7 +480,7 @@ Deno.serve(async (req: Request) => {
         message: refundTriggered 
           ? "Compra internacional cancelada localmente antes de ser enviada al proveedor. Reembolso procesado con éxito."
           : "Compra internacional cancelada localmente antes de ser enviada al proveedor. Reembolso en proceso de verificación.",
-        request: intlReq
+        requestId: cancellationRequestId
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
