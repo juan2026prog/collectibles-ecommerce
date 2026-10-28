@@ -2040,7 +2040,12 @@ export default function Checkout() {
   const dlocalgoEnabled = settings['payments_dlocal_go_enabled'] !== 'false';
   const paypalEnabled = settings['payments_paypal_enabled'] !== 'false';
   const handyProvider = publicPaymentProviders.find((provider) => provider.provider_key === 'handy');
-  const handyEnabled = !!handyProvider?.is_active;
+  // Do not advertise Handy sandbox or an inactive provider to real buyers.
+  const handyEnabled = form.country !== 'Argentina' &&
+    handyProvider?.is_active === true &&
+    String(handyProvider?.status || '').toLowerCase() === 'active' &&
+    handyProvider?.environment === 'production' &&
+    cartCurrencyInfo.canonicalCurrency === 'UYU';
 
   useEffect(() => {
     if (!settingsLoaded) return;
@@ -4218,14 +4223,15 @@ export default function Checkout() {
 
                     <div className="space-y-3">
                       {form.country === 'Argentina' ? (
-                        <PaymentMethodCard
-                          id="handy"
-                          title="Handy — Tarjetas Internacionales (Visa / Mastercard)"
-                          description="Cobro en USD para tarjetas emitidas en Argentina. Acepta crédito y débito Visa y Mastercard."
-                          badge="HABILITADO PARA ARGENTINA"
-                          isSelected={paymentMethod === 'handy'}
-                          onSelect={() => setPaymentMethod('handy')}
-                        />
+                        paypalEnabled && cartPaymentRules.allowedProviders.includes('paypal') ? (
+                          <PaymentMethodCard
+                            id="paypal"
+                            title="PayPal — Pago internacional"
+                            description="Pago en USD con los medios admitidos por PayPal."
+                            isSelected={paymentMethod === 'paypal'}
+                            onSelect={() => setPaymentMethod('paypal')}
+                          />
+                        ) : <p className="text-sm text-amber-300">No hay una pasarela habilitada para este pedido. Contactá a soporte.</p>
                       ) : (
                         <>
                           {mercadopagoEnabled && cartPaymentRules.allowedProviders.includes('mercadopago') && (
