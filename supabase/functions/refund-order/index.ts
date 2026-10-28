@@ -479,88 +479,36 @@ Deno.serve(async (req: Request) => {
               continue;
             }
 
-            if (['purchased', 'warehouse_received', 'shipped', 'delivered', 'shipped_to_courier', 'delivered_to_courier'].includes(purchaseStatus)) {
-              hasPurchasedIntlItem = true;
-              break;
+            // POLÍTICA COMERCIAL DEFINITIVA ZINC:
+            // Una vez que Zinc confirma y aprueba la compra internacional, el cliente no puede cancelarla por arrepentimiento
+            // y el sistema NUNCA debe intentar cancelarla automáticamente ni llamar a POST /orders/{id}/cancel.
+            // Si la compra ya fue procesada, aprobada o enviada a Zinc:
+            const approvedZincStatuses = [
+              'zinc_order_created',
+              'zinc_processing',
+              'purchased',
+              'warehouse_received',
+              'shipped',
+              'delivered',
+              'shipped_to_courier',
+              'delivered_to_courier'
+            ];
+
+            if (approvedZincStatuses.includes(purchaseStatus)) {
+              throw new Error(`POLÍTICA ZINC: El artículo internacional ${intlItem.id} ya se encuentra confirmado o en procesamiento con el proveedor (${purchaseStatus}). La cancelación voluntaria y el reembolso automático están estrictamente prohibidos.`);
+            }
+
+            // Si está activamente enviándose (zinc_submitting):
+            if (purchaseStatus === 'zinc_submitting') {
+              throw new Error(`POLÍTICA ZINC: El artículo internacional ${intlItem.id} está enviándose al proveedor (zinc_submitting). Reembolso bloqueado mientras se verifica el resultado.`);
             }
 
             // Estado ambiguo o en revisión manual: bloquear reembolso automático y exigir conciliación
             if (purchaseStatus === 'cancellation_requires_review' || purchaseStatus === 'requires_manual_review') {
               throw new Error(`El artículo internacional ${intlItem.id} se encuentra en estado ambiguo (${purchaseStatus}). Reembolso automático bloqueado por seguridad financiera. Se requiere conciliación manual.`);
             }
-
-            if (['zinc_order_created', 'zinc_processing'].includes(purchaseStatus) && intlItem.zinc_order_id) {
-              if (!ZINC_API_KEY) {
-                throw new Error("ZINC_API_KEY no configurada para procesar la cancelación internacional.");
-              }
-              
-              console.log(`[Refund] Attempting to cancel Zinc order ${intlItem.zinc_order_id} for isolated item ${intlItem.id}...`);
-              try {
-                const cancelRes = await fetch(`https://api.zinc.com/orders/${intlItem.zinc_order_id}/cancel`, {
-                  method: 'POST',
-                  headers: { 'Authorization': `Bearer ${ZINC_API_KEY}` }
-                });
-                
-                if (cancelRes.status === 204) {
-                  // Zinc 2.0 Cancellation Protocol: HTTP 204 No Content confirms cancellation
-                  console.log(`[Refund] Zinc 2.0 cancellation confirmed with HTTP 204 for order ${intlItem.zinc_order_id}`);
-                  
-                  await supabaseAdmin.from("international_order_items").update({
-                    purchase_status: 'cancelled',
-                    review_reason_code: 'ZINC_204_CANCELLED',
-                    updated_at: new Date().toISOString()
-                  }).eq("id", intlItem.id);
-                } else {
-                  const errText = await cancelRes.text().catch(() => '');
-                  console.error(`[Refund] Zinc cancellation API error: ${cancelRes.status}`, errText);
-                  
-                  await supabaseAdmin.from("international_order_items").update({
-                    purchase_status: 'cancellation_requires_review'
-                  }).eq("id", intlItem.id);
-                  
-                  if (itemSuborderId) {
-                    await supabaseAdmin.from("order_suborders").update({
-                      status: 'cancellation_requires_review',
-                      updated_at: new Date().toISOString()
-                    }).eq("id", itemSuborderId);
-                  }
-                  
-                  await supabaseAdmin.from("orders").update({
-                    status: 'cancellation_requires_review',
-                    updated_at: new Date().toISOString()
-                  }).eq("id", orderId);
-                  
-                  throw new Error("Zinc no pudo cancelar la compra en Amazon. Cancelación automática bloqueada. Se requiere revisión manual.");
-                }
-                
-              } catch (err: any) {
-                console.error(`[Refund] Error calling Zinc cancellation API:`, err.message);
-                
-                await supabaseAdmin.from("international_order_items").update({
-                  purchase_status: 'cancellation_requires_review'
-                }).eq("id", intlItem.id);
-                
-                if (itemSuborderId) {
-                  await supabaseAdmin.from("order_suborders").update({
-                    status: 'cancellation_requires_review',
-                    updated_at: new Date().toISOString()
-                  }).eq("id", itemSuborderId);
-                }
-                
-                await supabaseAdmin.from("orders").update({
-                  status: 'cancellation_requires_review',
-                  updated_at: new Date().toISOString()
-                }).eq("id", orderId);
-                
-                throw new Error(`Error llamando a la API de cancelación de Zinc: ${err.message}`);
-              }
-            }
           }
         }
-      }
-
-      if (hasPurchasedIntlItem) {
-        throw new Error("El proveedor internacional ya procesó la compra. Reembolso automático bloqueado para evitar pérdidas financieras.");
       }
     }
 

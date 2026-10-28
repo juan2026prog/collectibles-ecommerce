@@ -144,66 +144,54 @@ describe('EDGE FUNCTIONS REAL INTEGRATION & SECURITY SUITE (HOTFIX FINAL)', () =
     if (intlItems.length === 0) throw new Error('No se encontraron items internacionales');
 
     const calculatedRefundAmount = itemsQuery.reduce((sum: number, it: any) => sum + Number(it.final_total), 0);
-    const anySentToZinc = intlItems.some((i: any) => Boolean(i.zinc_order_id));
+    // REGLA DEFINITIVA ZINC: Si el ítem ya fue enviado a Zinc o aprobado, la cancelación voluntaria es rechazada (HTTP 409)
+    const approvedZincStatuses = ['zinc_order_created', 'zinc_processing', 'purchased', 'warehouse_received', 'shipped', 'delivered', 'shipped_to_courier', 'delivered_to_courier'];
+    const isZincApproved = intlItems.some((i: any) => Boolean(i.zinc_order_id) || approvedZincStatuses.includes(i.purchase_status));
+    const isZincSubmitting = intlItems.some((i: any) => i.purchase_status === 'zinc_submitting');
 
-    if (!anySentToZinc) {
-      // Caso A: Antes de Zinc
-      for (const it of intlItems) {
-        db.public.none(`UPDATE international_order_items SET purchase_status = 'cancelled' WHERE id = '${it.id}'`);
-      }
-      for (const it of itemsQuery) {
-        db.public.none(`UPDATE order_items SET status = 'cancelled' WHERE id = '${it.id}'`);
-      }
-
-      // Invocación a refund-order con targetOrderItem verificado y validado
-      const refundPayload = {
-        orderId: order_id,
-        suborderId: suborder_id || null,
-        orderItemId: order_item_id || null,
-        quantity: targetOrderItem?.quantity || null,
-        operationType: 'pre_dispatch_cancellation',
-        restoreStock: false,
-        amount: calculatedRefundAmount,
-        idempotencyKey: idempotency_key
+    if (isZincSubmitting) {
+      return {
+        status: 202,
+        error: 'ZINC_PURCHASE_SUBMITTING',
+        message: 'Tu compra internacional está siendo procesada por el proveedor. Estamos confirmando su estado.'
       };
-
-      const refundRes = await mock_refund_order_fn(refundPayload);
-      db.public.none(`
-        INSERT INTO unified_order_requests (id, order_id, suborder_id, order_item_id, status, amount_requested, amount_approved, idempotency_key)
-        VALUES ('req-${Date.now()}', '${order_id}', ${suborder_id ? `'${suborder_id}'` : 'NULL'}, ${order_item_id ? `'${order_item_id}'` : 'NULL'}, '${refundRes.refundSuccess ? 'REFUNDED' : 'CANCELLATION_CONFIRMED'}', ${calculatedRefundAmount}, ${calculatedRefundAmount}, '${idempotency_key}')
-      `);
-
-      return { success: true, refundRes, calculatedRefundAmount, quantity: targetOrderItem?.quantity || null };
-    } else {
-      // Caso B: Posterior a Zinc (HTTP 204)
-      let allCancelled = true;
-      for (const it of intlItems) {
-        if (it.zinc_order_id && mock_zinc_cancel_api) {
-          const zRes = await mock_zinc_cancel_api(it.zinc_order_id);
-          if (zRes.status === 204) {
-            db.public.none(`UPDATE international_order_items SET purchase_status = 'cancelled', review_reason_code = 'ZINC_204_CANCELLED' WHERE id = '${it.id}'`);
-          } else {
-            allCancelled = false;
-          }
-        }
-      }
-
-      let refundRes = null;
-      if (allCancelled) {
-        refundRes = await mock_refund_order_fn({
-          orderId: order_id,
-          suborderId: suborder_id || null,
-          orderItemId: order_item_id || null,
-          quantity: targetOrderItem?.quantity || null,
-          operationType: 'pre_dispatch_cancellation',
-          restoreStock: false,
-          amount: calculatedRefundAmount,
-          idempotencyKey: idempotency_key
-        });
-      }
-
-      return { success: true, allCancelled, refundRes, calculatedRefundAmount, quantity: targetOrderItem?.quantity || null };
     }
+
+    if (isZincApproved) {
+      return {
+        status: 409,
+        error: 'ZINC_PURCHASE_ALREADY_APPROVED',
+        message: 'Tu compra ya fue confirmada con el proveedor internacional y no admite cancelación por arrepentimiento.'
+      };
+    }
+
+    // Si NO fue enviado a Zinc (pre-Zinc safe cancellation)
+    for (const it of intlItems) {
+      db.public.none(`UPDATE international_order_items SET purchase_status = 'cancelled' WHERE id = '${it.id}'`);
+    }
+    for (const it of itemsQuery) {
+      db.public.none(`UPDATE order_items SET status = 'cancelled' WHERE id = '${it.id}'`);
+    }
+
+    // Invocación a refund-order con targetOrderItem verificado y validado
+    const refundPayload = {
+      orderId: order_id,
+      suborderId: suborder_id || null,
+      orderItemId: order_item_id || null,
+      quantity: targetOrderItem?.quantity || null,
+      operationType: 'pre_dispatch_cancellation',
+      restoreStock: false,
+      amount: calculatedRefundAmount,
+      idempotencyKey: idempotency_key
+    };
+
+    const refundRes = await mock_refund_order_fn(refundPayload);
+    db.public.none(`
+      INSERT INTO unified_order_requests (id, order_id, suborder_id, order_item_id, status, amount_requested, amount_approved, idempotency_key)
+      VALUES ('req-${Date.now()}', '${order_id}', ${suborder_id ? `'${suborder_id}'` : 'NULL'}, ${order_item_id ? `'${order_item_id}'` : 'NULL'}, '${refundRes.refundSuccess ? 'REFUNDED' : 'CANCELLATION_CONFIRMED'}', ${calculatedRefundAmount}, ${calculatedRefundAmount}, '${idempotency_key}')
+    `);
+
+    return { status: 200, success: true, refundRes, calculatedRefundAmount, quantity: targetOrderItem?.quantity || null };
   }
 
   // Handler que ejecuta la lógica real de refund-order corregida
@@ -401,8 +389,8 @@ describe('EDGE FUNCTIONS REAL INTEGRATION & SECURITY SUITE (HOTFIX FINAL)', () =
     expect(it2.purchase_status).toBe('pending'); // Ítem hermano sin afectar
   });
 
-  // B. Cancelación internacional después de HTTP 204 de Zinc, sin segunda cancelación y con un solo reembolso
-  it('B. Cancelación internacional después de HTTP 204 de Zinc: sin segunda llamada externa y un solo reembolso', async () => {
+  // B. Cancelación internacional rechazada una vez confirmada/aprobada por Zinc (HTTP 409 ZINC_PURCHASE_ALREADY_APPROVED)
+  it('B. Cancelación internacional con Zinc aprobado: rechaza cancelación con HTTP 409 ZINC_PURCHASE_ALREADY_APPROVED y CERO llamadas a /cancel', async () => {
     db.public.none(`INSERT INTO orders (id, order_number, total_amount) VALUES ('ord-b', 'ORD-B-001', 4000)`);
     db.public.none(`INSERT INTO order_suborders (id, parent_order_id, group_key, product_subtotal) VALUES ('sub-b', 'ord-b', 'intl_store', 4000)`);
     db.public.none(`INSERT INTO order_items (id, order_id, suborder_id, product_id, quantity, unit_price, total_price, final_total) VALUES ('oi-b1', 'ord-b', 'sub-b', 'p-b1', 2, 2000, 4000, 4000)`);
@@ -429,14 +417,34 @@ describe('EDGE FUNCTIONS REAL INTEGRATION & SECURITY SUITE (HOTFIX FINAL)', () =
       mock_refund_order_fn: mockRefund
     });
 
-    expect(res.success).toBe(true);
-    expect(res.allCancelled).toBe(true);
-    expect(zincCancelCalls).toBe(1); // Exactamente una cancelación hacia Zinc
-    expect(refundCalls).toBe(1); // Exactamente una solicitud de reembolso
+    // Debe ser rechazado con 409 y código de error exacto
+    expect(res.status).toBe(409);
+    expect(res.error).toBe('ZINC_PURCHASE_ALREADY_APPROVED');
+    expect(zincCancelCalls).toBe(0); // CERO llamadas al endpoint de cancelación de Zinc
+    expect(refundCalls).toBe(0); // CERO reembolsos emitidos
 
+    // El estado del ítem en la base de datos permanece intacto
     const itIntl = db.public.one(`SELECT * FROM international_order_items WHERE id = 'intl-b1'`);
-    expect(itIntl.purchase_status).toBe('cancelled');
-    expect(itIntl.review_reason_code).toBe('ZINC_204_CANCELLED');
+    expect(itIntl.purchase_status).toBe('zinc_order_created');
+  });
+
+  // B2. Cancelación internacional con Zinc en proceso de envío (HTTP 202 ZINC_PURCHASE_SUBMITTING)
+  it('B2. Cancelación internacional en estado zinc_submitting: responde HTTP 202 indicando verificación en curso', async () => {
+    db.public.none(`INSERT INTO orders (id, order_number, total_amount) VALUES ('ord-b2', 'ORD-B2-001', 1800)`);
+    db.public.none(`INSERT INTO order_suborders (id, parent_order_id, group_key, product_subtotal) VALUES ('sub-b2', 'ord-b2', 'intl_store', 1800)`);
+    db.public.none(`INSERT INTO order_items (id, order_id, suborder_id, product_id, quantity, unit_price, total_price, final_total) VALUES ('oi-b2', 'ord-b2', 'sub-b2', 'p-b2', 1, 1800, 1800, 1800)`);
+    db.public.none(`INSERT INTO international_order_items (id, order_item_id, purchase_status) VALUES ('intl-b2', 'oi-b2', 'zinc_submitting')`);
+
+    const res = await simulateRequestOrderResolution({
+      order_id: 'ord-b2',
+      suborder_id: 'sub-b2',
+      order_item_id: 'oi-b2',
+      idempotency_key: 'idemp-b2',
+      mock_refund_order_fn: async () => ({ success: true, refundSuccess: true })
+    });
+
+    expect(res.status).toBe(202);
+    expect(res.error).toBe('ZINC_PURCHASE_SUBMITTING');
   });
 
   // C. Cancelación de un artículo de una suborden de dos artículos sin cancelar el envío del hermano

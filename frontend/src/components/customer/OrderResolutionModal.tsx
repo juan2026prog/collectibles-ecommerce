@@ -53,7 +53,35 @@ export default function OrderResolutionModal({
   const isVendor = Boolean(!isInternational && selectedSuborder && !selectedSuborder.is_collectibles_order && selectedSuborder.vendor_id);
   const isCollectiblesNational = !isInternational && !isVendor;
 
-  const [requestType, setRequestType] = useState<string>('voluntary_return');
+  // Evaluar estado Zinc del ítem seleccionado o de la suborden internacional
+  const intlItemsToCheck = selectedOrderItem
+    ? (selectedOrderItem.international_order_items || [])
+    : orderItems.flatMap((it: any) => it.international_order_items || []);
+
+  const approvedZincStatuses = [
+    'zinc_order_created',
+    'zinc_processing',
+    'purchased',
+    'warehouse_received',
+    'shipped',
+    'shipped_to_courier',
+    'delivered',
+    'delivered_to_courier'
+  ];
+
+  const isZincApproved = isInternational && intlItemsToCheck.some((z: any) => 
+    approvedZincStatuses.includes(z.purchase_status) || Boolean(z.zinc_order_id)
+  );
+
+  const isZincSubmitting = isInternational && intlItemsToCheck.some((z: any) => 
+    z.purchase_status === 'zinc_submitting'
+  );
+
+  const canCancelInternationalVoluntary = isInternational && !isZincApproved && !isZincSubmitting;
+
+  const [requestType, setRequestType] = useState<string>(
+    canCancelInternationalVoluntary ? 'cancel_international_zinc' : 'voluntary_return'
+  );
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [evidenceImages, setEvidenceImages] = useState<string[]>([]);
@@ -247,13 +275,37 @@ export default function OrderResolutionModal({
             </div>
           )}
 
-          {isInternational && (
-            <div className="bg-blue-500/10 border border-blue-500/30 p-3 rounded-xl flex items-start gap-2.5 text-blue-400">
+          {isInternational && isZincApproved && (
+            <div className="bg-amber-500/10 border border-amber-500/30 p-3.5 rounded-xl flex items-start gap-2.5 text-amber-400">
+              <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
+              <div>
+                <strong className="block font-semibold">Compra internacional confirmada:</strong>
+                <p className="text-[11px] text-amber-300 mt-0.5">
+                  Tu compra ya fue confirmada con el proveedor internacional y no admite cancelación por arrepentimiento. Podés continuar siguiendo el estado de tu pedido o ingresar un reclamo si surge alguna incidencia física.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {isInternational && isZincSubmitting && (
+            <div className="bg-blue-500/10 border border-blue-500/30 p-3.5 rounded-xl flex items-start gap-2.5 text-blue-400">
+              <RefreshCw className="w-4 h-4 shrink-0 mt-0.5 animate-spin" />
+              <div>
+                <strong className="block font-semibold">Compra en proceso de confirmación:</strong>
+                <p className="text-[11px] text-blue-300 mt-0.5">
+                  Tu compra internacional está siendo procesada por el proveedor. Estamos confirmando su estado.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {isInternational && canCancelInternationalVoluntary && (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 p-3.5 rounded-xl flex items-start gap-2.5 text-emerald-400">
               <Truck className="w-4 h-4 shrink-0 mt-0.5" />
               <div>
-                <strong className="block font-semibold">Política Internacional (USA / Zinc 2.0):</strong>
-                <p className="text-[11px] text-blue-300 mt-0.5">
-                  La cancelación está sujeta a la confirmación auténtica de detención en el proveedor (Amazon) antes de que sea despachado al casillero en Miami.
+                <strong className="block font-semibold">Compra no enviada a proveedor:</strong>
+                <p className="text-[11px] text-emerald-300 mt-0.5">
+                  El pedido aún no fue transmitido a Zinc. Podés solicitar la detención segura pre-compra de forma inmediata.
                 </p>
               </div>
             </div>
@@ -270,17 +322,21 @@ export default function OrderResolutionModal({
               {isWithin10m && (
                 <option value="cancel_immediate_10m">Cancelación Inmediata (Ventana 10 minutos)</option>
               )}
-              {isInternational && (
-                <option value="cancel_international_zinc">Solicitar Cancelación Internacional en Zinc</option>
+              {canCancelInternationalVoluntary && (
+                <option value="cancel_international_zinc">Solicitar Cancelación Pre-Compra en Proveedor</option>
               )}
               {isVendor && (
                 <option value="cancel_vendor_policy">Cancelación según política del vendedor</option>
               )}
-              <option value="legal_withdrawal">Derecho de Arrepentimiento Legal (5 días hábiles)</option>
-              <option value="voluntary_return">Devolución Comercial Voluntaria</option>
-              <option value="defective_product">Producto Defectuoso / Falla de Origen</option>
-              <option value="wrong_product">Producto Equivocado Recibido</option>
-              <option value="damaged_in_transit">Producto Dañado durante el Transporte</option>
+              {!isZincApproved && (
+                <option value="legal_withdrawal">Derecho de Arrepentimiento Legal (5 días hábiles)</option>
+              )}
+              {!isZincApproved && (
+                <option value="voluntary_return">Devolución Comercial Voluntaria</option>
+              )}
+              <option value="defective_product">Producto Defectuoso / Falla de Origen (Reclamo)</option>
+              <option value="wrong_product">Producto Equivocado Recibido (Reclamo)</option>
+              <option value="damaged_in_transit">Producto Dañado durante el Transporte (Reclamo)</option>
             </select>
           </div>
 
