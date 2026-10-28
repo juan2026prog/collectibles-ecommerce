@@ -21,8 +21,8 @@ Deno.serve(async (req: Request) => {
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     // 1. Webhook signature/secret verification
-    const handySecret = (Deno.env.get("HANDY_WEBHOOK_SECRET") || Deno.env.get("HANDY_MERCHANT_SECRET_KEY") || "").trim();
-    if (handySecret) {
+    const handySecret = (Deno.env.get("HANDY_WEBHOOK_SECRET") || "").trim();
+    if (handySecret.length >= 24) {
       const authHeader = req.headers.get("x-handy-secret") || req.headers.get("x-handy-signature") || req.headers.get("merchant-secret-key") || "";
       const urlObj = new URL(req.url);
       const querySecret = urlObj.searchParams.get("secret") || urlObj.searchParams.get("token") || "";
@@ -34,7 +34,7 @@ Deno.serve(async (req: Request) => {
         });
       }
     } else {
-      console.error("🚨 [Handy Webhook] CRITICAL SECURITY GATE: HANDY_WEBHOOK_SECRET or HANDY_MERCHANT_SECRET_KEY is not configured.");
+      console.error("🚨 [Handy Webhook] CRITICAL SECURITY GATE: HANDY_WEBHOOK_SECRET is not configured securely.");
       return new Response(JSON.stringify({ error: "Handy webhook authentication not configured" }), {
         status: 500,
         headers: responseHeaders,
