@@ -2047,6 +2047,16 @@ export default function Checkout() {
     handyProvider?.environment === 'production' &&
     cartCurrencyInfo.canonicalCurrency === 'UYU';
 
+  // Argentina does not use Handy UY. Keep checkout method in sync with
+  // the only displayed international option instead of leaving MP selected.
+  useEffect(() => {
+    if (form.country === 'Argentina' && paypalEnabled &&
+        cartPaymentRules.allowedProviders.includes('paypal') &&
+        paymentMethod !== 'paypal') {
+      setPaymentMethod('paypal');
+    }
+  }, [form.country, paypalEnabled, cartPaymentRules.allowedProviders, paymentMethod]);
+
   useEffect(() => {
     if (!settingsLoaded) return;
 
