@@ -76,6 +76,7 @@ async function handleHandyRefundNotice(payload: Record<string, any>, supabaseAdm
       amount:Number(payment.amount),
       reason:'Devolución Handy confirmada por webhook',
       operationType:existing.api_response?.operation_type || 'monetary_compensation',
+      bypassLiquidationCheck: existing.api_response?.bypass_liquidation_check === true,
       restoreStock:false,
     }),
   });
