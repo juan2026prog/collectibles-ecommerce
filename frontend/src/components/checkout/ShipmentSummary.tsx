@@ -21,11 +21,11 @@ export interface ShipmentSummaryProps {
   vendorShippingCosts: Record<string, number>;
   subtotal: number;
   shippingTotal: number;
-  shippingSavings?: number;
   couponDiscount?: number;
   autoDiscount?: number;
   finalTotal: number;
-  formatCurrencyPrice: (amount: number) => string;
+  /** Renders the input in its original checkout currency; no FX conversion. */
+  formatAmount: (amount: number) => string;
   activeCoupon?: any;
   onRemoveCoupon?: () => void;
 }
@@ -38,14 +38,22 @@ export const ShipmentSummary: React.FC<ShipmentSummaryProps> = ({
   vendorShippingCosts,
   subtotal,
   shippingTotal,
-  shippingSavings = 0,
   couponDiscount = 0,
   autoDiscount = 0,
   finalTotal,
-  formatCurrencyPrice,
+  formatAmount,
   activeCoupon,
   onRemoveCoupon,
 }) => {
+  // Missing a courier quote is not a free shipment. Only actual zero-valued
+  // quotes or pickup should receive the GRATIS badge.
+  const unquotedShippingKeys = uniqueStoreKeys.filter((key) => {
+    const method = subordersShipping[key]?.method;
+    const isPickupOrExternal = method === 'pickup' || method === 'international_courier_direct' || key === 'international';
+    return !isPickupOrExternal && !Object.prototype.hasOwnProperty.call(vendorShippingCosts, key);
+  });
+  const hasUnquotedShipping = unquotedShippingKeys.length > 0;
+
   return (
     <div className="bg-neutral-900/90 border border-neutral-800 rounded-2xl p-5 md:p-6 shadow-xl sticky top-6">
       <h3 className="font-bold text-lg text-white mb-4 flex items-center justify-between border-b border-neutral-800 pb-3">
@@ -70,9 +78,10 @@ export const ShipmentSummary: React.FC<ShipmentSummaryProps> = ({
             const vName = getVendorName(key);
             const subSel = subordersShipping[key];
             const method = subSel?.method || 'delivery';
-            const cost = vendorShippingCosts[key] ?? 0;
+            const hasVerifiedCost = Object.prototype.hasOwnProperty.call(vendorShippingCosts, key);
+            const cost = hasVerifiedCost ? vendorShippingCosts[key] : null;
             const isPickup = method === 'pickup';
-            const isFree = cost === 0;
+            const isFree = isPickup || (hasVerifiedCost && cost === 0);
 
             let methodLabel = 'Envío a domicilio';
             if (key === 'international' || method === 'international_courier_direct') methodLabel = 'Entrega en casilla EE.UU.';
@@ -105,8 +114,10 @@ export const ShipmentSummary: React.FC<ShipmentSummaryProps> = ({
                     </span>
                   ) : isFree ? (
                     <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">GRATIS</span>
+                  ) : cost === null ? (
+                    <span className="text-[10px] font-medium text-amber-300">Por calcular</span>
                   ) : (
-                    <span className="font-semibold text-white">${cost.toLocaleString('es-UY')}</span>
+                    <span className="font-semibold text-white">{formatAmount(cost)}</span>
                   )}
                 </div>
               </div>
@@ -144,38 +155,33 @@ export const ShipmentSummary: React.FC<ShipmentSummaryProps> = ({
       <div className="space-y-2.5 text-sm mb-5">
         <div className="flex justify-between text-neutral-400">
           <span>Subtotal productos</span>
-          <span className="text-white font-medium">{formatCurrencyPrice(subtotal)}</span>
+          <span className="text-white font-medium">{formatAmount(subtotal)}</span>
         </div>
 
         {autoDiscount > 0 && (
           <div className="flex justify-between text-emerald-400 font-medium">
             <span>Descuentos automáticos</span>
-            <span>-{formatCurrencyPrice(autoDiscount)}</span>
+            <span>-{formatAmount(autoDiscount)}</span>
           </div>
         )}
 
         {couponDiscount > 0 && (
           <div className="flex justify-between text-purple-400 font-medium">
             <span>Descuento cupón</span>
-            <span>-{formatCurrencyPrice(couponDiscount)}</span>
+            <span>-{formatAmount(couponDiscount)}</span>
           </div>
         )}
 
         <div className="flex justify-between text-neutral-400">
           <span>Total envío ({uniqueStoreKeys.length} {uniqueStoreKeys.length === 1 ? 'paquete' : 'paquetes'})</span>
-          {shippingTotal === 0 ? (
+          {hasUnquotedShipping ? (
+            <span className="text-amber-300 font-semibold">Por calcular</span>
+          ) : shippingTotal === 0 ? (
             <span className="text-emerald-400 font-bold">GRATIS</span>
           ) : (
-            <span className="text-white font-medium">{formatCurrencyPrice(shippingTotal)}</span>
+            <span className="text-white font-medium">{formatAmount(shippingTotal)}</span>
           )}
         </div>
-
-        {shippingSavings > 0 && (
-          <div className="flex justify-between text-emerald-400 font-semibold text-xs bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
-            <span>Ahorro en envíos</span>
-            <span>-{formatCurrencyPrice(shippingSavings)}</span>
-          </div>
-        )}
 
         <div className="border-t border-neutral-800 pt-3 mt-3 flex justify-between items-baseline">
           <div>
@@ -184,7 +190,9 @@ export const ShipmentSummary: React.FC<ShipmentSummaryProps> = ({
           </div>
           <div className="text-right">
             <span className="text-2xl font-black text-[#f00856] tracking-tight">
-              {formatCurrencyPrice(finalTotal)}
+              {hasUnquotedShipping ? (
+                <span className="text-sm text-amber-300">Pendiente del costo de envío</span>
+              ) : formatAmount(finalTotal)}
             </span>
           </div>
         </div>
