@@ -743,6 +743,7 @@ Deno.serve(async (req: Request) => {
             handy_refund_requested: true,
             transaction_external_id: payment.transaction_external_id,
             operation_type: operationType,
+            bypass_liquidation_check: bypassLiquidationCheck === true,
             initiated_at: new Date().toISOString(),
           },
         }).eq('id', processingRefundId).eq('status','processing');
@@ -776,6 +777,7 @@ Deno.serve(async (req: Request) => {
             handy_request_accepted: accepted,
             transaction_external_id: payment.transaction_external_id,
             operation_type: operationType,
+            bypass_liquidation_check: bypassLiquidationCheck === true,
             initiated_at: new Date().toISOString(),
             ...(requestProblem ? { reconciliation_note: requestProblem } : {}),
           },
