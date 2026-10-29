@@ -1133,7 +1133,7 @@ export default function AdminRefunds() {
                   className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl text-sm transition-colors flex justify-center items-center gap-2 shadow-lg shadow-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submittingRefund ? 'Procesando...' : 
-                   searchedOrder && ['handy', 'dlocalgo', 'dlocal'].includes(searchedOrder.payment_method)
+                   searchedOrder && ['dlocalgo', 'dlocal'].includes(searchedOrder.payment_method)
                      ? 'Registrar solicitud de devolución manual'
                      : 'Procesar reembolso ahora'
                   }
