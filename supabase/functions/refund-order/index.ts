@@ -721,7 +721,7 @@ Deno.serve(async (req: Request) => {
         refundSuccess = true;
         gatewayRefundId = payment.transaction_external_id;
         refundDetails = {
-          gateway: 'handy', confirmed_by_webhook: true,
+          gateway: 'handy', confirmed_by_webhook: true, handy_refund_requested: true,
           transaction_external_id: payment.transaction_external_id,
           idempotency_key: idempotencyKey,
         };
