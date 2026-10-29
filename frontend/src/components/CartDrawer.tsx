@@ -12,6 +12,7 @@ import { trackGA4Event, trackClarityEvent, mapCartItemsToGA4 } from '../lib/anal
 import { useImageProtection } from '../hooks/useImageProtection';
 import { formatUSD } from '../lib/formatters';
 import { formatProductMoney, resolveCartItemPrice, inspectCartCurrencies } from '../lib/priceResolver';
+import { getCartDrawerNativeTotals } from '../lib/cartDrawerNativeTotals';
 
 export default function CartDrawer() {
   const navigate = useNavigate();
@@ -27,7 +28,7 @@ export default function CartDrawer() {
     setIsDrawerOpen 
   } = useCartContext();
 
-  const { formatCurrencyPrice, selectedCurrency } = useCurrency();
+  const { selectedCurrency } = useCurrency();
   const { settings } = useSiteSettings();
   const freeShippingThreshold = Number(settings['free_shipping_threshold'] || 4000);
 
@@ -106,14 +107,12 @@ export default function CartDrawer() {
   // Inspección canónica de monedas en carrito
   const cartCurrencyInfo = inspectCartCurrencies(items);
 
-  let autoDiscountAmount = 0;
-  items.forEach(item => {
-    autoDiscountAmount += evaluateItemDiscount(item as any, promotions);
-  });
-
-  const shipping = total - autoDiscountAmount >= freeShippingThreshold ? 0 : 350;
-  const grandTotal = total - autoDiscountAmount + shipping;
-  const freeShippingProgress = Math.min(100, ((total - autoDiscountAmount) / freeShippingThreshold) * 100);
+  const itemDiscounts = items.map(item => evaluateItemDiscount(item as any, promotions));
+  const autoDiscountAmount = itemDiscounts.reduce((sum, discount) => sum + discount, 0);
+  const cartNative = getCartDrawerNativeTotals(items, itemDiscounts, freeShippingThreshold);
+  // Local shipping is an UYU estimate. International shipping is calculated at checkout.
+  const shipping = cartNative.shippingUYU;
+  const freeShippingProgress = cartNative.freeShippingProgress;
 
   // GA4: view_cart trigger (Phase 2)
   const viewCartTrackedRef = useRef(false);
@@ -254,22 +253,17 @@ export default function CartDrawer() {
               </div>
 
               {/* Free Shipping Promo Banner */}
-              {(() => {
-                const hasInternational = items.some(item => (item as any).is_international || (item as any).source_provider === 'zinc' || (item as any).shipping_type === 'international_courier_direct');
+              {!cartNative.hasUSD && (() => {
                 return (
                   <div className="border border-dashed border-blue-500/50 bg-blue-950/10 rounded-2xl p-4 space-y-3">
                     <div className="flex items-start gap-2.5">
                       <span className="text-amber-400 text-lg mt-0.5">⚡</span>
                       <div>
                         <div className="text-xs font-bold text-white uppercase tracking-wider">
-                          {hasInternational 
-                            ? `Envíos GRATIS en Uruguay en compras mayores a ${formatCurrencyPrice(freeShippingThreshold)}`
-                            : `Envíos GRATIS en compras mayores a ${formatCurrencyPrice(freeShippingThreshold)}`}
+                          Envíos GRATIS en compras mayores a {formatProductMoney({ amount: freeShippingThreshold, currency: 'UYU' })}
                         </div>
                         <div className="text-[10px] text-blue-400 mt-0.5">
-                          {hasInternational 
-                            ? 'Aplica a paquetes locales elegibles.' 
-                            : 'Aprovechá esta promoción de verano'}
+                          Aprovechá esta promoción de verano
                         </div>
                       </div>
                     </div>
@@ -283,7 +277,7 @@ export default function CartDrawer() {
                         />
                       </div>
                       <div className="text-[10px] flex justify-between">
-                    {total - autoDiscountAmount >= freeShippingThreshold ? (
+                    {cartNative.freeShippingRemainingUYU === 0 ? (
                       <span className="text-emerald-400 font-bold flex items-center gap-1">
                         <Sparkles className="w-3 h-3" /> ¡Tenés envío GRATIS!
                       </span>
@@ -291,7 +285,7 @@ export default function CartDrawer() {
                       <span className="text-slate-400">
                         Te faltan{' '}
                         <span className="text-blue-400 font-bold">
-                          {formatCurrencyPrice(freeShippingThreshold - (total - autoDiscountAmount))}
+                          {formatProductMoney({ amount: cartNative.freeShippingRemainingUYU, currency: 'UYU' })}
                         </span>{' '}
                         para el envío gratis.
                       </span>
@@ -324,7 +318,8 @@ export default function CartDrawer() {
                   const itemDiscount = evaluateItemDiscount(item as any, promotions);
                   const displayPrice = (item.price * item.quantity) - itemDiscount;
                   const isItemIntl = Boolean(
-                    (item as any).is_international || 
+                    item.currency === 'USD' ||
+                    (item as any).is_international ||
                     (item as any).source_provider === 'zinc' || 
                     (item as any).shipping_type === 'international_courier_direct'
                   );
@@ -510,21 +505,38 @@ export default function CartDrawer() {
             <div className="space-y-2.5 mb-5 text-sm">
               <div className="flex justify-between items-center text-slate-400">
                 <span>Subtotal ({count} {count === 1 ? 'item' : 'items'})</span>
-                <span className="font-bold text-white">{formatCurrencyPrice(total - autoDiscountAmount)}</span>
+                <span className="font-bold text-white text-right">
+                  {cartNative.isMixed ? (
+                    <>{formatProductMoney({ amount: cartNative.netUYU, currency: 'UYU' })}
+                      <span className="block">{formatProductMoney({ amount: cartNative.netUSD, currency: 'USD' })}</span>
+                    </>
+                  ) : formatProductMoney({
+                    amount: cartNative.hasUSD ? cartNative.netUSD : cartNative.netUYU,
+                    currency: cartNative.hasUSD ? 'USD' : 'UYU'
+                  })}
+                </span>
               </div>
                 {autoDiscountAmount > 0 && (
                   <div className="flex justify-between items-center text-emerald-400 text-xs mt-1">
                     <span className="flex items-center gap-1"><Tag className="w-3.5 h-3.5" /> Ahorro en promociones</span>
-                    <span className="font-bold">{formatCurrencyPrice(autoDiscountAmount)}</span>
+                    <span className="font-bold text-right">{cartNative.isMixed ? (
+                      <>{formatProductMoney({ amount: cartNative.discountUYU, currency: 'UYU' })}
+                        <span className="block">{formatProductMoney({ amount: cartNative.discountUSD, currency: 'USD' })}</span></>
+                    ) : formatProductMoney({
+                      amount: cartNative.hasUSD ? cartNative.discountUSD : cartNative.discountUYU,
+                      currency: cartNative.hasUSD ? 'USD' : 'UYU'
+                    })}</span>
                   </div>
                 )}
               <div className="flex justify-between items-center text-slate-400">
                 <span>Envío estimado</span>
                 <span className="font-bold text-white">
-                  {shipping === 0 ? (
+                  {shipping === null ? (
+                    <span className="text-xs text-slate-300">Se calcula en el checkout</span>
+                  ) : shipping === 0 ? (
                     <span className="text-emerald-400 font-black">GRATIS</span>
                   ) : (
-                    formatCurrencyPrice(shipping)
+                    formatProductMoney({ amount: shipping, currency: 'UYU' })
                   )}
                 </span>
               </div>
@@ -537,17 +549,17 @@ export default function CartDrawer() {
                   {cartCurrencyInfo.isMixed ? (
                     <div className="text-right">
                       <span className="text-sm font-bold text-amber-400 block">
-                        $ {cartCurrencyInfo.totalUYU.toLocaleString('es-UY')} UYU
+                        {formatProductMoney({ amount: cartNative.netUYU, currency: 'UYU' })}
                       </span>
                       <span className="text-sm font-bold text-blue-400 block">
-                        + US$ {cartCurrencyInfo.totalUSD.toFixed(2)}
+                        + {formatProductMoney({ amount: cartNative.netUSD, currency: 'USD' })}
                       </span>
                     </div>
                   ) : (
                     <span className="text-xl font-black text-[#f00856]">
                       {cartCurrencyInfo.hasUSD
-                        ? `US$ ${(total - autoDiscountAmount + (shipping > 0 ? 0 : 0)).toFixed(2)}`
-                        : formatCurrencyPrice(grandTotal)}
+                        ? formatProductMoney({ amount: cartNative.netUSD, currency: 'USD' })
+                        : formatProductMoney({ amount: cartNative.estimatedGrandTotalUYU ?? cartNative.netUYU, currency: 'UYU' })}
                     </span>
                   )}
                   {selectedCurrency !== 'UYU' && !cartCurrencyInfo.hasUSD && (
