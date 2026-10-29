@@ -532,7 +532,7 @@ Deno.serve(async (req: Request) => {
 
       if (hasLabelCreatedShipment) {
         // Set shipment status to label_created
-        if (orderShipments) {
+        if (orderShipments && (order.payment_method !== 'handy' || handyWebhookSettlement)) {
           for (const ship of orderShipments) {
             if (['documented', 'ready_to_ship', 'label_created'].includes(ship.shipping_status)) {
               await supabaseAdmin
@@ -575,7 +575,7 @@ Deno.serve(async (req: Request) => {
           }
         }
 
-        if (canCancelShipments) {
+        if (canCancelShipments && (order.payment_method !== 'handy' || handyWebhookSettlement)) {
           // Solo cancelar el shipment si toda la suborden/orden o todos los ítems del envío son cancelados
           for (const ship of orderShipments) {
             await supabaseAdmin
