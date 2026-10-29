@@ -144,6 +144,16 @@ Deno.serve(async (req: Request) => {
       throw new Error("No se encontraron subórdenes para esta orden.");
     }
 
+    // Vendor orders often enter the refund form with their sole suborder selected.
+    // Normalize to the whole payment ONLY when that single suborder is the entire order.
+    // This must never turn a partial vendor refund on a mixed order into a full refund.
+    if (order.payment_method === 'handy' && suborderId && !orderItemId &&
+        suborders.length === 1 && suborders[0].id === suborderId &&
+        (amount === null || amount === undefined ||
+         Math.abs(Number(amount) - Number(order.total_amount)) < 0.01)) {
+      suborderId = null;
+    }
+
     // 3. Fetch Payments
     const { data: payment } = await supabaseAdmin
       .from("payments")
