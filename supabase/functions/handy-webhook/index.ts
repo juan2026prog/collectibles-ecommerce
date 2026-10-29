@@ -135,7 +135,16 @@ Deno.serve(async (req: Request) => {
     // Handy sends { Success: boolean, TransactionExternalId: UUID } when a
     // reversal succeeds/fails. It has no PurchaseData.Status field.
     if (typeof payload.Success === 'boolean' && payload.TransactionExternalId) {
-      return await handleHandyRefundNotice(payload, supabaseAdmin, supabaseUrl, supabaseServiceKey);
+      try {
+        return await handleHandyRefundNotice(payload, supabaseAdmin, supabaseUrl, supabaseServiceKey);
+      } catch (error) {
+        // Acknowledge only after durable reconciliation. On DB/settlement failure
+        // return retryable error instead of falsely replying "received: true".
+        console.error("[Handy] Refund callback could not be reconciled", error instanceof Error ? error.message : "unknown");
+        return new Response(JSON.stringify({ error: "Refund callback reconciliation unavailable" }), {
+          status: 503, headers: responseHeaders,
+        });
+      }
     }
 
     const webhookData = extractHandyWebhookData(payload);
