@@ -14,7 +14,7 @@ import { getProductImage, resolveImage } from '../lib/imageUtils';
 import { usePromotions, evaluateItemDiscount, evaluateItemDiscountDetailed } from '../hooks/usePromotions';
 import { getProductPaymentRestrictions } from '../hooks/useData';
 import { trackGA4Event, trackClarityEvent, mapCartItemsToGA4 } from '../lib/analyticsTracker';
-import { resolveCartItemPrice, resolveProductPrice, inspectCartCurrencies } from '../lib/priceResolver';
+import { resolveCartItemPrice, resolveProductPrice, inspectCartCurrencies, formatProductMoney } from '../lib/priceResolver';
 import { generateMetaEventId, trackInitiateCheckout, trackAddPaymentInfo } from '../lib/meta/metaPixel';
 import { calculateUruboxEstimate, getEstimatedWeightKg } from '../lib/urubox';
 import CheckoutStepper from '../components/checkout/CheckoutStepper';
@@ -132,15 +132,17 @@ export default function Checkout() {
   const { items, total, addItem, updateQuantity, removeItem } = useCartContext();
   const { settings, loaded: settingsLoaded } = useSiteSettings();
   const freeShippingThreshold = Number(settings['free_shipping_threshold'] || 4000);
-  const { formatCurrencyPrice, formatProductPrice, selectedCurrency, setSelectedCurrency, convertUSDToARS, convertARSToUSD, getFxRateUsdToArs } = useCurrency();
+  const { selectedCurrency, setSelectedCurrency, convertUSDToARS, convertARSToUSD, getFxRateUsdToArs } = useCurrency();
   const { user } = useAuth();
   const [internationalShippingRate, setInternationalShippingRate] = useState<number>(0);
 
   // Inspección canónica de monedas en checkout
   const cartCurrencyInfo = useMemo(() => inspectCartCurrencies(items), [items]);
+  // All checkout totals are already denominated in the CART'S NATIVE currency.
+  // Never pass UYU values into formatCurrencyPrice (which assumes USD input).
   const formatCheckoutTotal = (amount: number) => cartCurrencyInfo.isMixed
     ? 'Total sujeto a separación por moneda'
-    : formatProductPrice({ amount, sourceCurrency: cartCurrencyInfo.canonicalCurrency || 'UYU' });
+    : formatProductMoney({ amount, currency: cartCurrencyInfo.canonicalCurrency || 'UYU' });
 
   const [form, setForm] = useState({
     email: user?.email || '',
@@ -1470,6 +1472,13 @@ export default function Checkout() {
     ));
   
   let shipping = Object.values(vendorShippingCosts).reduce((sum, cost) => sum + cost, 0);
+  // Unknown delivery quotations are NOT free delivery; do not show a final total
+  // until the shipping charge for every selected store has been confirmed.
+  const hasUnquotedShipping = uniqueStoreKeys.some(key => {
+    const method = subordersShipping[key]?.method;
+    if (method === 'pickup' || method === 'international_courier_direct' || key === 'international') return false;
+    return !Object.prototype.hasOwnProperty.call(vendorShippingCosts, key);
+  });
 
   // Debug log for shipping cost final
   useEffect(() => {
@@ -2972,7 +2981,7 @@ export default function Checkout() {
                           {p.title}
                         </h4>
                         <p className="text-sm font-black text-[#f00856] mt-1.5">
-                          {formatCurrencyPrice(p.base_price)}
+                          {formatCheckoutTotal(p.base_price)}
                         </p>
                       </div>
                       
@@ -3976,11 +3985,14 @@ export default function Checkout() {
                       </div>
                       <div className="flex items-center gap-3 text-xs">
                         <span className="text-emerald-400 font-bold">
-                          {Object.values(subordersShipping).filter(s => (vendorShippingCosts[s.method] ?? 0) === 0 || s.method === 'pickup').length} envíos gratis
+                          {uniqueStoreKeys.filter(key => {
+                            const method = subordersShipping[key]?.method;
+                            return method === 'pickup' || (Object.prototype.hasOwnProperty.call(vendorShippingCosts, key) && vendorShippingCosts[key] === 0);
+                          }).length} envíos gratis
                         </span>
                         <span className="text-neutral-500">·</span>
                         <span className="text-white font-bold">
-                          Total de envío: ${shipping.toLocaleString('es-UY')}
+                          Total de envío: {hasUnquotedShipping ? 'Por calcular' : formatCheckoutTotal(shipping)}
                         </span>
                       </div>
                     </div>
@@ -4316,9 +4328,9 @@ export default function Checkout() {
                                 </div>
                                 <p className="text-xs text-slate-400 leading-snug">{promo.promo_label || `${promo.discount_value}% OFF pagando con ${promo.bank_name}`}</p>
                                 {meetsMinimum ? (
-                                  <p className="text-xs font-bold text-green-600 mt-1.5">Ahorras {formatCurrencyPrice(promoDiscount)}</p>
+                                  <p className="text-xs font-bold text-green-600 mt-1.5">Ahorras {formatCheckoutTotal(promoDiscount)}</p>
                                 ) : (
-                                  <p className="text-[10px] text-slate-500 mt-1.5">Mínimo {formatCurrencyPrice(promo.min_purchase)} para aplicar</p>
+                                  <p className="text-[10px] text-slate-500 mt-1.5">Mínimo {formatCheckoutTotal(promo.min_purchase)} para aplicar</p>
                                 )}
                               </div>
                             </div>
@@ -4330,7 +4342,7 @@ export default function Checkout() {
                       <div className="mt-4 flex items-center justify-between bg-green-50 border border-green-200  px-4 py-3">
                         <div className="flex items-center gap-2">
                           <Tag className="w-4 h-4 text-green-600" />
-                          <span className="text-sm font-bold text-green-700">Promo {selectedPromo.bank_name} aplicada: -{selectedPromo.discount_value}% {bankDiscount > 0 && <span className="ml-1 text-green-600">(-{formatCurrencyPrice(bankDiscount)})</span>}</span>
+                          <span className="text-sm font-bold text-green-700">Promo {selectedPromo.bank_name} aplicada: -{selectedPromo.discount_value}% {bankDiscount > 0 && <span className="ml-1 text-green-600">(-{formatCheckoutTotal(bankDiscount)})</span>}</span>
                         </div>
                         <button type="button" onClick={() => setSelectedPromo(null)} className="p-1 hover:bg-green-100 rounded-full transition-colors">
                           <X className="w-4 h-4 text-green-500" />
@@ -4457,7 +4469,7 @@ export default function Checkout() {
                             <span className="text-[10px] font-bold text-slate-400">
                               {sel.method === 'pickup' 
                                 ? 'Retiro en local: GRATIS'
-                                : `Envío (${providerLabel}): ${groupShippingCost === 0 ? 'GRATIS' : formatCurrencyPrice(groupShippingCost)}`
+                                : `Envío (${providerLabel}): ${groupShippingCost === 0 ? 'GRATIS' : formatCheckoutTotal(groupShippingCost)}`
                               }
                             </span>
                           )}
@@ -4506,11 +4518,11 @@ export default function Checkout() {
                                   </div>
                                   <div className="flex flex-col items-end gap-0.5">
                                     <span className={`text-xs font-bold whitespace-nowrap ${(item.is_international || storeKey === 'international') ? 'text-sky-300' : 'text-white'}`}>
-                                      {formatProductPrice({ amount: displayPrice, sourceCurrency: (item.currency === 'USD' || item.is_international) ? 'USD' : 'UYU' })}
+                                      {formatProductMoney({ amount: displayPrice, currency: (item.currency === 'USD' || item.is_international) ? 'USD' : 'UYU' })}
                                     </span>
                                     {itemDiscount > 0 && (
                                       <span className="text-[10px] text-slate-500 line-through whitespace-nowrap">
-                                        {formatProductPrice({ amount: item.price * item.quantity, sourceCurrency: (item.currency === 'USD' || item.is_international) ? 'USD' : 'UYU' })}
+                                        {formatProductMoney({ amount: item.price * item.quantity, currency: (item.currency === 'USD' || item.is_international) ? 'USD' : 'UYU' })}
                                       </span>
                                     )}
                                   </div>
@@ -4602,11 +4614,10 @@ export default function Checkout() {
                 vendorShippingCosts={vendorShippingCosts}
                 subtotal={subtotal}
                 shippingTotal={shipping}
-                shippingSavings={Object.values(subordersShipping).some(s => s.method === 'pickup') ? 220 : 0}
                 couponDiscount={couponDiscount}
                 autoDiscount={autoDiscountAmount}
                 finalTotal={grandTotal}
-                formatCurrencyPrice={formatCurrencyPrice}
+                formatAmount={formatCheckoutTotal}
                 activeCoupon={activeCoupon}
                 onRemoveCoupon={handleRemoveCoupon}
               />
