@@ -109,3 +109,33 @@ export async function getHandyProviderConfig(supabaseAdmin: any) {
     checkoutText: String(config.checkout_text || "Pagar con Handy"),
   };
 }
+
+
+/** Handy Botón de Pago V2: a reversal is full-sale, card-only and may be attempted once. */
+export function parseHandyRefundResponse(payload: any, transactionExternalId: string) {
+  const id = String(payload?.TransactionExternalId ?? "");
+  return {
+    accepted: payload?.IsSuccess === true && Number(payload?.StatusCode) === 200
+      && id === transactionExternalId,
+    statusCode: Number(payload?.StatusCode),
+    matchesTransaction: id === transactionExternalId,
+  };
+}
+
+export function isHandyCardPayment(webhookPayload: any) {
+  const instrument = webhookPayload?.InstrumentData ?? webhookPayload?.instrumentData;
+  if (!instrument || instrument.NotACard !== false) return false;
+  const issuer = String(instrument.IssuerName ?? "").trim().toUpperCase();
+  const name = String(instrument.Name ?? "").trim();
+  // Handy v2 also uses NotACard=false for bank transfers.
+  if (["ITAÚ", "ITAU", "BROU", "SCOTIABANK", "BBVA", "BANDES"].includes(issuer)) return false;
+  const knownCardIssuer = /^(VISA|MASTERCARD|MASTER CARD|OCA|AMEX|AMERICAN EXPRESS|CABAL|PASSCARD|ANDA|CLUB DEL ESTE)/.test(issuer);
+  const maskedCardNumber = /[0-9]{4}[*Xx]{2,}/.test(name);
+  return knownCardIssuer || maskedCardNumber;
+}
+
+export function isHandyFullReversal(amount: number, orderTotal: number, suborderId: string | null, orderItemId: string | null) {
+  return !suborderId && !orderItemId && Number.isFinite(amount)
+    && Number.isFinite(orderTotal) && amount > 0
+    && Math.abs(amount - orderTotal) < 0.01;
+}
