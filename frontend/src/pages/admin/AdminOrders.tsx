@@ -858,7 +858,10 @@ export default function AdminOrders() {
       const { data, error: fnErr } = await supabase.functions.invoke('refund-order', {
         body: {
           orderId: selectedOrder.id,
-          reason: reason || "Cancelada por el administrador"
+          reason: reason || "Cancelada por el administrador",
+          idempotencyKey: selectedOrder.payment_method === 'handy'
+            ? `handy-full-refund-${selectedOrder.id}`
+            : crypto.randomUUID()
         }
       });
       
@@ -878,6 +881,10 @@ export default function AdminOrders() {
            const details = data.refundDetails || {};
            const testWarning = details.isTestMode ? '\n\n⚠️ ATENCIÓN: Estás usando un token de PRUEBA (TEST). Este reembolso solo se procesó en el sandbox de MercadoPago y NO se reflejará en la tarjeta de crédito real del cliente.' : '';
            toast.success(`Orden cancelada y reembolso procesado. Refund ID: ${details.refund_id || details.id || 'N/A'}${testWarning}`, 8000);
+         } else if (data?.pendingGatewayConfirmation) {
+           toast.warning(data.status === 'processing'
+             ? 'Handy inició la devolución. Pendiente de confirmación automática.'
+             : 'Respuesta de Handy incierta. No reintentar: requiere conciliación.');
          } else if (data?.manualRequired) {
            toast.warning("Esta pasarela requiere devolución manual. Se ha registrado la solicitud de reembolso manual.");
          } else {
@@ -1684,7 +1691,7 @@ export default function AdminOrders() {
                       {selectedOrder.status === 'pending' 
                         ? 'Cancelar la orden sin reembolso (pendiente de pago). Se revertirá el stock y se notificará al cliente.'
                         : selectedOrder.status === 'paid'
-                          ? 'Cancelar la orden y procesar reembolso automático vía Mercado Pago. Se revertirá el stock.'
+                          ? 'Solicitar cancelación y devolución mediante la pasarela utilizada. Confirmar resultado antes de marcar el dinero como devuelto.'
                           : 'Cancelar la orden y revertir el stock de los productos. Se notificará al cliente.'}
                     </p>
                     <button 

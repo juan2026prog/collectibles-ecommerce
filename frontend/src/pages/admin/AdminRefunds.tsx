@@ -229,6 +229,11 @@ export default function AdminRefunds() {
 
   // Handle Suborder Change inside Refund Modal
   const handleSuborderChange = (subId: string) => {
+    if (searchedOrder?.payment_method === 'handy') {
+      setSelectedSuborderId('');
+      setRefundAmount(String(searchedOrder.total_amount));
+      return;
+    }
     setSelectedSuborderId(subId);
     if (!searchedOrder) return;
 
@@ -256,7 +261,10 @@ export default function AdminRefunds() {
           suborderId: selectedSuborderId || null,
           amount: refundAmount ? Number(refundAmount) : null,
           reason: refundReason,
-          bypassLiquidationCheck: bypassLiquidation
+          bypassLiquidationCheck: bypassLiquidation,
+          idempotencyKey: searchedOrder.payment_method === 'handy'
+            ? `handy-full-refund-${searchedOrder.id}`
+            : crypto.randomUUID()
         }
       });
 
@@ -270,10 +278,16 @@ export default function AdminRefunds() {
         throw new Error(errorMsg || 'Error al procesar reembolso');
       }
 
-      if (data?.manualRequired) {
+      if (data?.pendingGatewayConfirmation) {
+        toast.warning(data.status === 'processing'
+          ? 'Handy inició la devolución. Esperando confirmación del reintegro por webhook.'
+          : 'Devolución Handy con respuesta incierta. Requiere conciliación; no volver a solicitar.');
+      } else if (data?.manualRequired) {
         toast.warning('Esta pasarela requiere devolución manual. Se ha registrado la solicitud.');
+      } else if (data?.refundSuccess) {
+        toast.success('Reembolso confirmado y procesado exitosamente.');
       } else {
-        toast.success('Reembolso procesado exitosamente.');
+        throw new Error(data?.message || 'El reembolso no fue confirmado.');
       }
 
       setIsNewRefundModalOpen(false);
@@ -1003,14 +1017,16 @@ export default function AdminRefunds() {
 
                   {/* Gateways manual/automatic helper */}
                   <div className={`p-4 rounded-xl text-xs font-bold border ${
-                    ['handy', 'dlocalgo', 'dlocal'].includes(searchedOrder.payment_method)
+                    ['dlocalgo', 'dlocal'].includes(searchedOrder.payment_method)
                       ? 'bg-orange-50 border-orange-200 text-orange-800'
                       : 'bg-emerald-50 border-emerald-200 text-emerald-800'
                   }`}>
-                    {['handy', 'dlocalgo', 'dlocal'].includes(searchedOrder.payment_method) ? (
+                    {['dlocalgo', 'dlocal'].includes(searchedOrder.payment_method) ? (
                       <p>⚠️ Devolución manual requerida para esta pasarela ({searchedOrder.payment_method}). El sistema registrará la solicitud en estado 'manual_refund_required' y no actualizará los estados del pago ni la orden hasta que confirmes la realización manual externa.</p>
                     ) : (
-                      <p>⚡ Reembolso automático disponible para esta pasarela ({searchedOrder.payment_method}). El sistema intentará procesarlo de forma programática inmediata.</p>
+                      <p>⚡ {searchedOrder.payment_method === 'handy'
+                        ? 'Handy permite una única devolución automática del pago completo con tarjeta. El estado será pendiente hasta que Handy confirme por webhook.'
+                        : `Reembolso automático disponible para esta pasarela (${searchedOrder.payment_method}). El sistema intentará procesarlo de forma programática inmediata.`}</p>
                     )}
                   </div>
 
@@ -1019,6 +1035,7 @@ export default function AdminRefunds() {
                     <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Ámbito del Reembolso</label>
                     <select
                       value={selectedSuborderId}
+                      disabled={searchedOrder.payment_method === 'handy'}
                       onChange={e => handleSuborderChange(e.target.value)}
                       className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white outline-none focus:border-indigo-500"
                     >
@@ -1045,6 +1062,7 @@ export default function AdminRefunds() {
                         required
                         placeholder="0.00"
                         value={refundAmount}
+                        disabled={searchedOrder.payment_method === 'handy'}
                         onChange={e => setRefundAmount(e.target.value)}
                         className="w-full pl-8 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:border-indigo-500 outline-none font-bold text-gray-800"
                       />
@@ -1115,7 +1133,7 @@ export default function AdminRefunds() {
                   className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl text-sm transition-colors flex justify-center items-center gap-2 shadow-lg shadow-indigo-100 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submittingRefund ? 'Procesando...' : 
-                   searchedOrder && ['handy', 'dlocalgo', 'dlocal'].includes(searchedOrder.payment_method)
+                   searchedOrder && ['dlocalgo', 'dlocal'].includes(searchedOrder.payment_method)
                      ? 'Registrar solicitud de devolución manual'
                      : 'Procesar reembolso ahora'
                   }

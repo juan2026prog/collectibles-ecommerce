@@ -153,6 +153,7 @@ export async function startCheckoutPayment(params: StartPaymentParams): Promise<
       body: {
         order_id: params.order_id,
         customer_email: params.customer_email,
+        order_token: sessionStorage.getItem(`order_token_${params.order_id}`) || undefined,
       },
     });
 
@@ -163,11 +164,11 @@ export async function startCheckoutPayment(params: StartPaymentParams): Promise<
       throw new Error(error.message || "No se pudo crear el pago con Handy");
     }
 
-    if (data?.error) {
-      throw new Error(data.error);
+    if (data?.error || data?.success === false) {
+      throw new Error(data?.error || "Handy no pudo crear el pago");
     }
 
-    const paymentUrl = data?.url || data?.payment_url;
+    const paymentUrl = data?.url || data?.payment_url || data?.checkout_url;
     if (!paymentUrl) {
       throw new Error("Handy no devolvió URL de pago");
     }
