@@ -11,8 +11,11 @@ interface Banner {
   image_url: string;
   mobile_image_url: string | null;
   link_url: string | null;
+  cta_text?: string | null;
+  cta_link?: string | null;
   badge_text: string | null;
   button_text: string | null;
+  button_url?: string | null;
   secondary_button_text: string | null;
   secondary_button_url: string | null;
   content_position: string | null; // 'top' | 'center' | 'bottom'
@@ -261,18 +264,18 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
               <div className="absolute inset-0 bg-[#05070f]" />
             )}
 
-            {/* 2. Custom dark solid overlay */}
+            {/* 2. Custom dark solid overlay (tuned for image luminosity and photography clarity) */}
             <div 
-              className="absolute inset-0 bg-black pointer-events-none" 
-              style={{ opacity: opacityVal }} 
+              className="absolute inset-0 bg-black pointer-events-none transition-opacity duration-500" 
+              style={{ opacity: Math.min(opacityVal, 0.25) }} 
             />
 
-            {/* 3. Cinematic Gradient overlay for text readability */}
+            {/* 3. Cinematic Gradient overlay for text readability without obscuring photography */}
             <div 
               className={`absolute inset-0 pointer-events-none ${
                 alignCenter 
-                  ? 'bg-gradient-to-t from-black/90 via-black/40 to-black/30' 
-                  : 'bg-gradient-to-r from-black/90 via-black/40 to-transparent'
+                  ? 'bg-gradient-to-t from-black/85 via-black/25 to-black/10' 
+                  : 'bg-gradient-to-r from-black/85 via-black/35 to-transparent'
               }`}
             />
 
@@ -326,14 +329,14 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
                     alignCenter ? 'justify-center' : 'justify-start'
                   }`}
                 >
-                  {/* Primary CTA */}
-                  {banner.button_text && (
+                  {/* Primary CTA (supports button_text or D1 cta_text) */}
+                  {(banner.button_text || banner.cta_text) && (
                     <Link 
-                      to={banner.link_url || '/shop'} 
+                      to={banner.button_url || banner.link_url || banner.cta_link || '/shop'} 
                       onClick={() => trackClarityEvent('home_hero_click')}
                       className="btn-primary px-8 py-4 sm:px-10 sm:py-5 text-sm sm:text-base rounded-full group inline-flex items-center"
                     >
-                      {banner.button_text} 
+                      {banner.button_text || banner.cta_text} 
                       <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                     </Link>
                   )}

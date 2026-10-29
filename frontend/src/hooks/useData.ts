@@ -1168,6 +1168,7 @@ export function useBanners() {
       _bannersPromise = (async () => {
         try {
           const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+          await PublicCatalogProvider.ensureRuntimeConfigReady();
           if (PublicCatalogProvider.isDomainEnabled('taxonomies') || PublicCatalogProvider.isDomainEnabled('settings')) {
             const res = await PublicCatalogProvider.getBanners().catch(() => null);
             if (Array.isArray(res?.data?.banners) && res.data.banners.length > 0) {
