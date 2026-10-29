@@ -32,6 +32,11 @@ Deno.serve(async (req: Request) => {
   let refundDetails: any = null;
   let gatewayRefundId: string | null = null;
   let isManualRefundRequired = false;
+  let handyDeleteAttempted = false;
+  let handyReversalContext: null | {
+    transactionExternalId: string; idempotencyKey: string; operationType: string;
+    bypassLiquidationCheck: boolean;
+  } = null;
 
   try {
     // SECURITY: Only admins can process refunds
@@ -338,6 +343,12 @@ Deno.serve(async (req: Request) => {
         throw new Error("HANDY_SETTLEMENT_NOT_AUTHORIZED: no existe una solicitud de devolución válida.");
       }
       processingRefundId = settlement.id;
+      handyReversalContext = {
+        transactionExternalId: payment.transaction_external_id,
+        idempotencyKey,
+        operationType,
+        bypassLiquidationCheck,
+      };
     } else {
     const { data: lockResult, error: lockRpcErr } = await supabaseAdmin.rpc("acquire_refund_lock_atomic", {
       p_order_id: orderId,
@@ -736,6 +747,12 @@ Deno.serve(async (req: Request) => {
         const callbackUrl = new URL(`${supabaseUrl}/functions/v1/handy-webhook`);
         callbackUrl.searchParams.set('token', callbackSecret);
         // Persist an intent BEFORE sending any external request; callback can arrive before the DELETE response.
+        handyReversalContext = {
+          transactionExternalId: payment.transaction_external_id,
+          idempotencyKey,
+          operationType,
+          bypassLiquidationCheck,
+        };
         const { error: intentErr } = await supabaseAdmin.from('refunds').update({
           payment_id: payment.id,
           api_response: {
@@ -754,6 +771,7 @@ Deno.serve(async (req: Request) => {
         let accepted = false;
         let requestProblem: string | null = null;
         try {
+          handyDeleteAttempted = true; // Network/DB failures from here are outcome-unknown.
           const res = await fetch(`${handy.baseUrl}/payments`, {
             method: 'DELETE',
             headers: { 'merchant-secret-key': handy.merchantSecretKey, 'Content-Type': 'application/json' },
@@ -1484,7 +1502,8 @@ Deno.serve(async (req: Request) => {
     // En su lugar, registrar como 'unknown_gateway_reversal_requires_reconciliation'
     if (processingRefundId) {
       try {
-        const nextLockStatus = refundSuccess ? "reconciliation_required" : "failed";
+        const needsReconciliation = refundSuccess || handyDeleteAttempted || !!handyReversalContext;
+        const nextLockStatus = needsReconciliation ? "reconciliation_required" : "failed";
         await supabaseAdmin
           .from("refunds")
           .update({
@@ -1493,7 +1512,14 @@ Deno.serve(async (req: Request) => {
               error: error.message,
               external_refund_success: refundSuccess,
               gateway_refund_id: gatewayRefundId,
-              requires_manual_reconciliation: refundSuccess,
+              requires_manual_reconciliation: needsReconciliation,
+              ...(handyReversalContext ? {
+                handy_refund_requested: true,
+                transaction_external_id: handyReversalContext.transactionExternalId,
+                idempotency_key: handyReversalContext.idempotencyKey,
+                operation_type: handyReversalContext.operationType,
+                bypass_liquidation_check: handyReversalContext.bypassLiquidationCheck,
+              } : {}),
               failed_at: new Date().toISOString()
             }
           })
