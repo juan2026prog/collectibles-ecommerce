@@ -290,7 +290,7 @@ export default function AdminCurrencies() {
                 <Globe className="w-4 h-4 text-[#f00856]" />
                 Monedas Regionales Soportadas
               </h2>
-              <span className="text-xs text-gray-400">Cadencia: Horaria (Vercel Cron)</span>
+              <span className="text-xs text-gray-400">Cadencia: Diaria, 06:00 UTC (Vercel Cron)</span>
             </div>
 
             <div className="overflow-x-auto">
