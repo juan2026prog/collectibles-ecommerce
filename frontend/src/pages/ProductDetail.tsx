@@ -20,7 +20,7 @@ import SEO from '../components/SEO';
 import { generateProductSchema, generateBreadcrumbs, generateMetaTitle, generateMetaDescription, generateCanonical } from '../utils/seoHelpers';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { supabase } from '../lib/supabase';
-import { resolveProductPrice, resolveProductNativeCurrency, formatProductMoney } from '../lib/priceResolver';
+import { resolveProductPrice, resolveProductNativeCurrency } from '../lib/priceResolver';
 import { formatUSD } from '../lib/formatters';
 import SoldByCard from '../components/SoldByCard';
 import ProductShippingBlock from '../components/ProductShippingBlock';
