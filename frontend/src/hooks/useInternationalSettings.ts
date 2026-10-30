@@ -49,6 +49,10 @@ function formatSettings(data: any, publicOnly: boolean): InternationalSettings {
   };
 }
 
+// Temporary public launch hold. Keep admin tools, inventory and Zinc integration intact.
+// Set to false when the international storefront is ready for customers.
+export const INTERNATIONAL_STOREFRONT_PAUSED = true;
+
 const SESSION_CACHE_KEY = 'collectibles_intl_public_settings_v1';
 
 function isAutomatedCrawlerAgent(): boolean {
@@ -161,7 +165,7 @@ export function useInternationalSettings(enableRealtime = false, isAdminContext 
     };
   }, [enableRealtime, isAdminContext]);
   return {
-    settings, loaded, publicEnabled: settings?.international_public_enabled === true,
+    settings, loaded, publicEnabled: settings?.international_public_enabled === true && (isAdminContext || !INTERNATIONAL_STOREFRONT_PAUSED),
     purchasesEnabled: settings?.international_purchases_enabled ?? true,
     capacityEnabled: settings?.international_capacity_enabled ?? true,
     refetch: () => fetchInternationalSettings(true, isAdminContext)
