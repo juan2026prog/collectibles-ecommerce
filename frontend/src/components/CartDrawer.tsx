@@ -511,7 +511,7 @@ export default function CartDrawer() {
                   ) : formatDrawerPrice(
                     cartNative.hasUSD ? cartNative.netUSD : cartNative.netUYU,
                     cartNative.hasUSD ? 'USD' : 'UYU'
-                  )
+                  )}
                 </span>
               </div>
                 {autoDiscountAmount > 0 && (
@@ -523,7 +523,7 @@ export default function CartDrawer() {
                     ) : formatDrawerPrice(
                       cartNative.hasUSD ? cartNative.discountUSD : cartNative.discountUYU,
                       cartNative.hasUSD ? 'USD' : 'UYU'
-                    )</span>
+                    )}</span>
                   </div>
                 )}
               <div className="flex justify-between items-center text-slate-400">
