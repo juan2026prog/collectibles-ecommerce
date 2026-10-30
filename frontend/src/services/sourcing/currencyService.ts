@@ -32,7 +32,7 @@ export class CurrencyService {
         target_currency: currency,
         rate: DEFAULT_RATES[currency],
         source: 'fallback_reference',
-        status: 'ACTUALIZADO',
+        status: 'NO_DISPONIBLE',
         updated_at: new Date().toISOString(),
       });
     });
