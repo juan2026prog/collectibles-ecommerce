@@ -28,7 +28,11 @@ export default function CartDrawer() {
     setIsDrawerOpen 
   } = useCartContext();
 
-  const { selectedCurrency } = useCurrency();
+  const { selectedCurrency, formatProductPrice } = useCurrency();
+  // Display-only conversion matching ProductGridCard. Never mutate item.price,
+  // cartNative amounts, shipping rules, payment currency or checkout payloads.
+  const formatDrawerPrice = (amount: number, sourceCurrency: 'UYU' | 'USD') =>
+    formatProductPrice({ amount, sourceCurrency });
   const { settings } = useSiteSettings();
   const freeShippingThreshold = Number(settings['free_shipping_threshold'] || 4000);
 
@@ -260,7 +264,7 @@ export default function CartDrawer() {
                       <span className="text-amber-400 text-lg mt-0.5">⚡</span>
                       <div>
                         <div className="text-xs font-bold text-white uppercase tracking-wider">
-                          Envíos GRATIS en compras mayores a {formatProductMoney({ amount: freeShippingThreshold, currency: 'UYU' })}
+                          Envíos GRATIS en compras mayores a {formatDrawerPrice(freeShippingThreshold, 'UYU')}
                         </div>
                         <div className="text-[10px] text-blue-400 mt-0.5">
                           Aprovechá esta promoción de verano
@@ -285,7 +289,7 @@ export default function CartDrawer() {
                       <span className="text-slate-400">
                         Te faltan{' '}
                         <span className="text-blue-400 font-bold">
-                          {formatProductMoney({ amount: cartNative.freeShippingRemainingUYU, currency: 'UYU' })}
+                          {formatDrawerPrice(cartNative.freeShippingRemainingUYU, 'UYU')}
                         </span>{' '}
                         para el envío gratis.
                       </span>
@@ -415,17 +419,11 @@ export default function CartDrawer() {
                         {/* Price */}
                         <div className="flex flex-col items-end">
                           <span data-testid="cart-drawer-item-subtotal" className={`text-sm font-black ${isItemIntl ? 'text-sky-400' : 'text-emerald-400'}`}>
-                            {formatProductMoney({
-                              amount: displayPrice,
-                              currency: isItemIntl ? 'USD' : (item.currency || 'UYU')
-                            })}
+                            {formatDrawerPrice(displayPrice, isItemIntl ? 'USD' : 'UYU')}
                           </span>
                           {itemDiscount > 0 && (
                             <span className="text-[10px] text-slate-500 line-through">
-                              {formatProductMoney({
-                                amount: item.price * item.quantity,
-                                currency: isItemIntl ? 'USD' : (item.currency || 'UYU')
-                              })}
+                              {formatDrawerPrice(item.price * item.quantity, isItemIntl ? 'USD' : 'UYU')}
                             </span>
                           )}
                         </div>
@@ -510,10 +508,10 @@ export default function CartDrawer() {
                     <>{formatProductMoney({ amount: cartNative.netUYU, currency: 'UYU' })}
                       <span className="block">{formatProductMoney({ amount: cartNative.netUSD, currency: 'USD' })}</span>
                     </>
-                  ) : formatProductMoney({
-                    amount: cartNative.hasUSD ? cartNative.netUSD : cartNative.netUYU,
-                    currency: cartNative.hasUSD ? 'USD' : 'UYU'
-                  })}
+                  ) : formatDrawerPrice(
+                    cartNative.hasUSD ? cartNative.netUSD : cartNative.netUYU,
+                    cartNative.hasUSD ? 'USD' : 'UYU'
+                  )}
                 </span>
               </div>
                 {autoDiscountAmount > 0 && (
@@ -522,10 +520,10 @@ export default function CartDrawer() {
                     <span className="font-bold text-right">{cartNative.isMixed ? (
                       <>{formatProductMoney({ amount: cartNative.discountUYU, currency: 'UYU' })}
                         <span className="block">{formatProductMoney({ amount: cartNative.discountUSD, currency: 'USD' })}</span></>
-                    ) : formatProductMoney({
-                      amount: cartNative.hasUSD ? cartNative.discountUSD : cartNative.discountUYU,
-                      currency: cartNative.hasUSD ? 'USD' : 'UYU'
-                    })}</span>
+                    ) : formatDrawerPrice(
+                      cartNative.hasUSD ? cartNative.discountUSD : cartNative.discountUYU,
+                      cartNative.hasUSD ? 'USD' : 'UYU'
+                    )}</span>
                   </div>
                 )}
               <div className="flex justify-between items-center text-slate-400">
@@ -536,7 +534,7 @@ export default function CartDrawer() {
                   ) : shipping === 0 ? (
                     <span className="text-emerald-400 font-black">GRATIS</span>
                   ) : (
-                    formatProductMoney({ amount: shipping, currency: 'UYU' })
+                    formatDrawerPrice(shipping, 'UYU')
                   )}
                 </span>
               </div>
@@ -558,13 +556,14 @@ export default function CartDrawer() {
                   ) : (
                     <span className="text-xl font-black text-[#f00856]">
                       {cartCurrencyInfo.hasUSD
-                        ? formatProductMoney({ amount: cartNative.netUSD, currency: 'USD' })
-                        : formatProductMoney({ amount: cartNative.estimatedGrandTotalUYU ?? cartNative.netUYU, currency: 'UYU' })}
+                        ? formatDrawerPrice(cartNative.netUSD, 'USD')
+                        : formatDrawerPrice(cartNative.estimatedGrandTotalUYU ?? cartNative.netUYU, 'UYU')}
                     </span>
                   )}
-                  {selectedCurrency !== 'UYU' && !cartCurrencyInfo.hasUSD && (
-                    <p className="text-[9px] text-slate-500 mt-1 leading-none">
-                      El cobro final se realiza en pesos uruguayos.
+                  {!cartCurrencyInfo.isMixed &&
+                    selectedCurrency !== (cartCurrencyInfo.hasUSD ? 'USD' : 'UYU') && (
+                    <p className="text-[10px] text-slate-400 mt-1 leading-tight">
+                      Importe de referencia. Se cobra en {cartCurrencyInfo.hasUSD ? 'USD' : 'UYU'} al finalizar.
                     </p>
                   )}
                 </div>

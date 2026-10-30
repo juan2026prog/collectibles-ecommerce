@@ -20,7 +20,7 @@ import SEO from '../components/SEO';
 import { generateProductSchema, generateBreadcrumbs, generateMetaTitle, generateMetaDescription, generateCanonical } from '../utils/seoHelpers';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { supabase } from '../lib/supabase';
-import { resolveProductPrice, resolveProductNativeCurrency, formatProductMoney } from '../lib/priceResolver';
+import { resolveProductPrice, resolveProductNativeCurrency } from '../lib/priceResolver';
 import { formatUSD } from '../lib/formatters';
 import SoldByCard from '../components/SoldByCard';
 import ProductShippingBlock from '../components/ProductShippingBlock';
@@ -193,7 +193,7 @@ export default function ProductDetail() {
   const cart = useCartContext();
   const internationalCart = useInternationalCartContext();
   const { user } = useAuth();
-  const { formatCurrencyPrice, selectedCurrency } = useCurrency();
+  const { formatProductPrice, selectedCurrency } = useCurrency();
   const { promotions } = usePromotions();
   const { toggleWishlist, isInWishlist } = useWishlistContext();
   const { features } = useFeatures();
@@ -664,17 +664,17 @@ export default function ProductDetail() {
             <div className="text-[11px] uppercase text-slate-400 font-bold tracking-wider">Precio actual</div>
             <div className="flex items-baseline gap-4 flex-wrap">
               <span className={`text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight ${productCurrency === 'USD' ? 'text-sky-400' : 'text-white'}`}>
-                {formatProductMoney({
+                {formatProductPrice({
                   amount: productCurrency === 'USD' ? (product.final_price_usd || product.base_price || displayPrice) : displayPrice,
-                  currency: productCurrency
+                  sourceCurrency: productCurrency
                 })}
               </span>
               {hasDiscount && (
                 <div className="flex items-center gap-2">
                   <span className="text-lg sm:text-xl text-slate-500 line-through font-semibold">
-                    {formatProductMoney({
+                    {formatProductPrice({
                       amount: productCurrency === 'USD' ? (product.amazon_list_price_usd || displayOldPrice) : displayOldPrice,
-                      currency: productCurrency
+                      sourceCurrency: productCurrency
                     })}
                   </span>
                   <span className="bg-[#f00856]/15 text-[#f00856] text-xs font-bold px-2.5 py-0.5 rounded-md uppercase border border-[#f00856]/30">
@@ -1209,9 +1209,9 @@ export default function ProductDetail() {
               <div className="overflow-hidden min-w-0">
                 <p className="text-white font-bold text-xs truncate">{product.title}</p>
                 <p className={`font-extrabold text-sm leading-tight ${productCurrency === 'USD' ? 'text-sky-400' : 'text-[#f00856]'}`}>
-                  {formatProductMoney({
+                  {formatProductPrice({
                     amount: productCurrency === 'USD' ? (product.final_price_usd || product.base_price || finalPrice) : finalPrice,
-                    currency: productCurrency
+                    sourceCurrency: productCurrency
                   })}
                 </p>
               </div>
