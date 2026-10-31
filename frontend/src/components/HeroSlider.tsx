@@ -20,12 +20,26 @@ interface Banner {
   secondary_button_url: string | null;
   content_position: string | null; // 'top' | 'center' | 'bottom'
   content_align: string | null;    // 'left' | 'center'
-  overlay_opacity: number | null;  // 0.0 to 1.0
+  overlay_opacity?: number | string | null;
 }
 
 interface HeroSliderProps {
   banners: Banner[];
   loading?: boolean;
+}
+
+const MAX_OVERLAY_OPACITY = 0.25;
+
+function getOverlayOpacity(value: Banner['overlay_opacity']): number {
+  // D1 and existing browser caches can omit this field. Never pass NaN to CSS:
+  // an invalid inline opacity leaves the black overlay fully opaque.
+  if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim())) {
+    return MAX_OVERLAY_OPACITY;
+  }
+  const opacity = Number(value);
+  return Number.isFinite(opacity)
+    ? Math.max(0, Math.min(opacity, MAX_OVERLAY_OPACITY))
+    : MAX_OVERLAY_OPACITY;
 }
 
 export default function HeroSlider({ banners, loading = false }: HeroSliderProps) {
@@ -214,7 +228,7 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
       */}
       {activeBanners.map((banner, index) => {
         const isCurrent = index === activeIndex;
-        const opacityVal = banner.overlay_opacity !== null ? Number(banner.overlay_opacity) : 0.4;
+        const opacityVal = getOverlayOpacity(banner.overlay_opacity);
         const alignCenter = banner.content_align === 'center';
         const isImageEligible = isCurrent || loadedIndices.has(index);
         const slideKey = banner.id || `slide-${index}`;
@@ -266,8 +280,8 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
 
             {/* 2. Custom dark solid overlay (tuned for image luminosity and photography clarity) */}
             <div 
-              className="absolute inset-0 bg-black pointer-events-none transition-opacity duration-500" 
-              style={{ opacity: Math.min(opacityVal, 0.25) }} 
+              className="absolute inset-0 bg-black opacity-25 pointer-events-none transition-opacity duration-500"
+              style={{ opacity: opacityVal }}
             />
 
             {/* 3. Cinematic Gradient overlay for text readability without obscuring photography */}
