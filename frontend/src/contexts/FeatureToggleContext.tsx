@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, publicSupabase } from '../lib/supabase';
 
 export interface FeatureToggles {
   marketplaceEnabled: boolean;
@@ -75,6 +75,7 @@ export function FeatureToggleProvider({ children }: { children: React.ReactNode 
     try {
       try {
         const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+        await PublicCatalogProvider.ensureRuntimeConfigReady(4500);
         if (PublicCatalogProvider.isDomainEnabled('settings')) {
           const { data: bundle } = await PublicCatalogProvider.getPublicSettingsBundle();
           if (bundle?.feature_toggles && Object.keys(bundle.feature_toggles).length > 0) {
@@ -105,9 +106,10 @@ export function FeatureToggleProvider({ children }: { children: React.ReactNode 
       }
 
       // Try dedicated feature_toggles table first (authoritative source)
-      const { data: toggleData, error: toggleError } = await supabase
+      const { data: toggleData, error: toggleError } = await publicSupabase
         .from('feature_toggles')
-        .select('id, is_enabled');
+        .select('id, is_enabled')
+        .abortSignal(AbortSignal.timeout(5000));
 
       if (!toggleError && toggleData && toggleData.length > 0) {
         // Build a map from id -> is_enabled
@@ -130,25 +132,6 @@ export function FeatureToggleProvider({ children }: { children: React.ReactNode 
         };
         setFeatures(loaded);
         setCachedFeatures(loaded);
-      } else {
-        // Fallback: try store_settings for backward compatibility
-        const { data, error } = await supabase
-          .from('store_settings')
-          .select('*')
-          .eq('id', 'default')
-          .single();
-
-        if (!error && data) {
-          const loaded: FeatureToggles = {
-            ...defaultFeatures,
-            marketplaceEnabled: data.marketplace_enabled ?? true,
-            affiliatesEnabled: data.affiliates_enabled ?? true,
-            artistCameoEnabled: data.artist_cameo_enabled ?? false,
-            mercadoLibreSyncEnabled: data.ml_sync_enabled ?? true,
-          };
-          setFeatures(loaded);
-          setCachedFeatures(loaded);
-        }
       }
     } catch {
       // Silent fail — cached or defaults remain active

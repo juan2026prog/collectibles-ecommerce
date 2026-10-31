@@ -16,6 +16,21 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     flowType: 'pkce',
     // Custom lock implementation extending the Web Locks acquisition timeout
     // to 15000ms using the official, exported navigatorLock from @supabase/auth-js.
-    lock: (name, _acquireTimeout, fn) => navigatorLock(name, 15000, fn),
+    // Web Locks are absent in some browsers/webviews. Let the SDK use its
+    // supported fallback there instead of throwing on navigator.locks.request.
+    ...(typeof navigator !== 'undefined' && navigator.locks ? {
+      lock: (name, _acquireTimeout, fn) => navigatorLock(name, 15000, fn),
+    } : {}),
+  },
+});
+
+// Public configuration must not wait for a visitor's token refresh or auth lock.
+// This client always uses the public key and cannot inherit a signed-in session.
+export const publicSupabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    storageKey: 'collectibles-public-readonly',
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
   },
 });

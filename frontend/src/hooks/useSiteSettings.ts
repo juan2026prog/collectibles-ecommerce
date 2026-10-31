@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { publicSupabase } from '../lib/supabase';
 
 const SETTINGS_CACHE_KEY = 'site_settings_cache';
 const SETTINGS_TIMESTAMP_KEY = 'site_settings_timestamp';
@@ -76,6 +76,7 @@ export function fetchSettings(force: boolean = false): Promise<Record<string, st
   _promise = (async () => {
     try {
       const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
+      await PublicCatalogProvider.ensureRuntimeConfigReady(4500);
       if (PublicCatalogProvider.isDomainEnabled('settings')) {
         const { data: bundle } = await PublicCatalogProvider.getPublicSettingsBundle();
         if (bundle?.site_config && Object.keys(bundle.site_config).length > 0) {
@@ -100,9 +101,10 @@ export function fetchSettings(force: boolean = false): Promise<Record<string, st
       // Fall through to Supabase fallback if D1 kill-switch is active or unreachable
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await publicSupabase
       .from('public_site_config')
-      .select('*');
+      .select('*')
+      .abortSignal(AbortSignal.timeout(5000));
 
     if (error) throw error;
     const s: Record<string, string> = {};

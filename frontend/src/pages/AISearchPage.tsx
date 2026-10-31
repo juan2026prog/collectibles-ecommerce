@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useSiteSettings } from '../hooks/useSiteSettings';
 import { 
   Sparkles, Search, Camera, X, RefreshCw, MessageSquare, 
   Radio, BookOpen, ArrowRight, Bell, Check, ChevronDown, 
@@ -162,7 +163,9 @@ export default function AISearchPage() {
   // Alerts & Subscriptions
   const [subscribedAlerts, setSubscribedAlerts] = useState<Record<string, boolean>>({});
   const [searchAlertCreated, setSearchAlertCreated] = useState(false);
-  const [whatsappNumber, setWhatsappNumber] = useState('');
+  const { settings } = useSiteSettings();
+  const whatsappUrl = settings['social_whatsapp_url'] || '';
+  const whatsappNumber = useMemo(() => whatsappUrl.replace(/[\s\-\(\)\+]/g, ''), [whatsappUrl]);
 
   const { formatCurrencyPrice } = useCurrency();
   const cart = useCartContext();
@@ -175,20 +178,6 @@ export default function AISearchPage() {
   // Reference Questions Dropdown State
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    supabase
-      .from('public_site_config')
-      .select('value')
-      .eq('key', 'social_whatsapp_url')
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.value) {
-          const raw = data.value.replace(/[\s\-\(\)\+]/g, '');
-          setWhatsappNumber(raw);
-        }
-      });
-  }, []);
 
   // Close dropdown on click outside
   useEffect(() => {

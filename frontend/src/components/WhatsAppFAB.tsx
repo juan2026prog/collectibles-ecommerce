@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { MessageCircle, X } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { useSiteSettings } from '../hooks/useSiteSettings';
 import { useCartContext } from '../contexts/CartContext';
 
 /**
@@ -13,35 +13,23 @@ import { useCartContext } from '../contexts/CartContext';
  * To configure: Admin > Configuración > Redes Sociales > WhatsApp
  */
 export default function WhatsAppFAB() {
-  const [url, setUrl] = useState('');
+  const { settings } = useSiteSettings();
   const [shown, setShown] = useState(true);
   const [pulsing, setPulsing] = useState(true);
   const location = useLocation();
   const { isDrawerOpen } = useCartContext();
 
-  useEffect(() => {
-    supabase
-      .from('public_site_config')
-      .select('key, value')
-      .in('key', ['social_whatsapp_enabled', 'social_whatsapp_url'])
-      .then(({ data }) => {
-        const settings: Record<string, string> = {};
-        data?.forEach(d => (settings[d.key] = d.value));
-        if (settings['social_whatsapp_enabled'] === 'true' && settings['social_whatsapp_url']) {
-          const rawUrl = settings['social_whatsapp_url'].trim();
-          let formattedUrl = rawUrl;
-          if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-            if (formattedUrl.includes('wa.me') || formattedUrl.includes('whatsapp.com')) {
-              formattedUrl = `https://${formattedUrl.replace(/^(https?:\/\/)?/, '')}`;
-            } else {
-              const cleanNumber = formattedUrl.replace(/[\s\-\(\)\+]/g, '');
-              formattedUrl = `https://wa.me/${cleanNumber}`;
-            }
-          }
-          setUrl(formattedUrl);
-        }
-      });
+  const whatsappEnabled = settings['social_whatsapp_enabled'];
+  const whatsappUrl = settings['social_whatsapp_url'];
+  const url = useMemo(() => {
+    if (whatsappEnabled !== 'true' || !whatsappUrl) return '';
+    const rawUrl = whatsappUrl.trim();
+    if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) return rawUrl;
+    if (rawUrl.includes('wa.me') || rawUrl.includes('whatsapp.com')) return `https://${rawUrl}`;
+    return `https://wa.me/${rawUrl.replace(/[\s\-\(\)\+]/g, '')}`;
+  }, [whatsappEnabled, whatsappUrl]);
 
+  useEffect(() => {
     // Stop pulsing after 4 seconds (only draw attention once)
     const t = setTimeout(() => setPulsing(false), 4000);
     return () => clearTimeout(t);

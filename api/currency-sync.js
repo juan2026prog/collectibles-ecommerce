@@ -7,6 +7,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { authenticateRequest } from '../server/lib/authGuard.js';
+import { withDeadline } from './_lib/public-supabase.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_f_7xF86CT0DFwT7YupNh_Q_TzmemHNf';
@@ -96,6 +97,21 @@ async function fetchWithTimeout(promise, ms = 4000) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
+// Coalesce concurrent public reads without retaining prices after completion.
+// Abort the upstream request on timeout instead of leaving it running for 90s.
+let publicRatesRead = null;
+function readPublicRates() {
+  if (!publicRatesRead) {
+    publicRatesRead = withDeadline(signal => supabase
+      .from('currency_exchange_rates')
+      .select('id, country_code, country_name, base_currency, quote_currency, rate, provider, source_name, source_url, status, safety_buffer_percent, is_manual_override, is_active, is_auto_sync, fetched_at, effective_at, expires_at, created_at, updated_at')
+      .order('country_code', { ascending: false })
+      .abortSignal(signal), 3500)
+      .finally(() => { publicRatesRead = null; });
+  }
+  return publicRatesRead;
+}
+
 async function executeLiveSync(triggerSource = 'SCHEDULED_CRON') {
   const fxRes = await fetch(FX_PROVIDER_CONFIG.provider_endpoint);
   if (!fxRes.ok) {
@@ -132,7 +148,7 @@ async function executeLiveSync(triggerSource = 'SCHEDULED_CRON') {
           .eq('quote_currency', item.quote_currency)
           .maybeSingle();
 
-        const { data: existing, error: checkErr } = await fetchWithTimeout(checkQuery, 4000);
+        const { data: existing, error: checkErr } = await withDeadline(checkQuery, 4000);
 
         // REQUIREMENT D: If checking existing row fails or times out, DO NOT overwrite!
         if (checkErr) {
@@ -361,12 +377,7 @@ export default async function handler(req, res) {
     try {
       if (supabase) {
         try {
-          const dbQuery = supabase
-            .from('currency_exchange_rates')
-            .select('id, country_code, country_name, base_currency, quote_currency, rate, provider, source_name, source_url, status, safety_buffer_percent, is_manual_override, is_active, is_auto_sync, fetched_at, effective_at, expires_at, created_at, updated_at')
-            .order('country_code', { ascending: false });
-
-          const { data, error } = await fetchWithTimeout(dbQuery, 3500);
+          const { data, error } = await readPublicRates();
 
           if (!error && data && data.length > 0) {
             const now = Date.now();

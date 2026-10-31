@@ -46,6 +46,18 @@ Solo persiste métricas numéricas de una lista fija, modos CPU y nombres de dis
 
 La captura continua externa de estos recursos requiere un colector seguro con una credencial de métricas; no quedó conectada automáticamente a GitHub ni a un proveedor de pago. La [API oficial de métricas](https://supabase.com/docs/guides/observability/metrics/vendor-agnostic) describe esa configuración. La cancelación de PostgREST usa el [mecanismo oficial AbortSignal](https://supabase.com/docs/reference/javascript/using-modifiers-abortsignal).
 
+## Lecturas públicas aisladas (2026-10-31)
+
+La configuración del sitio y los feature toggles esperan la configuración de runtime de Cloudflare (hasta 4,5 segundos) antes de decidir el fallback a Supabase. Esa consulta de runtime también tiene cancelación real. El fallback usa un cliente público sin sesión persistida, con una clave de almacenamiento distinta y un plazo de cinco segundos; no comparte el bloqueo de renovación de tokens del visitante. WhatsApp y la página de búsqueda reutilizan esa configuración compartida. Las escrituras administrativas continúan usando el cliente autenticado. Se retiró el fallback a `store_settings`, tabla inexistente en producción.
+
+En navegadores sin Web Locks, el cliente autenticado deja que el SDK seleccione su mecanismo compatible. No se fuerza `navigator.locks.request` cuando la API no existe.
+
+Las lecturas públicas de `/api/currency-sync` se reúnen solo mientras están en curso, sin agregar un TTL de cotizaciones. A los 3,5 segundos se aborta la lectura de Supabase; las comprobaciones de overrides previas a la sincronización también se cancelan al vencer. Los importes, overrides manuales y estados del fallback financiero conservan su comportamiento anterior.
+
+La intervención no cambia el plan Free, cron, límites globales de conexiones ni capacidad del servidor. Las dos muestras oficiales de recursos de 03:16:29 a 03:17:39 UTC registraron 1,88 % de CPU ocupada, 8,63 % de IOwait y actividad de swap. Son mediciones de ese intervalo y no demuestran por sí mismas el disparador de los episodios anteriores. Esta protección reduce carga y esperas; no demuestra que una instancia limitada no pueda volver a quedar indisponible.
+
+Las pruebas específicas cubren configuración D1 en arranque en frío, caché durante una caída, separación entre lecturas anónimas y escrituras autenticadas, ausencia de Web Locks, cancelación y recuperación de cotizaciones. La suite histórica `database_stability.test.ts` tiene dos fallos anteriores a esta intervención: presupone 60 segundos de frescura/180 segundos de fallback y ausencia de caché en respuestas degradadas, mientras el código de `main` usa 15 minutos/6 horas y caché degradada de 30 segundos. Ese código y esas dos pruebas no se modificaron en esta intervención.
+
 ## Ante una nueva degradación
 
 1. Guardar los probes y su única repetición antes de cambiar nada.

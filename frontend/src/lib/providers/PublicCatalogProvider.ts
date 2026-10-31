@@ -318,6 +318,7 @@ export function syncRuntimeConfig(fetcher: typeof fetch = fetch): Promise<{
       const res = await fetcher(`${cfg.workerBaseUrl}/api/v1/runtime-config`, {
         method: 'GET',
         headers: { Accept: 'application/json', 'X-Catalog-Client': 'collectibles-web-v1' },
+        signal: AbortSignal.timeout(4500),
       });
 
       const killHeader = res.headers?.get?.('X-Catalog-Kill-Switch');
