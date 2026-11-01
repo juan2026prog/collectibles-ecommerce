@@ -2117,7 +2117,7 @@ export default function Checkout() {
   }, [currentStep, paymentMethod, grandTotal, total, items.length]);
 
   async function processPaymentFlow(orderId: string, provider: string, email: string) {
-    console.log("create-order processPaymentFlow started:", orderId, provider, email);
+    console.info("payment_flow_started", {order_id:orderId,provider});
 
     const normalizedProvider = 
       provider === 'mercadopago' ? 'mercado_pago' :
@@ -2144,6 +2144,8 @@ export default function Checkout() {
 
       if (paymentResult?.redirectUrl) {
         console.log("create-order redirecting to:", paymentResult.redirectUrl);
+        sessionStorage.setItem('mp_redirect_started_at',String(Date.now()));
+        console.info('payment_redirect_ready',{request_id:paymentResult.data?.request_id});
         window.location.href = paymentResult.redirectUrl;
         return;
       }
@@ -2285,6 +2287,11 @@ export default function Checkout() {
     setCheckoutError('');
 
     try {
+      const previous=JSON.parse(sessionStorage.getItem('pending_checkout_order')||'null');
+      if(previous?.id && previous.payment_method === 'mercadopago') {
+        await processPaymentFlow(previous.id,'mercadopago',form.email);
+        return;
+      }
       // 1. ZINC LIVE CHECK & CAPITAL CAPACITY RESERVATION
       let activeReservationId: string | null = null;
       const { data: { session } } = await supabase.auth.getSession();

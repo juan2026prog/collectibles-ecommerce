@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { timingSafeEqual } from "../_shared/order-token.ts";
 import { finalizeOrderIfNeeded } from "../_shared/order-payments.ts";
+import { paymentTelemetry } from "../_shared/payment-telemetry.ts";
 
 const responseHeaders = {
   'Content-Type': 'application/json',
@@ -72,6 +73,7 @@ async function verifyMPSignature(
 }
 
 Deno.serve(async (req: Request) => {
+  const telemetry = paymentTelemetry();
   // Webhooks are server-to-server — no CORS preflight needed
   if (req.method === 'OPTIONS') return new Response('ok', { status: 204 });
 
@@ -150,7 +152,7 @@ Deno.serve(async (req: Request) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {global:{fetch:telemetry.fetch()}});
 
     // Fetch the access token — prefer env var over site_settings
     let mpAccessToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
@@ -171,7 +173,7 @@ Deno.serve(async (req: Request) => {
     // Fetch payment from Mercado Pago API
     let mpResponse: Response;
     try {
-      mpResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+      mpResponse = await telemetry.fetch()(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
         headers: { "Authorization": `Bearer ${mpAccessToken}` },
       });
     } catch (networkErr: any) {
@@ -223,12 +225,14 @@ Deno.serve(async (req: Request) => {
     const nowStr = new Date().toISOString();
     const mpStatus = String(paymentData.status || "");
 
-    const { data: normStatus } = await supabaseAdmin.rpc("normalize_payment_status", {
+    const { data: normStatus, error: normalizeError } = await supabaseAdmin.rpc("normalize_payment_status", {
       p_provider: "mercadopago",
       p_provider_status: mpStatus,
       p_status_detail: paymentData.status_detail || "",
     });
-    const normalizedStatus = normStatus || mpStatus;
+    if(normalizeError) throw new Error('Payment status normalization failed');
+    // An authorization is not an accredited payment, even if a legacy SQL mapping says otherwise.
+    const normalizedStatus = mpStatus === 'authorized' ? 'processing' : normStatus || mpStatus;
 
     // Check if order exists in DB
     const { data: order, error: orderFetchErr } = await supabaseAdmin
@@ -268,6 +272,11 @@ Deno.serve(async (req: Request) => {
 
     let effectiveNormalizedStatus = normalizedStatus;
     let isFraudOrMismatch = false;
+    const lateApprovalRequiresReview = mpStatus === 'approved' && ['expired','cancelled','cancelada'].includes(order.status);
+    if(lateApprovalRequiresReview) {
+      effectiveNormalizedStatus = 'manual_verification_required';
+      console.error('[MP Webhook] Approved payment on closed order; manual reconciliation required',orderId,paymentId);
+    }
 
     if (mpStatus === "approved" && (!isCurrencyValid || !isAmountValid)) {
       isFraudOrMismatch = true;
@@ -299,13 +308,13 @@ Deno.serve(async (req: Request) => {
 
     let currentAttemptId: string | null = atomicPersistResult?.attempt_id || null;
 
-    if (atomicPersistErr) {
-      console.error("[MP Webhook] CRITICAL: record_payment_transaction_atomic failed:", atomicPersistErr.message);
+    if (atomicPersistErr || !atomicPersistResult?.success) {
+      console.error("[MP Webhook] CRITICAL: record_payment_transaction_atomic failed:", atomicPersistErr?.code || 'unsuccessful_result');
       // Return 500 to trigger Mercado Pago legitimate webhook retry without silent data loss
       // Never proceed to finalize or credit an order when atomic transaction persistence fails!
       return new Response(JSON.stringify({ 
         error: "Database atomic persistence failed", 
-        detail: atomicPersistErr.message,
+        detail: 'Payment persistence failed',
         retryable: true 
       }), {
         status: 500,
@@ -314,8 +323,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // If financial mismatch occurred on approved payment, halt order confirmation
-    if (isFraudOrMismatch) {
-      return new Response(JSON.stringify({ received: true, error: "Financial integrity mismatch: payment recorded as manual_verification_required without crediting order" }), {
+    if (isFraudOrMismatch || lateApprovalRequiresReview) {
+      return new Response(JSON.stringify({ received: true, error: "Payment requires manual verification; order not credited" }), {
         status: 200,
         headers: responseHeaders,
       });
@@ -336,13 +345,31 @@ Deno.serve(async (req: Request) => {
 
       // Finalize order atomically and durably via finalizeOrderIfNeeded
       console.log(`[MP Webhook] Finalizing order ${orderId} with verified payment ${paymentId}`);
-      await finalizeOrderIfNeeded(
-        supabaseAdmin,
-        supabaseUrl,
-        supabaseServiceKey,
-        orderId,
-        paymentId.toString()
-      );
+      try {
+        await finalizeOrderIfNeeded(
+          supabaseAdmin,
+          supabaseUrl,
+          supabaseServiceKey,
+          orderId,
+          paymentId.toString()
+        );
+      } catch (finErr: any) {
+        console.error(`[MP Webhook] Order finalization error for ${orderId}:`, finErr.message || finErr);
+        if (finErr.code === "STOCK_EXHAUSTED_ON_LATE_APPROVAL" || finErr.code === "STOCK_EXHAUSTED_ON_ORDER_CONFIRMATION") {
+          // The payment was verified & credited into payments table, but stock was exhausted.
+          // Return HTTP 200 so MP stops hammering webhook; the order is safely quarantined in DB with status awaiting manual resolution.
+          return new Response(JSON.stringify({ 
+            received: true, 
+            warning: "Payment accredited, but stock recovery shortage requires manual administrative resolution.",
+            code: finErr.code
+          }), {
+            status: 200,
+            headers: responseHeaders,
+          });
+        }
+        // For unexpected database / network errors, rethrow to allow retry
+        throw finErr;
+      }
     } else if (mpStatus === "authorized" || mpStatus === "in_process" || mpStatus === "pending") {
       // Pending / Authorized states: Update payment status only; do NOT finalize order nor decrement stock
       console.log(`[MP Webhook] Order ${orderId} payment in non-final state: ${mpStatus}`);

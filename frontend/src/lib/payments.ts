@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { withRecoverableCheckout } from './checkout-recovery';
 
 interface CreateOrderParams {
   items: Array<{
@@ -96,16 +97,26 @@ async function getAuthHeaders() {
 }
 
 export async function createCheckoutOrder(params: CreateOrderParams) {
+  if(params.payment_method === 'mercadopago') {
+    const {data:{session}}=await supabase.auth.getSession();
+    return withRecoverableCheckout({...params,customer_scope:session?.user?.id || 'guest'},async requestKey => createCheckoutOrderRequest(params,requestKey));
+  }
+  if(localStorage.getItem('mp_checkout_recovery_v1')) throw new Error('Hay un intento de Mercado Pago pendiente. Revisá esa orden antes de iniciar otro pago.');
+  return (await createCheckoutOrderRequest(params)).order;
+}
+
+async function createCheckoutOrderRequest(params:CreateOrderParams,requestKey?:string) {
   console.log("createCheckoutOrder initiating with fetch...");
   try {
     const response = await fetch(CREATE_ORDER_URL, {
       method: 'POST',
       headers: await getAuthHeaders(),
-      body: JSON.stringify(params),
+      body: JSON.stringify({...params,checkout_request_key:requestKey}),
+      signal:AbortSignal.timeout(60000),
     });
 
     const text = await response.text();
-    console.log("create-order raw response:", response.status, text);
+    console.info('checkout_order_response',{http_status:response.status});
 
     let data;
     try {
@@ -133,7 +144,7 @@ export async function createCheckoutOrder(params: CreateOrderParams) {
       // Ignore storage failures; the payment flow can continue without local cache.
     }
 
-    return data.order;
+    return {order:data.order,order_token:data.order_token};
   } catch (error: any) {
     console.error("create-order error full:", error);
     console.error("create-order error context:", {
@@ -156,7 +167,6 @@ export async function startCheckoutPayment(params: StartPaymentParams): Promise<
       },
     });
 
-    console.log("payment provider response:", data);
 
     if (error) {
       console.error("Error Edge Function:", error);
@@ -178,6 +188,10 @@ export async function startCheckoutPayment(params: StartPaymentParams): Promise<
     };
   }
 
+  const paymentStarted=performance.now();
+  const authStarted=performance.now();
+  const authHeaders=await getAuthHeaders();
+  const authDuration=performance.now()-authStarted;
   const endpoint = CREATE_PAYMENT_URL;
   const guestOrderToken = sessionStorage.getItem(`order_token_${params.order_id}`) || undefined;
   const payload = {
@@ -185,11 +199,15 @@ export async function startCheckoutPayment(params: StartPaymentParams): Promise<
     provider: params.provider === 'dlocalgo' ? 'dlocal' : params.provider,
     order_token: guestOrderToken,
   };
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: await getAuthHeaders(),
-    body: JSON.stringify(payload),
-  });
+  let response:Response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST', headers: authHeaders, body: JSON.stringify(payload),signal:AbortSignal.timeout(60000),
+    });
+  } catch {
+    console.info('payment_frontend_timing',{duration_ms:Math.round(performance.now()-paymentStarted),outcome:'response_unavailable'});
+    throw new Error('La respuesta del pago demoró o se interrumpió. Conservamos la orden; verificá el intento antes de volver a pagar.');
+  }
 
   const text = await response.text();
   let data;
@@ -199,10 +217,11 @@ export async function startCheckoutPayment(params: StartPaymentParams): Promise<
     throw new Error(`Respuesta no válida del proveedor (${response.status}): ${text}`);
   }
 
-  console.log("payment provider response:", data);
+  console.info('payment_frontend_timing',{request_id:response.headers.get('X-Payment-Request-Id')||data.request_id,
+    duration_ms:Math.round(performance.now()-paymentStarted),auth_ms:Math.round(authDuration),server_timing:response.headers.get('Server-Timing'),http_status:response.status});
 
   if (!response.ok) {
-    throw new Error(`Error del servidor (${response.status}): ${JSON.stringify(data)}`);
+    throw new Error(data?.error || `No se pudo verificar el pago (${response.status}). Conservá esta orden antes de reintentar.`);
   }
   if (data.error) {
     throw new Error(data.error);

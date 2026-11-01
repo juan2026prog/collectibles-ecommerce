@@ -5,6 +5,9 @@ import { corsHeaders, handleOptions, getCorsHeaders } from "../_shared/cors.ts";
 import { getGuestTokenSecret, generateOrderAccessToken, verifyOrderAccessToken } from "../_shared/order-token.ts";
 
 
+import { startMercadoPagoPreference, PaymentRecoveryError } from "../_shared/mercadopago-recovery.ts";
+import { paymentTelemetry } from "../_shared/payment-telemetry.ts";
+
 interface PaymentRequest {
   provider: "dlocal" | "paypal" | "mercadopago";
   order_id: string;
@@ -21,6 +24,7 @@ function getCustomerName(order: Record<string, any>) {
 }
 
 serve(async (req: Request) => {
+  const telemetry = paymentTelemetry();
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: getCorsHeaders(req) });
   }
@@ -33,7 +37,7 @@ serve(async (req: Request) => {
       throw new Error("Supabase configuration missing");
     }
 
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey);
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, { global: { fetch: telemetry.fetch() } });
     const user = await verifyOptionalAuth(req);
     const body = await req.json() as PaymentRequest;
     const { provider, order_id: orderId, customer_email: customerEmail, order_token: orderToken } = body;
@@ -70,7 +74,12 @@ serve(async (req: Request) => {
       }
     }
 
-    const { data: settings } = await supabaseAdmin.from("site_settings").select("key, value");
+    if (order.payment_method === 'mercadopago' && provider !== 'mercadopago') {
+      throw new PaymentRecoveryError('PROVIDER_CHANGE_REQUIRES_RECONCILIATION');
+    }
+
+    const { data: settings, error: settingsError } = await supabaseAdmin.from("site_settings").select("key, value");
+    if (settingsError) throw new Error("No se pudo cargar la configuración de pagos.");
     const safeSettings = Array.isArray(settings) ? settings : [];
     const config = Object.fromEntries(safeSettings.map((item) => [item.key, item.value]));
 
@@ -88,11 +97,12 @@ serve(async (req: Request) => {
     // Verify payment provider restrictions
     const productIds = safeOrderItems.map((item: any) => item.product_id).filter(Boolean);
     if (productIds.length > 0) {
-      const { data: dbProducts } = await supabaseAdmin
+      const { data: dbProducts, error: productsError } = await supabaseAdmin
         .from("products")
         .select("id, product_group_items(group:product_groups(allowed_payment_providers, is_active))")
         .in("id", productIds);
 
+      if (productsError) throw new Error("No se pudieron validar los proveedores permitidos.");
       if (dbProducts) {
         let allowedProvidersIntersection: string[] | null = null;
         for (const p of dbProducts) {
@@ -290,7 +300,7 @@ serve(async (req: Request) => {
     }
 
     if (provider === "mercadopago") {
-      const mpAccessToken = (config.payments_mercadopago_access_token || "").trim();
+      const mpAccessToken = (Deno.env.get("MERCADOPAGO_ACCESS_TOKEN") || config.payments_mercadopago_access_token || "").trim();
       if (!mpAccessToken) {
         throw new Error("Mercado Pago Access Token no configurado. Configuralo en Admin > Settings > Payments.");
       }
@@ -385,114 +395,18 @@ serve(async (req: Request) => {
         statement_descriptor: "COLLECTIBLES STORE",
       };
 
-      const mpResponse = await fetch("https://api.mercadopago.com/checkout/preferences", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${mpAccessToken}`,
-        },
-        body: JSON.stringify(preferencePayload),
-      });
-
-      const mpResult = await mpResponse.json();
-      if (!mpResponse.ok) {
-        throw new Error(`Mercado Pago Error (${mpResponse.status}): ${JSON.stringify(mpResult)}`);
-      }
-
-      const checkoutUrl = isSandbox ? mpResult.sandbox_init_point : mpResult.init_point;
-      if (!checkoutUrl) {
-        throw new Error(`Mercado Pago no devolvio URL de checkout. Response: ${JSON.stringify(mpResult)}`);
-      }
-
-      await supabaseAdmin
-        .from("orders")
-        .update({
-          payment_id: mpResult.id,
-          payment_method: "mercadopago",
-          payment_status: "redirected",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", orderId);
-
-      // Financial traceability: Record payment_attempt & payment_event for Mercado Pago
-      try {
-        const { data: existingAttempts } = await supabaseAdmin
-          .from("payment_attempts")
-          .select("attempt_number")
-          .eq("order_id", orderId);
-
-        const attemptNumber = (existingAttempts && existingAttempts.length > 0)
-          ? Math.max(...existingAttempts.map((a: any) => a.attempt_number)) + 1
-          : 1;
-
-        const { data: attempt } = await supabaseAdmin
-          .from("payment_attempts")
-          .insert({
-            order_id: orderId,
-            user_id: order.customer_id,
-            provider: "mercadopago",
-            payment_method_type: "mercadopago",
-            attempt_number: attemptNumber,
-            amount: amount,
-            currency: currency,
-            normalized_status: "initiated",
-            provider_status: "redirected",
-            external_preference_id: mpResult.id,
-            initiated_at: new Date().toISOString(),
-            metadata: { preference_id: mpResult.id, checkout_url: checkoutUrl }
-          })
-          .select()
-          .single();
-
-        await supabaseAdmin.from("payment_events").insert({
-          order_id: orderId,
-          payment_attempt_id: attempt?.id,
-          provider: "mercadopago",
-          event_type: "preference_created",
-          normalized_status: "initiated",
-          provider_status: "redirected",
-          source: "checkout",
-          payload_sanitized: { preference_id: mpResult.id },
-          processing_result: "Preferencia de Mercado Pago generada exitosamente",
-          occurred_at: new Date().toISOString()
-        });
-
-        if (attempt?.id) {
-          await supabaseAdmin
-            .from("orders")
-            .update({ last_payment_attempt_id: attempt.id })
-            .eq("id", orderId);
-        }
-
-        // Traceability: Insert into payments table
-        await supabaseAdmin.from("payments").insert({
-          order_id: orderId,
-          provider: "mercadopago",
-          transaction_external_id: mpResult.id,
-          payment_url: checkoutUrl,
-          amount: amount,
-          currency: currency,
-          status: "redirected",
-          raw_request: preferencePayload,
-          raw_response: mpResult,
-        }).catch((pErr: any) => {
-          console.warn("[create-payment] payments table insert warning:", pErr?.message);
-        });
-      } catch (traceErr: any) {
-        console.warn("[create-payment] Non-blocking payment_attempts tracing warning:", traceErr?.message);
-      }
-
-      return new Response(JSON.stringify({ checkout_url: checkoutUrl }), {
-        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      const result = await startMercadoPagoPreference(supabaseAdmin, order, preferencePayload, mpAccessToken, telemetry.fetch());
+      return new Response(JSON.stringify({ ...result, request_id:telemetry.requestId }), {
+        headers: { ...getCorsHeaders(req), ...telemetry.headers(), "Content-Type":"application/json" },
       });
     }
 
     throw new Error("Proveedor no configurado");
   } catch (err: any) {
     console.error("Payment Function Error:", err.message);
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 200,
-      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+    return new Response(JSON.stringify({ error: err.message, code: err instanceof PaymentRecoveryError ? err.code : "PAYMENT_START_FAILED", request_id:telemetry.requestId }), {
+      status: err instanceof PaymentRecoveryError ? 409 : 400,
+      headers: { ...getCorsHeaders(req), ...telemetry.headers(), "Content-Type": "application/json" },
     });
   }
 });

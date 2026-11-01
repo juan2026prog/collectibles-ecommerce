@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { CheckCircle, Clock, Package, ArrowRight, Copy, Check, RefreshCcw, CreditCard, Archive } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { startCheckoutPayment, isOrderPaymentApproved } from '../lib/payments';
+import { clearRecoveredCheckout } from '../lib/checkout-recovery';
 import { useCartContext } from '../contexts/CartContext';
 import { analytics } from '../lib/analytics';
 import { generateMetaEventId, trackPurchase } from '../lib/meta/metaPixel';
@@ -26,16 +28,17 @@ export default function CheckoutSuccess() {
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState('');
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+  const [resuming,setResuming]=useState(false);
+  const isMP=provider === 'mercadopago' || order?.payment_method === 'mercadopago';
 
   const orderNumber = orderId ? orderId.slice(0, 8).toUpperCase() : '---';
-  const isPending = statusParam === 'pending' || 
-                    ['pending', 'awaiting_payment'].includes(order?.status || '') || 
-                    ['pending_payment', 'redirected', 'initiated'].includes(order?.payment_status || '');
+  const isExpired=order?.status === 'expired' || order?.payment_status === 'expired';
+  const isPending=!isOrderPaymentApproved(order);
 
   const shouldTrackPurchase = useMemo(() => {
-    if (!orderId || (order?.status !== 'paid' && order?.status !== 'confirmed')) return false;
+    if (!orderId || !isOrderPaymentApproved(order)) return false;
     return !sessionStorage.getItem(`purchase_tracked_${orderId}`);
-  }, [order?.status, orderId]);
+  }, [order?.payment_status, order?.payment_processed_at, orderId]);
 
   useEffect(() => {
     async function verifyPayment() {
@@ -52,7 +55,7 @@ export default function CheckoutSuccess() {
           .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
-        if (payData?.payment_url) {
+        if (payData?.payment_url && !isMP) {
           setPaymentUrl(payData.payment_url);
         }
 
@@ -76,6 +79,7 @@ export default function CheckoutSuccess() {
         if (data?.order) {
           setOrder(data.order);
           sessionStorage.setItem('pending_checkout_order', JSON.stringify(data.order));
+          if(isOrderPaymentApproved(data.order)) clearRecoveredCheckout(orderId);
         }
       } catch (err: any) {
         setError(err.message || 'No se pudo confirmar el estado del pago.');
@@ -158,6 +162,8 @@ export default function CheckoutSuccess() {
   // Technical event: payment_returned (Phase 5)
   useEffect(() => {
     if (orderId) {
+      const redirectedAt=Number(sessionStorage.getItem('mp_redirect_started_at')||0);
+      if(redirectedAt) console.info('payment_provider_round_trip',{elapsed_ms:Date.now()-redirectedAt});
       trackGA4Event('payment_returned', {
         order_id: orderId,
         gateway: provider || 'unknown',
@@ -177,6 +183,16 @@ export default function CheckoutSuccess() {
     }
   }, [error, orderId, provider]);
 
+  async function resumeMercadoPago() {
+    if(!orderId || resuming) return;
+    setResuming(true);setError('');
+    try {
+      const result=await startCheckoutPayment({provider:'mercadopago',order_id:orderId,customer_email:order?.customer_email||''});
+      if(result.redirectUrl) window.location.href=result.redirectUrl;
+    } catch(err:any) { setError(err.message||'Estamos verificando el intento anterior. Conservá esta orden.'); }
+    finally {setResuming(false);}
+  }
+
   function copyOrderNumber() {
     navigator.clipboard.writeText(orderNumber);
     setCopied(true);
@@ -191,17 +207,19 @@ export default function CheckoutSuccess() {
         </div>
 
         <h1 className="text-3xl font-black text-white mb-2">
-          {verifying ? 'Verificando pago...' : isPending ? 'Tu orden esta pendiente' : 'Gracias por tu compra'}
+          {verifying ? 'Verificando pago...' : isExpired ? 'Tu orden venció' : isPending ? 'Tu orden esta pendiente' : 'Gracias por tu compra'}
         </h1>
         <p className="text-slate-400 mb-8">
           {verifying
             ? 'Espera un momento mientras confirmamos la transaccion.'
+            : isExpired
+              ? 'Conservamos la referencia del intento anterior. Su estado debe verificarse antes de volver a pagar.'
             : isPending
               ? 'Tu pago sigue en proceso. Conservamos la orden y te avisaremos cuando cambie de estado.'
               : 'Recibimos tu pago y tu pedido ya esta confirmado.'}
         </p>
 
-        {isPending && (
+        {isPending && !isExpired && (
           <div className="mb-6 p-4 border border-amber-500/30 bg-amber-500/10 text-amber-200 text-sm text-left flex items-start gap-3">
             <Clock className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
             <div>
@@ -299,7 +317,11 @@ export default function CheckoutSuccess() {
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link to="/shop" className="btn-primary px-8 py-3">Seguir comprando</Link>
           {isPending ? (
-            paymentUrl ? (
+            isMP ? (
+              <button type="button" disabled={resuming || verifying} onClick={resumeMercadoPago} className="px-8 py-3 bg-amber-600 text-white font-bold disabled:opacity-50 inline-flex items-center justify-center gap-2">
+                <RefreshCcw className="w-4 h-4" /> {resuming ? 'Verificando intento...' : 'Verificar y continuar pago'}
+              </button>
+            ) : paymentUrl ? (
               <a 
                 href={paymentUrl} 
                 target="_blank" 

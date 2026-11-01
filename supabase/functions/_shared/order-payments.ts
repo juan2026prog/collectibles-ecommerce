@@ -467,8 +467,19 @@ export async function finalizeOrderIfNeeded(
     throw new Error("No se encontro la orden a confirmar.");
   }
 
+  // If order was already confirmed and has payment_processed_at, verify if suborders or post-payment
+  // actions need recovery (idempotent reconciliation) before short-circuiting.
   if (currentOrder.payment_processed_at) {
-    return currentOrder;
+    const { data: pendingSuborders } = await supabaseClient
+      .from('order_suborders')
+      .select('id')
+      .eq('parent_order_id', orderId)
+      .eq('status', 'pending');
+
+    if (!pendingSuborders || pendingSuborders.length === 0) {
+      return currentOrder;
+    }
+    console.info(`[order-payments] Order ${orderId} has payment_processed_at but pending suborders; executing idempotent suborder recovery.`);
   }
 
   // Retrieve payment details to extract fee if available
@@ -497,7 +508,7 @@ export async function finalizeOrderIfNeeded(
     console.warn("Could not retrieve payment record for fee share calculation:", e);
   }
 
-  const { error: confirmError } = await supabaseClient.rpc("confirm_payment_atomic", {
+  const { data: confirmResult, error: confirmError } = await supabaseClient.rpc("confirm_payment_atomic", {
     p_order_id: orderId,
     p_payment_provider: currentOrder.payment_method,
     p_payment_ref: paymentId || currentOrder.payment_id || "UNKNOWN",
@@ -506,6 +517,18 @@ export async function finalizeOrderIfNeeded(
   if (confirmError) {
     console.error("confirm_payment_atomic failed:", confirmError);
     throw new Error(confirmError.message || "No se pudo confirmar el pago de la orden.");
+  }
+
+  // Strict check on business outcome: if stock was exhausted on late approval or confirmation failed,
+  // halt confirmation immediately. DO NOT update total_payment_fee, suborders, or trigger post-payment actions!
+  if (!confirmResult || confirmResult.success !== true) {
+    console.error("confirm_payment_atomic business rejection:", confirmResult);
+    const errorCode = confirmResult?.code || "ORDER_CONFIRMATION_REJECTED";
+    const errorMessage = confirmResult?.error || "El pedido no pudo confirmarse debido a una discrepancia de stock o inventario.";
+    const businessError = new Error(errorMessage) as any;
+    businessError.code = errorCode;
+    businessError.details = confirmResult;
+    throw businessError;
   }
 
   // Update total_payment_fee on orders

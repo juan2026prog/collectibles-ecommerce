@@ -217,6 +217,22 @@ Deno.serve(async (req: Request) => {
           const paidCents = Math.round(paidAmount * 100);
           const orderCents = Math.round(orderAmount * 100);
 
+          const closedOrder=['expired','cancelled','cancelada','refunded'].includes(currentOrder.status);
+          const financialMatch=paidCurrency === expectedCurrency && paidCents === orderCents;
+          const {data: recorded,error: recordError}=await supabaseClient.rpc('record_payment_transaction_atomic',{
+            p_order_id:order_id,p_provider:'mercadopago',p_external_payment_id:String(paymentData.id),
+            p_amount:paidAmount,p_currency:paidCurrency,p_normalized_status:closedOrder || !financialMatch ? 'manual_verification_required' : 'approved',
+            p_provider_status:paymentData.status,p_provider_status_detail:paymentData.status_detail||'',
+            p_raw_payload:{id:paymentData.id,status:paymentData.status,external_reference:order_id,transaction_amount:paidAmount,currency_id:paidCurrency},
+            p_source:'reconciliation',p_provider_event_id:`mp-confirm-${paymentData.id}-${paymentData.status}`,
+          });
+          if(recordError || !recorded?.success) throw new Error('No se pudo guardar la verificación del pago. Conservá la orden.');
+          if(closedOrder || !financialMatch) {
+            return new Response(JSON.stringify({success:false,error:'El pago requiere revisión manual antes de confirmar esta orden.',code:'MANUAL_VERIFICATION_REQUIRED',order:orderSummary(currentOrder,isFullyAuthorized)}),{
+              status:409,headers:{...corsHeaders,'Content-Type':'application/json'},
+            });
+          }
+
           if (paidCurrency === expectedCurrency && paidCents === orderCents) {
             const paidOrder = await finalizeOrderIfNeeded(
               supabaseClient,
