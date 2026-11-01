@@ -104,6 +104,7 @@ export interface UnifiedSearchOptions {
   filterTab?: 'all' | 'in_stock' | 'preorder' | 'international';
   enableAIEditorial?: boolean;
   userLocale?: string;
+  isInternationalEnabled?: boolean;
 }
 
 export interface UnifiedSearchResult {
@@ -341,26 +342,29 @@ export class CollectiblesSearchService {
           });
         }
 
-        // 2. Query International Products with cancellable query
-        const { data: intlData } = await executeCancellableQuery(signal => {
-          let q = supabase
-            .from('international_products')
-            .select('id, title, slug, final_price_usd, amazon_list_price_usd, image_url, brand, category, status')
-            .eq('status', 'published')
-            .abortSignal(signal);
+        // 2. Query International Products with cancellable query (Only if international is enabled)
+        const canQueryIntl = options.isInternationalEnabled !== false;
+        const { data: intlData } = canQueryIntl
+          ? await executeCancellableQuery(signal => {
+              let q = supabase
+                .from('international_products')
+                .select('id, title, slug, final_price_usd, amazon_list_price_usd, image_url, brand, category, status')
+                .eq('status', 'published')
+                .abortSignal(signal);
 
-          if (searchTerm) {
-            q = q.ilike('title', `%${searchTerm}%`);
-          }
-          if (intlPriceMax) {
-            q = q.lte('final_price_usd', Math.round(intlPriceMax * 100) / 100);
-          }
-          if (intlPriceMin) {
-            q = q.gte('final_price_usd', Math.round(intlPriceMin * 100) / 100);
-          }
+              if (searchTerm) {
+                q = q.ilike('title', `%${searchTerm}%`);
+              }
+              if (intlPriceMax) {
+                q = q.lte('final_price_usd', Math.round(intlPriceMax * 100) / 100);
+              }
+              if (intlPriceMin) {
+                q = q.gte('final_price_usd', Math.round(intlPriceMin * 100) / 100);
+              }
 
-          return q.limit(limitIntl);
-        }, 3000);
+              return q.limit(limitIntl);
+            }, 3000)
+          : { data: [] };
 
         if (Array.isArray(intlData)) {
           intlResults = intlData.map(item => {
@@ -373,7 +377,7 @@ export class CollectiblesSearchService {
               base_price: priceUsd,
               price: priceUsd,
               compare_at_price: Number(item.amazon_list_price_usd || item.final_price_usd || 0),
-              currency: 'USD',
+              currency: 'USD' as const,
               price_in_usd: priceUsd,
               price_in_uyu: priceUyu,
               images: [{ id: item.id, url: item.image_url, is_primary: true }],

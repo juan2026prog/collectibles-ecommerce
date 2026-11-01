@@ -128,7 +128,7 @@ export default function AdminInternationalSync() {
         wishlist_promotion_threshold: Number(settings.wishlist_promotion_threshold || 10),
         auto_purchase_enabled: false, // strictly enforce OFF
         international_purchases_enabled: false, // strictly enforce OFF
-        international_public_enabled: false, // strictly enforce OFF
+        international_public_enabled: Boolean(settings.international_public_enabled),
         updated_at: new Date().toISOString()
       };
 
@@ -313,6 +313,49 @@ export default function AdminInternationalSync() {
           </div>
 
           <div className="space-y-4">
+            <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-start justify-between gap-4">
+              <div>
+                <div className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
+                  <span>Visibilidad Pública — Uruguay</span>
+                  <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                    settings.international_public_enabled
+                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                      : 'bg-rose-100 text-rose-800 border-rose-300'
+                  }`}>
+                    {settings.international_public_enabled ? 'ACTIVADO' : 'DESACTIVADO'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-0.5">
+                  Controla si el menú, catálogo y compras internacionales son visibles para compradores uruguayos.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  const nextVal = !settings.international_public_enabled;
+                  setSettings(prev => ({ ...prev, international_public_enabled: nextVal }));
+                  try {
+                    await supabase
+                      .from('international_sync_settings')
+                      .update({ international_public_enabled: nextVal, updated_at: new Date().toISOString() })
+                      .eq('id', 1);
+                    setSuccess(`Internacional — Uruguay ${nextVal ? 'ACTIVADO' : 'DESACTIVADO'} correctamente.`);
+                    setTimeout(() => setSuccess(''), 3000);
+                  } catch (err: any) {
+                    setError('Error al actualizar: ' + err.message);
+                  }
+                }}
+                className="px-2.5 py-1 text-xs font-black rounded-lg shrink-0 transition-colors cursor-pointer border"
+                style={{
+                  backgroundColor: settings.international_public_enabled ? '#10b981' : '#f43f5e',
+                  color: '#ffffff',
+                  borderColor: settings.international_public_enabled ? '#059669' : '#e11d48'
+                }}
+              >
+                {settings.international_public_enabled ? 'ON' : 'OFF'}
+              </button>
+            </div>
+
             <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex items-start justify-between gap-4">
               <div>
                 <div className="text-xs font-bold text-gray-900">Publicación automática</div>

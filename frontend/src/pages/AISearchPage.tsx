@@ -19,6 +19,7 @@ import { resolveCartItemPrice } from '../lib/priceResolver';
 import SEO from '../components/SEO';
 import { captureDemandSignal } from '../services/sourcing/demandSignalEngine';
 import { processSignalIntoCatalogGap } from '../services/sourcing/catalogGapEngine';
+import { useInternationalSettings } from '../hooks/useInternationalSettings';
 
 const HERO_SUGGESTION_CHIPS = [
   'Dragon Ball',
@@ -139,6 +140,7 @@ type ResultFilterTab = 'all' | 'in_stock' | 'preorder' | 'international';
 export default function AISearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryParam = searchParams.get('q') || '';
+  const { publicEnabled: intlPublicEnabled } = useInternationalSettings();
   
   const [inputQuery, setInputQuery] = useState(queryParam);
   const [interpretation, setInterpretation] = useState<AISearchQueryInterpretation | null>(null);
@@ -266,7 +268,8 @@ export default function AISearchPage() {
         limitInternational: 24,
         limitRadar: 6,
         enableAIEditorial: true,
-        userLocale: 'es-UY'
+        userLocale: 'es-UY',
+        isInternationalEnabled: intlPublicEnabled
       });
 
       setProducts(searchResult.products);
@@ -909,7 +912,7 @@ export default function AISearchPage() {
                   </button>
                 )}
 
-                {internationalCount > 0 && (
+                {intlPublicEnabled && internationalCount > 0 && (
                   <button
                     type="button"
                     onClick={() => setActiveTab('international')}

@@ -447,6 +447,34 @@ function sanitizePayloadForLogging(data: any) {
       }
     }
 
+    // Server-Side Guard: If order contains international products for Uruguay, verify visibility & purchases are enabled
+    const hasIntlProds = productsList.some(p => p.is_international);
+    if (hasIntlProds && isUruguay) {
+      const { data: syncSettings } = await supabase
+        .from("international_sync_settings")
+        .select("international_public_enabled, international_purchases_enabled")
+        .eq("id", 1)
+        .maybeSingle();
+
+      const publicOk = syncSettings?.international_public_enabled === true;
+      const purchasesOk = syncSettings?.international_purchases_enabled !== false;
+
+      if (!publicOk || !purchasesOk) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: "El canal de compras internacionales para Uruguay se encuentra actualmente inactivo.",
+          details: {
+            reason: "international_channel_disabled",
+            public_enabled: publicOk,
+            purchases_enabled: purchasesOk
+          }
+        }), {
+          status: 200,
+          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
+        });
+      }
+    }
+
     const productPriceMap = new Map<string, number>();
     for (const product of productsList) {
       productPriceMap.set(product.id, Number(product.base_price));

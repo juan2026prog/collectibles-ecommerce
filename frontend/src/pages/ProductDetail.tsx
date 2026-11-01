@@ -28,6 +28,7 @@ import { sanitizeProductDescription } from '../lib/descriptionSanitizer';
 import AdminTechnicalPanel from '../components/AdminTechnicalPanel';
 import { calculateUruboxEstimate, getEstimatedWeightKg } from '../lib/urubox';
 import { isValidInternalSku } from '../lib/skuUtils';
+import { useInternationalSettings } from '../hooks/useInternationalSettings';
 import { ProductGridCard } from '../components/ProductGridCard';
 import { calculateArgentinaShippingStatus } from '../lib/mbeLogisticsUtils';
 import { getConditionLabel } from '../config/conditionConfig';
@@ -192,7 +193,7 @@ export default function ProductDetail() {
   const { buyBox } = useProductBuyBox(product?.id);
   const cart = useCartContext();
   const internationalCart = useInternationalCartContext();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { formatProductPrice, selectedCurrency } = useCurrency();
   const { promotions } = usePromotions();
   const { toggleWishlist, isInWishlist } = useWishlistContext();
@@ -396,8 +397,10 @@ export default function ProductDetail() {
 
   const inventoryResolution = resolveProductInventory(product, selectedVariant);
   const isIntl = product.source_provider === 'zinc' || Boolean(product.is_international);
+  const { publicEnabled: intlPublicEnabled } = useInternationalSettings();
+  const isIntlBlocked = isIntl && !intlPublicEnabled && !profile?.is_admin;
   const isVendorActive = !product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined;
-  const isAvailable = inventoryResolution.isAvailable;
+  const isAvailable = inventoryResolution.isAvailable && !isIntlBlocked;
   const isPurchasable = isAvailable && isVendorActive;
   const maxPurchasableStock = inventoryResolution.availableQuantity !== null
     ? inventoryResolution.availableQuantity
@@ -405,6 +408,9 @@ export default function ProductDetail() {
   const stock = maxPurchasableStock;
 
   const getStockInfo = () => {
+    if (isIntlBlocked) {
+      return { text: 'Importación temporalmente no disponible para Uruguay', className: 'text-amber-400 border-amber-500/20 bg-amber-500/10' };
+    }
     if (!isVendorActive) {
       return { text: 'Vendedor no disponible', className: 'text-amber-400 border-amber-500/20 bg-amber-500/10' };
     }

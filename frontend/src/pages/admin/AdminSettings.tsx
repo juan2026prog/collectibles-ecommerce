@@ -463,6 +463,8 @@ export default function AdminSettings() {
   const [radarRefreshing, setRadarRefreshing] = useState(false);
   const [radarEstimating, setRadarEstimating] = useState(false);
   const [radarCostEstimate, setRadarCostEstimate] = useState<any>(null);
+  const [intlPublicEnabled, setIntlPublicEnabled] = useState<boolean>(false);
+  const [updatingIntlPublic, setUpdatingIntlPublic] = useState<boolean>(false);
   const [showMediaPicker, setShowMediaPicker] = useState<false | 'logo'>(false);
   const { toast } = useToast();
   const { user, isSuperAdmin } = useAuth();
@@ -770,11 +772,12 @@ export default function AdminSettings() {
 
   async function fetchData() {
     setLoading(true);
-    const [{ data: pubConfig }, { data: secrets }, { data: t }, { data: handy }] = await Promise.all([
+    const [{ data: pubConfig }, { data: secrets }, { data: t }, { data: handy }, { data: intlSettings }] = await Promise.all([
       supabase.from('public_site_config').select('*'),
       supabase.from('site_settings').select('*'),
       supabase.from('feature_toggles').select('*').order('id'),
       supabase.from('payment_providers').select('*').eq('provider_key', 'handy').maybeSingle(),
+      supabase.from('international_sync_settings').select('international_public_enabled').eq('id', 1).maybeSingle(),
     ]);
     const settingsMap: Record<string, string> = {};
     (pubConfig || []).forEach(item => { settingsMap[item.key] = item.value || ''; });
@@ -783,7 +786,38 @@ export default function AdminSettings() {
     setToggles(t || []);
     setHandyProvider(normalizeHandyProvider(handy || undefined));
     setHandySecretInput('');
+    if (intlSettings) {
+      setIntlPublicEnabled(Boolean(intlSettings.international_public_enabled));
+    }
     setLoading(false);
+  }
+
+  async function toggleInternationalUruguay() {
+    if (!isSuperAdmin) return;
+    const nextVal = !intlPublicEnabled;
+    setUpdatingIntlPublic(true);
+    try {
+      const { error: updErr } = await supabase
+        .from('international_sync_settings')
+        .update({
+          international_public_enabled: nextVal,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', 1);
+
+      if (updErr) throw updErr;
+
+      setIntlPublicEnabled(nextVal);
+      toast.success(
+        nextVal
+          ? 'Módulo Internacional activado para compradores en Uruguay'
+          : 'Módulo Internacional desactivado para compradores en Uruguay'
+      );
+    } catch (err: any) {
+      toast.error('Error al actualizar visibilidad internacional: ' + (err.message || 'Error desconocido'));
+    } finally {
+      setUpdatingIntlPublic(false);
+    }
   }
 
   const SECRET_KEYS = new Set([
@@ -1898,6 +1932,60 @@ export default function AdminSettings() {
       {/* Modules Settings */}
       {currentTab === 'modules' && isSuperAdmin && (
         <div className="space-y-6 max-w-3xl">
+          {/* Sección 0: Interruptor Internacional por País (Uruguay) */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                <h3 className="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-slate-400">
+                  Mercados Internacionales · Uruguay (2026)
+                </h3>
+              </div>
+            </div>
+
+            <div className="bg-gradient-to-r from-indigo-500/10 via-sky-500/5 to-transparent border border-indigo-500/30 rounded-2xl p-5 flex items-center justify-between gap-4 shadow-sm">
+              <div className="flex items-start gap-3.5 min-w-0">
+                <div className="p-3 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 shrink-0 text-xl flex items-center justify-center">
+                  <span role="img" aria-label="Uruguay">🇺🇾</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-black text-base text-gray-900 dark:text-white">Internacional — Uruguay</h4>
+                    <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${
+                      intlPublicEnabled
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-700'
+                        : 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-700'
+                    }`}>
+                      {intlPublicEnabled ? 'ACTIVADO' : 'DESACTIVADO'}
+                    </span>
+                    <span className="text-[10px] font-semibold text-gray-400 dark:text-slate-500">
+                      (Requiere Super Admin)
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-slate-300 mt-1 leading-relaxed max-w-xl">
+                    {intlPublicEnabled
+                      ? 'ACTIVADO: El módulo Internacional es visible para los compradores de Uruguay en menú, móvil, catálogo y checkout.'
+                      : 'DESACTIVADO: El catálogo y compras internacionales quedan 100% ocultos para el público uruguayo. Solo los Administradores conservan acceso para pruebas y configuración.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={updatingIntlPublic}
+                onClick={toggleInternationalUruguay}
+                className="p-1 hover:scale-105 active:scale-95 transition-transform shrink-0 cursor-pointer focus:outline-none disabled:opacity-50"
+                title={intlPublicEnabled ? 'Desactivar Internacional para Uruguay' : 'Activar Internacional para Uruguay'}
+                aria-label="Interruptor de visibilidad internacional para Uruguay"
+              >
+                {intlPublicEnabled ? (
+                  <ToggleRight className="w-12 h-12 text-emerald-500 drop-shadow-sm" />
+                ) : (
+                  <ToggleLeft className="w-12 h-12 text-gray-300 dark:text-slate-600" />
+                )}
+              </button>
+            </div>
+          </div>
+
           {/* Seccion 1: Plugins de Coleccionista */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
