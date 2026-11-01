@@ -1,4 +1,5 @@
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, Navigate } from 'react-router-dom';
+import { INTERNATIONAL_STOREFRONT_PAUSED } from '../hooks/useInternationalSettings';
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, Minus, Plus, Star, ChevronDown, Heart, Zap, ZoomIn, Archive } from 'lucide-react';
 import { useProduct, useProductBuyBox, useProductCards, getProductGroupBadge, getAllProductGroupBadges } from '../hooks/useData';
@@ -346,6 +347,11 @@ export default function ProductDetail() {
         <Link to="/shop" className="btn-primary mt-6">Volver al catálogo</Link>
       </div>
     );
+  }
+
+  // Existing international product links must not bypass the temporary storefront hold.
+  if (INTERNATIONAL_STOREFRONT_PAUSED && (product.is_international || product.source_provider === 'zinc' || product.shipping_type === 'international_courier_direct')) {
+    return <Navigate to="/shop" replace />;
   }
 
   const variants = product.variants && product.variants.length > 0 ? product.variants : [];

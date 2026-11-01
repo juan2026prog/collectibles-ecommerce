@@ -16,6 +16,7 @@ import { AdminModeProvider } from './contexts/AdminModeContext';
 import { InternationalCartProvider } from './contexts/InternationalCartContext';
 import InternationalLaboratory from './pages/international/InternationalLaboratory';
 import InternationalStorefront from './pages/InternationalStorefront';
+import { INTERNATIONAL_STOREFRONT_PAUSED } from './hooks/useInternationalSettings';
 import InternationalCart from './pages/international/InternationalCart';
 import InternationalCourier from './pages/international/InternationalCourier';
 import InternationalReview from './pages/international/InternationalReview';
@@ -196,8 +197,8 @@ function App() {
                     <Route path="/store/:slug" element={<MarketplaceGuard><VendorStorefront /></MarketplaceGuard>} />
                     <Route path="/page/:slug" element={<DynamicPage />} />
                     <Route path="/collection/:slug" element={<Shop />} />
-                    <Route path="/intl" element={<InternationalStorefront />} />
-                    <Route path="/intl/:countryCode" element={<InternationalMarketTemplate />} />
+                    <Route path="/intl" element={INTERNATIONAL_STOREFRONT_PAUSED ? <Navigate to="/" replace /> : <InternationalStorefront />} />
+                    <Route path="/intl/:countryCode" element={INTERNATIONAL_STOREFRONT_PAUSED ? <Navigate to="/" replace /> : <InternationalMarketTemplate />} />
                     <Route path="/internacional" element={<ProtectedRoute requireSuperAdmin><InternationalLaboratory /></ProtectedRoute>} />
                     <Route path="/about" element={<Navigate to="/page/nosotros" replace />} />
                     <Route path="/contact" element={<Contact />} />
@@ -290,14 +291,16 @@ function App() {
                 
                 {/* International Checkout Simulation */}
                 <Route path="/internacional/cart" element={
-                  <StorefrontLayout />
+                  INTERNATIONAL_STOREFRONT_PAUSED ? <Navigate to="/" replace /> : <StorefrontLayout />
                 }>
                   <Route index element={<InternationalCart />} />
                 </Route>
                 <Route path="/internacional/checkout" element={
-                  <ProtectedRoute>
-                    <StorefrontLayout />
-                  </ProtectedRoute>
+                  INTERNATIONAL_STOREFRONT_PAUSED ? <Navigate to="/" replace /> : (
+                    <ProtectedRoute>
+                      <StorefrontLayout />
+                    </ProtectedRoute>
+                  )
                 }>
                   <Route path="courier" element={<InternationalCourier />} />
                   <Route path="review" element={<InternationalReview />} />
