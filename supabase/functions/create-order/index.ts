@@ -73,6 +73,7 @@ const checkoutSchema = z.object({
     pickup_type: z.string().nullable().optional(),
     internal_reference: z.string().optional(),
   })).optional(),
+  checkout_request_key: z.string().trim().min(8).max(128).optional(),
 });
 
 const FLEX_NEAR = new Set([
@@ -1882,7 +1883,7 @@ function sanitizePayloadForLogging(data: any) {
       }
     }
 
-    const { data: orderResult, error: rpcError } = await supabase.rpc("create_order_atomic", {
+    const { data: orderResult, error: rpcError } = await supabase.rpc("create_order_atomic_v2", {
       p_customer_id: user?.id || null,
       p_total_amount: totalAmount,
       p_currency: isArgentinaOrder ? "USD" : (hasUSDOrderItems ? "USD" : (payload.currency || "UYU")),
@@ -1914,12 +1915,43 @@ function sanitizePayloadForLogging(data: any) {
       p_shipping_weight_volumetric_kg: isArgentinaOrder ? totalVolumetricWeightKg : null,
       p_shipping_weight_chargeable_kg: isArgentinaOrder ? totalRealWeightKg : null,
       p_shipping_rule_applied: isArgentinaOrder ? shippingRuleApplied : null,
-      p_is_shipping_quote_required: isArgentinaOrder ? isShippingQuoteRequired : false
+      p_is_shipping_quote_required: isArgentinaOrder ? isShippingQuoteRequired : false,
+      p_checkout_request_key: payload.checkout_request_key || `anon_req_${crypto.randomUUID()}`
     });
 
     if (rpcError) {
       console.error("Atomic order creation failed:", rpcError);
       throw new Error(rpcError.message || "No se pudo crear la orden.");
+    }
+
+    // Si create_order_atomic_v2 resolvió un replay idempotente dentro de PostgreSQL, retornar orden existente de inmediato
+    if (orderResult?.idempotent_replay) {
+      const guestSecret = await getGuestTokenSecret(supabaseServiceKey);
+      const guestOrderToken = await generateOrderAccessToken(orderResult.order_id, guestSecret);
+
+      console.info("[create-order] Atomic idempotent replay returned for key:", payload.checkout_request_key);
+      return new Response(JSON.stringify({
+        success: true,
+        order_token: guestOrderToken,
+        idempotent_replay: true,
+        order: {
+          id: orderResult.order_id,
+          order_number: orderResult.order_number,
+          total_amount: orderResult.total_amount,
+          subtotal: orderResult.subtotal_products || orderResult.total_amount,
+          discount: orderResult.total_discounts || 0,
+          bank_discount: 0,
+          shipping: orderResult.total_shipping || 0,
+          status: orderResult.status,
+          payment_status: orderResult.payment_status,
+          currency: orderResult.currency,
+          payment_method: payload.payment_method,
+          customer_email: payload.customer_email,
+        },
+      }), {
+        status: 200,
+        headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
+      });
     }
 
     // Link international capital reservation if provided

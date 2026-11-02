@@ -97,11 +97,13 @@ async function getAuthHeaders() {
 }
 
 export async function createCheckoutOrder(params: CreateOrderParams) {
-  if(params.payment_method === 'mercadopago') {
-    const {data:{session}}=await supabase.auth.getSession();
-    return withRecoverableCheckout({...params,customer_scope:session?.user?.id || 'guest'},async requestKey => createCheckoutOrderRequest(params,requestKey));
+  if (params.payment_method === 'mercadopago') {
+    const { data: { session } } = await supabase.auth.getSession();
+    return withRecoverableCheckout(
+      { ...params, customer_scope: session?.user?.id || 'guest' },
+      async (requestKey) => createCheckoutOrderRequest(params, requestKey)
+    );
   }
-  if(localStorage.getItem('mp_checkout_recovery_v1')) throw new Error('Hay un intento de Mercado Pago pendiente. Revisá esa orden antes de iniciar otro pago.');
   return (await createCheckoutOrderRequest(params)).order;
 }
 

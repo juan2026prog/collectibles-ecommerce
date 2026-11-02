@@ -15,7 +15,7 @@ export default function CheckoutSuccess() {
   const provider = searchParams.get('provider');
   const statusParam = searchParams.get('status');
   const orderToken = searchParams.get('order_token') || (orderId ? sessionStorage.getItem('order_token_' + orderId) : null) || undefined;
-  const { clearCart, items, total } = useCartContext();
+  const { clearCart, items: cartItems, total: cartTotal } = useCartContext();
   const [order, setOrder] = useState<any>(() => {
     try {
       const stored = sessionStorage.getItem('pending_checkout_order');
@@ -23,6 +23,14 @@ export default function CheckoutSuccess() {
     } catch {
       return null;
     }
+  });
+
+  // Preserve snapshot of cart items and total upon arrival before cart is cleared
+  const [purchaseSnapshot] = useState(() => {
+    return {
+      items: cartItems.length > 0 ? [...cartItems] : [],
+      total: cartTotal
+    };
   });
   const [copied, setCopied] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -78,8 +86,14 @@ export default function CheckoutSuccess() {
         if (data?.error) throw new Error(data.error);
         if (data?.order) {
           setOrder(data.order);
-          sessionStorage.setItem('pending_checkout_order', JSON.stringify(data.order));
-          if(isOrderPaymentApproved(data.order)) clearRecoveredCheckout(orderId);
+          if (isOrderPaymentApproved(data.order)) {
+            clearRecoveredCheckout(orderId);
+            clearCart();
+            sessionStorage.removeItem('pending_checkout_order');
+            sessionStorage.removeItem('mp_redirect_started_at');
+          } else {
+            sessionStorage.setItem('pending_checkout_order', JSON.stringify(data.order));
+          }
         }
       } catch (err: any) {
         setError(err.message || 'No se pudo confirmar el estado del pago.');
@@ -111,53 +125,69 @@ export default function CheckoutSuccess() {
       return;
     }
 
-    analytics.track({
-      eventName: 'Purchase',
-      eventData: {
-        content_ids: items.map((item) => item.product_id),
-        content_type: 'product',
-        value: order?.total_amount || total,
+    const effectiveItems = purchaseSnapshot.items.length > 0 ? purchaseSnapshot.items : cartItems;
+    const effectiveTotal = order?.total_amount || purchaseSnapshot.total || cartTotal;
+
+    // Fail-safe analytics dispatch: failure in pixel/GA4 must never break checkout cleanup
+    try {
+      analytics.track({
+        eventName: 'Purchase',
+        eventData: {
+          content_ids: effectiveItems.map((item) => item.product_id),
+          content_type: 'product',
+          value: effectiveTotal,
+          currency: order?.currency || 'UYU',
+          num_items: effectiveItems.reduce((sum, item) => sum + item.quantity, 0),
+        },
+        user: { email: order?.customer_email || undefined },
+      });
+    } catch (e) {
+      console.warn('[CheckoutSuccess] Analytics track error:', e);
+    }
+
+    try {
+      // Meta Pixel: Purchase
+      const metaEventId = generateMetaEventId('Purchase', orderId);
+      trackPurchase(metaEventId, {
+        value: effectiveTotal,
         currency: order?.currency || 'UYU',
-        num_items: items.reduce((sum, item) => sum + item.quantity, 0),
-      },
-      user: { email: order?.customer_email || undefined },
-    });
+        contents: effectiveItems.map((item) => ({
+          id: item.product_id,
+          quantity: item.quantity,
+          item_price: item.price
+        })),
+        content_ids: effectiveItems.map((item) => item.product_id),
+        num_items: effectiveItems.reduce((sum, item) => sum + item.quantity, 0),
+        order_id: orderId,
+        user_email: order?.customer_email || undefined
+      });
+    } catch (e) {
+      console.warn('[CheckoutSuccess] Meta Pixel track error:', e);
+    }
 
-    // Meta Pixel: Purchase
-    const metaEventId = generateMetaEventId('Purchase', orderId);
-    trackPurchase(metaEventId, {
-      value: order?.total_amount || total,
-      currency: order?.currency || 'UYU',
-      contents: items.map((item) => ({
-        id: item.product_id,
-        quantity: item.quantity,
-        item_price: item.price
-      })),
-      content_ids: items.map((item) => item.product_id),
-      num_items: items.reduce((sum, item) => sum + item.quantity, 0),
-      order_id: orderId,
-      user_email: order?.customer_email || undefined
-    });
+    try {
+      // GA4 & Clarity Purchase Tracking (Phase 2, 4, 6)
+      trackGA4Event('purchase', {
+        transaction_id: orderId,
+        value: Number(effectiveTotal),
+        currency: order?.currency || 'UYU',
+        shipping: Number(order?.shipping_cost || 0),
+        tax: Number(order?.tax_amount || 0),
+        items: mapCartItemsToGA4(effectiveItems)
+      });
+      trackClarityEvent('purchase_completed');
+    } catch (e) {
+      console.warn('[CheckoutSuccess] GA4/Clarity track error:', e);
+    }
 
-    // GA4 & Clarity Purchase Tracking (Phase 2, 4, 6)
-    trackGA4Event('purchase', {
-      transaction_id: orderId,
-      value: Number(order?.total_amount || total),
-      currency: order?.currency || 'UYU',
-      shipping: Number(order?.shipping_cost || 0),
-      tax: Number(order?.tax_amount || 0),
-      items: mapCartItemsToGA4(items)
-    });
-
-    trackClarityEvent('purchase_completed');
-
-    // ONLY mark as tracked after successful event dispatching
+    // Mark as tracked to prevent duplicates
     markPurchaseAsTracked(orderId);
 
     clearCart();
     sessionStorage.setItem(`purchase_tracked_${orderId}`, 'true');
     sessionStorage.removeItem('pending_checkout_order');
-  }, [clearCart, items, order?.currency, order?.customer_email, order?.status, order?.total_amount, order?.shipping_cost, order?.tax_amount, orderId, shouldTrackPurchase, total]);
+    clearRecoveredCheckout(orderId);
+  }, [clearCart, cartItems, cartTotal, purchaseSnapshot, order?.currency, order?.customer_email, order?.status, order?.total_amount, order?.shipping_cost, order?.tax_amount, orderId, shouldTrackPurchase]);
 
   // Technical event: payment_returned (Phase 5)
   useEffect(() => {

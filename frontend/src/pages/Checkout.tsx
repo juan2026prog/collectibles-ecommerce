@@ -2287,11 +2287,6 @@ export default function Checkout() {
     setCheckoutError('');
 
     try {
-      const previous=JSON.parse(sessionStorage.getItem('pending_checkout_order')||'null');
-      if(previous?.id && previous.payment_method === 'mercadopago') {
-        await processPaymentFlow(previous.id,'mercadopago',form.email);
-        return;
-      }
       // 1. ZINC LIVE CHECK & CAPITAL CAPACITY RESERVATION
       let activeReservationId: string | null = null;
       const { data: { session } } = await supabase.auth.getSession();
