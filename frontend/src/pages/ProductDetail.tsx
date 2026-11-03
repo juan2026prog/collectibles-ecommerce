@@ -205,6 +205,7 @@ export default function ProductDetail() {
   const { toggleWishlist, isInWishlist } = useWishlistContext();
   const { features } = useFeatures();
   const { isModuleVisible } = useCollectorPermissions();
+  const { publicEnabled: intlPublicEnabled } = useInternationalSettings();
 
   const arShippingStatus = calculateArgentinaShippingStatus(product || {});
   
@@ -403,7 +404,6 @@ export default function ProductDetail() {
 
   const inventoryResolution = resolveProductInventory(product, selectedVariant);
   const isIntl = product.source_provider === 'zinc' || Boolean(product.is_international);
-  const { publicEnabled: intlPublicEnabled } = useInternationalSettings();
   const isIntlBlocked = isIntl && !intlPublicEnabled && !profile?.is_admin;
   const isVendorActive = !product?.vendor_id || product?.vendor_id === 'platform' || product?.vendor?.status === 'active' || product?.vendor?.status === undefined;
   const isAvailable = inventoryResolution.isAvailable && !isIntlBlocked;
