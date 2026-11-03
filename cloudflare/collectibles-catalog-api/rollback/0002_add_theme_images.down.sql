@@ -1,0 +1,4 @@
+-- Rollback Migration: 0002_add_theme_images.down.sql
+-- Description: SQLite doesn't strictly support DROP COLUMN in older engines without table rewrite, but SQLite 3.35.0+ does:
+-- ALTER TABLE public_themes DROP COLUMN image_alt;
+-- ALTER TABLE public_themes DROP COLUMN image_url;

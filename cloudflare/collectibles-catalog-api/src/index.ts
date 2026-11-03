@@ -1983,16 +1983,19 @@ async function handleInternalSync(
       if (!t?.id || !t?.slug) continue;
       statements.push(
         env.DB.prepare(
-          `INSERT INTO public_themes (id, name, slug, description, is_active, sort_order, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO public_themes (id, name, slug, description, image_url, image_alt, is_active, sort_order, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
              name = excluded.name, slug = excluded.slug, description = excluded.description,
+             image_url = excluded.image_url, image_alt = excluded.image_alt,
              is_active = excluded.is_active, sort_order = excluded.sort_order, updated_at = excluded.updated_at`
         ).bind(
           t.id,
           t.name,
           t.slug,
           t.description ?? null,
+          t.image_url ?? null,
+          t.image_alt ?? null,
           t.is_active === false ? 0 : 1,
           Number(t.sort_order ?? 0),
           t.updated_at || new Date().toISOString()
