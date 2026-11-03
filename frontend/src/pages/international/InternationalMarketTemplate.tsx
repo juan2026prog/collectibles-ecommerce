@@ -2,30 +2,24 @@
 
 import React from 'react';
 import { useParams, Navigate, Link } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { useInternationalSettings } from '../../hooks/useInternationalSettings';
 import { useInternationalMarkets } from '../../hooks/useInternationalMarkets';
 import MarketPreviewBanner from '../../components/international/MarketPreviewBanner';
 import SEO from '../../components/SEO';
 import SkyPostalQuoteSimulator from '../../components/international/SkyPostalQuoteSimulator';
 import Shop from '../Shop';
-import { Globe, Plane, ShieldCheck, ArrowRight, Package } from 'lucide-react';
+import { Globe, Plane, ShieldCheck } from 'lucide-react';
 
 export default function InternationalMarketTemplate() {
   const { countryCode } = useParams<{ countryCode: string }>();
-  const { getMarket, loading } = useInternationalMarkets();
 
-  if (loading) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full" />
-      </div>
-    );
-  }
-
+  // RULE OF HOOKS: All hooks called unconditionally at top level in consistent order
+  const { user, profile, isSuperAdmin, loading: authLoading } = useAuth();
   const { publicEnabled: intlPublicEnabled, loaded: intlLoaded } = useInternationalSettings();
-  const market = getMarket(countryCode || 'CL');
+  const { getMarket, loading: marketsLoading } = useInternationalMarkets();
 
-  if (!intlLoaded) {
+  if (authLoading || marketsLoading || !intlLoaded) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="animate-spin w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full" />
@@ -33,8 +27,16 @@ export default function InternationalMarketTemplate() {
     );
   }
 
-  // If international public access is disabled and market is not in admin preview, block access
-  if (!intlPublicEnabled && !market.isPreview) {
+  const market = getMarket(countryCode || 'CL');
+  const isAdminAuthorized = Boolean(isSuperAdmin || profile?.is_admin || profile?.is_super_admin);
+
+  // If international public access is globally disabled and user is not an authorized Admin previewing, block access
+  if (!intlPublicEnabled && !isAdminAuthorized) {
+    return <Navigate to="/" replace />;
+  }
+
+  // Previews of markets are strictly restricted to authorized administrators
+  if (market.isPreview && !isAdminAuthorized) {
     return <Navigate to="/" replace />;
   }
 
@@ -59,7 +61,7 @@ export default function InternationalMarketTemplate() {
       <SEO
         title={`Collectibles ${market.countryName} | Catálogo Internacional`}
         description={`Descubrí figuras, cómics y coleccionables internacionales con envíos directos a ${market.countryName}.`}
-        noIndex={market.isPreview} // Enforces noindex, nofollow on preview markets
+        noIndex={market.isPreview || !intlPublicEnabled} // Enforces noindex, nofollow on preview markets or disabled intl
       />
 
       {market.isPreview && <MarketPreviewBanner market={market} />}

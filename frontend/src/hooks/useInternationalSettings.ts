@@ -26,8 +26,6 @@ export interface InternationalSettings {
 }
 
 
-import { PublicCatalogProvider } from '../lib/providers/PublicCatalogProvider';
-
 const ADMIN_CACHE_TTL = 60000;
 const PUBLIC_CACHE_TTL = 15 * 60 * 1000; // 15 minutos en navegación pública para evitar martillar Supabase
 const caches = new Map<string, { data: InternationalSettings; expires: number }>();
@@ -36,9 +34,8 @@ const listeners = new Set<(scope: string, data: InternationalSettings | null) =>
 let authRevision = 0;
 
 function formatSettings(data: any, publicOnly: boolean): InternationalSettings {
-  // STRICT FAIL-CLOSED: Visibility flags require explicit boolean true.
-  // Legacy or unverified Worker properties (e.g. international_enabled: true) are rejected
-  // unless international_public_enabled is strictly true.
+  // STRICT FAIL-CLOSED: Visibility & purchase flags require explicit boolean true.
+  // Neither a missing property, null, undefined, nor unverified Worker values can enable them.
   const isPublicEnabled = Boolean(data && data.international_public_enabled === true);
   const isPurchasesEnabled = Boolean(data && data.international_purchases_enabled === true);
 
@@ -46,7 +43,7 @@ function formatSettings(data: any, publicOnly: boolean): InternationalSettings {
     ...(publicOnly ? {} : data), id: 1,
     international_public_enabled: isPublicEnabled,
     international_purchases_enabled: isPurchasesEnabled,
-    international_capacity_enabled: publicOnly ? true : (data?.international_capacity_enabled ?? true),
+    international_capacity_enabled: publicOnly ? true : (data?.international_capacity_enabled === true),
     target_margin_percent: publicOnly ? 15 : Number(data?.target_margin_percent ?? 15),
     min_absolute_profit_usd: publicOnly ? 3.99 : Number(data?.min_absolute_profit_usd ?? 3.99),
     min_profit_usd: publicOnly ? 3.99 : Number(data?.min_profit_usd ?? 3.99),
@@ -55,7 +52,7 @@ function formatSettings(data: any, publicOnly: boolean): InternationalSettings {
   };
 }
 
-const SESSION_CACHE_KEY = 'collectibles_intl_public_settings_v2';
+const SESSION_CACHE_KEY = 'collectibles_intl_public_settings_v3';
 
 function isAutomatedCrawlerAgent(): boolean {
   if (typeof navigator === 'undefined') return false;
@@ -94,31 +91,16 @@ export async function fetchInternationalSettings(forceRefresh = false, isAdminCo
   if (pending.has(scope)) return pending.get(scope)!;
   const operation = (async () => {
     try {
-      if (!isAdminContext && PublicCatalogProvider.isDomainEnabled('settings')) {
-        try {
-          const bundle = await PublicCatalogProvider.getPublicSettingsBundle();
-          // STRICT FAIL-CLOSED: Worker data must strictly provide international_public_enabled.
-          // If statusData lacks international_public_enabled or is falsy, we fall through to Supabase RPC.
-          const statusData = bundle.data?.international_status;
-          if (statusData && typeof (statusData as any).international_public_enabled === 'boolean') {
-            const data = formatSettings(statusData, true);
-            const entry = { data, expires: Date.now() + ttl };
-            caches.set(scope, entry);
-            if (typeof sessionStorage !== 'undefined') {
-              try { sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(entry)); } catch {}
-            }
-            listeners.forEach(listener => listener(scope, data));
-            return data;
-          }
-        } catch {
-          // If Worker fails or data is legacy/incomplete, fall through to Supabase RPC authority
-        }
-      }
-
+      // SUPABASE IS THE SOLE AUTHORITY OF RECORD FOR INTERNATIONAL VISIBILITY
+      // An external Worker or cache with "true" must NEVER override or bypass Supabase.
       const result = isAdminContext
         ? await supabase.from('international_sync_settings').select('*').eq('id', 1).abortSignal(AbortSignal.timeout(5000)).maybeSingle()
         : await supabase.rpc('get_international_public_status').abortSignal(AbortSignal.timeout(5000));
-      if (result.error || !result.data) throw new Error('Settings unavailable');
+
+      if (result.error || !result.data) {
+        throw new Error('Settings unavailable');
+      }
+
       if (isAdminContext && requestRevision !== authRevision) return null;
       const data = formatSettings(result.data, !isAdminContext);
       const entry = { data, expires: Date.now() + ttl };
@@ -129,7 +111,8 @@ export async function fetchInternationalSettings(forceRefresh = false, isAdminCo
       listeners.forEach(listener => listener(scope, data));
       return data;
     } catch {
-      // An admin permission failure never falls back to a public entry with financial defaults.
+      // STRICT FAIL-CLOSED: When status cannot be verified, return safe fail-closed state (false)
+      // Never fall back to unverified true or financial defaults.
       return isAdminContext ? null : cached?.data || null;
     } finally { if (pending.get(scope) === operation) pending.delete(scope); }
   })();
@@ -175,9 +158,11 @@ export function useInternationalSettings(enableRealtime = false, isAdminContext 
     };
   }, [enableRealtime, isAdminContext]);
   return {
-    settings, loaded, publicEnabled: settings?.international_public_enabled === true,
-    purchasesEnabled: settings?.international_purchases_enabled ?? true,
-    capacityEnabled: settings?.international_capacity_enabled ?? true,
+    settings,
+    loaded,
+    publicEnabled: settings?.international_public_enabled === true,
+    purchasesEnabled: settings?.international_purchases_enabled === true,
+    capacityEnabled: settings?.international_capacity_enabled === true,
     refetch: () => fetchInternationalSettings(true, isAdminContext)
   };
 }
