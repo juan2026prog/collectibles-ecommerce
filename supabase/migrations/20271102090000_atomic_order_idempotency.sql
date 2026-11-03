@@ -1,5 +1,5 @@
 -- Migration: 20271102090000_atomic_order_idempotency.sql
--- Implementa public.create_order_atomic_v2:
+-- Implementa public.create_order_atomic_v2 compatible 100% con el esquema canónico de producción:
 -- Mantiene intacta la función histórica de 32 parámetros public.create_order_atomic para preservar
 -- todas las llamadas existentes de checkout-handler, scripts o extensiones sin riesgo de ambigüedad.
 --
@@ -13,7 +13,13 @@
 --    - Inserta la orden, subórdenes, items, reservas y el registro en payment_attempts con
 --      idempotency_key = 'create_order:' || p_checkout_request_key.
 --    - El índice único idx_payment_attempts_idempotency aborta y previene concurrencias dobles.
--- 4. Permisos estrictos: SECURITY DEFINER con search_path 'public', 'pg_temp'.
+-- 4. Esquema canónico de producción restaurado para:
+--    - public.orders (usa logistics_consent, no campos opt-in exclusivos de customer_consents)
+--    - public.order_suborders (product_subtotal, marketplace_commission_rate, marketplace_fee, vendor_gross_amount, vendor_net_amount, seller_type, etc.)
+--    - public.order_items (order_id, suborder_id, product_id, variant_id, vendor_id, vendor_store_id, quantity, unit_price, total_price, product_name, sku, discount_total, final_total)
+--    - public.preorder_items (order_item_id, product_id, customer_id, status, estimated_arrival)
+--    - public.customer_consents (email, phone, email_marketing_opt_in, whatsapp_opt_in, logistics_consent_opt_in)
+-- 5. Permisos estrictos: SECURITY DEFINER con search_path 'public', 'pg_temp'.
 --    REVOKE ALL de PUBLIC, anon, authenticated. GRANT EXECUTE únicamente a service_role y postgres.
 
 CREATE OR REPLACE FUNCTION public.create_order_atomic_v2(
@@ -161,7 +167,7 @@ BEGIN
   END IF;
 
   -- 5. Validación transaccional bidireccional estricta de group_key
-  IF jsonb_array_length(p_suborders) > 0 THEN
+  IF p_suborders IS NOT NULL AND jsonb_array_length(p_suborders) > 0 THEN
     SELECT COALESCE(SUM((s->>'items_count')::integer), 0) INTO v_expected_items_count
     FROM jsonb_array_elements(p_suborders) AS s;
 
@@ -169,6 +175,27 @@ BEGIN
       RAISE EXCEPTION 'INTEGRITY_MISMATCH: La suma de items de las subórdenes (%) no coincide con la cantidad total de artículos (%).',
         v_expected_items_count, jsonb_array_length(p_items);
     END IF;
+
+    -- Validar que cada ítem en p_items tenga correspondencia en p_suborders
+    FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
+    LOOP
+      IF NOT EXISTS (
+        SELECT 1 FROM jsonb_array_elements(p_suborders) AS so
+        WHERE (
+          (v_item->>'group_key' IS NOT NULL AND so->>'group_key' = v_item->>'group_key')
+          OR
+          (v_item->>'group_key' IS NULL AND (
+            (NULLIF(v_item->>'vendor_id', '') IS NOT NULL AND so->>'vendor_id' = v_item->>'vendor_id')
+            OR
+            (NULLIF(v_item->>'vendor_id', '') IS NULL AND (so->>'vendor_id' IS NULL OR so->>'vendor_id' = ''))
+          ))
+        )
+      ) THEN
+        RAISE EXCEPTION 'INTEGRITY_ERROR: El artículo % con group_key "%" no corresponde a ninguna suborden generada.', 
+          COALESCE(v_item->>'product_name', v_item->>'product_id', 'Desconocido'),
+          COALESCE(v_item->>'group_key', 'null');
+      END IF;
+    END LOOP;
   ELSE
     v_expected_items_count := jsonb_array_length(p_items);
   END IF;
@@ -230,19 +257,40 @@ BEGIN
   END IF;
 
   -- Check if Handy payment to auto-assign sequential numeric invoice
-  IF p_payment_method = 'handy' THEN
-    SELECT nextval('public.handy_invoice_seq') INTO v_handy_invoice_num;
+  IF LOWER(p_payment_method) = 'handy' THEN
+    v_handy_invoice_num := nextval('public.handy_invoice_seq');
   END IF;
 
   -- Customer name extraction
   v_cust_first_name := p_shipping_address->>'first_name';
   v_cust_last_name := p_shipping_address->>'last_name';
-  IF v_cust_first_name IS NOT NULL OR v_cust_last_name IS NOT NULL THEN
-    v_customer_name := TRIM(CONCAT(COALESCE(v_cust_first_name, ''), ' ', COALESCE(v_cust_last_name, '')));
+  v_customer_name := TRIM(COALESCE(v_cust_first_name, '') || ' ' || COALESCE(v_cust_last_name, ''));
+  IF v_customer_name = '' THEN
+    v_customer_name := 'Cliente';
   END IF;
 
-  -- Auto-determine shipping provider
-  IF p_shipping_address ? 'shipping_method' THEN
+  -- Consolidate financial totals and detect international status from suborders / items
+  IF p_suborders IS NOT NULL AND jsonb_array_length(p_suborders) > 0 THEN
+    FOR v_suborder IN SELECT * FROM jsonb_array_elements(p_suborders)
+    LOOP
+      v_subtotal_products := v_subtotal_products + COALESCE((v_suborder->>'product_subtotal')::numeric, 0.00);
+      v_total_shipping := v_total_shipping + COALESCE((v_suborder->>'shipping_cost')::numeric, 0.00);
+      v_total_discounts := v_total_discounts + COALESCE((v_suborder->>'discount_total')::numeric, 0.00);
+      
+      IF COALESCE((v_suborder->>'is_international')::boolean, false) = true THEN
+        v_has_international := true;
+      END IF;
+
+      IF v_shipping_provider IS NULL AND v_suborder->>'shipping_provider' IS NOT NULL THEN
+        v_shipping_provider := v_suborder->>'shipping_provider';
+      END IF;
+    END LOOP;
+  ELSE
+    v_subtotal_products := p_total_amount;
+  END IF;
+
+  -- Fallback auto-determination of shipping provider if not set from suborders
+  IF v_shipping_provider IS NULL AND p_shipping_address ? 'shipping_method' THEN
     IF (p_shipping_address->>'shipping_method') IN ('dac_agency', 'dac_home') THEN
       v_shipping_provider := 'dac';
     ELSIF (p_shipping_address->>'shipping_method') IN ('skypostal', 'mbe') THEN
@@ -256,93 +304,122 @@ BEGIN
     END IF;
   END IF;
 
-  -- Calculate financial aggregates & international flag
-  SELECT 
-    COALESCE(SUM((item->>'total_price')::numeric), 0),
-    COALESCE(SUM((item->>'discount_total')::numeric), 0),
-    BOOL_OR(COALESCE((item->>'is_international')::boolean, false) OR COALESCE((item->>'origin_country')::text = 'US', false))
-  INTO v_subtotal_products, v_total_discounts, v_has_international
-  FROM jsonb_array_elements(p_items) AS item;
-
-  IF jsonb_array_length(p_suborders) > 0 THEN
-    SELECT COALESCE(SUM((s->>'shipping_cost')::numeric), 0)
-    INTO v_total_shipping
-    FROM jsonb_array_elements(p_suborders) AS s;
-  ELSE
-    v_total_shipping := GREATEST(0, p_total_amount - v_subtotal_products + v_total_discounts);
+  -- Fallback detection of international status from international_products table or item properties
+  IF NOT v_has_international AND p_items IS NOT NULL AND jsonb_array_length(p_items) > 0 THEN
+    SELECT EXISTS (
+      SELECT 1 FROM jsonb_array_elements(p_items) AS itm
+      JOIN public.international_products ip ON ip.id = (itm->>'product_id')::uuid
+    ) INTO v_has_international;
   END IF;
 
-  -- Check for preorders
-  SELECT EXISTS (
-    SELECT 1 FROM jsonb_array_elements(p_items) AS item 
-    WHERE (item->>'is_preorder')::boolean = true
-  ) INTO v_has_any_preorder;
-
-  -- 6. Insert Order
+  -- 6. Insert Order (Canonical Production Columns)
   INSERT INTO public.orders (
-    order_number, customer_id, total_amount, currency, payment_method,
-    status, payment_status, customer_email, customer_phone, customer_name,
-    shipping_address, affiliate_id, coupon_id, terms_accepted,
-    terms_accepted_at, accepted_terms_version, email_marketing_opt_in,
-    whatsapp_opt_in, logistics_consent_opt_in, shipping_provider,
-    handy_invoice_number, subtotal_products, total_shipping, total_discounts,
-    is_international, display_currency, display_subtotal, display_shipping,
-    display_total, fx_rate, fx_rate_source, shipping_weight_kg,
-    shipping_cost_ars, shipping_cost_usd, mbe_service_type,
-    shipping_weight_real_kg, shipping_weight_volumetric_kg,
-    shipping_weight_chargeable_kg, shipping_rule_applied,
-    is_shipping_quote_required, created_at, updated_at
+    customer_id, order_number, total_amount, currency, status, payment_status,
+    payment_method, payment_provider, customer_email, customer_phone, customer_name,
+    shipping_address, billing_address, affiliate_id, coupon_id,
+    shipping_provider, terms_accepted, terms_accepted_at,
+    accepted_terms_version, subtotal_products, total_shipping, total_discounts,
+    preorder_status, logistics_consent,
+    display_currency, display_subtotal, display_shipping, display_total,
+    payment_currency, payment_subtotal, payment_shipping, payment_total,
+    fx_rate, fx_rate_source, fx_rate_timestamp,
+    handy_invoice_number, shipping_weight_kg, shipping_cost_ars, shipping_cost_usd,
+    mbe_service_type, shipping_weight_real_kg, shipping_weight_volumetric_kg,
+    shipping_weight_chargeable_kg, shipping_rule_applied, is_shipping_quote_required,
+    is_international
   ) VALUES (
-    v_order_number, p_customer_id, p_total_amount, p_currency, p_payment_method,
-    'pending', 'pending', p_customer_email, p_customer_phone, v_customer_name,
-    p_shipping_address, p_affiliate_id, p_coupon_id, p_terms_accepted,
-    p_terms_accepted_at, p_accepted_terms_version, p_email_opt_in,
-    p_whatsapp_opt_in, p_logistics_consent, v_shipping_provider,
-    v_handy_invoice_num, v_subtotal_products, v_total_shipping, v_total_discounts,
-    v_has_international, p_display_currency, p_display_subtotal, p_display_shipping,
-    p_display_total, p_fx_rate, p_fx_rate_source, p_shipping_weight_kg,
-    p_shipping_cost_ars, p_shipping_cost_usd, p_mbe_service_type,
-    p_shipping_weight_real_kg, p_shipping_weight_volumetric_kg,
-    p_shipping_weight_chargeable_kg, p_shipping_rule_applied,
-    p_is_shipping_quote_required, now(), now()
+    p_customer_id, v_order_number, p_total_amount, p_currency, 'awaiting_payment', 'not_started',
+    p_payment_method, p_payment_method, p_customer_email, p_customer_phone, v_customer_name,
+    p_shipping_address, p_shipping_address, p_affiliate_id, p_coupon_id,
+    v_shipping_provider, p_terms_accepted, p_terms_accepted_at,
+    p_accepted_terms_version, v_subtotal_products, v_total_shipping, v_total_discounts,
+    'not_applicable', p_logistics_consent,
+    COALESCE(p_display_currency, p_currency), COALESCE(p_display_subtotal, v_subtotal_products), COALESCE(p_display_shipping, v_total_shipping), COALESCE(p_display_total, p_total_amount),
+    p_currency, v_subtotal_products, v_total_shipping, p_total_amount,
+    p_fx_rate, p_fx_rate_source, CASE WHEN p_fx_rate IS NOT NULL THEN now() ELSE NULL END,
+    v_handy_invoice_num, p_shipping_weight_kg, p_shipping_cost_ars, p_shipping_cost_usd,
+    p_mbe_service_type, p_shipping_weight_real_kg, p_shipping_weight_volumetric_kg,
+    p_shipping_weight_chargeable_kg, p_shipping_rule_applied, p_is_shipping_quote_required,
+    v_has_international
   ) RETURNING id INTO v_order_id;
 
   -- 7. Insert Suborders and Items with group_key exact matching
-  IF jsonb_array_length(p_suborders) > 0 THEN
+  IF p_suborders IS NOT NULL AND jsonb_array_length(p_suborders) > 0 THEN
     FOR v_suborder IN SELECT * FROM jsonb_array_elements(p_suborders)
     LOOP
-      v_suborder_idx := v_suborder_idx + 1;
-      
-      INSERT INTO public.order_suborders (
-        parent_order_id, suborder_number, vendor_id, vendor_store_id,
-        subtotal, shipping_cost, commission_rate, commission_amount,
-        vendor_payout, status, shipping_address, shipping_method,
-        origin_country, is_international, dac_suborder_tracking_code,
-        dac_label_pdf_url, dac_tracking_status, tracking_number
-      ) VALUES (
-        v_order_id,
-        v_order_number || '-S' || v_suborder_idx,
-        NULLIF(v_suborder->>'vendor_id', '')::uuid,
-        NULLIF(v_suborder->>'vendor_store_id', '')::uuid,
-        COALESCE((v_suborder->>'subtotal')::numeric, 0.00),
-        COALESCE((v_suborder->>'shipping_cost')::numeric, 0.00),
-        COALESCE((v_suborder->>'commission_rate')::numeric, 0.00),
-        COALESCE((v_suborder->>'commission_amount')::numeric, 0.00),
-        COALESCE((v_suborder->>'vendor_payout')::numeric, 0.00),
-        'pending',
-        p_shipping_address,
-        v_suborder->>'shipping_method',
-        COALESCE(v_suborder->>'origin_country', 'UY'),
-        COALESCE((v_suborder->>'is_international')::boolean, false),
-        v_suborder->>'dac_suborder_tracking_code',
-        v_suborder->>'dac_label_pdf_url',
-        v_suborder->>'dac_tracking_status',
-        v_suborder->>'tracking_number'
-      ) RETURNING id INTO v_suborder_id;
+      DECLARE
+        v_suborder_number TEXT;
+        v_suborder_group_key TEXT;
+        v_vendor_id UUID;
+        v_vendor_store_id UUID;
+        v_is_collectibles BOOLEAN;
+        v_is_suborder_intl BOOLEAN;
+        v_suborder_id UUID;
+        v_seller_type TEXT;
+        v_shipping_mode TEXT;
+        v_pickup_type TEXT;
+        v_agency_id UUID;
+        v_agency_name TEXT;
+        v_dispatch_address_id UUID;
+        v_internal_reference TEXT;
+      BEGIN
+        v_suborder_number := v_order_number || '-' || chr(65 + v_suborder_idx);
+        v_suborder_idx := v_suborder_idx + 1;
+        
+        v_suborder_group_key := v_suborder->>'group_key';
+        v_vendor_id := NULLIF(v_suborder->>'vendor_id', '')::uuid;
+        v_vendor_store_id := NULLIF(v_suborder->>'vendor_store_id', '')::uuid;
+        v_is_collectibles := COALESCE((v_suborder->>'is_collectibles_order')::boolean, false);
+        v_is_suborder_intl := COALESCE((v_suborder->>'is_international')::boolean, false);
+        
+        v_seller_type := COALESCE(v_suborder->>'seller_type', CASE WHEN v_is_collectibles THEN 'platform' ELSE 'vendor' END);
+        v_shipping_mode := v_suborder->>'shipping_mode';
+        v_pickup_type := v_suborder->>'pickup_type';
+        v_agency_id := NULLIF(v_suborder->>'agency_id', '')::uuid;
+        v_agency_name := v_suborder->>'agency_name';
+        v_dispatch_address_id := NULLIF(v_suborder->>'dispatch_address_id', '')::uuid;
+        v_internal_reference := COALESCE(v_suborder->>'internal_reference', v_suborder_number);
 
-      FOR v_item IN SELECT * FROM jsonb_array_elements(p_items)
-      LOOP
-        IF (v_item->>'group_key') = (v_suborder->>'group_key') THEN
+        INSERT INTO public.order_suborders (
+          parent_order_id, suborder_number, vendor_id, vendor_name, vendor_store_id, vendor_store_name, is_collectibles_order,
+          product_subtotal, shipping_method, shipping_provider, shipping_cost, shipping_status,
+          marketplace_commission_rate, marketplace_fee, payment_fee_share, vendor_gross_amount,
+          vendor_net_amount, liquidation_status, status, discount_total,
+          shipping_charged_to_customer, shipping_provider_cost, shipping_paid_by, shipping_billing_mode,
+          shipping_margin, shipping_provider_invoice_status,
+          seller_type, shipping_mode, pickup_type, agency_id, agency_name, dispatch_address_id, internal_reference, vendor_policy_snapshot,
+          is_international
+        ) VALUES (
+          v_order_id, v_suborder_number, v_vendor_id, v_suborder->>'vendor_name', v_vendor_store_id, v_suborder->>'vendor_store_name', v_is_collectibles,
+          COALESCE((v_suborder->>'product_subtotal')::numeric, 0.00), v_suborder->>'shipping_method', 
+          v_suborder->>'shipping_provider', COALESCE((v_suborder->>'shipping_cost')::numeric, 0.00), 'pending',
+          COALESCE((v_suborder->>'marketplace_commission_rate')::numeric, 0.00), COALESCE((v_suborder->>'marketplace_fee')::numeric, 0.00),
+          0.00,
+          COALESCE((v_suborder->>'vendor_gross_amount')::numeric, 0.00), COALESCE((v_suborder->>'vendor_net_amount')::numeric, 0.00),
+          'pending', 'pending', COALESCE((v_suborder->>'discount_total')::numeric, 0.00),
+          COALESCE((v_suborder->>'shipping_charged_to_customer')::numeric, 0.00),
+          COALESCE((v_suborder->>'shipping_provider_cost')::numeric, 0.00),
+          COALESCE(v_suborder->>'shipping_paid_by', 'collectibles'),
+          COALESCE(v_suborder->>'shipping_billing_mode', 'collectibles_envios'),
+          COALESCE((v_suborder->>'shipping_margin')::numeric, 0.00),
+          COALESCE(v_suborder->>'shipping_provider_invoice_status', 'pending'),
+          v_seller_type, v_shipping_mode, v_pickup_type, v_agency_id, v_agency_name, v_dispatch_address_id, v_internal_reference, COALESCE(v_suborder->'vendor_policy_snapshot', '{}'::jsonb),
+          v_is_suborder_intl
+        ) RETURNING id INTO v_suborder_id;
+
+        -- Asignar artículos comparando group_key si está presente, o vendor_id y store_id
+        FOR v_item IN 
+          SELECT * FROM jsonb_array_elements(p_items) AS item
+          WHERE (
+            (v_suborder_group_key IS NOT NULL AND item->>'group_key' = v_suborder_group_key)
+            OR
+            (v_suborder_group_key IS NULL AND (
+              (v_vendor_id IS NOT NULL AND item->>'vendor_id' = v_vendor_id::text)
+              OR
+              (v_vendor_id IS NULL AND (item->>'vendor_id' IS NULL OR item->>'vendor_id' = ''))
+            ))
+          )
+        LOOP
           v_inserted_items_count := v_inserted_items_count + 1;
 
           INSERT INTO public.order_items (
@@ -353,7 +430,7 @@ BEGIN
             v_suborder_id,
             (v_item->>'product_id')::uuid,
             NULLIF(v_item->>'variant_id', '')::uuid,
-            NULLIF(v_item->>'vendor_id', '')::uuid,
+            v_vendor_id,
             NULLIF(v_item->>'vendor_store_id', '')::uuid,
             (v_item->>'quantity')::integer,
             (v_item->>'unit_price')::numeric,
@@ -364,6 +441,30 @@ BEGIN
             COALESCE((v_item->>'final_total')::numeric, (v_item->>'unit_price')::numeric * (v_item->>'quantity')::integer)
           ) RETURNING id INTO v_order_item_id;
 
+          SELECT EXISTS (
+            SELECT 1 FROM public.products p
+            WHERE p.id = (v_item->>'product_id')::uuid
+              AND (
+                p.badge ILIKE '%preorder%' 
+                OR p.badge ILIKE '%preventa%'
+                OR EXISTS (
+                  SELECT 1 FROM public.badges b 
+                  WHERE (b.id::text = p.badge OR b.slug = p.badge)
+                    AND (b.slug ILIKE '%preorder%' OR b.label ILIKE '%preorder%' OR b.label ILIKE '%preventa%')
+                )
+              )
+          ) INTO v_is_preorder;
+
+          IF v_is_preorder THEN
+            v_has_any_preorder := true;
+            
+            INSERT INTO public.preorder_items (
+              order_item_id, product_id, customer_id, status, estimated_arrival
+            ) VALUES (
+              v_order_item_id, (v_item->>'product_id')::uuid, p_customer_id, 'awaiting_payment', now() + interval '30 days'
+            );
+          END IF;
+
           IF v_item->>'variant_id' IS NOT NULL AND v_item->>'variant_id' != '' THEN
             INSERT INTO public.stock_reservations (
               order_id, variant_id, quantity, reserved_until, status
@@ -371,10 +472,12 @@ BEGIN
               v_order_id, (v_item->>'variant_id')::uuid, (v_item->>'quantity')::integer, v_reserved_until, 'active'
             );
           END IF;
-        END IF;
-      END LOOP;
+        END LOOP;
+
+      END;
     END LOOP;
 
+    -- Validación B: Comprobar que la cantidad total de artículos insertados sea EXACTAMENTE igual a los artículos del carrito
     IF v_inserted_items_count != v_expected_items_count THEN
       RAISE EXCEPTION 'INTEGRITY_MISMATCH: Se esperaban % líneas de artículos pero se asignaron %. Transacción abortada para evitar pedidos incompletos o duplicados.',
         v_expected_items_count, v_inserted_items_count;
