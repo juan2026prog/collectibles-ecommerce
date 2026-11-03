@@ -1444,6 +1444,7 @@ function sanitizePayloadForLogging(data: any) {
       const groupKeyStr = String(groupKey ?? 'null');
       subordersList.push({
         group_key: groupKeyStr,
+        items_count: groupItems.length,
         vendor_id: vendorId,
         vendor_name: vendorName,
         vendor_store_id: vendorStoreId,
@@ -1880,6 +1881,18 @@ function sanitizePayloadForLogging(data: any) {
         const uyuPerUsd = Number(uyuFx.rate);
         subtotalArs = Math.round((subtotal / uyuPerUsd) * arsPerUsdRate);
         totalArs = Math.round(((subtotal - totalDiscounts) / uyuPerUsd) * arsPerUsdRate) + intlShippingCostArs;
+      }
+    }
+
+    // Pre-flight defensive validation before invoking atomic database transaction
+    const totalSuborderItemsCount = subordersList.reduce((acc: number, s: any) => acc + Number(s.items_count || 0), 0);
+    if (subordersList.length > 0 && totalSuborderItemsCount !== orderItems.length) {
+      throw new Error(`INTEGRITY_MISMATCH: La suma de items_count de las subórdenes (${totalSuborderItemsCount}) no coincide con la cantidad total de artículos (${orderItems.length}).`);
+    }
+    const suborderGroupKeys = new Set(subordersList.map((s: any) => s.group_key));
+    for (const item of orderItems) {
+      if (!suborderGroupKeys.has(item.group_key)) {
+        throw new Error(`INTEGRITY_MISMATCH: El ítem ${item.product_name || item.product_id} tiene un group_key '${item.group_key}' que no existe en las subórdenes.`);
       }
     }
 
