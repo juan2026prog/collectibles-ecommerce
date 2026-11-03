@@ -1,3 +1,4 @@
+import { invalidateInternationalSettingsCache } from '../../hooks/useInternationalSettings';
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
@@ -808,6 +809,7 @@ export default function AdminSettings() {
       if (updErr) throw updErr;
 
       setIntlPublicEnabled(nextVal);
+      invalidateInternationalSettingsCache();
       toast.success(
         nextVal
           ? 'Módulo Internacional activado para compradores en Uruguay'

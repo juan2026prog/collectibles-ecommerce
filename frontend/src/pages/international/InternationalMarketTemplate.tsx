@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { useParams, Navigate, Link } from 'react-router-dom';
+import { useInternationalSettings } from '../../hooks/useInternationalSettings';
 import { useInternationalMarkets } from '../../hooks/useInternationalMarkets';
 import MarketPreviewBanner from '../../components/international/MarketPreviewBanner';
 import SEO from '../../components/SEO';
@@ -21,7 +22,21 @@ export default function InternationalMarketTemplate() {
     );
   }
 
+  const { publicEnabled: intlPublicEnabled, loaded: intlLoaded } = useInternationalSettings();
   const market = getMarket(countryCode || 'CL');
+
+  if (!intlLoaded) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-primary-500 border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  // If international public access is disabled and market is not in admin preview, block access
+  if (!intlPublicEnabled && !market.isPreview) {
+    return <Navigate to="/" replace />;
+  }
 
   // If market is DISABLED and not previewable, redirect
   if (market.isDisabled) {

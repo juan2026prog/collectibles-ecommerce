@@ -131,7 +131,13 @@ function RelatedProductsSection({ currentProductId, categorySlug, brandId, licen
   brandId?: string;
   licenseId?: string;
 }) {
-  const { products } = useProductCards({ category: categorySlug, limit: 12, skipCount: true });
+  const { publicEnabled: intlPublicEnabled } = useInternationalSettings();
+  const { products } = useProductCards({
+    category: categorySlug,
+    limit: 12,
+    skipCount: true,
+    availability: intlPublicEnabled ? 'all' : 'local'
+  });
   const { formatCurrencyPrice } = useCurrency();
   const { addToCart } = useCartContext();
 

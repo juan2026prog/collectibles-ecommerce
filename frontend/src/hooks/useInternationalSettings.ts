@@ -36,20 +36,26 @@ const listeners = new Set<(scope: string, data: InternationalSettings | null) =>
 let authRevision = 0;
 
 function formatSettings(data: any, publicOnly: boolean): InternationalSettings {
+  // STRICT FAIL-CLOSED: Visibility flags require explicit boolean true.
+  // Legacy or unverified Worker properties (e.g. international_enabled: true) are rejected
+  // unless international_public_enabled is strictly true.
+  const isPublicEnabled = Boolean(data && data.international_public_enabled === true);
+  const isPurchasesEnabled = Boolean(data && data.international_purchases_enabled === true);
+
   return {
     ...(publicOnly ? {} : data), id: 1,
-    international_public_enabled: data.international_public_enabled === true || data.international_enabled === true,
-    international_purchases_enabled: data.international_purchases_enabled ?? true,
-    international_capacity_enabled: publicOnly ? true : (data.international_capacity_enabled ?? true),
-    target_margin_percent: publicOnly ? 15 : Number(data.target_margin_percent ?? 15),
-    min_absolute_profit_usd: publicOnly ? 3.99 : Number(data.min_absolute_profit_usd ?? 3.99),
-    min_profit_usd: publicOnly ? 3.99 : Number(data.min_profit_usd ?? 3.99),
-    zinc_fee_usd: publicOnly ? 1 : Number(data.zinc_fee_usd ?? 1),
-    never_sell_at_loss: publicOnly ? true : (data.never_sell_at_loss ?? true)
+    international_public_enabled: isPublicEnabled,
+    international_purchases_enabled: isPurchasesEnabled,
+    international_capacity_enabled: publicOnly ? true : (data?.international_capacity_enabled ?? true),
+    target_margin_percent: publicOnly ? 15 : Number(data?.target_margin_percent ?? 15),
+    min_absolute_profit_usd: publicOnly ? 3.99 : Number(data?.min_absolute_profit_usd ?? 3.99),
+    min_profit_usd: publicOnly ? 3.99 : Number(data?.min_profit_usd ?? 3.99),
+    zinc_fee_usd: publicOnly ? 1 : Number(data?.zinc_fee_usd ?? 1),
+    never_sell_at_loss: publicOnly ? true : (data?.never_sell_at_loss ?? true)
   };
 }
 
-const SESSION_CACHE_KEY = 'collectibles_intl_public_settings_v1';
+const SESSION_CACHE_KEY = 'collectibles_intl_public_settings_v2';
 
 function isAutomatedCrawlerAgent(): boolean {
   if (typeof navigator === 'undefined') return false;
@@ -89,16 +95,24 @@ export async function fetchInternationalSettings(forceRefresh = false, isAdminCo
   const operation = (async () => {
     try {
       if (!isAdminContext && PublicCatalogProvider.isDomainEnabled('settings')) {
-        const bundle = await PublicCatalogProvider.getPublicSettingsBundle();
-        const statusData = bundle.data?.international_status || { international_enabled: true };
-        const data = formatSettings(statusData, true);
-        const entry = { data, expires: Date.now() + ttl };
-        caches.set(scope, entry);
-        if (typeof sessionStorage !== 'undefined') {
-          try { sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(entry)); } catch {}
+        try {
+          const bundle = await PublicCatalogProvider.getPublicSettingsBundle();
+          // STRICT FAIL-CLOSED: Worker data must strictly provide international_public_enabled.
+          // If statusData lacks international_public_enabled or is falsy, we fall through to Supabase RPC.
+          const statusData = bundle.data?.international_status;
+          if (statusData && typeof (statusData as any).international_public_enabled === 'boolean') {
+            const data = formatSettings(statusData, true);
+            const entry = { data, expires: Date.now() + ttl };
+            caches.set(scope, entry);
+            if (typeof sessionStorage !== 'undefined') {
+              try { sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(entry)); } catch {}
+            }
+            listeners.forEach(listener => listener(scope, data));
+            return data;
+          }
+        } catch {
+          // If Worker fails or data is legacy/incomplete, fall through to Supabase RPC authority
         }
-        listeners.forEach(listener => listener(scope, data));
-        return data;
       }
 
       const result = isAdminContext
@@ -166,4 +180,11 @@ export function useInternationalSettings(enableRealtime = false, isAdminContext 
     capacityEnabled: settings?.international_capacity_enabled ?? true,
     refetch: () => fetchInternationalSettings(true, isAdminContext)
   };
+}
+
+export function invalidateInternationalSettingsCache() {
+  caches.delete('public');
+  if (typeof sessionStorage !== 'undefined') {
+    try { sessionStorage.removeItem(SESSION_CACHE_KEY); } catch {}
+  }
 }
