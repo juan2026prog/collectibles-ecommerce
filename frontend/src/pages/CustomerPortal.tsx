@@ -288,7 +288,7 @@ export default function CustomerPortal() {
           id, suborder_id, quantity, unit_price, total_price, product_id, variant_id, vendor_id, vendor_store_id, sku, product_name, final_total, status, refunded_quantity, refunded_amount,
           vendor:vendors(store_name, slug, logo_url, promotions_opt_in, company_name),
           vendor_store:vendor_stores(store_name, slug, logo_url),
-          products (title, slug, is_international, images:product_images(url)),
+          products (title, slug, images:product_images(url)),
           variant:product_variants(id, name, sku, price_adjustment),
           international_order_items (id, purchase_status, zinc_order_id, tracking_number, carrier, tracking_url, final_price_usd, estimated_delivery_to_courier)
         ),
