@@ -458,6 +458,18 @@ Deno.serve(async (req: Request) => {
           api_response: paymentData,
         });
       }
+
+      // Sincronizar solicitudes unificadas pendientes para este pedido
+      await supabaseAdmin
+        .from("unified_order_requests")
+        .update({
+          status: "REFUNDED",
+          amount_approved: refundAmt,
+          resolved_at: nowStr,
+          admin_notes: "Reembolso conciliado automáticamente vía webhook de Mercado Pago"
+        })
+        .eq("order_id", orderId)
+        .in("status", ["CANCELLATION_PENDING", "REFUND_PENDING", "REFUND_PROCESSING", "WAITING_VENDOR", "UNDER_REVIEW"]);
     } else if (mpStatus === "charged_back" || mpStatus === "in_mediation") {
       const isChargeback = mpStatus === "charged_back";
       const disputeAmt = Number(paymentData.transaction_amount || 0);

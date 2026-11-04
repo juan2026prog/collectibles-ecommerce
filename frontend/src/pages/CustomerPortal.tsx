@@ -118,6 +118,15 @@ export default function CustomerPortal() {
   const [pwMessage, setPwMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
   const [resolutionOrder, setResolutionOrder] = useState<any | null>(null);
 
+  // New Orders UX state: filters, detail modal, cancel confirm modal
+  const [orderFilter, setOrderFilter] = useState<'all' | 'pending' | 'paid' | 'processing' | 'shipped' | 'cancelled' | 'refunded'>('all');
+  const [selectedDetailOrder, setSelectedDetailOrder] = useState<any | null>(null);
+  const [cancelModalOrder, setCancelModalOrder] = useState<any | null>(null);
+  const [cancelReason, setCancelReason] = useState<string>('desistimiento');
+  const [cancelCustomNotes, setCancelCustomNotes] = useState<string>('');
+  const [cancellingOrder, setCancellingOrder] = useState<boolean>(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
   const getTrackingMilestoneStep = (status: string) => {
     switch (status) {
       case 'pending_purchase':
@@ -266,13 +275,15 @@ export default function CustomerPortal() {
   const loadOrders = async () => {
     if (!user) return;
     const orderSelect = `
-      id, total_amount, currency, status, created_at, paid_at, payment_method, customer_id, user_id, customer_email, shipping_address, total_shipping, is_international,
-      payments(id, status, payment_url, created_at),
+      id, order_number, total_amount, currency, status, payment_status, created_at, paid_at, payment_method, customer_id, user_id, customer_email, shipping_address, total_shipping, is_international, exchange_rate_value,
+      payments(id, status, payment_url, created_at, payment_method, amount),
+      refunds:refunds(id, amount, status, reason, created_at),
       order_items (
         id, suborder_id, quantity, unit_price, total_price, product_id, variant_id, vendor_id, vendor_store_id, sku, product_name, final_total, status, refunded_quantity, refunded_amount,
         vendor:vendors(store_name, slug, logo_url, promotions_opt_in, company_name),
         vendor_store:vendor_stores(store_name, slug, logo_url),
         products (title, slug, is_international, images:product_images(url)),
+        variant:product_variants(id, title, sku, price, attributes),
         international_order_items (id, purchase_status, zinc_order_id, tracking_number, carrier, tracking_url, final_price_usd, estimated_delivery_to_courier)
       ),
       order_suborders (
@@ -296,6 +307,140 @@ export default function CustomerPortal() {
     }
     setOrders(finalOrders);
   };
+
+  // Helper functions for Orders Classification, Badges and Actions
+  const classifyOrderState = (order: any) => {
+    const isOrderCancelled = ['cancelled', 'cancelada'].includes(order.status);
+    const isOrderExpired = order.status === 'expired';
+    const isPaymentRefunded = order.payment_status === 'refunded' || (order.refunds && order.refunds.length > 0);
+    const hasApprovedPayment = (order.payments || []).some((p: any) => p.status === 'approved') || order.payment_status === 'approved';
+
+    let orderBadge = { label: 'Esperando Pago', color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' };
+    if (isOrderCancelled) {
+      orderBadge = { label: 'Cancelado', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
+    } else if (isOrderExpired) {
+      orderBadge = { label: 'Expirado', color: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' };
+    } else if (['paid', 'confirmed'].includes(order.status)) {
+      orderBadge = { label: 'Confirmado', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
+    } else if (order.status === 'processing') {
+      orderBadge = { label: 'En Preparación', color: 'bg-purple-500/10 text-purple-400 border-purple-500/20' };
+    } else if (order.status === 'shipped') {
+      orderBadge = { label: 'En Tránsito', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' };
+    } else if (order.status === 'delivered') {
+      orderBadge = { label: 'Entregado', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
+    }
+
+    let paymentBadge = { label: 'Sin Iniciar', color: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' };
+    if (isPaymentRefunded) {
+      paymentBadge = { label: 'Reembolsado', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
+    } else if (hasApprovedPayment) {
+      paymentBadge = { label: 'Aprobado', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
+    } else if (order.payment_status === 'rejected') {
+      paymentBadge = { label: 'Rechazado', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
+    } else if (order.payment_status === 'pending' || order.status === 'awaiting_payment') {
+      paymentBadge = { label: 'Pendiente', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' };
+    }
+
+    let cancellationNotice: { type: 'refunded' | 'pending_refund' | 'unpaid_cancelled' | null; label: string } = {
+      type: null,
+      label: ''
+    };
+
+    if (isPaymentRefunded) {
+      cancellationNotice = {
+        type: 'refunded',
+        label: 'Reembolsado'
+      };
+    } else if (isOrderCancelled && hasApprovedPayment) {
+      cancellationNotice = {
+        type: 'pending_refund',
+        label: 'Cancelación solicitada — Devolución pendiente'
+      };
+    } else if (isOrderCancelled && !hasApprovedPayment) {
+      cancellationNotice = {
+        type: 'unpaid_cancelled',
+        label: 'Cancelado (Sin cargo realizado)'
+      };
+    }
+
+    // Eligibility to initiate cancellation from customer UI:
+    // 1. Not already cancelled or delivered
+    // 2. Can cancel if unpaid (awaiting_payment, pending, or expired without approved payment)
+    // 3. Or can request resolution if approved payment and not yet delivered/shipped
+    const canCancelUnpaid = !isOrderCancelled && !hasApprovedPayment && ['awaiting_payment', 'pending', 'expired'].includes(order.status);
+    const canRequestPaidResolution = !isOrderCancelled && hasApprovedPayment && !['shipped', 'delivered'].includes(order.status);
+
+    return {
+      orderBadge,
+      paymentBadge,
+      cancellationNotice,
+      hasApprovedPayment,
+      canCancelUnpaid,
+      canRequestPaidResolution
+    };
+  };
+
+  const handleCancelUnpaidSubmit = async () => {
+    if (!cancelModalOrder || cancellingOrder) return;
+    setCancellingOrder(true);
+    setCancelError(null);
+    try {
+      const fullReason = `${cancelReason}: ${cancelCustomNotes}`.trim();
+      const { data, error } = await supabase.rpc('cancel_unpaid_order', {
+        p_order_id: cancelModalOrder.id,
+        p_reason: fullReason || 'Cancelación solicitada por el cliente desde Mi Cuenta'
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setCancelModalOrder(null);
+      setCancelCustomNotes('');
+      await loadOrders();
+    } catch (err: any) {
+      console.error('Error cancelling unpaid order:', err);
+      setCancelError(err?.message || 'No se pudo cancelar el pedido. Verifica el estado o contacta a soporte.');
+    } finally {
+      setCancellingOrder(false);
+    }
+  };
+
+  const openCancelAction = (order: any) => {
+    const { canCancelUnpaid, canRequestPaidResolution } = classifyOrderState(order);
+    if (canCancelUnpaid) {
+      setCancelModalOrder(order);
+      setCancelError(null);
+      setCancelReason('desistimiento');
+      setCancelCustomNotes('');
+    } else if (canRequestPaidResolution) {
+      setResolutionOrder(order);
+    }
+  };
+
+  const filteredOrders = orders.filter((order: any) => {
+    const isCancelled = ['cancelled', 'cancelada'].includes(order.status);
+    const isRefunded = order.payment_status === 'refunded' || (order.refunds && order.refunds.length > 0);
+    const isPaid = (order.payments || []).some((p: any) => p.status === 'approved') || ['paid', 'confirmed'].includes(order.status);
+
+    switch (orderFilter) {
+      case 'pending':
+        return ['pending', 'awaiting_payment'].includes(order.status) && !isCancelled;
+      case 'paid':
+        return isPaid && !isCancelled && !isRefunded;
+      case 'processing':
+        return order.status === 'processing';
+      case 'shipped':
+        return order.status === 'shipped';
+      case 'cancelled':
+        return isCancelled;
+      case 'refunded':
+        return isRefunded;
+      case 'all':
+      default:
+        return true;
+    }
+  });
 
   useEffect(() => {
     if (!user) return;
@@ -843,6 +988,54 @@ export default function CustomerPortal() {
           {/* ═══ TAB: Mis Pedidos ═══ */}
           {activeTab === 'orders' && (
             <div className="space-y-6">
+              {/* Order Filtering Tabs */}
+              <div className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-4">
+                {[
+                  { id: 'all', label: 'Todos' },
+                  { id: 'pending', label: 'Pendientes' },
+                  { id: 'paid', label: 'Pagados' },
+                  { id: 'processing', label: 'En preparación' },
+                  { id: 'shipped', label: 'Enviados' },
+                  { id: 'cancelled', label: 'Cancelados' },
+                  { id: 'refunded', label: 'Reembolsados' },
+                ].map(tab => {
+                  const count = orders.filter((o: any) => {
+                    const isCancelled = ['cancelled', 'cancelada'].includes(o.status);
+                    const isRefunded = o.payment_status === 'refunded' || (o.refunds && o.refunds.length > 0);
+                    const isPaid = (o.payments || []).some((p: any) => p.status === 'approved') || ['paid', 'confirmed'].includes(o.status);
+
+                    switch (tab.id) {
+                      case 'pending': return ['pending', 'awaiting_payment'].includes(o.status) && !isCancelled;
+                      case 'paid': return isPaid && !isCancelled && !isRefunded;
+                      case 'processing': return o.status === 'processing';
+                      case 'shipped': return o.status === 'shipped';
+                      case 'cancelled': return isCancelled;
+                      case 'refunded': return isRefunded;
+                      default: return true;
+                    }
+                  }).length;
+
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setOrderFilter(tab.id as any)}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                        orderFilter === tab.id
+                          ? 'bg-[#f00856] text-white shadow-lg shadow-[#f00856]/25'
+                          : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 border border-white/5'
+                      }`}
+                    >
+                      <span>{tab.label}</span>
+                      <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono ${
+                        orderFilter === tab.id ? 'bg-black/30 text-white' : 'bg-white/10 text-slate-400'
+                      }`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
               {orders.length === 0 ? (
                 <div className="space-y-6">
                   {/* Hero Empty State with Call to Action */}
@@ -919,384 +1112,135 @@ export default function CustomerPortal() {
                 </div>
               ) : (
             <div className="space-y-4">
-              {orders.map(order => (
-                <div key={order.id} className="glass border  overflow-hidden shadow-sm">
-                  <div className="bg-white/5 px-6 py-4 flex flex-wrap items-center justify-between gap-4 border-b">
-                    <div>
-                      <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">PEDIDO</p>
-                      <p className="font-medium">{new Date(order.created_at).toLocaleDateString('es-UY', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">N° DE ORDEN</p>
-                      <p className="font-mono font-medium text-sm">#{order.id.slice(0, 8).toUpperCase()}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-slate-400 font-bold uppercase tracking-wider text-right">TOTAL</p>
-                      <p className="font-bold text-lg text-primary-600">{formatCurrencyPrice(order.total_amount)}</p>
-                      <div className="flex flex-col items-end gap-2">
-                        <span className={`px-4 py-1.5 rounded-full text-xs font-bold uppercase ${
-                          ['paid', 'delivered', 'confirmed'].includes(order.status) ? 'bg-green-100 text-green-700' :
-                          order.status === 'shipped' ? 'bg-blue-100 text-blue-700' :
-                          ['pending', 'awaiting_payment'].includes(order.status) ? 'bg-yellow-100 text-yellow-800' :
-                          ['cancelled', 'cancelada', 'expired'].includes(order.status) ? 'bg-red-100 text-red-700' :
-                          'bg-white/10 text-slate-300'
-                        }`}>
-                          {(order.status === 'pending' || order.status === 'awaiting_payment') && 'Esperando Pago'}
-                          {(order.status === 'paid' || order.status === 'confirmed') && 'Confirmado'}
-                          {order.status === 'processing' && 'En Preparación'}
-                          {order.status === 'shipped' && 'En Tránsito'}
-                          {order.status === 'delivered' && 'Entregado'}
-                          {(order.status === 'cancelled' || order.status === 'cancelada') && 'Cancelado'}
-                          {order.status === 'expired' && 'Expirado'}
-                        </span>
-                        
-                        {order.order_suborders && order.order_suborders.length > 0 ? (
-                          <div className="mt-4 space-y-2 text-right flex flex-col items-end w-full max-w-[200px]">
-                            {order.order_suborders.map((sub: any) => {
-                              const isPickup = ['pickup', 'local'].includes((sub.shipping_method || '').toLowerCase());
-                              const isManual = (sub.shipping_method || '').toLowerCase().includes('manual');
-                              
-                              // Sanitize and filter out internal/fake tracking codes (COL-, SHIP-, UUIDs, etc.)
-                              const cleanTrack = (sub.tracking_number || '').trim().toUpperCase();
-                              const isFake = cleanTrack.startsWith('COL-') || 
-                                             cleanTrack.startsWith('SHIP-') || 
-                                             cleanTrack.startsWith('ORDER-') || 
-                                             cleanTrack.startsWith('TRACK-') ||
-                                             /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i.test(cleanTrack);
-                              const realTracking = isFake ? null : sub.tracking_number;
-                              const carrier = sub.shipping_provider || 'Logística';
-                              const storeName = sub.vendor_store?.store_name || sub.vendor?.store_name || 'Vendedor';
-                              const shipmentsList = sub.shipments || [];
+              {filteredOrders.length === 0 ? (
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-8 text-center">
+                  <Package className="w-8 h-8 text-slate-500 mx-auto mb-2" />
+                  <p className="text-sm font-bold text-white">No hay pedidos con el filtro "{orderFilter}"</p>
+                  <button
+                    onClick={() => setOrderFilter('all')}
+                    className="mt-3 px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-xs text-white font-bold transition"
+                  >
+                    Ver todos los pedidos
+                  </button>
+                </div>
+              ) : (
+                filteredOrders.map(order => {
+                  const stateMeta = classifyOrderState(order);
+                  const displayOrderNumber = order.order_number || `#${order.id.slice(0, 8).toUpperCase()}`;
 
-                              return (
-                                <div key={sub.id} className="text-right text-[11px] border-b border-white/5 pb-2 last:border-0 last:pb-0 w-full">
-                                  <div className="text-[10px] text-slate-400 font-bold">Paquete: {storeName}</div>
-                                  {isPickup ? (
-                                    <span className="inline-block text-[9px] text-green-500 font-bold bg-green-500/10 px-2 py-0.5 rounded border border-green-500/20 uppercase mt-1">Listo para retiro</span>
-                                  ) : isManual ? (
-                                    <span className="inline-block text-[9px] text-slate-400 font-bold bg-white/5 px-2 py-0.5 rounded border border-white/10 uppercase mt-1">A coordinar</span>
-                                  ) : shipmentsList.length > 1 ? (
-                                    <div className="space-y-1.5 mt-1">
-                                      {shipmentsList.map((s: any, idx: number) => {
-                                        const cleanSTrack = (s.tracking_code || '').trim().toUpperCase();
-                                        const isSFake = cleanSTrack.startsWith('COL-') || 
-                                                       cleanSTrack.startsWith('SHIP-') || 
-                                                       cleanSTrack.startsWith('ORDER-') || 
-                                                       cleanSTrack.startsWith('TRACK-') ||
-                                                       /^[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}$/i.test(cleanSTrack);
-                                        const sTracking = isSFake ? null : s.tracking_code;
-
-                                        let trackUrl = sub.tracking_url;
-                                        if (carrier.toLowerCase() === 'dac' && sTracking) {
-                                          trackUrl = `https://www.dac.com.uy/seguimiento-de-envio?guia=${sTracking}`;
-                                        } else if (carrier.toLowerCase() === 'soydelivery' && sTracking) {
-                                          trackUrl = `https://soydelivery.com.uy/tracking/${sTracking}`;
-                                        }
-                                        return (
-                                          <div key={s.id} className="flex flex-col items-end border-t border-white/5 pt-1 first:border-t-0 first:pt-0">
-                                            <span className="text-[8px] text-slate-400 uppercase font-black">Bulto {idx + 1} ({s.shipping_status || 'En cola'})</span>
-                                            {sTracking ? (
-                                              <>
-                                                <div className="text-[9px] text-blue-400 font-mono font-bold bg-blue-500/5 px-1.5 py-0.5 rounded border border-blue-500/10 mt-0.5">
-                                                  {carrier.toUpperCase()}: {sTracking}
-                                                </div>
-                                                {trackUrl && (
-                                                  <a href={trackUrl} target="_blank" rel="noreferrer" className="text-[9px] text-primary-500 hover:underline mt-0.5">Rastrear bulto</a>
-                                                )}
-                                              </>
-                                            ) : (
-                                              <span className="text-[8px] text-amber-500 font-bold uppercase mt-0.5">Procesando guía...</span>
-                                            )}
-                                          </div>
-                                        );
-                                      })}
-                                    </div>
-                                  ) : realTracking ? (
-                                    <div className="flex flex-col items-end mt-1">
-                                      <div className="flex items-center gap-1 text-[10px] text-blue-400 font-bold bg-blue-500/10 px-2 py-1 rounded w-fit border border-blue-500/20 font-mono">
-                                        <Truck className="w-3 h-3 text-blue-400" />
-                                        {carrier.toUpperCase()}: {realTracking}
-                                      </div>
-                                      {sub.tracking_url && (
-                                        <a href={sub.tracking_url} target="_blank" rel="noreferrer" className="text-[10px] text-primary-500 hover:underline mt-1">Rastrear envío</a>
-                                      )}
-                                    </div>
-                                  ) : (
-                                    <span className="inline-block text-[9px] text-amber-500 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 uppercase mt-1">
-                                      {['dac', 'soydelivery'].includes(carrier.toLowerCase()) ? `Pendiente emisión ${carrier.toUpperCase()}` : 'Preparando envío'}
-                                    </span>
-                                  )}
-                                </div>
-                              );
-                            })}
+                  return (
+                    <div key={order.id} className="glass border border-white/10 rounded-2xl overflow-hidden shadow-sm hover:border-white/20 transition-all">
+                      <div className="bg-white/5 px-6 py-4 flex flex-wrap items-center justify-between gap-4 border-b border-white/10">
+                        <div>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">FECHA</p>
+                          <p className="font-medium text-sm text-white">
+                            {new Date(order.created_at).toLocaleDateString('es-UY', { year: 'numeric', month: 'long', day: 'numeric' })}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">N° DE PEDIDO</p>
+                          <p className="font-mono font-bold text-sm text-primary-400">{displayOrderNumber}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider text-right">TOTAL</p>
+                          <p className="font-bold text-lg text-emerald-400">{formatCurrencyPrice(order.total_amount)}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5 justify-end">
+                            <span className={`px-3 py-1 rounded-full text-[11px] font-bold border uppercase ${stateMeta.orderBadge.color}`}>
+                              {stateMeta.orderBadge.label}
+                            </span>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border uppercase ${stateMeta.paymentBadge.color}`}>
+                              Pago: {stateMeta.paymentBadge.label}
+                            </span>
                           </div>
-                        ) : (
-                          order.tracking_number && (
-                            <div className="text-right">
-                              <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{order.carrier || 'Logística'}</div>
-                              <div className="text-xs font-mono font-bold text-blue-400">{order.tracking_number}</div>
-                              {order.tracking_url && (
-                                <a href={order.tracking_url} target="_blank" rel="noreferrer" className="text-[10px] text-primary-500 hover:underline">Rastrear envío</a>
-                              )}
-                            </div>
-                          )
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="p-6">
-                    {/* ARGENTINA SHIPPING TRACKING MODULE */}
-                    {(() => {
-                      const isArgentina = ['argentina', 'ar'].includes((order.shipping_address?.country || '').toLowerCase().trim());
-                      if (!isArgentina) return null;
-
-                      const tracking = order.international_shipment_tracking;
-                      return (
-                        <div className="mb-6 bg-white/5 border border-white/10 p-5 rounded-xl space-y-4 text-xs font-medium">
-                          <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                            <Truck className="w-4 h-4 text-primary-500" /> Envío Internacional (Argentina)
-                          </h3>
-
-                          {tracking ? (
-                            <div className="space-y-4">
-                              <div className="p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex items-start gap-3">
-                                <div className="p-1 bg-emerald-500 text-white rounded shrink-0">
-                                  <Truck className="w-4 h-4" />
-                                </div>
-                                <div className="flex-1">
-                                  <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider">¡Paquete en Camino!</h4>
-                                  <p className="text-xs text-slate-300 mt-1 leading-normal">
-                                    Tu envío internacional ha sido despachado a través de <b>{tracking.courier_company}</b>. Puedes realizar el seguimiento del envío utilizando el número de tracking provisto.
-                                  </p>
-                                </div>
-                              </div>
-
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs bg-white/5 p-4 rounded-xl border border-white/5 font-medium">
-                                <div>
-                                  <span className="text-slate-400 block mb-0.5">Número de Seguimiento (Tracking)</span>
-                                  <span className="font-mono text-sm font-bold text-white select-all">{tracking.tracking_number}</span>
-                                  {tracking.tracking_url && (
-                                    <a
-                                      href={tracking.tracking_url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-primary-400 hover:underline block mt-1 font-bold"
-                                    >
-                                      Rastrear Envío →
-                                    </a>
-                                  )}
-                                </div>
-
-                                <div>
-                                  <span className="text-slate-400 block mb-0.5">Empresa Courier</span>
-                                  <span className="text-sm font-bold text-white uppercase">{tracking.courier_company}</span>
-                                </div>
-
-                                {tracking.picked_up_at && (
-                                  <div>
-                                    <span className="text-slate-400 block mb-0.5">Fecha de Retiro</span>
-                                    <span className="font-bold text-white">{new Date(tracking.picked_up_at).toLocaleDateString()}</span>
-                                  </div>
-                                )}
-
-                                {tracking.estimated_delivery && (
-                                  <div>
-                                    <span className="text-slate-400 block mb-0.5">Entrega Estimada</span>
-                                    <span className="font-bold text-white">{tracking.estimated_delivery}</span>
-                                  </div>
-                                )}
-
-                                {(tracking.contact_phone || tracking.contact_email) && (
-                                  <div className="col-span-1 sm:col-span-2 border-t border-white/5 pt-3 mt-1 space-y-1">
-                                    <span className="text-slate-400 block">Información de Contacto del Courier</span>
-                                    <div className="flex flex-wrap gap-x-4 text-slate-300">
-                                      {tracking.contact_phone && <span className="mr-3">📞 {tracking.contact_phone}</span>}
-                                      {tracking.contact_email && <span>✉️ {tracking.contact_email}</span>}
-                                    </div>
-                                  </div>
-                                )}
-
-                                {tracking.observations && (
-                                  <div className="col-span-1 sm:col-span-2 border-t border-white/5 pt-3 mt-1 text-slate-300">
-                                    <span className="text-slate-400 block mb-0.5 font-bold">Detalles / Estado</span>
-                                    <span className="italic">{tracking.observations}</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="p-4 bg-primary-500/10 border border-primary-500/20 rounded-xl flex items-start gap-3">
-                              <div className="p-1 bg-primary-500 text-white rounded shrink-0">
-                                <Clock className="w-4 h-4 animate-pulse" />
-                              </div>
-                              <div>
-                                <h4 className="text-xs font-bold text-primary-400 uppercase tracking-wider">Preparando Envío</h4>
-                                <p className="text-xs text-slate-300 mt-1 leading-normal font-medium">
-                                  Pago confirmado. Estamos preparando tu envío internacional. El seguimiento estará disponible una vez que el courier retire el paquete.
-                                </p>
-                              </div>
-                            </div>
+                          {stateMeta.cancellationNotice.label && (
+                            <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-md border ${
+                              stateMeta.cancellationNotice.type === 'refunded'
+                                ? 'bg-rose-500/10 text-rose-300 border-rose-500/20'
+                                : stateMeta.cancellationNotice.type === 'pending_refund'
+                                ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                                : 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
+                            }`}>
+                              {stateMeta.cancellationNotice.label}
+                            </span>
                           )}
                         </div>
-                      );
-                    })()}
-
-                    {/* MÓDULO INTERNACIONAL: SEGUIMIENTO "MIS IMPORTACIONES" */}
-                    {(() => {
-                      const isArgentina = ['argentina', 'ar'].includes((order.shipping_address?.country || '').toLowerCase().trim());
-                      if (isArgentina) return null;
-
-                      const intlItems = order.order_items.filter((item: any) => item.international_order_items && item.international_order_items.length > 0);
-                      if (intlItems.length === 0) return null;
-
-                      // Use the status of the first international item as representative
-                      const representativeTracker = intlItems[0].international_order_items[0];
-                      const purchaseStatus = representativeTracker?.purchase_status || 'pending_purchase';
-                      const zincOrderId = representativeTracker?.zinc_order_id;
-                      const trackingNumber = representativeTracker?.tracking_number;
-                      const trackingUrl = representativeTracker?.tracking_url;
-                      const carrier = representativeTracker?.carrier;
-
-                      const currentStep = getTrackingMilestoneStep(purchaseStatus);
-
-                      const steps = [
-                        { label: 'Pago Confirmado', desc: 'Confirmado en Collectibles' },
-                        { label: 'Procesando', desc: 'Enviado a despacho en EE.UU.' },
-                        { label: 'En Camino', desc: 'Hacia tu casilla en Miami' },
-                        { label: 'En tu Courier', desc: 'Recibido en tu casilla' },
-                      ];
-
-                      return (
-                        <div className="mb-6 bg-white/5 border border-white/10 p-5 rounded-xl">
-                          <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
-                            <Truck className="w-4 h-4 text-[#f00856]" /> Seguimiento de Compra Internacional
-                          </h3>
-
-                          {/* Timeline visualization */}
-                          <div className="relative flex flex-col md:flex-row justify-between items-start md:items-center gap-4 md:gap-2 mb-6">
-                            {/* Connecting Line (for MD screens and above) */}
-                            <div className="absolute top-3.5 left-3.5 right-3.5 h-[2px] bg-white/10 -z-10 hidden md:block" />
-                            
-                            {steps.map((st, index) => {
-                              const stepNum = index + 1;
-                              const isCompleted = stepNum < currentStep;
-                              const isActive = stepNum === currentStep;
-
-                              return (
-                                <div key={index} className="flex md:flex-col items-center gap-3 md:gap-1.5 flex-1 w-full md:text-center z-10">
-                                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black transition-all ${
-                                    isCompleted ? 'bg-green-500 text-white shadow-lg shadow-green-500/20' :
-                                    isActive ? 'bg-[#f00856] text-white animate-pulse shadow-lg shadow-[#f00856]/20' :
-                                    'bg-slate-700 text-slate-400'
-                                  }`}>
-                                    {isCompleted ? '✓' : stepNum}
-                                  </div>
-                                  <div className="text-left md:text-center">
-                                    <div className={`text-xs font-bold ${isActive ? 'text-[#f00856]' : isCompleted ? 'text-green-400' : 'text-slate-400'}`}>{st.label}</div>
-                                    <div className="text-[10px] text-slate-500 leading-tight mt-0.5 md:max-w-[90px] mx-auto">{st.desc}</div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          {/* Tracking metadata */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-white/5 pt-4 text-xs">
-                            <div>
-                              <span className="text-slate-400 font-medium">Estado actual:</span>
-                              <span className="font-bold text-white ml-1.5 uppercase">
-                                {purchaseStatus === 'pending_purchase' && 'Preparando compra internacional'}
-                                {(purchaseStatus === 'zinc_order_created' || purchaseStatus === 'zinc_processing') && 'Procesando en proveedor internacional'}
-                                {purchaseStatus === 'purchased' && 'Comprado · Preparando despacho a Miami'}
-                                {purchaseStatus === 'warehouse_received' && 'Recibido en depósito Miami'}
-                                {(purchaseStatus === 'shipped' || purchaseStatus === 'shipped_to_courier') && 'En camino a tu casilla en Miami'}
-                                {(purchaseStatus === 'delivered' || purchaseStatus === 'delivered_to_courier') && 'Entregado a tu courier en EE.UU.'}
-                                {purchaseStatus === 'cancelled' && 'Orden Cancelada'}
-                                {purchaseStatus === 'cancellation_requires_review' && 'Cancelación Pendiente de Revisión'}
-                                {purchaseStatus === 'manual_review' && 'En Revisión Administrativa'}
-                              </span>
-                            </div>
-
-                            {trackingNumber && (
-                              <div className="sm:text-right">
-                                <span className="text-slate-400 font-medium">Código de rastreo en EE.UU.:</span>
-                                <span className="font-mono font-bold text-blue-400 ml-1.5">{trackingNumber} ({carrier || 'Envío terrestre'})</span>
-                                {trackingUrl && (
-                                  <a href={trackingUrl} target="_blank" rel="noreferrer" className="text-primary-500 hover:underline block mt-1 font-bold">Rastrear envío en EE.UU.</a>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Franchise Warning */}
-                          <div className="mt-4 bg-[#f00856]/5 border border-[#f00856]/20 p-4 rounded-xl flex items-start gap-3">
-                            <AlertCircle className="w-5 h-5 text-[#f00856] shrink-0 mt-0.5" />
-                            <div>
-                              <h4 className="text-xs font-bold text-white uppercase tracking-wider">Control de Franquicia Aduanera (Uruguay)</h4>
-                              <p className="text-xs text-slate-300 mt-1 leading-normal">
-                                Esta compra consume 1 de tus 3 franquicias anuales. El valor aduanero CIF es de 
-                                <span className="font-bold text-white mx-1">
-                                  USD {intlItems.reduce((sum: number, it: any) => sum + (it.international_order_items?.[0]?.final_price_usd || (it.unit_price / (order.exchange_rate_value || 40)) * it.quantity), 0).toFixed(2)}
-                                </span>.
-                                Recuerda que para no pagar impuestos aduaneros, el valor de la importación no debe superar los <b>USD 200.00</b>.
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
-                    {order.order_items.map((item: any, i: number) => (
-                      <div key={i} className="flex gap-4 py-3 border-b last:border-0 last:pb-0 items-center">
-                        <Link to={item.products?.slug ? `/producto/${item.products.slug}` : '#'}>
-                          <img 
-                            src={getOrderItemImage(item)} 
-                            alt=""
-                            {...getImageProps("w-16 h-16 object-contain border bg-white/5 p-1 hover:border-primary-300 transition-colors")}
-                          />
-                        </Link>
-                        <div className="flex-1 min-w-0">
-                          <Link to={item.products?.slug ? `/producto/${item.products.slug}` : '#'} className="font-bold text-white hover:text-primary-600 transition-colors line-clamp-1">{item.products?.title}</Link>
-                          <p className="text-[10px] font-black text-[#f00856] uppercase tracking-widest mt-0.5">
-                            Vendido por: {item.vendor_id ? (item.vendor_store?.display_name || item.vendor_store?.store_name || item.vendor_store?.name || item.vendor?.company_name || item.vendor?.store_name || 'Vendedor') : 'Collectibles.uy'}
-                          </p>
-                          <p className="text-sm text-slate-400">Cant: {item.quantity} · {formatCurrencyPrice(item.unit_price)} c/u</p>
-                        </div>
                       </div>
-                    ))}
-                  </div>
-                  <div className="px-6 pb-5 flex flex-wrap gap-3">
-                    {['awaiting_payment', 'pending'].includes(order.status) && order.payments && order.payments.length > 0 && order.payments[0].payment_url && (
-                      <a 
-                        href={order.payments[0].payment_url} 
-                        target="_blank" 
-                        rel="noopener noreferrer" 
-                        className="flex items-center gap-2 px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm transition-colors border border-amber-500"
-                      >
-                        <CreditCard className="w-4 h-4" /> Retomar Pago
-                      </a>
-                    )}
-                    <button onClick={() => handleBuyAgain(order)} className="flex items-center gap-2 px-5 py-2 bg-primary-500/10 text-primary-700 hover:bg-primary-500/15  font-bold text-sm transition-colors border border-primary-200">
-                      <RotateCcw className="w-4 h-4" /> Volver a Comprar
-                    </button>
-                    <button onClick={() => downloadCleanInvoice(order)} className="flex items-center gap-2 px-5 py-2 bg-white/5 text-white hover:bg-white/10 font-bold text-sm transition-colors border border-white/10">
-                      <FileText className="w-4 h-4 text-slate-400" /> Descargar Factura
-                    </button>
-                    <button 
-                      onClick={() => setResolutionOrder(order)} 
-                      className="flex items-center gap-2 px-5 py-2 bg-rose-600/20 text-rose-300 hover:bg-rose-600/30 font-bold text-sm transition-colors border border-rose-500/30"
-                    >
-                      <RotateCcw className="w-4 h-4 text-rose-400" /> Cancelar / Devolución
-                    </button>
-                    <button 
-                      onClick={() => setSupportOrderModal(order)} 
-                      className="flex items-center gap-2 px-5 py-2 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 font-bold text-sm transition-colors border border-amber-500/20"
-                    >
-                      <HelpCircle className="w-4 h-4 text-amber-400" /> Ayuda WhatsApp
-                    </button>
-                  </div>
-                </div>
-              ))}
+
+                      <div className="p-6">
+                        {order.order_items.map((item: any, i: number) => (
+                          <div key={i} className="flex gap-4 py-3 border-b border-white/5 last:border-0 last:pb-0 items-center">
+                            <Link to={item.products?.slug ? `/producto/${item.products.slug}` : '#'}>
+                              <img 
+                                src={getOrderItemImage(item)} 
+                                alt=""
+                                {...getImageProps("w-16 h-16 object-contain border border-white/10 rounded-xl bg-white/5 p-1 hover:border-primary-400 transition-colors")}
+                              />
+                            </Link>
+                            <div className="flex-1 min-w-0">
+                              <Link to={item.products?.slug ? `/producto/${item.products.slug}` : '#'} className="font-bold text-white hover:text-primary-400 transition-colors line-clamp-1">
+                                {item.products?.title || item.product_name || 'Coleccionable'}
+                              </Link>
+                              {item.variant?.title && (
+                                <p className="text-xs text-slate-300 font-medium">Variante: {item.variant.title}</p>
+                              )}
+                              <p className="text-[10px] font-black text-[#f00856] uppercase tracking-widest mt-0.5">
+                                Vendido por: {item.vendor_id ? (item.vendor_store?.display_name || item.vendor_store?.store_name || item.vendor_store?.name || item.vendor?.company_name || item.vendor?.store_name || 'Vendedor') : 'Collectibles.uy'}
+                              </p>
+                              <p className="text-xs text-slate-400">Cant: {item.quantity} · {formatCurrencyPrice(item.unit_price)} c/u</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="px-6 pb-5 flex flex-wrap gap-2.5 items-center border-t border-white/5 pt-4">
+                        <button
+                          onClick={() => setSelectedDetailOrder(order)}
+                          className="flex items-center gap-1.5 px-4 py-2 bg-white/10 hover:bg-white/15 text-white font-bold text-xs rounded-xl border border-white/10 transition-colors"
+                        >
+                          <Eye className="w-4 h-4 text-primary-400" /> Ver Detalle
+                        </button>
+
+                        {['awaiting_payment', 'pending'].includes(order.status) && order.payments && order.payments.length > 0 && order.payments[0].payment_url && (
+                          <a 
+                            href={order.payments[0].payment_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="flex items-center gap-1.5 px-4 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs rounded-xl transition-colors border border-amber-500 shadow-md shadow-amber-600/20"
+                          >
+                            <CreditCard className="w-4 h-4" /> Retomar Pago
+                          </a>
+                        )}
+
+                        <button onClick={() => handleBuyAgain(order)} className="flex items-center gap-1.5 px-4 py-2 bg-primary-500/10 text-primary-400 hover:bg-primary-500/20 font-bold text-xs rounded-xl transition-colors border border-primary-500/20">
+                          <RotateCcw className="w-4 h-4" /> Volver a Comprar
+                        </button>
+
+                        <button onClick={() => downloadCleanInvoice(order)} className="flex items-center gap-1.5 px-4 py-2 bg-white/5 text-slate-300 hover:text-white hover:bg-white/10 font-bold text-xs rounded-xl transition-colors border border-white/10">
+                          <FileText className="w-4 h-4 text-slate-400" /> Factura
+                        </button>
+
+                        {(stateMeta.canCancelUnpaid || stateMeta.canRequestPaidResolution) && (
+                          <button 
+                            onClick={() => openCancelAction(order)} 
+                            className="flex items-center gap-1.5 px-4 py-2 bg-rose-600/20 text-rose-300 hover:bg-rose-600/30 font-bold text-xs rounded-xl transition-colors border border-rose-500/30"
+                          >
+                            <RotateCcw className="w-4 h-4 text-rose-400" /> Cancelar Compra
+                          </button>
+                        )}
+
+                        <button 
+                          onClick={() => setSupportOrderModal(order)} 
+                          className="flex items-center gap-1.5 px-4 py-2 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 font-bold text-xs rounded-xl transition-colors border border-amber-500/20"
+                        >
+                          <HelpCircle className="w-4 h-4 text-amber-400" /> Ayuda WhatsApp
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           )}
         </div>
@@ -2020,6 +1964,252 @@ export default function CustomerPortal() {
             loadOrders();
           }}
         />
+      )}
+
+      {/* MODAL DE DETALLE COMPLETO DEL PEDIDO */}
+      {selectedDetailOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-[#0e131f] border border-white/10 rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl relative max-h-[90vh] overflow-y-auto space-y-6">
+            <div className="flex items-start justify-between border-b border-white/10 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-primary-500/15 text-primary-400 border border-primary-500/20">
+                    Detalle de Pedido
+                  </span>
+                  <span className="font-mono text-xs text-slate-400">
+                    {new Date(selectedDetailOrder.created_at).toLocaleString('es-UY')}
+                  </span>
+                </div>
+                <h3 className="text-xl font-black text-white mt-1">
+                  {selectedDetailOrder.order_number || `#${selectedDetailOrder.id.slice(0, 8).toUpperCase()}`}
+                </h3>
+              </div>
+              <button 
+                onClick={() => setSelectedDetailOrder(null)} 
+                className="text-slate-400 hover:text-white p-1 rounded-xl hover:bg-white/5 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Badges and summary */}
+            {(() => {
+              const meta = classifyOrderState(selectedDetailOrder);
+              return (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold border uppercase ${meta.orderBadge.color}`}>
+                    Estado: {meta.orderBadge.label}
+                  </span>
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold border uppercase ${meta.paymentBadge.color}`}>
+                    Pago: {meta.paymentBadge.label}
+                  </span>
+                  {meta.cancellationNotice.label && (
+                    <span className="px-3 py-1 rounded-full text-xs font-bold border uppercase bg-rose-500/10 text-rose-300 border-rose-500/20">
+                      {meta.cancellationNotice.label}
+                    </span>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Subórdenes y Envíos */}
+            {selectedDetailOrder.order_suborders && selectedDetailOrder.order_suborders.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-primary-400" /> Despacho y Logística ({selectedDetailOrder.order_suborders.length} suborden{selectedDetailOrder.order_suborders.length > 1 ? 'es' : ''})
+                </h4>
+                <div className="space-y-2">
+                  {selectedDetailOrder.order_suborders.map((sub: any) => {
+                    const storeName = sub.vendor_store?.store_name || sub.vendor?.store_name || 'Collectibles';
+                    return (
+                      <div key={sub.id} className="p-3.5 rounded-xl bg-white/5 border border-white/5 text-xs space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-white">{storeName}</span>
+                          <span className="font-mono text-slate-400 text-[11px]">{sub.suborder_number}</span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-x-4 text-slate-400 text-[11px]">
+                          <span>Método: <b>{sub.shipping_method || 'Envío estándar'}</b></span>
+                          {sub.shipping_provider && <span>Transportista: <b>{sub.shipping_provider}</b></span>}
+                          {sub.tracking_number && (
+                            <span>Guía: <b className="text-blue-400 font-mono">{sub.tracking_number}</b></span>
+                          )}
+                        </div>
+                        {sub.tracking_url && (
+                          <a href={sub.tracking_url} target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:underline block text-[11px] font-bold mt-1">
+                            Seguir paquete en tiempo real →
+                          </a>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Productos */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <Package className="w-4 h-4 text-primary-400" /> Artículos ({selectedDetailOrder.order_items?.length || 0})
+              </h4>
+              <div className="space-y-2">
+                {selectedDetailOrder.order_items?.map((item: any) => (
+                  <div key={item.id} className="p-3 rounded-xl bg-white/5 border border-white/5 flex items-center gap-3">
+                    <img 
+                      src={getOrderItemImage(item)} 
+                      alt="" 
+                      className="w-12 h-12 object-contain bg-white/5 rounded-lg border border-white/10 p-0.5" 
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-white truncate">{item.products?.title || item.product_name}</p>
+                      {item.variant?.title && (
+                        <p className="text-[11px] text-slate-400">Variante: {item.variant.title}</p>
+                      )}
+                      <p className="text-[10px] text-[#f00856] font-bold uppercase mt-0.5">
+                        {item.vendor_id ? (item.vendor_store?.store_name || item.vendor?.store_name || 'Vendedor asociado') : 'Collectibles Oficial'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-mono font-bold text-white">{formatCurrencyPrice(item.unit_price * item.quantity)}</p>
+                      <p className="text-[10px] text-slate-400">x{item.quantity}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Totales y Dirección */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs pt-2 border-t border-white/10">
+              <div className="p-3.5 bg-white/5 rounded-xl border border-white/5 space-y-1">
+                <p className="font-bold text-white uppercase text-[11px] mb-1">Destino de Entrega</p>
+                <p className="text-slate-300 font-medium">
+                  {selectedDetailOrder.shipping_address?.first_name} {selectedDetailOrder.shipping_address?.last_name}
+                </p>
+                <p className="text-slate-400">
+                  {selectedDetailOrder.shipping_address?.street || 'Retiro o dirección en cuenta'} {selectedDetailOrder.shipping_address?.apartment || ''}
+                </p>
+                <p className="text-slate-400">
+                  {selectedDetailOrder.shipping_address?.city || ''} {selectedDetailOrder.shipping_address?.department || ''}
+                </p>
+              </div>
+
+              <div className="p-3.5 bg-white/5 rounded-xl border border-white/5 space-y-2">
+                <p className="font-bold text-white uppercase text-[11px] mb-1">Resumen de Importes</p>
+                <div className="flex justify-between text-slate-400">
+                  <span>Productos:</span>
+                  <span className="font-mono text-white">
+                    {formatCurrencyPrice(selectedDetailOrder.total_amount - (selectedDetailOrder.total_shipping || 0))}
+                  </span>
+                </div>
+                <div className="flex justify-between text-slate-400">
+                  <span>Envío:</span>
+                  <span className="font-mono text-white">
+                    {formatCurrencyPrice(selectedDetailOrder.total_shipping || 0)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm font-bold text-emerald-400 border-t border-white/10 pt-2">
+                  <span>Total:</span>
+                  <span className="font-mono">{formatCurrencyPrice(selectedDetailOrder.total_amount)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-white/10">
+              <button
+                onClick={() => setSelectedDetailOrder(null)}
+                className="px-5 py-2.5 bg-white/10 hover:bg-white/15 text-white font-bold text-xs rounded-xl transition"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE CONFIRMACIÓN DE CANCELACIÓN INMEDIATA (PEDIDO NO COBRADO) */}
+      {cancelModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-[#0e131f] border border-rose-500/30 rounded-3xl max-w-md w-full p-6 shadow-2xl relative space-y-5">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-rose-500/15 text-rose-400">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Cancelar Pedido</h3>
+                  <p className="text-xs text-slate-400 font-mono">
+                    {cancelModalOrder.order_number || `#${cancelModalOrder.id.slice(0, 8).toUpperCase()}`}
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setCancelModalOrder(null)} 
+                disabled={cancellingOrder}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs text-slate-300">
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-1 text-amber-200">
+                <p className="font-bold flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" /> Cancelación segura sin cobro
+                </p>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  Este pedido no cuenta con pagos aprobados. Al confirmar, tu reserva de figuras se liberará inmediatamente para otros coleccionistas y el pedido quedará cancelado.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-slate-400 font-bold mb-1">Motivo de cancelación</label>
+                <select
+                  value={cancelReason}
+                  onChange={e => setCancelReason(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-rose-500/50"
+                >
+                  <option value="desistimiento" className="bg-[#0e131f] text-white">Desistimiento de compra</option>
+                  <option value="error_datos" className="bg-[#0e131f] text-white">Error en dirección o método de pago</option>
+                  <option value="cambio_opinion" className="bg-[#0e131f] text-white">Prefiero otro artículo / variante</option>
+                  <option value="otro" className="bg-[#0e131f] text-white">Otro motivo</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-400 font-bold mb-1">Comentarios adicionales (opcional)</label>
+                <textarea
+                  value={cancelCustomNotes}
+                  onChange={e => setCancelCustomNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Detalles sobre tu cancelación..."
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-xs outline-none focus:border-rose-500/50 resize-none"
+                />
+              </div>
+
+              {cancelError && (
+                <div className="p-2.5 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs">
+                  {cancelError}
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                onClick={() => setCancelModalOrder(null)}
+                disabled={cancellingOrder}
+                className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition disabled:opacity-50"
+              >
+                Volver
+              </button>
+              <button
+                onClick={handleCancelUnpaidSubmit}
+                disabled={cancellingOrder}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-lg shadow-rose-600/30"
+              >
+                {cancellingOrder ? 'Cancelando...' : 'Confirmar Cancelación'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
