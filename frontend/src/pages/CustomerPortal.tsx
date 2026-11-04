@@ -272,47 +272,72 @@ export default function CustomerPortal() {
     printWindow.document.close();
   };
 
+  const [ordersLoading, setOrdersLoading] = useState<boolean>(false);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+
   const loadOrders = async () => {
     if (!user) return;
-    const orderSelect = `
-      id, order_number, total_amount, currency, status, payment_status, created_at, paid_at, payment_method, customer_id, user_id, customer_email, shipping_address, total_shipping, is_international, exchange_rate_value,
-      payments(id, status, payment_url, created_at, payment_method, amount),
-      refunds:refunds(id, amount, status, reason, created_at),
-      order_items (
-        id, suborder_id, quantity, unit_price, total_price, product_id, variant_id, vendor_id, vendor_store_id, sku, product_name, final_total, status, refunded_quantity, refunded_amount,
-        vendor:vendors(store_name, slug, logo_url, promotions_opt_in, company_name),
-        vendor_store:vendor_stores(store_name, slug, logo_url),
-        products (title, slug, is_international, images:product_images(url)),
-        variant:product_variants(id, title, sku, price, attributes),
-        international_order_items (id, purchase_status, zinc_order_id, tracking_number, carrier, tracking_url, final_price_usd, estimated_delivery_to_courier)
-      ),
-      order_suborders (
-        id, suborder_number, status, is_collectibles_order, is_international, product_subtotal, vendor_policy_snapshot, vendor_id, shipping_method, shipping_provider, shipping_cost, tracking_number, tracking_url, exchange_rate_value,
-        shipments(id, tracking_code, external_guide, shipping_status, package_number, total_packages),
-        vendor:vendors(store_name, slug, logo_url),
-        vendor_store:vendor_stores(store_name, slug, logo_url)
-      ),
-      international_shipment_tracking (
-        tracking_number, tracking_url, courier_company, picked_up_at, estimated_delivery, contact_phone, contact_email, observations
-      )
-    `;
+    setOrdersLoading(true);
+    setOrdersError(null);
+    try {
+      const orderSelect = `
+        id, order_number, total_amount, currency, status, payment_status, created_at, paid_at, payment_method, customer_id, user_id, customer_email, shipping_address, total_shipping, is_international, fx_rate,
+        payments(id, status, payment_url, created_at, provider, amount),
+        refunds:refunds(id, amount, status, reason, created_at),
+        order_items (
+          id, suborder_id, quantity, unit_price, total_price, product_id, variant_id, vendor_id, vendor_store_id, sku, product_name, final_total, status, refunded_quantity, refunded_amount,
+          vendor:vendors(store_name, slug, logo_url, promotions_opt_in, company_name),
+          vendor_store:vendor_stores(store_name, slug, logo_url),
+          products (title, slug, is_international, images:product_images(url)),
+          variant:product_variants(id, name, sku, price_adjustment),
+          international_order_items (id, purchase_status, zinc_order_id, tracking_number, carrier, tracking_url, final_price_usd, estimated_delivery_to_courier)
+        ),
+        order_suborders (
+          id, suborder_number, status, is_collectibles_order, is_international, product_subtotal, vendor_policy_snapshot, vendor_id, shipping_method, shipping_provider, shipping_cost, tracking_number, tracking_url, exchange_rate_used,
+          shipments(id, tracking_code, external_guide, shipping_status, package_number, total_packages),
+          vendor:vendors(store_name, slug, logo_url),
+          vendor_store:vendor_stores(store_name, slug, logo_url)
+        ),
+        international_shipment_tracking (
+          tracking_number, tracking_url, courier_company, picked_up_at, estimated_delivery, contact_phone, contact_email, observations
+        )
+      `;
 
-    const { data: ordersData } = await supabase
-      .from('orders').select(orderSelect).eq('customer_id', user!.id).order('created_at', { ascending: false });
-    let finalOrders = ordersData || [];
-    if (finalOrders.length === 0 && user!.email) {
-      const { data: emailOrders } = await supabase
-        .from('orders').select(orderSelect).eq('customer_email', user!.email).order('created_at', { ascending: false });
-      finalOrders = emailOrders || [];
+      // Consultar exclusivamente por customer_id / user_id autenticado con políticas RLS activas
+      const { data: ordersData, error } = await supabase
+        .from('orders')
+        .select(orderSelect)
+        .or(`customer_id.eq.${user.id},user_id.eq.${user.id}`)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      setOrders(ordersData || []);
+    } catch (err: any) {
+      console.error('Error loading customer orders:', err);
+      setOrdersError(err?.message || 'Ocurrió un error al cargar tus pedidos.');
+    } finally {
+      setOrdersLoading(false);
     }
-    setOrders(finalOrders);
   };
 
   // Helper functions for Orders Classification, Badges and Actions
   const classifyOrderState = (order: any) => {
     const isOrderCancelled = ['cancelled', 'cancelada'].includes(order.status);
     const isOrderExpired = order.status === 'expired';
-    const isPaymentRefunded = order.payment_status === 'refunded' || (order.refunds && order.refunds.length > 0);
+
+    // Manejo robusto de reembolsos: verificar estado completado/aprobado e importe reembolsado
+    const completedRefunds = (order.refunds || []).filter((r: any) => 
+      ['approved', 'completed', 'succeeded'].includes((r.status || '').toLowerCase())
+    );
+    const totalRefundedAmount = completedRefunds.reduce((sum: number, r: any) => sum + Number(r.amount || 0), 0);
+    const isFullRefund = totalRefundedAmount >= Number(order.total_amount || 0) && totalRefundedAmount > 0;
+    const isPartialRefund = totalRefundedAmount > 0 && !isFullRefund;
+
+    const isPaymentRefunded = order.payment_status === 'refunded' || isFullRefund;
+    const isPaymentPartiallyRefunded = order.payment_status === 'partially_refunded' || isPartialRefund;
     const hasApprovedPayment = (order.payments || []).some((p: any) => p.status === 'approved') || order.payment_status === 'approved';
 
     let orderBadge = { label: 'Esperando Pago', color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' };
@@ -333,6 +358,8 @@ export default function CustomerPortal() {
     let paymentBadge = { label: 'Sin Iniciar', color: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' };
     if (isPaymentRefunded) {
       paymentBadge = { label: 'Reembolsado', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
+    } else if (isPaymentPartiallyRefunded) {
+      paymentBadge = { label: 'Reembolso Parcial', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
     } else if (hasApprovedPayment) {
       paymentBadge = { label: 'Aprobado', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
     } else if (order.payment_status === 'rejected') {
@@ -341,7 +368,7 @@ export default function CustomerPortal() {
       paymentBadge = { label: 'Pendiente', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' };
     }
 
-    let cancellationNotice: { type: 'refunded' | 'pending_refund' | 'unpaid_cancelled' | null; label: string } = {
+    let cancellationNotice: { type: 'refunded' | 'partial_refund' | 'pending_refund' | 'unpaid_cancelled' | null; label: string } = {
       type: null,
       label: ''
     };
@@ -349,7 +376,12 @@ export default function CustomerPortal() {
     if (isPaymentRefunded) {
       cancellationNotice = {
         type: 'refunded',
-        label: 'Reembolsado'
+        label: `Reembolsado (${formatCurrencyPrice(totalRefundedAmount || order.total_amount)})`
+      };
+    } else if (isPaymentPartiallyRefunded) {
+      cancellationNotice = {
+        type: 'partial_refund',
+        label: `Reembolso Parcial (${formatCurrencyPrice(totalRefundedAmount)})`
       };
     } else if (isOrderCancelled && hasApprovedPayment) {
       cancellationNotice = {
@@ -363,10 +395,6 @@ export default function CustomerPortal() {
       };
     }
 
-    // Eligibility to initiate cancellation from customer UI:
-    // 1. Not already cancelled or delivered
-    // 2. Can cancel if unpaid (awaiting_payment, pending, or expired without approved payment)
-    // 3. Or can request resolution if approved payment and not yet delivered/shipped
     const canCancelUnpaid = !isOrderCancelled && !hasApprovedPayment && ['awaiting_payment', 'pending', 'expired'].includes(order.status);
     const canRequestPaidResolution = !isOrderCancelled && hasApprovedPayment && !['shipped', 'delivered'].includes(order.status);
 
@@ -393,6 +421,11 @@ export default function CustomerPortal() {
 
       if (error) {
         throw error;
+      }
+
+      // Comprobar explícitamente data?.success === true
+      if (!data || data.success !== true) {
+        throw new Error(data?.message || 'No fue posible cancelar el pedido.');
       }
 
       setCancelModalOrder(null);
@@ -1001,7 +1034,11 @@ export default function CustomerPortal() {
                 ].map(tab => {
                   const count = orders.filter((o: any) => {
                     const isCancelled = ['cancelled', 'cancelada'].includes(o.status);
-                    const isRefunded = o.payment_status === 'refunded' || (o.refunds && o.refunds.length > 0);
+                    const completedRefunds = (o.refunds || []).filter((r: any) => 
+                      ['approved', 'completed', 'succeeded'].includes((r.status || '').toLowerCase())
+                    );
+                    const totalRefunded = completedRefunds.reduce((sum: number, r: any) => sum + Number(r.amount || 0), 0);
+                    const isRefunded = o.payment_status === 'refunded' || o.payment_status === 'partially_refunded' || totalRefunded > 0;
                     const isPaid = (o.payments || []).some((p: any) => p.status === 'approved') || ['paid', 'confirmed'].includes(o.status);
 
                     switch (tab.id) {
@@ -1036,7 +1073,27 @@ export default function CustomerPortal() {
                 })}
               </div>
 
-              {orders.length === 0 ? (
+              {/* Error state with retry button */}
+              {ordersError && (
+                <div className="bg-rose-500/10 border border-rose-500/20 rounded-2xl p-6 text-center space-y-3">
+                  <AlertCircle className="w-8 h-8 text-rose-400 mx-auto" />
+                  <p className="text-sm font-bold text-white">{ordersError}</p>
+                  <button
+                    onClick={() => loadOrders()}
+                    disabled={ordersLoading}
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition disabled:opacity-50"
+                  >
+                    {ordersLoading ? 'Reintentando...' : 'Reintentar'}
+                  </button>
+                </div>
+              )}
+
+              {ordersLoading ? (
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-12 text-center space-y-3">
+                  <div className="w-8 h-8 border-2 border-[#f00856] border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Cargando tus pedidos...</p>
+                </div>
+              ) : orders.length === 0 && !ordersError ? (
                 <div className="space-y-6">
                   {/* Hero Empty State with Call to Action */}
                   <div className="bg-gradient-to-br from-white/[0.03] to-white/[0.01] border border-white/10 rounded-3xl p-8 text-center relative overflow-hidden backdrop-blur-sm">
@@ -1182,8 +1239,8 @@ export default function CustomerPortal() {
                               <Link to={item.products?.slug ? `/producto/${item.products.slug}` : '#'} className="font-bold text-white hover:text-primary-400 transition-colors line-clamp-1">
                                 {item.products?.title || item.product_name || 'Coleccionable'}
                               </Link>
-                              {item.variant?.title && (
-                                <p className="text-xs text-slate-300 font-medium">Variante: {item.variant.title}</p>
+                              {item.variant?.name && (
+                                <p className="text-xs text-slate-300 font-medium">Variante: {item.variant.name}</p>
                               )}
                               <p className="text-[10px] font-black text-[#f00856] uppercase tracking-widest mt-0.5">
                                 Vendido por: {item.vendor_id ? (item.vendor_store?.display_name || item.vendor_store?.store_name || item.vendor_store?.name || item.vendor?.company_name || item.vendor?.store_name || 'Vendedor') : 'Collectibles.uy'}
@@ -2061,8 +2118,8 @@ export default function CustomerPortal() {
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-white truncate">{item.products?.title || item.product_name}</p>
-                      {item.variant?.title && (
-                        <p className="text-[11px] text-slate-400">Variante: {item.variant.title}</p>
+                      {item.variant?.name && (
+                        <p className="text-[11px] text-slate-400">Variante: {item.variant.name}</p>
                       )}
                       <p className="text-[10px] text-[#f00856] font-bold uppercase mt-0.5">
                         {item.vendor_id ? (item.vendor_store?.store_name || item.vendor?.store_name || 'Vendedor asociado') : 'Collectibles Oficial'}

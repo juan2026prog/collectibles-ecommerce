@@ -1,11 +1,25 @@
 import { describe, it, expect } from 'vitest';
 
 describe('Customer Orders Classification & Filtering Helper Logic', () => {
+  function formatCurrencyPrice(amount: number) {
+    return `$ ${amount.toFixed(2)}`;
+  }
+
   // Classification helper mirroring CustomerPortal.tsx logic
   function classifyOrder(order: any) {
     const isOrderCancelled = ['cancelled', 'cancelada'].includes(order.status);
     const isOrderExpired = order.status === 'expired';
-    const isPaymentRefunded = order.payment_status === 'refunded' || (order.refunds && order.refunds.length > 0);
+
+    // Manejo robusto de reembolsos: verificar estado completado/aprobado e importe reembolsado
+    const completedRefunds = (order.refunds || []).filter((r: any) => 
+      ['approved', 'completed', 'succeeded'].includes((r.status || '').toLowerCase())
+    );
+    const totalRefundedAmount = completedRefunds.reduce((sum: number, r: any) => sum + Number(r.amount || 0), 0);
+    const isFullRefund = totalRefundedAmount >= Number(order.total_amount || 0) && totalRefundedAmount > 0;
+    const isPartialRefund = totalRefundedAmount > 0 && !isFullRefund;
+
+    const isPaymentRefunded = order.payment_status === 'refunded' || isFullRefund;
+    const isPaymentPartiallyRefunded = order.payment_status === 'partially_refunded' || isPartialRefund;
     const hasApprovedPayment = (order.payments || []).some((p: any) => p.status === 'approved') || order.payment_status === 'approved';
 
     let orderBadge = { label: 'Esperando Pago', color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' };
@@ -26,6 +40,8 @@ describe('Customer Orders Classification & Filtering Helper Logic', () => {
     let paymentBadge = { label: 'Sin Iniciar', color: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' };
     if (isPaymentRefunded) {
       paymentBadge = { label: 'Reembolsado', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
+    } else if (isPaymentPartiallyRefunded) {
+      paymentBadge = { label: 'Reembolso Parcial', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
     } else if (hasApprovedPayment) {
       paymentBadge = { label: 'Aprobado', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
     } else if (order.payment_status === 'rejected') {
@@ -35,7 +51,7 @@ describe('Customer Orders Classification & Filtering Helper Logic', () => {
     }
 
     // Cancellation / refund state distinction
-    let cancellationNotice: { type: 'refunded' | 'pending_refund' | 'unpaid_cancelled' | null; label: string } = {
+    let cancellationNotice: { type: 'refunded' | 'partial_refund' | 'pending_refund' | 'unpaid_cancelled' | null; label: string } = {
       type: null,
       label: ''
     };
@@ -43,7 +59,12 @@ describe('Customer Orders Classification & Filtering Helper Logic', () => {
     if (isPaymentRefunded) {
       cancellationNotice = {
         type: 'refunded',
-        label: 'Reembolsado'
+        label: `Reembolsado (${formatCurrencyPrice(totalRefundedAmount || order.total_amount)})`
+      };
+    } else if (isPaymentPartiallyRefunded) {
+      cancellationNotice = {
+        type: 'partial_refund',
+        label: `Reembolso Parcial (${formatCurrencyPrice(totalRefundedAmount)})`
       };
     } else if (isOrderCancelled && hasApprovedPayment) {
       cancellationNotice = {
@@ -62,7 +83,11 @@ describe('Customer Orders Classification & Filtering Helper Logic', () => {
 
   function matchesFilter(order: any, filter: string): boolean {
     const isCancelled = ['cancelled', 'cancelada'].includes(order.status);
-    const isRefunded = order.payment_status === 'refunded' || (order.refunds && order.refunds.length > 0);
+    const completedRefunds = (order.refunds || []).filter((r: any) => 
+      ['approved', 'completed', 'succeeded'].includes((r.status || '').toLowerCase())
+    );
+    const totalRefunded = completedRefunds.reduce((sum: number, r: any) => sum + Number(r.amount || 0), 0);
+    const isRefunded = order.payment_status === 'refunded' || order.payment_status === 'partially_refunded' || totalRefunded > 0;
     const isPaid = (order.payments || []).some((p: any) => p.status === 'approved') || ['paid', 'confirmed'].includes(order.status);
 
     switch (filter) {
@@ -88,6 +113,7 @@ describe('Customer Orders Classification & Filtering Helper Logic', () => {
     const col0020 = {
       id: '27874812-e8be-4536-860a-8f5e6d68ab37',
       order_number: 'COL-20261103-0020',
+      total_amount: 2,
       status: 'cancelada',
       payment_status: 'refunded',
       payments: [{ id: 'p1', status: 'approved' }],
@@ -96,16 +122,51 @@ describe('Customer Orders Classification & Filtering Helper Logic', () => {
 
     const classified = classifyOrder(col0020);
     expect(classified.cancellationNotice.type).toBe('refunded');
-    expect(classified.cancellationNotice.label).toBe('Reembolsado');
+    expect(classified.cancellationNotice.label).toContain('Reembolsado');
     expect(classified.paymentBadge.label).toBe('Reembolsado');
     expect(matchesFilter(col0020, 'refunded')).toBe(true);
     expect(matchesFilter(col0020, 'cancelled')).toBe(true);
+  });
+
+  it('does NOT classify as refunded if a refund attempt is rejected or pending', () => {
+    const orderWithFailedRefund = {
+      id: 'ord-failed-refund',
+      order_number: 'COL-TEST-FAIL-REF',
+      total_amount: 50,
+      status: 'cancelada',
+      payment_status: 'approved',
+      payments: [{ id: 'p1', status: 'approved' }],
+      refunds: [{ id: 'r1', amount: 50, status: 'rejected' }]
+    };
+
+    const classified = classifyOrder(orderWithFailedRefund);
+    expect(classified.cancellationNotice.type).toBe('pending_refund');
+    expect(classified.paymentBadge.label).toBe('Aprobado');
+    expect(matchesFilter(orderWithFailedRefund, 'refunded')).toBe(false);
+  });
+
+  it('correctly handles partial refund amounts and badges', () => {
+    const orderPartial = {
+      id: 'ord-partial-refund',
+      order_number: 'COL-TEST-PARTIAL',
+      total_amount: 100,
+      status: 'paid',
+      payment_status: 'partially_refunded',
+      payments: [{ id: 'p1', status: 'approved' }],
+      refunds: [{ id: 'r1', amount: 30, status: 'completed' }]
+    };
+
+    const classified = classifyOrder(orderPartial);
+    expect(classified.cancellationNotice.type).toBe('partial_refund');
+    expect(classified.paymentBadge.label).toBe('Reembolso Parcial');
+    expect(matchesFilter(orderPartial, 'refunded')).toBe(true);
   });
 
   it('correctly classifies COL-20261031-0002 as Cancellation Requested with Pending Refund', () => {
     const col0002 = {
       id: '95c110c1-942c-48ef-9f9a-5e4eec6c1f00',
       order_number: 'COL-20261031-0002',
+      total_amount: 2,
       status: 'cancelada',
       payment_status: 'approved',
       payments: [{ id: 'p2', status: 'approved' }],
@@ -124,6 +185,7 @@ describe('Customer Orders Classification & Filtering Helper Logic', () => {
     const col0014 = {
       id: '55e1f242-1375-4d0f-a209-d009ecf0b8fa',
       order_number: 'COL-20261103-0014',
+      total_amount: 2,
       status: 'expired',
       payment_status: 'expired',
       payments: [],
@@ -139,6 +201,7 @@ describe('Customer Orders Classification & Filtering Helper Logic', () => {
   it('handles unpaid order cancellation distinction', () => {
     const unpaidCancelledOrder = {
       id: 'order-unpaid-uuid',
+      total_amount: 15,
       status: 'cancelada',
       payment_status: 'cancelled',
       payments: [],
