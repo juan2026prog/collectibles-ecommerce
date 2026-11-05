@@ -10,7 +10,7 @@ import {
   Phone, Plus, Trash2, Lock, Eye, EyeOff, Edit3, Store, Truck, AlertCircle, 
   FileText, Globe, CreditCard, Clock, ShieldCheck, Heart, Sparkles, Trophy, 
   Award, Flame, ExternalLink, ChevronRight, LayoutDashboard, Compass, Star,
-  HelpCircle, MessageCircle, X
+  HelpCircle, MessageCircle, X, CheckCircle2
 } from 'lucide-react';
 import { useLocale } from '../contexts/LocaleContext';
 import { useCurrency } from '../contexts/CurrencyContext';
@@ -19,8 +19,10 @@ import AddressAutocomplete from '../components/AddressAutocomplete';
 import { FranchiseStatusCard } from '../components/customs/FranchiseStatusCard';
 import { ImportHub } from '../components/customs/ImportHub';
 import CustomerQuestionsTab from '../components/customer/CustomerQuestionsTab';
+import CustomerRequestsTab from '../components/customer/CustomerRequestsTab';
 import OrderResolutionModal from '../components/customer/OrderResolutionModal';
 import { MessageSquare } from 'lucide-react';
+import { useSiteSettings } from '../hooks/useSiteSettings';
 
 function getOrderItemImage(item: any): string {
   const img = item.products?.images?.[0];
@@ -50,14 +52,21 @@ export default function CustomerPortal() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { language, currency, setLanguage, setCurrency } = useLocale();
   const { formatCurrencyPrice } = useCurrency();
+  const { settings } = useSiteSettings();
   const cart = useCartContext();
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [supportOrderModal, setSupportOrderModal] = useState<any | null>(null);
-  
+  const [resolutionOrder, setResolutionOrder] = useState<any | null>(null);
+  const [refundDetailModalOrder, setRefundDetailModalOrder] = useState<any | null>(null);
+
+  // Posventa Requests State (unified_order_requests)
+  const [customerRequests, setCustomerRequests] = useState<any[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
+
   // Supported tabs
   const tabFromUrl = searchParams.get('tab');
-  const validTabs = ['orders', 'questions', 'import_hub', 'profile', 'franchise', 'couriers', 'security'] as const;
+  const validTabs = ['orders', 'requests', 'questions', 'import_hub', 'profile', 'franchise', 'couriers', 'security'] as const;
   type TabType = typeof validTabs[number];
   
   const initialTab: TabType = validTabs.includes(tabFromUrl as any) ? (tabFromUrl as TabType) : 'orders';
@@ -116,7 +125,6 @@ export default function CustomerPortal() {
   const [showPw, setShowPw] = useState(false);
   const [pwLoading, setPwLoading] = useState(false);
   const [pwMessage, setPwMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
-  const [resolutionOrder, setResolutionOrder] = useState<any | null>(null);
 
   // New Orders UX state: filters, detail modal, cancel confirm modal
   const [orderFilter, setOrderFilter] = useState<'all' | 'pending' | 'paid' | 'processing' | 'shipped' | 'cancelled' | 'refunded'>('all');
@@ -323,6 +331,32 @@ export default function CustomerPortal() {
     }
   };
 
+  const loadCustomerRequests = async () => {
+    if (!user) return;
+    setRequestsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('unified_order_requests')
+        .select(`
+          id, order_id, suborder_id, order_item_id, vendor_id, customer_id, business_model,
+          request_type, status, amount_requested, amount_approved, currency, reason,
+          customer_notes, vendor_notes, admin_notes, evidence_images, created_at, resolved_at,
+          order:orders(id, order_number, total_amount, status)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.warn('Error loading unified_order_requests:', error);
+      } else {
+        setCustomerRequests(data || []);
+      }
+    } catch (err) {
+      console.error('Unexpected error loading customer requests:', err);
+    } finally {
+      setRequestsLoading(false);
+    }
+  };
+
   // Helper functions for Orders Classification, Badges and Actions
   const classifyOrderState = (order: any) => {
     const isOrderCancelled = ['cancelled', 'cancelada'].includes(order.status);
@@ -398,13 +432,21 @@ export default function CustomerPortal() {
     const canCancelUnpaid = !isOrderCancelled && !hasApprovedPayment && ['awaiting_payment', 'pending', 'expired'].includes(order.status);
     const canRequestPaidResolution = !isOrderCancelled && hasApprovedPayment && !['shipped', 'delivered'].includes(order.status);
 
+    // Contextual Action Determination (Estilo Mercado Libre)
+    const activeRequest = customerRequests.find(r => r.order_id === order.id && !['CLOSED', 'REJECTED', 'REFUNDED'].includes(r.status));
+    const isFullyRefunded = isPaymentRefunded;
+    const isCancelledWithApprovedPayment = isOrderCancelled && hasApprovedPayment && !isFullyRefunded;
+
     return {
       orderBadge,
       paymentBadge,
       cancellationNotice,
       hasApprovedPayment,
       canCancelUnpaid,
-      canRequestPaidResolution
+      canRequestPaidResolution,
+      activeRequest,
+      isFullyRefunded,
+      isCancelledWithApprovedPayment
     };
   };
 
@@ -479,6 +521,7 @@ export default function CustomerPortal() {
     if (!user) return;
     async function loadData() {
       await loadOrders();
+      await loadCustomerRequests();
 
       // Load profile
       const { data: profileData } = await supabase
@@ -851,6 +894,7 @@ export default function CustomerPortal() {
             <nav className="mt-6 space-y-1.5">
               {([
                 { key: 'orders', icon: Package, label: 'Mis Pedidos', badge: orders.length > 0 ? String(orders.length) : undefined, color: 'text-blue-400' },
+                { key: 'requests', icon: ShieldCheck, label: 'Mis Gestiones', badge: customerRequests.length > 0 ? String(customerRequests.length) : undefined, color: 'text-emerald-400' },
                 { key: 'questions', icon: MessageSquare, label: 'Mis Preguntas', color: 'text-pink-400' },
                 { key: 'import_hub', icon: Globe, label: 'Importador HUB (Aduana & Casilla)', badge: '2026', color: 'text-sky-400' },
                 { key: 'profile', icon: User, label: 'Mis Datos y Direcciones', color: 'text-purple-400' },
@@ -1278,20 +1322,58 @@ export default function CustomerPortal() {
                           <FileText className="w-4 h-4 text-slate-400" /> Factura
                         </button>
 
-                        {(stateMeta.canCancelUnpaid || stateMeta.canRequestPaidResolution) && (
-                          <button 
-                            onClick={() => openCancelAction(order)} 
+                        {/* Acciones Contextuales Posventa (Estilo Mercado Libre Autogestión) */}
+                        {stateMeta.activeRequest ? (
+                          <button
+                            onClick={() => setActiveTab('requests')}
+                            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 font-bold text-xs rounded-xl transition-colors border border-emerald-500/30"
+                          >
+                            <ShieldCheck className="w-4 h-4 text-emerald-400" /> Seguir Solicitud
+                          </button>
+                        ) : stateMeta.isFullyRefunded ? (
+                          <button
+                            onClick={() => setRefundDetailModalOrder(order)}
+                            className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 font-bold text-xs rounded-xl transition-colors border border-emerald-500/30"
+                          >
+                            <Check className="w-4 h-4 text-emerald-400" /> Ver Devolución
+                          </button>
+                        ) : stateMeta.isCancelledWithApprovedPayment ? (
+                          <button
+                            onClick={() => setRefundDetailModalOrder(order)}
+                            className="flex items-center gap-1.5 px-4 py-2 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 font-bold text-xs rounded-xl transition-colors border border-amber-500/30"
+                          >
+                            <Clock className="w-4 h-4 text-amber-400" /> Consultar Devolución
+                          </button>
+                        ) : ['delivered', 'received'].includes(order.status) ? (
+                          <button
+                            onClick={() => setResolutionOrder(order)}
+                            className="flex items-center gap-1.5 px-4 py-2 bg-rose-600/20 text-rose-300 hover:bg-rose-600/30 font-bold text-xs rounded-xl transition-colors border border-rose-500/30"
+                          >
+                            <RotateCcw className="w-4 h-4 text-rose-400" /> Devolver Producto / Reclamo
+                          </button>
+                        ) : stateMeta.canCancelUnpaid ? (
+                          <button
+                            onClick={() => openCancelAction(order)}
+                            className="flex items-center gap-1.5 px-4 py-2 bg-rose-600/20 text-rose-300 hover:bg-rose-600/30 font-bold text-xs rounded-xl transition-colors border border-rose-500/30"
+                          >
+                            <RotateCcw className="w-4 h-4 text-rose-400" /> Cancelar Pedido
+                          </button>
+                        ) : stateMeta.canRequestPaidResolution ? (
+                          <button
+                            onClick={() => setResolutionOrder(order)}
                             className="flex items-center gap-1.5 px-4 py-2 bg-rose-600/20 text-rose-300 hover:bg-rose-600/30 font-bold text-xs rounded-xl transition-colors border border-rose-500/30"
                           >
                             <RotateCcw className="w-4 h-4 text-rose-400" /> Cancelar Compra
                           </button>
-                        )}
+                        ) : null}
 
+                        {/* Asistencia Complementaria Secundaria */}
                         <button 
                           onClick={() => setSupportOrderModal(order)} 
-                          className="flex items-center gap-1.5 px-4 py-2 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 font-bold text-xs rounded-xl transition-colors border border-amber-500/20"
+                          className="flex items-center gap-1.5 px-3.5 py-2 bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 font-medium text-xs rounded-xl transition-colors border border-white/10"
+                          title="Contactar soporte técnico o comercial"
                         >
-                          <HelpCircle className="w-4 h-4 text-amber-400" /> Ayuda WhatsApp
+                          <HelpCircle className="w-3.5 h-3.5" /> Asistencia
                         </button>
                       </div>
                     </div>
@@ -1301,6 +1383,16 @@ export default function CustomerPortal() {
             </div>
           )}
         </div>
+      )}
+
+      {/* ═══ TAB: Mis Gestiones (Centro de Resoluciones) ═══ */}
+      {activeTab === 'requests' && (
+        <CustomerRequestsTab
+          requests={customerRequests}
+          loading={requestsLoading}
+          onRefresh={loadCustomerRequests}
+          formatCurrencyPrice={formatCurrencyPrice}
+        />
       )}
 
       {/* ═══ TAB: Mis Datos ═══ */}
@@ -1936,80 +2028,94 @@ export default function CustomerPortal() {
         </div>
       </div>
 
-      {/* MODAL DE ASISTENCIA Y DEVOLUCIONES */}
-      {supportOrderModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-[#0e131f] border border-white/10 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative space-y-5">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400">
-                  <RotateCcw className="w-5 h-5" />
+      {/* MODAL DE ASISTENCIA Y SOPORTE SECUNDARIO */}
+      {supportOrderModal && (() => {
+        const rawWa = settings['social_whatsapp_url'] || settings['whatsapp_number'] || settings['whatsapp'] || '';
+        const waEnabled = settings['social_whatsapp_enabled'] !== 'false' && Boolean(rawWa);
+        const cleanWa = rawWa.replace(/[\s\-\(\)\+]/g, '');
+        const waLink = cleanWa.startsWith('http') ? cleanWa : `https://wa.me/${cleanWa}?text=${encodeURIComponent(`Hola Collectibles, quisiera consultar sobre mi pedido #${supportOrderModal.order_number || supportOrderModal.id.slice(0, 8).toUpperCase()}`)}`;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+            <div className="bg-[#0e131f] border border-white/10 rounded-3xl max-w-lg w-full p-6 shadow-2xl relative space-y-5">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-rose-500/15 text-rose-400">
+                    <ShieldCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">
+                      Asistencia y Posventa
+                    </h3>
+                    <p className="text-xs text-slate-400 font-mono">
+                      Orden #{supportOrderModal.order_number || supportOrderModal.id.slice(0, 8).toUpperCase()}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-base font-bold text-white">
-                    Soporte & Devoluciones
-                  </h3>
-                  <p className="text-xs text-slate-400 font-mono">
-                    Orden #{supportOrderModal.order_number || supportOrderModal.id.slice(0, 8).toUpperCase()}
+                <button 
+                  onClick={() => setSupportOrderModal(null)} 
+                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-3 text-xs text-slate-300">
+                <div className="p-3.5 bg-white/5 border border-white/5 rounded-2xl space-y-1.5">
+                  <p className="font-bold text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" /> Garantías y Autogestión Integrada
+                  </p>
+                  <p className="leading-relaxed text-slate-400">
+                    Podés autogestionar cancelaciones, devoluciones o reportar daños directamente en Collectibles. El sistema genera tu solicitud en tiempo real con seguimiento transparente.
                   </p>
                 </div>
+
+                <div className="grid grid-cols-1 gap-2 pt-1">
+                  <button
+                    onClick={() => {
+                      const target = supportOrderModal;
+                      setSupportOrderModal(null);
+                      setResolutionOrder(target);
+                    }}
+                    className="flex items-center justify-center gap-2 px-4 py-3 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-600/30 transition-all"
+                  >
+                    <RotateCcw className="w-4 h-4" /> Iniciar Autogestión / Devolución
+                  </button>
+
+                  {waEnabled && cleanWa && (
+                    <a 
+                      href={waLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-center gap-2 px-4 py-3 bg-white/5 hover:bg-white/10 text-emerald-400 border border-emerald-500/20 font-bold text-xs rounded-xl transition-all"
+                    >
+                      <MessageCircle className="w-4 h-4" /> Contactar por WhatsApp de Soporte
+                    </a>
+                  )}
+
+                  <Link
+                    to={`/contacto?asunto=Consulta posventa&orden=${supportOrderModal.order_number || supportOrderModal.id.slice(0, 8).toUpperCase()}`}
+                    onClick={() => setSupportOrderModal(null)}
+                    className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-slate-300 font-bold text-xs rounded-xl border border-white/5 transition-all"
+                  >
+                    <FileText className="w-4 h-4 text-slate-400" /> Formulario de Contacto
+                  </Link>
+                </div>
               </div>
-              <button 
-                onClick={() => setSupportOrderModal(null)} 
-                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            <div className="space-y-3 text-xs text-slate-300">
-              <div className="p-3.5 bg-white/5 border border-white/5 rounded-xl space-y-1.5">
-                <p className="font-bold text-white uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-emerald-400" /> Garantía y Políticas de Devolución
-                </p>
-                <p className="leading-relaxed text-slate-400">
-                  • <b>Productos Locales / Nacionales:</b> Tienes 5 días hábiles a partir de la entrega del paquete para solicitar cambio o devolución por fallas de fábrica o desistimiento de compra.
-                </p>
-                <p className="leading-relaxed text-slate-400">
-                  • <b>Compras Internacionales:</b> Las devoluciones aplican exclusivamente mientras el producto se encuentra en tu casillero en Miami antes de ser despachado en el vuelo a Uruguay.
-                </p>
+              <div className="border-t border-white/5 pt-3 text-center">
+                <Link 
+                  to="/page/envios-devoluciones" 
+                  target="_blank"
+                  className="text-[11px] text-rose-400 hover:underline inline-flex items-center gap-1 font-medium"
+                >
+                  Leer términos oficiales de devoluciones <ExternalLink className="w-3 h-3" />
+                </Link>
               </div>
-
-              <p className="text-slate-400">
-                Para resolver tu caso rápidamente, podés escribirnos por WhatsApp con los datos de tu orden ya cargados o completar el formulario oficial de reclamos y devoluciones.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-              <a 
-                href={`https://wa.me/59899000000?text=${encodeURIComponent(`Hola Collectibles, quisiera consultar por una devolución/soporte para mi pedido #${supportOrderModal.order_number || supportOrderModal.id.slice(0, 8).toUpperCase()}`)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-lg transition-all"
-              >
-                <MessageCircle className="w-4 h-4" /> WhatsApp Soporte
-              </a>
-              <Link
-                to={`/contacto?asunto=Cambios y devoluciones&orden=${supportOrderModal.order_number || supportOrderModal.id.slice(0, 8).toUpperCase()}`}
-                onClick={() => setSupportOrderModal(null)}
-                className="flex items-center justify-center gap-2 px-4 py-3 bg-white/10 hover:bg-white/15 text-white font-bold text-xs rounded-xl border border-white/10 transition-all"
-              >
-                <FileText className="w-4 h-4 text-slate-300" /> Formulario Oficial
-              </Link>
-            </div>
-
-            <div className="border-t border-white/5 pt-3 text-center">
-              <Link 
-                to="/page/envios-devoluciones" 
-                target="_blank"
-                className="text-[11px] text-primary-400 hover:underline inline-flex items-center gap-1 font-medium"
-              >
-                Leer términos oficiales de devoluciones <ExternalLink className="w-3 h-3" />
-              </Link>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* MODAL UNIFICADO DE RESOLUCIÓN (CANCELACIÓN / DEVOLUCIÓN POR MODELO) */}
       {resolutionOrder && (
@@ -2019,9 +2125,107 @@ export default function CustomerPortal() {
           onClose={() => setResolutionOrder(null)}
           onSuccess={() => {
             loadOrders();
+            loadCustomerRequests();
           }}
+          onViewRequests={() => setActiveTab('requests')}
         />
       )}
+
+      {/* MODAL DE DETALLE DE DEVOLUCIÓN / REEMBOLSO */}
+      {refundDetailModalOrder && (() => {
+        const orderRefunds = refundDetailModalOrder.refunds || [];
+        const orderPayments = refundDetailModalOrder.payments || [];
+        const approvedPayment = orderPayments.find((p: any) => p.status === 'approved') || orderPayments[0];
+        const isRefundConfirmed = orderRefunds.some((r: any) => ['completed', 'approved', 'succeeded'].includes((r.status || '').toLowerCase()));
+        const latestRefund = orderRefunds[0];
+        const refundAmount = latestRefund?.amount || refundDetailModalOrder.total_amount;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+            <div className="bg-[#0e131f] border border-white/10 rounded-3xl max-w-md w-full p-6 shadow-2xl relative space-y-5">
+              <div className="flex items-center justify-between border-b border-white/10 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className={`p-2 rounded-xl ${isRefundConfirmed ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-white">
+                      {isRefundConfirmed ? 'Detalle de Reembolso Confirmado' : 'Situación de la Devolución'}
+                    </h3>
+                    <p className="text-xs text-slate-400 font-mono">
+                      {refundDetailModalOrder.order_number || `#${refundDetailModalOrder.id.slice(0, 8).toUpperCase()}`}
+                    </p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setRefundDetailModalOrder(null)} 
+                  className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="space-y-3 text-xs">
+                <div className={`p-3.5 rounded-2xl border ${
+                  isRefundConfirmed 
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-300' 
+                    : 'bg-amber-500/10 border-amber-500/20 text-amber-300'
+                }`}>
+                  <p className="font-bold flex items-center gap-1.5 mb-1">
+                    <ShieldCheck className="w-4 h-4" />
+                    {isRefundConfirmed ? 'Reembolso acreditado en pasarela' : 'Cancelación en conciliación'}
+                  </p>
+                  <p className="text-[11px] text-slate-300 leading-relaxed">
+                    {isRefundConfirmed 
+                      ? 'El reintegro del importe fue formalmente ejecutado a través de Mercado Pago hacia el medio original de compra.'
+                      : 'La orden figura cancelada con pago registrado. Se encuentra en proceso de validación y liquidación automática por parte de Mercado Pago.'}
+                  </p>
+                </div>
+
+                <div className="bg-white/5 border border-white/5 rounded-2xl p-4 space-y-2 text-slate-300">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Importe reintegrado:</span>
+                    <span className="font-mono font-bold text-emerald-400 text-sm">
+                      {formatCurrencyPrice(Number(refundAmount))}
+                    </span>
+                  </div>
+                  {latestRefund?.provider && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Pasarela procesadora:</span>
+                      <span className="font-semibold text-white uppercase">{latestRefund.provider}</span>
+                    </div>
+                  )}
+                  {latestRefund?.created_at && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Fecha de confirmación:</span>
+                      <span className="text-white">{new Date(latestRefund.created_at).toLocaleString('es-UY')}</span>
+                    </div>
+                  )}
+                  {approvedPayment?.transaction_external_id && (
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Operación Mercado Pago:</span>
+                      <span className="font-mono text-white font-bold">{approvedPayment.transaction_external_id}</span>
+                    </div>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  Dependiendo del banco emisor de tu tarjeta de crédito o débito, el dinero puede verse reflejado de inmediato o en el próximo cierre del resumen.
+                </p>
+              </div>
+
+              <div className="flex justify-end pt-2 border-t border-white/10">
+                <button
+                  onClick={() => setRefundDetailModalOrder(null)}
+                  className="px-5 py-2.5 bg-white/10 hover:bg-white/15 text-white font-bold text-xs rounded-xl transition"
+                >
+                  Entendido
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* MODAL DE DETALLE COMPLETO DEL PEDIDO */}
       {selectedDetailOrder && (

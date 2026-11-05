@@ -78,7 +78,39 @@ describe('Customer Orders Classification & Filtering Helper Logic', () => {
       };
     }
 
-    return { orderBadge, paymentBadge, cancellationNotice, hasApprovedPayment };
+    const canCancelUnpaid = !isOrderCancelled && !hasApprovedPayment && ['awaiting_payment', 'pending', 'expired'].includes(order.status);
+    const canRequestPaidResolution = !isOrderCancelled && hasApprovedPayment && !['shipped', 'delivered'].includes(order.status);
+
+    // Contextual Action Determination (Estilo Mercado Libre Autogestión)
+    const isFullyRefunded = isPaymentRefunded;
+    const isCancelledWithApprovedPayment = isOrderCancelled && hasApprovedPayment && !isFullyRefunded;
+
+    let contextualAction: 'track_request' | 'view_refund' | 'query_refund' | 'return_product' | 'cancel_order' | 'cancel_purchase' | 'none' = 'none';
+    if (order.hasActiveRequest) {
+      contextualAction = 'track_request';
+    } else if (isFullyRefunded) {
+      contextualAction = 'view_refund';
+    } else if (isCancelledWithApprovedPayment) {
+      contextualAction = 'query_refund';
+    } else if (['delivered', 'received'].includes(order.status)) {
+      contextualAction = 'return_product';
+    } else if (canCancelUnpaid) {
+      contextualAction = 'cancel_order';
+    } else if (canRequestPaidResolution) {
+      contextualAction = 'cancel_purchase';
+    }
+
+    return { 
+      orderBadge, 
+      paymentBadge, 
+      cancellationNotice, 
+      hasApprovedPayment,
+      canCancelUnpaid,
+      canRequestPaidResolution,
+      isFullyRefunded,
+      isCancelledWithApprovedPayment,
+      contextualAction
+    };
   }
 
   function matchesFilter(order: any, filter: string): boolean {
@@ -211,5 +243,88 @@ describe('Customer Orders Classification & Filtering Helper Logic', () => {
     const classified = classifyOrder(unpaidCancelledOrder);
     expect(classified.cancellationNotice.type).toBe('unpaid_cancelled');
     expect(classified.cancellationNotice.label).toBe('Cancelado (Sin cargo realizado)');
+  });
+
+  describe('Mercado Libre Style Contextual Post-Sale Actions Verification', () => {
+    it('1. COL-20261103-0020: cancelada y reembolsada ofrece exclusivamente "Ver Devolución"', () => {
+      const col0020 = {
+        id: '27874812-e8be-4536-860a-8f5e6d68ab37',
+        order_number: 'COL-20261103-0020',
+        total_amount: 2,
+        status: 'cancelada',
+        payment_status: 'refunded',
+        payments: [{ id: 'p1', status: 'approved' }],
+        refunds: [{ id: 'r1', amount: 2, status: 'approved' }]
+      };
+
+      const classified = classifyOrder(col0020);
+      expect(classified.contextualAction).toBe('view_refund');
+      expect(classified.isFullyRefunded).toBe(true);
+    });
+
+    it('2. COL-20261103-0014: impaga / expirada ofrece acción segura "Cancelar Pedido"', () => {
+      const col0014 = {
+        id: '55e1f242-1375-4d0f-a209-d009ecf0b8fa',
+        order_number: 'COL-20261103-0014',
+        total_amount: 2,
+        status: 'expired',
+        payment_status: 'expired',
+        payments: [],
+        refunds: []
+      };
+
+      const classified = classifyOrder(col0014);
+      expect(classified.canCancelUnpaid).toBe(true);
+      expect(classified.contextualAction).toBe('cancel_order');
+    });
+
+    it('3. COL-20261031-0002: cancelada con pago aprobado ofrece "Consultar Devolución" y no permite doble cancelación', () => {
+      const col0002 = {
+        id: '95c110c1-942c-48ef-9f9a-5e4eec6c1f00',
+        order_number: 'COL-20261031-0002',
+        total_amount: 2,
+        status: 'cancelada',
+        payment_status: 'approved',
+        payments: [{ id: 'p2', status: 'approved' }],
+        refunds: []
+      };
+
+      const classified = classifyOrder(col0002);
+      expect(classified.contextualAction).toBe('query_refund');
+      expect(classified.canCancelUnpaid).toBe(false);
+      expect(classified.canRequestPaidResolution).toBe(false);
+      expect(classified.isCancelledWithApprovedPayment).toBe(true);
+    });
+
+    it('4. Pedido entregado ofrece "Devolver Producto / Reclamo"', () => {
+      const deliveredOrder = {
+        id: 'ord-delivered',
+        order_number: 'COL-DELIVERED-001',
+        total_amount: 1500,
+        status: 'delivered',
+        payment_status: 'approved',
+        payments: [{ id: 'p1', status: 'approved' }],
+        refunds: []
+      };
+
+      const classified = classifyOrder(deliveredOrder);
+      expect(classified.contextualAction).toBe('return_product');
+    });
+
+    it('5. Pedido con solicitud activa en curso ofrece "Seguir Solicitud"', () => {
+      const orderInProgress = {
+        id: 'ord-in-progress',
+        order_number: 'COL-ACTIVE-REQ',
+        total_amount: 500,
+        status: 'paid',
+        payment_status: 'approved',
+        hasActiveRequest: true,
+        payments: [{ id: 'p1', status: 'approved' }],
+        refunds: []
+      };
+
+      const classified = classifyOrder(orderInProgress);
+      expect(classified.contextualAction).toBe('track_request');
+    });
   });
 });
