@@ -1,12 +1,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { verifyOptionalAuth } from "../_shared/auth.ts";
+import { getGuestTokenSecret, verifyOrderAccessToken } from "../_shared/order-token.ts";
 import { getHandyProviderConfig } from "../_shared/handy.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 interface CreateHandyPaymentRequest {
   order_id: string;
   customer_email?: string;
+  order_token?: string;
 }
 
 function getCustomerName(order: Record<string, any>) {
@@ -36,6 +38,7 @@ Deno.serve(async (req: Request) => {
     const body = (await req.json()) as CreateHandyPaymentRequest;
     const orderId = body.order_id;
     const customerEmail = (body.customer_email || "").trim().toLowerCase();
+    const orderToken = body.order_token;
 
     console.log("order_id:", orderId);
 
@@ -45,18 +48,15 @@ Deno.serve(async (req: Request) => {
 
     const handy = await getHandyProviderConfig(supabaseAdmin);
     
-    console.log("Handy provider raw:", handy.provider);
+    console.log("[Handy] Provider settings loaded; secrets are not logged.");
 
-    if (handy.provider.is_active !== true) {
+    if (handy.provider.is_active !== true ||
+        String(handy.provider.status || "").toLowerCase() !== "active" ||
+        handy.environment !== "production") {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "Handy no está activo",
-          details: {
-            provider_key: handy.provider.provider_key,
-            is_active: handy.provider.is_active,
-            config: handy.provider.config
-          }
+          error: "Handy no está habilitado para cobros reales en Uruguay."
         }),
         {
           status: 400,
@@ -92,16 +92,25 @@ Deno.serve(async (req: Request) => {
     if (order.payment_method !== "handy") {
       throw new Error("La orden no fue creada con el metodo de pago Handy.");
     }
+    if (String(order.currency || "").toUpperCase() !== "UYU") {
+      throw new Error("Handy Uruguay solo puede procesar ordenes en pesos uruguayos.");
+    }
+    const orderCountry = String(order.shipping_address?.country || "").trim().toLowerCase();
+    if (orderCountry && !["uy", "uruguay"].includes(orderCountry)) {
+      throw new Error("Handy solamente esta habilitado para compras de Uruguay.");
+    }
 
     if (order.customer_id) {
       if (!user || user.id !== order.customer_id) {
         throw new Error("No tienes permisos para iniciar el pago de esta orden.");
       }
-    } else if (
-      !customerEmail ||
-      customerEmail !== String(order.customer_email || "").toLowerCase()
-    ) {
-      throw new Error("No se pudo validar el email de la orden.");
+    } else {
+      const guestSecret = await getGuestTokenSecret(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "");
+      const validGuest = await verifyOrderAccessToken(orderToken, orderId, guestSecret);
+      if (!validGuest || !customerEmail ||
+          customerEmail !== String(order.customer_email || "").trim().toLowerCase()) {
+        throw new Error("No se pudo verificar la autorizacion de pago de esta orden.");
+      }
     }
 
     const { data: existingPayment } = await supabaseAdmin
@@ -149,31 +158,22 @@ Deno.serve(async (req: Request) => {
 
     const transactionExternalId = order.id;
     const safeOrderItems = Array.isArray(orderItems) ? orderItems : [];
-    const isTesting = handy.environment === "testing";
 
-    // Products mapping with strict numeric constraints
-    const products = safeOrderItems.map((item: any) => {
-      const quantity = Number(item.quantity || 1);
-      const unitPrice = Number(item.unit_price || 0);
-      let productAmount = unitPrice * quantity;
-
-      // Rule: Product.Amount debe ser decimal mayor a 0. Probar con 5.00 en testing si es menor
-      if (isTesting && productAmount < 5.00) {
-        productAmount = 5.00;
-      }
-
-      return {
-        Name: String(item.product?.title || "Producto").trim() || "Producto",
-        Quantity: quantity,
-        Amount: productAmount,
-        TaxedAmount: 0.0, // Use 0 for TaxedAmount to avoid errors
-      };
-    });
-
-    // Enforce that total matches the sum of product amounts in testing
-    const sumProductsAmount = products.reduce((sum, p) => sum + p.Amount, 0);
-    const finalTotalAmount = isTesting ? Math.max(amount, sumProductsAmount, 5.00) : amount;
-    const currencyCode = order.currency?.toUpperCase() === "USD" ? 840 : 858;
+    // Handy requires a consistent Cart.TotalAmount and product breakdown.
+    // Discounts and shipping mean raw unit prices may not sum to the charged amount.
+    const lineItems = safeOrderItems.map((item: any) => ({
+      Name: String(item.product?.title || "Producto").trim() || "Producto",
+      Quantity: Number(item.quantity),
+      Amount: Math.round(Number(item.unit_price) * Number(item.quantity) * 100) / 100,
+      TaxedAmount: 0,
+    }));
+    const lineSum = lineItems.reduce((sum: number, p: any) => sum + p.Amount, 0);
+    const products = lineItems.every((p: any) => Number.isFinite(p.Amount) && p.Amount > 0 && Number.isInteger(p.Quantity) && p.Quantity > 0)
+      && Math.abs(lineSum - amount) <= 0.01
+      ? lineItems
+      : [{ Name: `Pedido Collectibles ${order.order_number}`, Quantity: 1, Amount: amount, TaxedAmount: 0 }];
+    const finalTotalAmount = amount;
+    const currencyCode = 858;
 
     // Helper function to extract numeric invoice number within 32-bit signed int limit (< 2,147,483,647)
     function resolveHandyInvoiceNumber(order: any): number {
@@ -215,7 +215,8 @@ Deno.serve(async (req: Request) => {
         return val;
       }
       
-      return 68000000 + Math.floor(Math.random() * 900000);
+      // Invoice numbers are transaction identifiers: never use a random fallback.
+      throw new Error("HANDY_INVALID_INVOICE_NUMBER: falta identificador estable.");
     }
 
     const invoiceNumber = resolveHandyInvoiceNumber(order);
@@ -262,8 +263,15 @@ Deno.serve(async (req: Request) => {
       ? handy.defaultImageUrl.trim()
       : undefined;
 
-    // CallbackUrl must be exactly:
-    const callbackUrl = "https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/handy-webhook";
+    // Handy sends asynchronous POST callbacks to the specified URL.
+    // Use a separate high-entropy webhook secret, not the merchant payment key.
+    const webhookSecret = (Deno.env.get("HANDY_WEBHOOK_SECRET") || "").trim();
+    if (webhookSecret.length < 24) {
+      throw new Error("HANDY_WEBHOOK_SECRET no configurado de forma segura.");
+    }
+    const callback = new URL(`${Deno.env.get("SUPABASE_URL")}/functions/v1/handy-webhook`);
+    callback.searchParams.set("token", webhookSecret);
+    const callbackUrl = callback.toString();
 
     const requestPayload = {
       Cart: {
@@ -280,13 +288,6 @@ Deno.serve(async (req: Request) => {
         SiteUrl: returnSuccessUrl,
       },
       CallbackURL: callbackUrl,
-      CallbackUrl: callbackUrl, // Send both casings to be absolutely foolproof
-      RedirectUrl: returnSuccessUrl,
-      RedirectURL: returnSuccessUrl,
-      ReturnUrl: returnSuccessUrl,
-      ReturnURL: returnSuccessUrl,
-      SuccessUrl: returnSuccessUrl,
-      SuccessURL: returnSuccessUrl,
       ResponseType: "Json",
       Customer: {
         Name: getCustomerName(order),
@@ -295,7 +296,7 @@ Deno.serve(async (req: Request) => {
       },
     };
 
-    console.log("Handy payload:", JSON.stringify(requestPayload, null, 2));
+    console.log("[Handy] Creating payment link", { orderId, currency: "UYU", invoiceNumber });
 
     const insertPayload = {
       order_id: orderId,
@@ -304,7 +305,7 @@ Deno.serve(async (req: Request) => {
       amount: finalTotalAmount,
       currency: order.currency || "UYU",
       status: "pending",
-      raw_request: requestPayload,
+      raw_request: { ...requestPayload, CallbackURL: "[REDACTED]" },
     };
 
     const { data: paymentRow, error: paymentInsertError } = await supabaseAdmin
@@ -331,8 +332,7 @@ Deno.serve(async (req: Request) => {
     });
 
     const handyText = await response.text();
-    console.error("Handy status:", response.status);
-    console.error("Handy response:", handyText);
+    console.log("[Handy] Provider HTTP status:", response.status);
 
     let responseBody: Record<string, any> = {};
     try {
@@ -362,12 +362,7 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "Handy devolvió 500",
-          details: {
-            handyStatus: response.status,
-            handyResponse: handyText,
-            sentPayload: requestPayload,
-          },
+          error: "No fue posible generar el pago Handy. Intentá más tarde o elegí otro medio.",
         }),
         {
           status: 200,
@@ -379,8 +374,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const paymentUrl = String(responseBody.url || responseBody.paymentUrl || "");
-    if (!paymentUrl) {
+    const paymentUrl = String(responseBody.url || "");
+    if (!paymentUrl || !paymentUrl.startsWith("https://")) {
       await supabaseAdmin
         .from("payments")
         .update({

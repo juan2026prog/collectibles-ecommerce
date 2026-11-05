@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, handleOptions } from "../_shared/cors.ts";
 import { verifyAdmin } from "../_shared/auth.ts";
 import { syncProductsToCloudflareD1 } from "../_shared/cloudflareCatalogSync.ts";
+import { getHandyProviderConfig, isHandyCardPayment, isHandyFullReversal, parseHandyRefundResponse } from "../_shared/handy.ts";
 
 Deno.serve(async (req: Request) => {
   const options = handleOptions(req);
@@ -31,6 +32,11 @@ Deno.serve(async (req: Request) => {
   let refundDetails: any = null;
   let gatewayRefundId: string | null = null;
   let isManualRefundRequired = false;
+  let handyDeleteAttempted = false;
+  let handyReversalContext: null | {
+    transactionExternalId: string; idempotencyKey: string; operationType: string;
+    bypassLiquidationCheck: boolean;
+  } = null;
 
   try {
     // SECURITY: Only admins can process refunds
@@ -38,6 +44,10 @@ Deno.serve(async (req: Request) => {
     const requestedBy = (user?.id && user.id !== 'test_bypass' && user.id !== 'service_role') ? user.id : null;
 
     const payload = await req.json();
+    const handyWebhookSettlement = payload.handyWebhookSettlement === true;
+    if (handyWebhookSettlement && user?.id !== 'service_role') {
+      throw new Error("La conciliación Handy requiere autenticación de servicio.");
+    }
     orderId = payload.orderId;
     suborderId = payload.suborderId;
     orderItemId = payload.orderItemId || null;
@@ -137,6 +147,16 @@ Deno.serve(async (req: Request) => {
 
     if (subordersErr || !suborders || suborders.length === 0) {
       throw new Error("No se encontraron subórdenes para esta orden.");
+    }
+
+    // Vendor orders often enter the refund form with their sole suborder selected.
+    // Normalize to the whole payment ONLY when that single suborder is the entire order.
+    // This must never turn a partial vendor refund on a mixed order into a full refund.
+    if (order.payment_method === 'handy' && suborderId && !orderItemId &&
+        suborders.length === 1 && suborders[0].id === suborderId &&
+        (amount === null || amount === undefined ||
+         Math.abs(Number(amount) - Number(order.total_amount)) < 0.01)) {
+      suborderId = null;
     }
 
     // 3. Fetch Payments
@@ -280,7 +300,56 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Adquisición atómica del lock y reserva transaccional de saldo en PostgreSQL usando EXACTAMENTE el importe validado
+    // Handy v2 supports ONE full reversal of the original payment, not per-item refunds.
+    // Never submit a full payment refund for a selected vendor/line of a mixed order.
+    if (order.payment_method === 'handy') {
+      if (!isHandyFullReversal(refundAmount, Number(order.total_amount), suborderId, orderItemId)) {
+        throw new Error("HANDY_FULL_REFUND_ONLY: Handy permite devolver la transacción completa una sola vez. No se ejecutó ninguna devolución parcial.");
+      }
+      if (!payment || payment.provider !== 'handy' || payment.status !== 'approved' ||
+          String(payment.currency).toUpperCase() !== 'UYU' || String(order.currency).toUpperCase() !== 'UYU' ||
+          Math.abs(Number(payment.amount) - Number(order.total_amount)) >= 0.01) {
+        throw new Error("HANDY_PAYMENT_NOT_VERIFIED: no existe un pago Handy aprobado y conciliado para esta orden en UYU.");
+      }
+      if (!isHandyCardPayment(payment.raw_webhook)) {
+        throw new Error("HANDY_CARD_ONLY: el medio de pago no acredita ser una tarjeta elegible para devolución automática.");
+      }
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(payment.transaction_external_id || ''))) {
+        throw new Error("HANDY_TRANSACTION_ID_REQUIRED: falta TransactionExternalId válido.");
+      }
+      // A once-only reversal cannot be reconciled against any earlier financial reversal.
+      const { data: priorHandyRefunds, error: priorHandyErr } = await supabaseAdmin.from('refunds')
+        .select('id,status').eq('order_id', orderId).eq('provider', 'handy');
+      if (priorHandyErr) throw priorHandyErr;
+      if (!handyWebhookSettlement && (priorHandyRefunds || []).some((r: any) =>
+        ['completed','partial','reconciliation_required','processing','manual_refund_required'].includes(r.status))) {
+        throw new Error("HANDY_REVERSAL_ALREADY_REQUESTED: la venta tiene una devolución previa en curso o por conciliar.");
+      }
+    }
+
+    if (handyWebhookSettlement) {
+      // Only the authenticated Handy webhook may confirm a previously requested reversal.
+      if (order.payment_method !== 'handy' || !payload.handyRefundId) {
+        throw new Error("HANDY_SETTLEMENT_INVALID_REQUEST");
+      }
+      const { data: settlement, error: settlementErr } = await supabaseAdmin.from('refunds')
+        .select('id,order_id,provider,amount,idempotency_key,status,payment_id,suborder_id,order_item_id,api_response')
+        .eq('id', payload.handyRefundId).eq('order_id', orderId).eq('provider', 'handy')
+        .in('status',['processing','reconciliation_required']).single();
+      if (settlementErr || !settlement || settlement.idempotency_key !== idempotencyKey ||
+          settlement.payment_id !== payment.id || settlement.suborder_id || settlement.order_item_id ||
+          Math.abs(Number(settlement.amount) - refundAmount) >= 0.01 ||
+          settlement.api_response?.handy_refund_requested !== true) {
+        throw new Error("HANDY_SETTLEMENT_NOT_AUTHORIZED: no existe una solicitud de devolución válida.");
+      }
+      processingRefundId = settlement.id;
+      handyReversalContext = {
+        transactionExternalId: payment.transaction_external_id,
+        idempotencyKey,
+        operationType,
+        bypassLiquidationCheck,
+      };
+    } else {
     const { data: lockResult, error: lockRpcErr } = await supabaseAdmin.rpc("acquire_refund_lock_atomic", {
       p_order_id: orderId,
       p_suborder_id: suborderId || null,
@@ -315,6 +384,8 @@ Deno.serve(async (req: Request) => {
     }
 
     processingRefundId = lockResult.lock_id;
+
+    }
 
     // 5b. Control estricto de reembolsos acumulados sobre la orden
     const { data: previousRefunds } = await supabaseAdmin
@@ -472,7 +543,7 @@ Deno.serve(async (req: Request) => {
 
       if (hasLabelCreatedShipment) {
         // Set shipment status to label_created
-        if (orderShipments) {
+        if (orderShipments && (order.payment_method !== 'handy' || handyWebhookSettlement)) {
           for (const ship of orderShipments) {
             if (['documented', 'ready_to_ship', 'label_created'].includes(ship.shipping_status)) {
               await supabaseAdmin
@@ -515,7 +586,7 @@ Deno.serve(async (req: Request) => {
           }
         }
 
-        if (canCancelShipments) {
+        if (canCancelShipments && (order.payment_method !== 'handy' || handyWebhookSettlement)) {
           // Solo cancelar el shipment si toda la suborden/orden o todos los ítems del envío son cancelados
           for (const ship of orderShipments) {
             await supabaseAdmin
@@ -655,7 +726,92 @@ Deno.serve(async (req: Request) => {
         throw new Error("Credenciales de PayPal incompletas o ID de pago no asignado.");
       }
     } 
-    else if (order.payment_method === 'handy' || order.payment_method === 'dlocalgo' || order.payment_method === 'dlocal') {
+    else if (order.payment_method === 'handy') {
+      if (handyWebhookSettlement) {
+        // Success was authenticated and correlated by handy-webhook, not the DELETE acknowledgement.
+        refundSuccess = true;
+        gatewayRefundId = payment.transaction_external_id;
+        refundDetails = {
+          gateway: 'handy', confirmed_by_webhook: true, handy_refund_requested: true,
+          transaction_external_id: payment.transaction_external_id,
+          idempotency_key: idempotencyKey,
+        };
+      } else {
+        const handy = await getHandyProviderConfig(supabaseAdmin);
+        if (handy.provider.is_active !== true || handy.provider.status !== 'active' ||
+            handy.environment !== 'production' || !handy.merchantSecretKey) {
+          throw new Error("HANDY_NOT_READY: producción y credenciales Handy deben estar habilitadas.");
+        }
+        const callbackSecret = (Deno.env.get('HANDY_WEBHOOK_SECRET') || '').trim();
+        if (callbackSecret.length < 24) throw new Error("HANDY_WEBHOOK_SECRET no configurado.");
+        const callbackUrl = new URL(`${supabaseUrl}/functions/v1/handy-webhook`);
+        callbackUrl.searchParams.set('token', callbackSecret);
+        // Persist an intent BEFORE sending any external request; callback can arrive before the DELETE response.
+        handyReversalContext = {
+          transactionExternalId: payment.transaction_external_id,
+          idempotencyKey,
+          operationType,
+          bypassLiquidationCheck,
+        };
+        const { error: intentErr } = await supabaseAdmin.from('refunds').update({
+          payment_id: payment.id,
+          api_response: {
+            idempotency_key: idempotencyKey,
+            handy_refund_requested: true,
+            transaction_external_id: payment.transaction_external_id,
+            operation_type: operationType,
+            bypass_liquidation_check: bypassLiquidationCheck === true,
+            initiated_at: new Date().toISOString(),
+          },
+        }).eq('id', processingRefundId).eq('status','processing');
+        if (intentErr) throw intentErr;
+
+        // Handy only accepts a whole-sale reversal. NEVER blindly retry a DELETE on timeout.
+        let gatewayReply: any = null;
+        let accepted = false;
+        let requestProblem: string | null = null;
+        try {
+          handyDeleteAttempted = true; // Network/DB failures from here are outcome-unknown.
+          const res = await fetch(`${handy.baseUrl}/payments`, {
+            method: 'DELETE',
+            headers: { 'merchant-secret-key': handy.merchantSecretKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              TransactionExternalId: payment.transaction_external_id,
+              CallbackUrl: callbackUrl.toString(),
+            }),
+            signal: AbortSignal.timeout(15000),
+          });
+          gatewayReply = await res.json().catch(() => null);
+          accepted = res.ok && parseHandyRefundResponse(gatewayReply,payment.transaction_external_id).accepted;
+          if (!accepted) requestProblem = 'Handy no confirmó el inicio de la devolución.';
+        } catch {
+          requestProblem = 'Respuesta de Handy incierta: requiere conciliación; no se reintentará.';
+        }
+        const { error: updateErr } = await supabaseAdmin.from('refunds').update({
+          status: accepted ? 'processing' : 'reconciliation_required',
+          api_response: {
+            idempotency_key: idempotencyKey,
+            handy_refund_requested: true,
+            handy_request_accepted: accepted,
+            transaction_external_id: payment.transaction_external_id,
+            operation_type: operationType,
+            bypass_liquidation_check: bypassLiquidationCheck === true,
+            initiated_at: new Date().toISOString(),
+            ...(requestProblem ? { reconciliation_note: requestProblem } : {}),
+          },
+        }).eq('id', processingRefundId).in('status',['processing','reconciliation_required']);
+        if (updateErr) throw updateErr;
+        // The DELETE only STARTS a reversal; funds are not returned until Success:true webhook.
+        return new Response(JSON.stringify({
+          success: true,
+          refundSuccess: false,
+          status: accepted ? 'processing' : 'reconciliation_required',
+          pendingGatewayConfirmation: true,
+          message: accepted ? 'Handy inició la devolución; esperando confirmación por webhook.' : requestProblem,
+        }), { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+    else if (order.payment_method === 'dlocalgo' || order.payment_method === 'dlocal') {
       console.warn(`[Refund] Payment method "${order.payment_method}" requires manual refund.`);
       isManualRefundRequired = true;
       refundSuccess = false;
@@ -1346,7 +1502,8 @@ Deno.serve(async (req: Request) => {
     // En su lugar, registrar como 'unknown_gateway_reversal_requires_reconciliation'
     if (processingRefundId) {
       try {
-        const nextLockStatus = refundSuccess ? "reconciliation_required" : "failed";
+        const needsReconciliation = refundSuccess || handyDeleteAttempted || !!handyReversalContext;
+        const nextLockStatus = needsReconciliation ? "reconciliation_required" : "failed";
         await supabaseAdmin
           .from("refunds")
           .update({
@@ -1355,7 +1512,14 @@ Deno.serve(async (req: Request) => {
               error: error.message,
               external_refund_success: refundSuccess,
               gateway_refund_id: gatewayRefundId,
-              requires_manual_reconciliation: refundSuccess,
+              requires_manual_reconciliation: needsReconciliation,
+              ...(handyReversalContext ? {
+                handy_refund_requested: true,
+                transaction_external_id: handyReversalContext.transactionExternalId,
+                idempotency_key: handyReversalContext.idempotencyKey,
+                operation_type: handyReversalContext.operationType,
+                bypass_liquidation_check: handyReversalContext.bypassLiquidationCheck,
+              } : {}),
               failed_at: new Date().toISOString()
             }
           })

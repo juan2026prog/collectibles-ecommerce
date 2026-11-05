@@ -20,13 +20,16 @@ export function getFirstValue(payload: Record<string, any>, paths: string[]) {
 }
 
 export function mapHandyPaymentStatus(status: string | undefined) {
-  const normalized = (status || "").trim().toUpperCase();
-  if (["APPROVED", "AUTHORIZED", "PAID", "SUCCESS", "COMPLETED", "FINALIZADO", "FINALIZED", "COMPLETADO", "2"].includes(normalized)) return "approved";
-  if (["REJECTED", "DECLINED", "DENIED", "3"].includes(normalized)) return "rejected";
+  // Handy Boton de Pago v2: PurchaseData.Status 0=iniciado, 1=exitoso,
+  // 2=fallido, 3=pendiente. Never treat status 2 as approved.
+  const normalized = String(status ?? "").trim().toUpperCase();
+  if (["1", "APPROVED", "AUTHORIZED", "PAID", "SUCCESS", "COMPLETED", "FINALIZADO", "FINALIZED", "COMPLETADO"].includes(normalized)) return "approved";
+  if (["2", "FAILED", "FAILURE", "ERROR"].includes(normalized)) return "failed";
+  if (["0", "3", "PENDING", "CREATED", "INITIATED", "IN_PROCESS", "PROCESSING"].includes(normalized)) return "pending";
+  if (["REJECTED", "DECLINED", "DENIED"].includes(normalized)) return "rejected";
   if (["CANCELLED", "CANCELED", "VOIDED", "ABANDONED", "4"].includes(normalized)) return "cancelled";
   if (["REFUNDED", "REVERSED", "5"].includes(normalized)) return "refunded";
-  if (["PENDING", "CREATED", "IN_PROCESS", "PROCESSING", "1"].includes(normalized)) return "pending";
-  return "failed";
+  return "unknown"; // Unknown provider state must never trigger order confirmation.
 }
 
 export function extractHandyWebhookData(payload: Record<string, any>) {
@@ -105,4 +108,34 @@ export async function getHandyProviderConfig(supabaseAdmin: any) {
     defaultImageUrl: String(config.default_image_url || ""),
     checkoutText: String(config.checkout_text || "Pagar con Handy"),
   };
+}
+
+
+/** Handy Botón de Pago V2: a reversal is full-sale, card-only and may be attempted once. */
+export function parseHandyRefundResponse(payload: any, transactionExternalId: string) {
+  const id = String(payload?.TransactionExternalId ?? "");
+  return {
+    accepted: payload?.IsSuccess === true && Number(payload?.StatusCode) === 200
+      && id === transactionExternalId,
+    statusCode: Number(payload?.StatusCode),
+    matchesTransaction: id === transactionExternalId,
+  };
+}
+
+export function isHandyCardPayment(webhookPayload: any) {
+  const instrument = webhookPayload?.InstrumentData ?? webhookPayload?.instrumentData;
+  if (!instrument || instrument.NotACard !== false) return false;
+  const issuer = String(instrument.IssuerName ?? "").trim().toUpperCase();
+  const name = String(instrument.Name ?? "").trim();
+  // Handy v2 also uses NotACard=false for bank transfers.
+  if (["ITAÚ", "ITAU", "BROU", "SCOTIABANK", "BBVA", "BANDES"].includes(issuer)) return false;
+  const knownCardIssuer = /^(VISA|MASTERCARD|MASTER CARD|OCA|AMEX|AMERICAN EXPRESS|CABAL|PASSCARD|ANDA|CLUB DEL ESTE)/.test(issuer);
+  const maskedCardNumber = /[0-9]{4}[*Xx]{2,}/.test(name);
+  return knownCardIssuer || maskedCardNumber;
+}
+
+export function isHandyFullReversal(amount: number, orderTotal: number, suborderId: string | null, orderItemId: string | null) {
+  return !suborderId && !orderItemId && Number.isFinite(amount)
+    && Number.isFinite(orderTotal) && amount > 0
+    && Math.abs(amount - orderTotal) < 0.01;
 }
