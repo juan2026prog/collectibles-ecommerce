@@ -19,13 +19,28 @@ export function getFirstValue(payload: Record<string, any>, paths: string[]) {
   return undefined;
 }
 
-export function mapHandyPaymentStatus(status: string | undefined) {
-  const normalized = (status || "").trim().toUpperCase();
-  if (["APPROVED", "AUTHORIZED", "PAID", "SUCCESS", "COMPLETED", "FINALIZADO", "FINALIZED", "COMPLETADO", "2"].includes(normalized)) return "approved";
-  if (["REJECTED", "DECLINED", "DENIED", "3"].includes(normalized)) return "rejected";
-  if (["CANCELLED", "CANCELED", "VOIDED", "ABANDONED", "4"].includes(normalized)) return "cancelled";
-  if (["REFUNDED", "REVERSED", "5"].includes(normalized)) return "refunded";
-  if (["PENDING", "CREATED", "IN_PROCESS", "PROCESSING", "1"].includes(normalized)) return "pending";
+export function mapHandyPaymentStatus(status: string | number | undefined) {
+  const normalized = String(status ?? "").trim().toUpperCase();
+  // Handy Botón de Pago v2.0 Official Status Enum:
+  // 0 = Pago iniciado / In process
+  // 1 = Pago exitoso / Approved
+  // 2 = Pago fallido / Rejected
+  // 3 = Pendiente de pago / Pending
+  if (normalized === "1" || ["APPROVED", "AUTHORIZED", "PAID", "SUCCESS", "COMPLETED", "FINALIZADO", "FINALIZED", "COMPLETADO"].includes(normalized)) {
+    return "approved";
+  }
+  if (normalized === "2" || ["REJECTED", "DECLINED", "DENIED", "FAILED"].includes(normalized)) {
+    return "rejected";
+  }
+  if (normalized === "3" || normalized === "0" || ["PENDING", "CREATED", "IN_PROCESS", "PROCESSING", "INITIATED"].includes(normalized)) {
+    return "pending";
+  }
+  if (["CANCELLED", "CANCELED", "VOIDED", "ABANDONED", "4"].includes(normalized)) {
+    return "cancelled";
+  }
+  if (["REFUNDED", "REVERSED", "5"].includes(normalized)) {
+    return "refunded";
+  }
   return "failed";
 }
 
@@ -35,6 +50,8 @@ export function extractHandyWebhookData(payload: Record<string, any>) {
     "transactionExternalId",
     "Cart.TransactionExternalId",
     "cart.transactionExternalId",
+    "PurchaseData.TransactionExternalId",
+    "purchaseData.transactionExternalId",
     "Data.TransactionExternalId",
     "data.transactionExternalId",
   ]) || "");
@@ -46,26 +63,42 @@ export function extractHandyWebhookData(payload: Record<string, any>) {
     "paymentId",
     "Id",
     "id",
+    "PurchaseData.Id",
+    "purchaseData.id",
+    "PurchaseData.TransactionId",
+    "purchaseData.transactionId",
     "Data.TransactionId",
     "data.transactionId",
   ]) || "");
 
-  const status = String(getFirstValue(payload, [
-    "Status",
-    "status",
-    "PaymentStatus",
-    "paymentStatus",
-    "Data.Status",
-    "data.status",
-    "PurchaseData.Status",
-    "purchaseData.status",
-  ]) || "");
+  // Note: Check for refund payload (Section 6.1.2) where Success=true and Message contains refund
+  const isRefundNotification = Boolean(
+    payload.Success === true &&
+    typeof payload.Message === "string" &&
+    payload.Message.toLowerCase().includes("devoluci")
+  );
+
+  const rawStatus = isRefundNotification
+    ? "REFUNDED"
+    : getFirstValue(payload, [
+        "PurchaseData.Status",
+        "purchaseData.status",
+        "Status",
+        "status",
+        "PaymentStatus",
+        "paymentStatus",
+        "Data.Status",
+        "data.status",
+      ]);
+
+  const statusStr = String(rawStatus ?? "");
 
   return {
     transactionExternalId,
     providerTransactionId,
-    status,
-    mappedStatus: mapHandyPaymentStatus(status),
+    status: statusStr,
+    rawStatus: statusStr,
+    mappedStatus: mapHandyPaymentStatus(rawStatus),
   };
 }
 

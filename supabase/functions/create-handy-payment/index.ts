@@ -149,30 +149,23 @@ Deno.serve(async (req: Request) => {
 
     const transactionExternalId = order.id;
     const safeOrderItems = Array.isArray(orderItems) ? orderItems : [];
-    const isTesting = handy.environment === "testing";
 
-    // Products mapping with strict numeric constraints
+    // Products mapping with exact financial preservation of order items
     const products = safeOrderItems.map((item: any) => {
       const quantity = Number(item.quantity || 1);
       const unitPrice = Number(item.unit_price || 0);
-      let productAmount = unitPrice * quantity;
-
-      // Rule: Product.Amount debe ser decimal mayor a 0. Probar con 5.00 en testing si es menor
-      if (isTesting && productAmount < 5.00) {
-        productAmount = 5.00;
-      }
+      const productAmount = unitPrice * quantity;
 
       return {
         Name: String(item.product?.title || "Producto").trim() || "Producto",
         Quantity: quantity,
         Amount: productAmount,
-        TaxedAmount: 0.0, // Use 0 for TaxedAmount to avoid errors
+        TaxedAmount: 0.0,
       };
     });
 
-    // Enforce that total matches the sum of product amounts in testing
-    const sumProductsAmount = products.reduce((sum, p) => sum + p.Amount, 0);
-    const finalTotalAmount = isTesting ? Math.max(amount, sumProductsAmount, 5.00) : amount;
+    // In Handy v2 Botón de Pago: TotalAmount must strictly match the real order amount without artificial test tampering
+    const finalTotalAmount = amount;
     const currencyCode = order.currency?.toUpperCase() === "USD" ? 840 : 858;
 
     // Helper function to extract numeric invoice number within 32-bit signed int limit (< 2,147,483,647)
@@ -362,15 +355,14 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "Handy devolvió 500",
+          error: `Error al crear pago en Handy (HTTP ${response.status})`,
           details: {
             handyStatus: response.status,
             handyResponse: handyText,
-            sentPayload: requestPayload,
           },
         }),
         {
-          status: 200,
+          status: response.status >= 400 && response.status < 500 ? response.status : 502,
           headers: {
             ...getCorsHeaders(req),
             "Content-Type": "application/json",
@@ -489,7 +481,7 @@ Deno.serve(async (req: Request) => {
         error: error.message || "Error inesperado en create-handy-payment",
       }),
       {
-        status: 200,
+        status: 500,
         headers: {
           ...getCorsHeaders(req),
           "Content-Type": "application/json",

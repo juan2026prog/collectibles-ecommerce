@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { extractHandyWebhookData } from "../_shared/handy.ts";
+import { extractHandyWebhookData, getFirstValue } from "../_shared/handy.ts";
 import { finalizeOrderIfNeeded } from "../_shared/order-payments.ts";
 
 const responseHeaders = {
@@ -70,13 +70,21 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Idempotency: If payment was already approved and processed, acknowledge immediately
-    if (payment.status === "approved" && webhookData.mappedStatus === "approved") {
-      console.log(`[Handy Webhook] Payment ${payment.id} already approved. Skipping redundant finalization.`);
-      return new Response(JSON.stringify({ received: true, already_processed: true }), {
-        status: 200,
-        headers: responseHeaders,
-      });
+    // Idempotency: If payment was already approved, do not revert to pending/rejected from a stale/out-of-order notification
+    if (payment.status === "approved") {
+      if (webhookData.mappedStatus === "approved") {
+        console.log(`[Handy Webhook] Payment ${payment.id} already approved. Skipping redundant finalization.`);
+        return new Response(JSON.stringify({ received: true, already_processed: true }), {
+          status: 200,
+          headers: responseHeaders,
+        });
+      } else if (webhookData.mappedStatus !== "refunded") {
+        console.warn(`[Handy Webhook] Payment ${payment.id} is already APPROVED. Ignoring stale status '${webhookData.mappedStatus}'.`);
+        return new Response(JSON.stringify({ received: true, ignored_stale_status: true }), {
+          status: 200,
+          headers: responseHeaders,
+        });
+      }
     }
 
     // STRICT FINANCIAL INTEGRITY VALIDATION: Verify Amount and Currency against order
@@ -177,8 +185,8 @@ Deno.serve(async (req: Request) => {
         .eq("id", attempt.id);
     }
 
-    // Insert payment_events (Append-Only)
-    await supabaseAdmin.from("payment_events").insert({
+    // Insert payment_events (Append-Only) with idempotency on provider_event_id + occurred_at
+    const { error: eventInsertError } = await supabaseAdmin.from("payment_events").insert({
       order_id: payment.order_id,
       payment_attempt_id: attempt?.id,
       provider: "handy",
@@ -191,6 +199,9 @@ Deno.serve(async (req: Request) => {
       processing_result: `Webhook de Handy procesado: ${webhookData.mappedStatus}`,
       occurred_at: nowStr,
     });
+    if (eventInsertError) {
+      console.warn("[Handy Webhook] Note on payment_event insert:", eventInsertError.message);
+    }
 
     if (webhookData.mappedStatus === "approved") {
       await finalizeOrderIfNeeded(
@@ -271,8 +282,8 @@ Deno.serve(async (req: Request) => {
     });
   } catch (error: any) {
     console.error("handy-webhook error:", error);
-    return new Response(JSON.stringify({ received: true, error: "Internal webhook error" }), {
-      status: 200,
+    return new Response(JSON.stringify({ received: false, error: error?.message || "Internal webhook error" }), {
+      status: 500,
       headers: responseHeaders,
     });
   }

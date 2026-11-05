@@ -40,6 +40,13 @@ type HandyProviderRecord = {
     response_type: string;
     default_image_url: string;
     checkout_text: string;
+    last_connectivity_check?: {
+      success: boolean;
+      status_code?: number;
+      environment?: string;
+      checked_at?: string;
+      message?: string;
+    };
   };
 };
 
@@ -981,9 +988,17 @@ export default function AdminSettings() {
       const { data, error } = await supabase.functions.invoke('handy-test-connection');
       if (error) throw error;
       if (data?.success) {
-        toast.success(data.message || 'Conexion Handy OK');
+        toast.success(data.message || 'Conexión Handy OK');
       } else {
-        throw new Error(data?.error || data?.message || 'No se pudo validar Handy');
+        toast.error(data?.error || data?.message || 'No se pudo validar Handy');
+      }
+      const { data: updatedHandy } = await supabase
+        .from('payment_providers')
+        .select('*')
+        .eq('provider_key', 'handy')
+        .maybeSingle();
+      if (updatedHandy) {
+        setHandyProvider(normalizeHandyProvider(updatedHandy));
       }
     } catch (error: any) {
       toast.error(error.message || 'Falló la prueba de Handy');
@@ -1895,8 +1910,24 @@ export default function AdminSettings() {
                     </div>
 
                     <div className="rounded-xl border border-gray-200 p-4 bg-gray-50">
-                      <p className="text-[11px] font-black text-gray-500 uppercase tracking-widest mb-3">6. Prueba de conexion</p>
-                      <p className="text-xs text-gray-500 mb-4">La prueba llama a <span className="font-mono">POST /payments</span> con payload vacio para validar conectividad y autenticacion basica sin exponer secretos al frontend.</p>
+                      <p className="text-[11px] font-black text-gray-500 uppercase tracking-widest mb-3">6. Prueba de conexión real & Diagnóstico</p>
+                      <p className="text-xs text-gray-500 mb-4">La prueba realiza una verificación de transporte y autenticación real contra la API de Handy (<span className="font-mono">{handyProvider.environment === 'production' ? handyProvider.config.production_base_url : handyProvider.config.testing_base_url}</span>) sin generar cargos ni órdenes comerciales.</p>
+
+                      {handyProvider.config.last_connectivity_check && (
+                        <div className={`p-3 rounded-lg border mb-4 text-xs ${handyProvider.config.last_connectivity_check.success ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-red-50 border-red-200 text-red-800"}`}>
+                          <div className="flex items-center justify-between font-bold mb-1">
+                            <span>Estado de conectividad: {handyProvider.config.last_connectivity_check.success ? "CERTIFICADA" : "FALLIDA"}</span>
+                            <span className="font-mono text-[10px] text-gray-500">
+                              {handyProvider.config.last_connectivity_check.checked_at ? new Date(handyProvider.config.last_connectivity_check.checked_at).toLocaleString() : ""}
+                            </span>
+                          </div>
+                          <p>{handyProvider.config.last_connectivity_check.message}</p>
+                          {handyProvider.config.last_connectivity_check.status_code && (
+                            <p className="mt-1 font-mono text-[10px]">HTTP Status: {handyProvider.config.last_connectivity_check.status_code}</p>
+                          )}
+                        </div>
+                      )}
+
                       <div className="flex flex-wrap gap-3">
                         <button onClick={() => saveHandyProvider()} className="btn-primary flex items-center gap-2">
                           <Save className="w-4 h-4" /> Guardar configuracion
