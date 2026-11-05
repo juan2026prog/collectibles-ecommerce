@@ -542,7 +542,7 @@ Deno.serve(async (req: Request) => {
       if (!mpAccessToken) {
         throw new Error("NOT_CONFIGURED: Credenciales de Mercado Pago no configuradas para procesar el reembolso.");
       }
-      let actualPaymentId = order.payment_id;
+      let actualPaymentId = payment?.transaction_external_id || order.payment_id;
       if (!actualPaymentId || isNaN(Number(actualPaymentId))) {
         // Search payment by reference
         try {
@@ -561,33 +561,59 @@ Deno.serve(async (req: Request) => {
       }
 
       if (actualPaymentId && !isNaN(Number(actualPaymentId))) {
+        // 1. Verificación previa con Mercado Pago del estado y pagos previos
         try {
-          const bodyPayload: Record<string, any> = {};
-          if (suborderId || amount) {
-            bodyPayload.amount = refundAmount;
-          }
-          const resp = await fetch(`https://api.mercadopago.com/v1/payments/${actualPaymentId}/refunds`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${mpAccessToken}`,
-              'Content-Type': 'application/json'
-            },
-            body: Object.keys(bodyPayload).length > 0 ? JSON.stringify(bodyPayload) : undefined
+          const checkRes = await fetch(`https://api.mercadopago.com/v1/payments/${actualPaymentId}`, {
+            headers: { "Authorization": `Bearer ${mpAccessToken}` }
           });
-          const mpData = await resp.json();
-          
-          if (!resp.ok) {
-            console.error("Error Mercado Pago Refund API:", mpData);
-            refundDetails = mpData;
-            throw new Error(mpData.message || 'Error en la API de Mercado Pago');
-          } else {
-            refundSuccess = true;
-            gatewayRefundId = mpData.id?.toString() || null;
-            refundDetails = mpData;
+          const checkData = await checkRes.json();
+          if (checkRes.ok && checkData) {
+            if (checkData.status === 'refunded') {
+              console.log(`[Refund] El pago ${actualPaymentId} ya fue reembolsado en Mercado Pago previamente.`);
+              refundSuccess = true;
+              gatewayRefundId = checkData.refunds?.[0]?.id?.toString() || "MP-ALREADY-REFUNDED";
+              refundDetails = checkData;
+            } else if (checkData.status !== 'approved') {
+              throw new Error(`El pago en Mercado Pago se encuentra en estado '${checkData.status}' (status_detail: ${checkData.status_detail}). No es posible emitir un reembolso de un pago no aprobado.`);
+            }
           }
-        } catch (e: any) {
-          console.error("MP refund error:", e.message);
-          throw e;
+        } catch (chkErr: any) {
+          console.warn("[Refund] Advertencia verificando pago en MP:", chkErr.message);
+          if (chkErr.message?.includes("No es posible emitir un reembolso")) {
+            throw chkErr;
+          }
+        }
+
+        if (!refundSuccess) {
+          try {
+            const bodyPayload: Record<string, any> = {};
+            if (suborderId || amount) {
+              bodyPayload.amount = refundAmount;
+            }
+            const resp = await fetch(`https://api.mercadopago.com/v1/payments/${actualPaymentId}/refunds`, {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${mpAccessToken}`,
+                'Content-Type': 'application/json',
+                'X-Idempotency-Key': idempotencyKey || `refund-${actualPaymentId}-${Date.now()}`
+              },
+              body: Object.keys(bodyPayload).length > 0 ? JSON.stringify(bodyPayload) : undefined
+            });
+            const mpData = await resp.json();
+            
+            if (!resp.ok) {
+              console.error("Error Mercado Pago Refund API:", mpData);
+              refundDetails = mpData;
+              throw new Error(mpData.message || mpData.error || 'Error en la API de Mercado Pago');
+            } else {
+              refundSuccess = true;
+              gatewayRefundId = mpData.id?.toString() || null;
+              refundDetails = mpData;
+            }
+          } catch (e: any) {
+            console.error("MP refund error:", e.message);
+            throw e;
+          }
         }
       } else {
         throw new Error("No se pudo obtener un ID de pago de Mercado Pago válido para esta orden.");

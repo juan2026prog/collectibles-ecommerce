@@ -548,12 +548,68 @@ export default function AdminRefunds() {
         .eq('id', refundId);
 
       if (error) throw error;
-
       toast.success('La solicitud de reembolso fue rechazada.');
       fetchRefunds();
     } catch (err: any) {
-      console.error('Error rejecting refund:', err);
       toast.error('Error al rechazar reembolso: ' + err.message);
+    }
+  }
+
+  // Aprobar Solicitud de Posventa y Ejecutar Reembolso Automático vía refund-order
+  async function handleApproveAndExecuteRequest(req: any) {
+    const ok = await confirm(`¿Aprobar y ejecutar automáticamente el reembolso de $${Number(req.amount_requested).toFixed(2)} ${req.currency || 'UYU'} en la pasarela de pago para la orden ${req.order?.order_number || req.order_id}?`, {
+      title: 'Aprobar y Reembolsar Automáticamente',
+      confirmText: 'Aprobar y Reembolsar',
+      cancelText: 'Cancelar'
+    });
+
+    if (!ok) return;
+
+    try {
+      toast.info('Invocando motor de reembolso automático...');
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co'}/functions/v1/refund-order`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          orderId: req.order_id,
+          suborderId: req.suborder_id || null,
+          orderItemId: req.order_item_id || null,
+          operationType: 'pre_dispatch_cancellation',
+          restoreStock: true,
+          amount: Number(req.amount_requested),
+          reason: `Aprobado por administración: ${req.reason || 'Resolución favorable'}`,
+          idempotencyKey: req.idempotency_key || `admin-refund-${req.id}-${Date.now()}`
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.refundSuccess) {
+        throw new Error(data.error || data.message || 'Error al ejecutar reembolso en pasarela.');
+      }
+
+      // Actualizar estado de la solicitud en unified_order_requests
+      await supabase
+        .from('unified_order_requests')
+        .update({
+          status: 'REFUNDED',
+          amount_approved: Number(req.amount_requested),
+          resolved_at: new Date().toISOString(),
+          admin_notes: `Aprobado y reembolsado por admin. Comprobante de pasarela: ${data.refundDetails?.id || 'OK'}`
+        })
+        .eq('id', req.id);
+
+      toast.success('Reembolso ejecutado exitosamente en Mercado Pago y registrado en sistema.');
+      fetchCustomerRequests();
+    } catch (err: any) {
+      console.error('Error aprobando solicitud:', err);
+      toast.error(err.message || 'Error al ejecutar reembolso');
     }
   }
 
@@ -716,14 +772,15 @@ export default function AdminRefunds() {
                   <th className="px-6 py-3 text-right text-[10px] font-black text-gray-500 uppercase tracking-widest">Monto Solicitado</th>
                   <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Estado</th>
                   <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Motivo & Notas</th>
+                  <th className="px-6 py-3 text-right text-[10px] font-black text-gray-500 uppercase tracking-widest">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {loading ? (
-                  <tr><td colSpan={7} className="p-12 text-center text-gray-400 animate-pulse">Cargando solicitudes de posventa...</td></tr>
+                  <tr><td colSpan={8} className="p-12 text-center text-gray-400 animate-pulse">Cargando solicitudes de posventa...</td></tr>
                 ) : customerRequests.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-16 text-center text-gray-400">
+                    <td colSpan={8} className="p-16 text-center text-gray-400">
                       <ShieldCheck className="w-12 h-12 mx-auto mb-3 text-emerald-300" />
                       <p className="font-semibold text-gray-600">No hay solicitudes de posventa activas</p>
                       <p className="text-xs text-gray-400 mt-1">Las cancelaciones y devoluciones solicitadas por compradores aparecerán aquí.</p>
@@ -763,6 +820,16 @@ export default function AdminRefunds() {
                       <td className="px-6 py-4 max-w-xs text-xs text-gray-600">
                         <p className="font-semibold text-gray-800 truncate" title={req.reason}>{req.reason}</p>
                         {req.customer_notes && <p className="truncate text-gray-500 mt-0.5">{req.customer_notes}</p>}
+                      </td>
+                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                        {!['REFUNDED', 'REJECTED', 'CLOSED'].includes(req.status) && (
+                          <button
+                            onClick={() => handleApproveAndExecuteRequest(req)}
+                            className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-sm"
+                          >
+                            Aprobar y Reembolsar
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))
