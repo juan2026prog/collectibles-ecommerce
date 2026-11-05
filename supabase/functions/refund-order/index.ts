@@ -83,11 +83,41 @@ Deno.serve(async (req: Request) => {
     amount = payload.amount;
     reason = payload.reason;
     bypassLiquidationCheck = payload.bypassLiquidationCheck || false;
-    const idempotencyKey = payload.idempotencyKey ? String(payload.idempotencyKey).trim() : null;
+    const unifiedRequestId = payload.unifiedRequestId ? String(payload.unifiedRequestId).trim() : null;
+    const idempotencyKey = payload.idempotencyKey 
+      ? String(payload.idempotencyKey).trim() 
+      : (unifiedRequestId ? `unified-req-${unifiedRequestId}` : null);
 
     if (!orderId) throw new Error("Falta el ID de la orden");
     if (!idempotencyKey) {
-      throw new Error("Idempotency key obligatoria: toda solicitud de reembolso requiere un identificador único.");
+      throw new Error("Idempotency key obligatoria: toda solicitud de reembolso requiere un identificador único persistente.");
+    }
+
+    // 0. Si viene asociado a una unifiedRequestId, auditar y validar la solicitud de posventa en la base de datos
+    let unifiedRequestRow: any = null;
+    if (unifiedRequestId) {
+      const { data: uReq, error: uReqErr } = await supabaseAdmin
+        .from("unified_order_requests")
+        .select("*")
+        .eq("id", unifiedRequestId)
+        .maybeSingle();
+
+      if (uReqErr || !uReq) {
+        throw new Error(`Solicitud de posventa (${unifiedRequestId}) no encontrada.`);
+      }
+      if (uReq.order_id !== orderId) {
+        throw new Error(`Inconsistencia: la solicitud ${unifiedRequestId} no pertenece a la orden ${orderId}.`);
+      }
+      if (['REFUNDED', 'CLOSED'].includes(uReq.status)) {
+        throw new Error(`La solicitud ${unifiedRequestId} ya se encuentra finalizada (${uReq.status}). Reembolso bloqueado.`);
+      }
+      if (uReq.status === 'REJECTED') {
+        throw new Error(`La solicitud ${unifiedRequestId} fue rechazada y no puede ser reembolsada.`);
+      }
+      if (['WAITING_VENDOR', 'WAITING_SUPPLIER', 'WAITING_RETURN'].includes(uReq.status)) {
+        throw new Error(`La solicitud se encuentra en '${uReq.status}'. Requiere resolución previa antes del reembolso.`);
+      }
+      unifiedRequestRow = uReq;
     }
 
     // Idempotency check: if refund already completed for this order / suborder / idempotencyKey
@@ -561,26 +591,59 @@ Deno.serve(async (req: Request) => {
       }
 
       if (actualPaymentId && !isNaN(Number(actualPaymentId))) {
-        // 1. Verificación previa con Mercado Pago del estado y pagos previos
+        // 1. Verificación previa obligatoria con Mercado Pago del estado y pagos previos
+        let checkData: any = null;
         try {
           const checkRes = await fetch(`https://api.mercadopago.com/v1/payments/${actualPaymentId}`, {
             headers: { "Authorization": `Bearer ${mpAccessToken}` }
           });
-          const checkData = await checkRes.json();
-          if (checkRes.ok && checkData) {
-            if (checkData.status === 'refunded') {
-              console.log(`[Refund] El pago ${actualPaymentId} ya fue reembolsado en Mercado Pago previamente.`);
-              refundSuccess = true;
-              gatewayRefundId = checkData.refunds?.[0]?.id?.toString() || "MP-ALREADY-REFUNDED";
-              refundDetails = checkData;
-            } else if (checkData.status !== 'approved') {
-              throw new Error(`El pago en Mercado Pago se encuentra en estado '${checkData.status}' (status_detail: ${checkData.status_detail}). No es posible emitir un reembolso de un pago no aprobado.`);
-            }
+          checkData = await checkRes.json();
+          if (!checkRes.ok) {
+            throw new Error(`Mercado Pago respondió status ${checkRes.status}: ${checkData?.message || 'Error consultando pago'}`);
           }
         } catch (chkErr: any) {
-          console.warn("[Refund] Advertencia verificando pago en MP:", chkErr.message);
-          if (chkErr.message?.includes("No es posible emitir un reembolso")) {
-            throw chkErr;
+          console.error("[Refund] Error crítico verificando estado del pago en Mercado Pago:", chkErr.message);
+          throw new Error(`Verificación previa con Mercado Pago no disponible o fallida (${chkErr.message}). El reembolso se bloquea y queda pendiente de conciliación por seguridad financiera.`);
+        }
+
+        if (!checkData || !checkData.status) {
+          throw new Error("Respuesta inválida o incompleta de Mercado Pago al verificar el pago. Operación bloqueada.");
+        }
+
+        // Inspeccionar reembolsos existentes reportados directamente por Mercado Pago
+        const mpRefunds = Array.isArray(checkData.refunds) ? checkData.refunds : [];
+        const mpTotalRefunded = Number(checkData.transaction_details?.total_refunded_amount ?? mpRefunds.reduce((acc: number, r: any) => acc + Number(r.amount || 0), 0));
+
+        if (checkData.status === 'refunded') {
+          console.log(`[Refund] El pago ${actualPaymentId} ya figura 100% reembolsado en Mercado Pago.`);
+          // Comprobar si ya existe un registro de reembolso formal en Supabase
+          const { data: matchedRefund } = await supabaseAdmin
+            .from("refunds")
+            .select("id, status, amount, provider_refund_id")
+            .eq("order_id", orderId)
+            .eq("status", "completed")
+            .maybeSingle();
+
+          if (matchedRefund) {
+            refundSuccess = true;
+            gatewayRefundId = matchedRefund.provider_refund_id || (mpRefunds[0]?.id ? String(mpRefunds[0].id) : "MP-PREVIOUSLY-REFUNDED");
+            refundDetails = checkData;
+          } else {
+            // El pago en MP fue reembolsado externamente/manualmente pero no conciliado
+            console.log(`[Refund] Conciliando reembolso previo detectado en MP para orden ${orderId}`);
+            refundSuccess = true;
+            gatewayRefundId = mpRefunds[0]?.id ? String(mpRefunds[0].id) : `MP-${actualPaymentId}-EXT-REFUND`;
+            refundDetails = { ...checkData, reconciled_from_gateway: true };
+          }
+        } else if (checkData.status !== 'approved') {
+          throw new Error(`El pago en Mercado Pago se encuentra en estado '${checkData.status}' (status_detail: ${checkData.status_detail}). No es posible emitir un reembolso de un pago que no esté formalmente aprobado.`);
+        } else {
+          // Si el pago está aprobado, validar que el nuevo monto solicitado no exceda el saldo remanente según MP
+          const mpOriginalAmount = Number(checkData.transaction_amount || 0);
+          const mpAvailableForRefund = Math.max(0, mpOriginalAmount - mpTotalRefunded);
+
+          if (refundAmount > (mpAvailableForRefund + 0.01)) {
+            throw new Error(`El importe solicitado ($${refundAmount}) supera el saldo disponible en Mercado Pago ($${mpAvailableForRefund.toFixed(2)}). Total cobrado en MP: $${mpOriginalAmount.toFixed(2)}, Reembolsado en MP: $${mpTotalRefunded.toFixed(2)}.`);
           }
         }
 
@@ -590,12 +653,13 @@ Deno.serve(async (req: Request) => {
             if (suborderId || amount) {
               bodyPayload.amount = refundAmount;
             }
+            const mpIdempotencyKey = idempotencyKey || `refund-${orderId}-${actualPaymentId}`;
             const resp = await fetch(`https://api.mercadopago.com/v1/payments/${actualPaymentId}/refunds`, {
               method: 'POST',
               headers: {
                 'Authorization': `Bearer ${mpAccessToken}`,
                 'Content-Type': 'application/json',
-                'X-Idempotency-Key': idempotencyKey || `refund-${actualPaymentId}-${Date.now()}`
+                'X-Idempotency-Key': mpIdempotencyKey
               },
               body: Object.keys(bodyPayload).length > 0 ? JSON.stringify(bodyPayload) : undefined
             });
@@ -1219,7 +1283,32 @@ Deno.serve(async (req: Request) => {
         console.warn("[Analytics] Meta CAPI call failed:", e.message);
       }
 
-      return new Response(JSON.stringify({ success: true, refundSuccess: true, refundDetails }), {
+      // Actualizar automáticamente unified_order_requests si la operación provenía de una gestión de posventa
+      if (unifiedRequestRow?.id) {
+        try {
+          await supabaseAdmin
+            .from("unified_order_requests")
+            .update({
+              status: "REFUNDED",
+              amount_approved: refundAmount,
+              resolved_at: new Date().toISOString(),
+              resolved_by: requestedBy,
+              admin_notes: `Reembolso completado exitosamente en pasarela (${order.payment_method}). Comprobante: ${gatewayRefundId || 'OK'}`
+            })
+            .eq("id", unifiedRequestRow.id);
+        } catch (uErr: any) {
+          console.warn("[Refund] Advertencia actualizando unified_order_requests:", uErr.message);
+        }
+      }
+
+      return new Response(JSON.stringify({ 
+        success: true, 
+        refundSuccess: true, 
+        refundDetails,
+        unifiedRequestId: unifiedRequestRow?.id || null,
+        gatewayRefundId,
+        refundAmount
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
 

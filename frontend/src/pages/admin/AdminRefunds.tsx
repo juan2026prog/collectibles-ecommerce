@@ -557,18 +557,59 @@ export default function AdminRefunds() {
 
   // Aprobar Solicitud de Posventa y Ejecutar Reembolso Automático vía refund-order
   async function handleApproveAndExecuteRequest(req: any) {
-    const ok = await confirm(`¿Aprobar y ejecutar automáticamente el reembolso de $${Number(req.amount_requested).toFixed(2)} ${req.currency || 'UYU'} en la pasarela de pago para la orden ${req.order?.order_number || req.order_id}?`, {
-      title: 'Aprobar y Reembolsar Automáticamente',
-      confirmText: 'Aprobar y Reembolsar',
-      cancelText: 'Cancelar'
-    });
+    // 1. Determinar tipo de operación comercial según request_type
+    const isPhysicalReturn = ['voluntary_return', 'defective_product', 'wrong_product', 'damaged_in_transit'].includes(req.request_type);
+    const isMonetaryCompensation = ['partial_refund', 'chargeback'].includes(req.request_type);
+    const isCancellation = ['cancel_before_payment', 'cancel_immediate_10m', 'cancel_vendor_policy', 'cancel_international_zinc', 'legal_withdrawal'].includes(req.request_type);
+
+    let operationType = 'pre_dispatch_cancellation';
+    if (isPhysicalReturn) {
+      operationType = 'physical_return';
+    } else if (isMonetaryCompensation) {
+      operationType = 'monetary_compensation';
+    }
+
+    // 2. Comprobar condiciones de elegibilidad previa
+    if (['WAITING_VENDOR', 'WAITING_SUPPLIER'].includes(req.status)) {
+      toast.error(`La solicitud se encuentra en '${req.status}'. Debe resolverse con el vendedor o proveedor antes de emitir un reembolso.`);
+      return;
+    }
+
+    if (isPhysicalReturn && req.status !== 'RETURN_RECEIVED' && req.status !== 'APPROVED') {
+      const proceedWithoutReturn = await confirm(
+        `Esta solicitud corresponde a una devolución física (${req.request_type}). El estado actual es '${req.status}' y todavía no figura como RETURN_RECEIVED. ¿Deseas aprobarla como compensación monetaria sin reposición automática de stock?`,
+        {
+          title: 'Devolución Física No Recibida',
+          confirmText: 'Aprobar Sin Reponer Stock',
+          cancelText: 'Cancelar'
+        }
+      );
+      if (!proceedWithoutReturn) return;
+      operationType = 'monetary_compensation';
+    }
+
+    const ok = await confirm(
+      `¿Aprobar y ejecutar automáticamente el reembolso de $${Number(req.amount_requested).toFixed(2)} ${req.currency || 'UYU'} para la orden ${req.order?.order_number || req.order_id}?\n\nTipo de operación: ${operationType}\nMotivo: ${req.reason}`,
+      {
+        title: 'Confirmación Financiera de Reembolso',
+        confirmText: 'Ejecutar Reembolso en Pasarela',
+        cancelText: 'Cancelar'
+      }
+    );
 
     if (!ok) return;
 
     try {
-      toast.info('Invocando motor de reembolso automático...');
+      toast.info('Validando y ejecutando reembolso en pasarela...');
       const { data: sessionData } = await supabase.auth.getSession();
       const token = sessionData?.session?.access_token;
+
+      if (!token) {
+        throw new Error('No hay una sesión de administrador activa.');
+      }
+
+      // Clave de idempotencia estrictamente estable derivada de la solicitud persistida
+      const stableIdempotencyKey = req.idempotency_key || `unified-request-${req.id}`;
 
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co'}/functions/v1/refund-order`, {
         method: 'POST',
@@ -580,32 +621,30 @@ export default function AdminRefunds() {
           orderId: req.order_id,
           suborderId: req.suborder_id || null,
           orderItemId: req.order_item_id || null,
-          operationType: 'pre_dispatch_cancellation',
-          restoreStock: true,
+          unifiedRequestId: req.id,
+          operationType,
+          restoreStock: operationType === 'pre_dispatch_cancellation',
           amount: Number(req.amount_requested),
           reason: `Aprobado por administración: ${req.reason || 'Resolución favorable'}`,
-          idempotencyKey: req.idempotency_key || `admin-refund-${req.id}-${Date.now()}`
+          idempotencyKey: stableIdempotencyKey,
+          // Datos de inspección si aplica devolución física recibida
+          inspectionVerified: req.status === 'RETURN_RECEIVED',
+          itemRestockable: req.status === 'RETURN_RECEIVED',
+          inspectionNotes: req.admin_notes || req.customer_notes
         })
       });
 
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok || !data.refundSuccess) {
-        throw new Error(data.error || data.message || 'Error al ejecutar reembolso en pasarela.');
+        const errorMsg = data.error || data.message || 'Error desconocido al ejecutar reembolso.';
+        // Marcar en UI y persistir estado si hubo fallo registrado
+        toast.error(`Error en reembolso: ${errorMsg}`);
+        fetchCustomerRequests();
+        return;
       }
 
-      // Actualizar estado de la solicitud en unified_order_requests
-      await supabase
-        .from('unified_order_requests')
-        .update({
-          status: 'REFUNDED',
-          amount_approved: Number(req.amount_requested),
-          resolved_at: new Date().toISOString(),
-          admin_notes: `Aprobado y reembolsado por admin. Comprobante de pasarela: ${data.refundDetails?.id || 'OK'}`
-        })
-        .eq('id', req.id);
-
-      toast.success('Reembolso ejecutado exitosamente en Mercado Pago y registrado en sistema.');
+      toast.success(`Reembolso exitoso en Mercado Pago. Comprobante: ${data.gatewayRefundId || data.refundDetails?.id || 'OK'}`);
       fetchCustomerRequests();
     } catch (err: any) {
       console.error('Error aprobando solicitud:', err);
@@ -822,7 +861,13 @@ export default function AdminRefunds() {
                         {req.customer_notes && <p className="truncate text-gray-500 mt-0.5">{req.customer_notes}</p>}
                       </td>
                       <td className="px-6 py-4 text-right whitespace-nowrap">
-                        {!['REFUNDED', 'REJECTED', 'CLOSED'].includes(req.status) && (
+                        {['REFUNDED', 'CLOSED'].includes(req.status) ? (
+                          <span className="text-xs font-semibold text-emerald-600">Completada</span>
+                        ) : req.status === 'REJECTED' ? (
+                          <span className="text-xs font-semibold text-red-500">Rechazada</span>
+                        ) : ['WAITING_VENDOR', 'WAITING_SUPPLIER'].includes(req.status) ? (
+                          <span className="text-xs font-semibold text-purple-600">Requiere Vendedor/Proveedor</span>
+                        ) : (
                           <button
                             onClick={() => handleApproveAndExecuteRequest(req)}
                             className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-sm"
