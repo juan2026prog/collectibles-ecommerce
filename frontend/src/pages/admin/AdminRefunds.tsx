@@ -12,8 +12,8 @@ export default function AdminRefunds() {
   const { toast } = useToast();
   const { confirm, prompt } = useConfirmModal();
 
-  // Tabs: 'refunds' | 'disputes' | 'adjustments'
-  const [activeTab, setActiveTab] = useState<'refunds' | 'disputes' | 'adjustments'>('refunds');
+  // Tabs: 'refunds' | 'disputes' | 'adjustments' | 'requests'
+  const [activeTab, setActiveTab] = useState<'refunds' | 'disputes' | 'adjustments' | 'requests'>('refunds');
 
   // Loading states
   const [loading, setLoading] = useState(true);
@@ -22,6 +22,7 @@ export default function AdminRefunds() {
   const [refunds, setRefunds] = useState<any[]>([]);
   const [disputes, setDisputes] = useState<any[]>([]);
   const [adjustments, setAdjustments] = useState<any[]>([]);
+  const [customerRequests, setCustomerRequests] = useState<any[]>([]);
 
   // Filters & Search
   const [statusFilter, setStatusFilter] = useState('all');
@@ -64,6 +65,8 @@ export default function AdminRefunds() {
       fetchRefunds();
     } else if (activeTab === 'disputes') {
       fetchDisputes();
+    } else if (activeTab === 'requests') {
+      fetchCustomerRequests();
     } else {
       fetchAdjustments();
     }
@@ -181,6 +184,44 @@ export default function AdminRefunds() {
     } catch (err: any) {
       console.error('Error fetching adjustments:', err);
       toast.error('Error al cargar ajustes financieros: ' + err.message);
+    }
+    setLoading(false);
+  }
+
+  // Fetch Posventa Unified Requests
+  async function fetchCustomerRequests() {
+    setLoading(true);
+    try {
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
+      let query = supabase
+        .from('unified_order_requests')
+        .select(`
+          *,
+          order:orders(id, order_number, total_amount, status, customer_name, customer_email),
+          suborder:order_suborders(id, suborder_number, vendor_name),
+          vendor:vendors(id, store_name, slug)
+        `, { count: 'exact' });
+
+      if (statusFilter !== 'all') {
+        query = query.eq('status', statusFilter);
+      }
+
+      if (searchQuery) {
+        query = query.or(`reason.ilike.%${searchQuery}%,customer_notes.ilike.%${searchQuery}%`);
+      }
+
+      const { data, count, error } = await query
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      if (error) throw error;
+      setCustomerRequests(data || []);
+      if (count !== null) setTotalRecords(count);
+    } catch (err: any) {
+      console.error('Error fetching customer requests:', err);
+      toast.error('Error al cargar solicitudes de posventa: ' + err.message);
     }
     setLoading(false);
   }
@@ -556,6 +597,16 @@ export default function AdminRefunds() {
       <div className="border-b border-gray-200">
         <nav className="flex gap-6 -mb-px">
           <button
+            onClick={() => { setActiveTab('requests'); setStatusFilter('all'); }}
+            className={`pb-4 px-2 font-bold text-sm border-b-2 transition-all ${
+              activeTab === 'requests'
+                ? 'border-emerald-600 text-emerald-600'
+                : 'border-transparent text-gray-500 hover:text-gray-800'
+            }`}
+          >
+            Gestiones y Devoluciones ({activeTab === 'requests' ? totalRecords : '...'})
+          </button>
+          <button
             onClick={() => { setActiveTab('refunds'); setStatusFilter('all'); }}
             className={`pb-4 px-2 font-bold text-sm border-b-2 transition-all ${
               activeTab === 'refunds'
@@ -653,7 +704,72 @@ export default function AdminRefunds() {
       {/* Main Table Card */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
         <div className="overflow-x-auto">
-          {activeTab === 'refunds' ? (
+          {activeTab === 'requests' ? (
+            /* =================== CUSTOMER REQUESTS TABLE =================== */
+            <table className="min-w-full divide-y divide-gray-100">
+              <thead>
+                <tr className="bg-gray-50/80">
+                  <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">ID / Fecha</th>
+                  <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Pedido / Cliente</th>
+                  <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Tipo de Gestión</th>
+                  <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Modelo / Vendor</th>
+                  <th className="px-6 py-3 text-right text-[10px] font-black text-gray-500 uppercase tracking-widest">Monto Solicitado</th>
+                  <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Estado</th>
+                  <th className="px-6 py-3 text-left text-[10px] font-black text-gray-500 uppercase tracking-widest">Motivo & Notas</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {loading ? (
+                  <tr><td colSpan={7} className="p-12 text-center text-gray-400 animate-pulse">Cargando solicitudes de posventa...</td></tr>
+                ) : customerRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-16 text-center text-gray-400">
+                      <ShieldCheck className="w-12 h-12 mx-auto mb-3 text-emerald-300" />
+                      <p className="font-semibold text-gray-600">No hay solicitudes de posventa activas</p>
+                      <p className="text-xs text-gray-400 mt-1">Las cancelaciones y devoluciones solicitadas por compradores aparecerán aquí.</p>
+                    </td>
+                  </tr>
+                ) : (
+                  customerRequests.map(req => (
+                    <tr key={req.id} className="hover:bg-gray-50/50 transition-colors text-sm">
+                      <td className="px-6 py-4">
+                        <div className="font-mono font-bold text-gray-900">{req.id.slice(0, 8).toUpperCase()}</div>
+                        <div className="text-xs text-gray-400">{new Date(req.created_at).toLocaleDateString('es-UY')}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="font-bold text-gray-900">{req.order?.order_number || req.order_id?.slice(0, 8)}</div>
+                        <div className="text-xs text-gray-500">{req.order?.customer_name || req.order?.customer_email || 'Comprador'}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="font-bold text-gray-800 capitalize">{req.request_type?.replace(/_/g, ' ')}</span>
+                      </td>
+                      <td className="px-6 py-4 text-xs">
+                        <div className="capitalize font-semibold text-gray-700">{req.business_model?.replace('_', ' ')}</div>
+                        {req.vendor?.store_name && <div className="text-gray-400">{req.vendor.store_name}</div>}
+                      </td>
+                      <td className="px-6 py-4 text-right font-mono font-bold text-emerald-600">
+                        ${Number(req.amount_requested || 0).toFixed(2)} {req.currency || 'UYU'}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold ${
+                          req.status === 'REFUNDED' ? 'bg-emerald-100 text-emerald-800' :
+                          req.status === 'REJECTED' ? 'bg-red-100 text-red-800' :
+                          req.status === 'WAITING_VENDOR' ? 'bg-purple-100 text-purple-800' :
+                          'bg-amber-100 text-amber-800'
+                        }`}>
+                          {req.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 max-w-xs text-xs text-gray-600">
+                        <p className="font-semibold text-gray-800 truncate" title={req.reason}>{req.reason}</p>
+                        {req.customer_notes && <p className="truncate text-gray-500 mt-0.5">{req.customer_notes}</p>}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          ) : activeTab === 'refunds' ? (
             /* =================== REFUNDS TABLE =================== */
             <table className="min-w-full divide-y divide-gray-100">
               <thead>

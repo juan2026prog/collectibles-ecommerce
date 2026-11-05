@@ -344,16 +344,17 @@ export default function CustomerRequestsTab({
 
               {selectedRequest.vendor_notes && (
                 <div>
-                  <label className="text-purple-400 font-bold block mb-1">Respuesta del vendedor:</label>
+                  <label className="text-purple-400 font-bold block mb-1">Respuesta oficial del vendedor:</label>
                   <p className="text-slate-300 bg-purple-500/10 p-3 rounded-xl border border-purple-500/20">
                     {selectedRequest.vendor_notes}
                   </p>
                 </div>
               )}
 
-              {selectedRequest.admin_notes && (
+              {/* Mensaje al cliente del equipo de soporte (sin exponer notas técnicas privadas) */}
+              {selectedRequest.admin_notes && !selectedRequest.admin_notes.toLowerCase().startsWith('internal:') && !selectedRequest.admin_notes.toLowerCase().startsWith('[secret]') && (
                 <div>
-                  <label className="text-rose-400 font-bold block mb-1">Dictamen del equipo Collectibles:</label>
+                  <label className="text-rose-400 font-bold block mb-1">Respuesta del equipo Collectibles:</label>
                   <p className="text-slate-300 bg-rose-500/10 p-3 rounded-xl border border-rose-500/20">
                     {selectedRequest.admin_notes}
                   </p>

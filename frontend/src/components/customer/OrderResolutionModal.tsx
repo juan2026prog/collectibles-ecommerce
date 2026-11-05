@@ -404,7 +404,25 @@ export default function OrderResolutionModal({
                   <div className="flex-1">
                     <h4 className="font-bold text-white text-sm group-hover:text-emerald-300">Quiero devolver el producto</h4>
                     <p className="text-slate-400 text-[11px] mt-0.5">
-                      Desistimiento legal uruguayo (Ley 17.250, 5 días hábiles con producto sellado) o devolución comercial.
+                      Desistimiento legal uruguayo (Ley 17.250 Art. 16, 5 días hábiles con producto en su estado original) o devolución comercial.
+                    </p>
+                  </div>
+                  <ArrowRight className="w-4 h-4 text-slate-500 group-hover:translate-x-1 transition" />
+                </button>
+
+                {/* Opción Tengo otro problema */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectIntent('other')}
+                  className="p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-left transition flex items-start gap-3.5 group"
+                >
+                  <div className="p-2 rounded-xl bg-slate-500/20 text-slate-400">
+                    <HelpCircle className="w-5 h-5" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-bold text-white text-sm group-hover:text-slate-200">Tengo otro problema</h4>
+                    <p className="text-slate-400 text-[11px] mt-0.5">
+                      Consultas sobre facturación, cobranza o incidencias particulares que requieran evaluación humana.
                     </p>
                   </div>
                   <ArrowRight className="w-4 h-4 text-slate-500 group-hover:translate-x-1 transition" />
@@ -526,14 +544,14 @@ export default function OrderResolutionModal({
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {[
-                    'Compré por error / me arrepentí',
-                    'Encontré un mejor precio',
-                    'La fecha de entrega no me sirve',
-                    'Producto defectuoso de fábrica',
-                    'Caja golpeada durante el envío',
+                    'Compré por error / me arrepentí (Retracto Ley 17.250)',
+                    'Cancelación comercial antes del despacho',
+                    'Producto defectuoso de fábrica / Falla',
+                    'Caja o figura golpeada durante el transporte',
                     'Me enviaron un artículo o variante distinta',
-                    'Paquete no entregado',
-                    'Otro motivo'
+                    'Paquete no entregado en plazo acordado',
+                    'Devolución comercial voluntaria',
+                    'Otro motivo o consulta de posventa'
                   ].map((motivo) => (
                     <button
                       key={motivo}
@@ -654,14 +672,18 @@ export default function OrderResolutionModal({
                   <ShieldCheck className="w-4 h-4" /> Qué sucederá a continuación:
                 </h5>
                 <ul className="space-y-1.5 text-[11px] text-slate-300 list-disc list-inside">
-                  {isWithin10m ? (
-                    <li>Cancelación inmediata activa: el reembolso se acreditará en tu método de pago de Mercado Pago de forma automática.</li>
+                  {requestType === 'legal_withdrawal' ? (
+                    <li>Derecho de Retracto (Ley 17.250 Art. 16): dispones de 5 días hábiles desde la entrega para desistir. El producto debe restituirse en su empaque original sin uso.</li>
+                  ) : isWithin10m ? (
+                    <li>Ventana comercial de cancelación inmediata activa: el reembolso se procesará de forma automatizada hacia tu medio de pago de Mercado Pago.</li>
                   ) : (
-                    <li>Tu solicitud se registrará de inmediato en el sistema de posventa con un número identificador único.</li>
+                    <li>Tu solicitud se registrará de inmediato en el sistema de posventa interno con un número identificador único.</li>
                   )}
-                  <li>El estado del caso se actualizará de forma transparente en la sección <b>Mis Gestiones</b> de tu cuenta.</li>
-                  {isVendor && <li>Al ser un producto de vendedor asociado, este tendrá hasta 48 horas hábiles para responder formalmente.</li>}
-                  {isInternational && <li>Para compras internacionales, coordinamos la detención logística en USA antes de emitir la reversión final.</li>}
+                  <li>El seguimiento cronológico y las actualizaciones de estado se reflejan en tiempo real en la sección <b>Mis Gestiones</b>.</li>
+                  {isVendor && <li>Al ser un producto de vendedor asociado, este intervendrá formalmente para validar la logística de retorno en un plazo de hasta 48 horas hábiles.</li>}
+                  {isInternational && (
+                    <li>Compras internacionales: conforme a la normativa, se verifica el estado logístico del operador exterior para coordinar la reversión sin cargos indebidos.</li>
+                  )}
                 </ul>
               </div>
             </div>
