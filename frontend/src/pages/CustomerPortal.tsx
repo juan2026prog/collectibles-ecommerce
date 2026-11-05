@@ -128,6 +128,11 @@ export default function CustomerPortal() {
 
   // New Orders UX state: filters, detail modal, cancel confirm modal
   const [orderFilter, setOrderFilter] = useState<'all' | 'pending' | 'paid' | 'processing' | 'shipped' | 'cancelled' | 'refunded'>('all');
+  const [showHiddenOrders, setShowHiddenOrders] = useState<boolean>(false);
+  const [hiddenOrderIds, setHiddenOrderIds] = useState<Set<string>>(new Set());
+  const [hidingOrderModal, setHidingOrderModal] = useState<any | null>(null);
+  const [actionInProgressId, setActionInProgressId] = useState<string | null>(null);
+  const [hidingSuccessMsg, setHidingSuccessMsg] = useState<string | null>(null);
   const [selectedDetailOrder, setSelectedDetailOrder] = useState<any | null>(null);
   const [cancelModalOrder, setCancelModalOrder] = useState<any | null>(null);
   const [cancelReason, setCancelReason] = useState<string>('desistimiento');
@@ -311,7 +316,20 @@ export default function CustomerPortal() {
         )
       `;
 
-      // Consultar exclusivamente por customer_id / user_id autenticado con políticas RLS activas
+      // 1. Cargar preferencias de pedidos ocultos del usuario autenticado
+      const { data: hiddenData, error: hiddenErr } = await supabase
+        .from('customer_hidden_orders')
+        .select('order_id')
+        .eq('user_id', user.id);
+
+      if (hiddenErr) {
+        console.warn('Advertencia al consultar customer_hidden_orders:', hiddenErr.message);
+      } else {
+        const idSet = new Set<string>((hiddenData || []).map((h: any) => h.order_id));
+        setHiddenOrderIds(idSet);
+      }
+
+      // 2. Consultar exclusivamente por customer_id / user_id autenticado con políticas RLS activas
       const { data: ordersData, error } = await supabase
         .from('orders')
         .select(orderSelect)
@@ -328,6 +346,63 @@ export default function CustomerPortal() {
       setOrdersError(err?.message || 'Ocurrió un error al cargar tus pedidos.');
     } finally {
       setOrdersLoading(false);
+    }
+  };
+
+  const handleHideOrderConfirm = async () => {
+    if (!user || !hidingOrderModal || actionInProgressId) return;
+    setActionInProgressId(hidingOrderModal.id);
+    try {
+      const orderNumber = hidingOrderModal.order_number || `#${hidingOrderModal.id.slice(0, 8).toUpperCase()}`;
+      const { error } = await supabase
+        .from('customer_hidden_orders')
+        .insert({
+          user_id: user.id,
+          order_id: hidingOrderModal.id
+        });
+
+      if (error && error.code !== '23505') { // 23505 = unique_violation, ya estaba oculto
+        throw error;
+      }
+
+      setHiddenOrderIds(prev => new Set([...prev, hidingOrderModal.id]));
+      setHidingOrderModal(null);
+      setHidingSuccessMsg(`El pedido ${orderNumber} fue retirado de tu lista principal.`);
+      setTimeout(() => setHidingSuccessMsg(null), 4000);
+    } catch (err: any) {
+      console.error('Error hiding order:', err);
+      alert('No fue posible ocultar el pedido: ' + (err.message || 'Error inesperado'));
+    } finally {
+      setActionInProgressId(null);
+    }
+  };
+
+  const handleRestoreOrder = async (order: any) => {
+    if (!user || actionInProgressId) return;
+    setActionInProgressId(order.id);
+    try {
+      const orderNumber = order.order_number || `#${order.id.slice(0, 8).toUpperCase()}`;
+      const { error } = await supabase
+        .from('customer_hidden_orders')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('order_id', order.id);
+
+      if (error) throw error;
+
+      setHiddenOrderIds(prev => {
+        const next = new Set(prev);
+        next.delete(order.id);
+        return next;
+      });
+
+      setHidingSuccessMsg(`El pedido ${orderNumber} fue restaurado a tu historial principal.`);
+      setTimeout(() => setHidingSuccessMsg(null), 4000);
+    } catch (err: any) {
+      console.error('Error restoring order:', err);
+      alert('No fue posible restaurar el pedido: ' + (err.message || 'Error inesperado'));
+    } finally {
+      setActionInProgressId(null);
     }
   };
 
@@ -493,7 +568,13 @@ export default function CustomerPortal() {
     }
   };
 
-  const filteredOrders = orders.filter((order: any) => {
+  // Filtrado de pedidos según visibilidad y filtros de estado
+  const visibleOrders = orders.filter((order: any) => {
+    const isHidden = hiddenOrderIds.has(order.id);
+    return showHiddenOrders ? isHidden : !isHidden;
+  });
+
+  const filteredOrders = visibleOrders.filter((order: any) => {
     const isCancelled = ['cancelled', 'cancelada'].includes(order.status);
     const isRefunded = order.payment_status === 'refunded' || (order.refunds && order.refunds.length > 0);
     const isPaid = (order.payments || []).some((p: any) => p.status === 'approved') || ['paid', 'confirmed'].includes(order.status);
@@ -1065,57 +1146,99 @@ export default function CustomerPortal() {
           {/* ═══ TAB: Mis Pedidos ═══ */}
           {activeTab === 'orders' && (
             <div className="space-y-6">
-              {/* Order Filtering Tabs */}
-              <div className="flex flex-wrap items-center gap-2 border-b border-white/10 pb-4">
-                {[
-                  { id: 'all', label: 'Todos' },
-                  { id: 'pending', label: 'Pendientes' },
-                  { id: 'paid', label: 'Pagados' },
-                  { id: 'processing', label: 'En preparación' },
-                  { id: 'shipped', label: 'Enviados' },
-                  { id: 'cancelled', label: 'Cancelados' },
-                  { id: 'refunded', label: 'Reembolsados' },
-                ].map(tab => {
-                  const count = orders.filter((o: any) => {
-                    const isCancelled = ['cancelled', 'cancelada'].includes(o.status);
-                    const completedRefunds = (o.refunds || []).filter((r: any) => 
-                      ['approved', 'completed', 'succeeded'].includes((r.status || '').toLowerCase())
+              {/* Order Filtering Tabs & Hidden Orders Toggle */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  {[
+                    { id: 'all', label: 'Todos' },
+                    { id: 'pending', label: 'Pendientes' },
+                    { id: 'paid', label: 'Pagados' },
+                    { id: 'processing', label: 'En preparación' },
+                    { id: 'shipped', label: 'Enviados' },
+                    { id: 'cancelled', label: 'Cancelados' },
+                    { id: 'refunded', label: 'Reembolsados' },
+                  ].map(tab => {
+                    const count = visibleOrders.filter((o: any) => {
+                      const isCancelled = ['cancelled', 'cancelada'].includes(o.status);
+                      const completedRefunds = (o.refunds || []).filter((r: any) => 
+                        ['approved', 'completed', 'succeeded'].includes((r.status || '').toLowerCase())
+                      );
+                      const totalRefunded = completedRefunds.reduce((sum: number, r: any) => sum + Number(r.amount || 0), 0);
+                      const isRefunded = o.payment_status === 'refunded' || o.payment_status === 'partially_refunded' || totalRefunded > 0;
+                      const isPaid = (o.payments || []).some((p: any) => p.status === 'approved') || ['paid', 'confirmed'].includes(o.status);
+
+                      switch (tab.id) {
+                        case 'pending': return ['pending', 'awaiting_payment'].includes(o.status) && !isCancelled;
+                        case 'paid': return isPaid && !isCancelled && !isRefunded;
+                        case 'processing': return o.status === 'processing';
+                        case 'shipped': return o.status === 'shipped';
+                        case 'cancelled': return isCancelled;
+                        case 'refunded': return isRefunded;
+                        default: return true;
+                      }
+                    }).length;
+
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setOrderFilter(tab.id as any)}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                          orderFilter === tab.id
+                            ? 'bg-[#f00856] text-white shadow-lg shadow-[#f00856]/25'
+                            : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 border border-white/5'
+                        }`}
+                      >
+                        <span>{tab.label}</span>
+                        <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono ${
+                          orderFilter === tab.id ? 'bg-black/30 text-white' : 'bg-white/10 text-slate-400'
+                        }`}>
+                          {count}
+                        </span>
+                      </button>
                     );
-                    const totalRefunded = completedRefunds.reduce((sum: number, r: any) => sum + Number(r.amount || 0), 0);
-                    const isRefunded = o.payment_status === 'refunded' || o.payment_status === 'partially_refunded' || totalRefunded > 0;
-                    const isPaid = (o.payments || []).some((p: any) => p.status === 'approved') || ['paid', 'confirmed'].includes(o.status);
+                  })}
+                </div>
 
-                    switch (tab.id) {
-                      case 'pending': return ['pending', 'awaiting_payment'].includes(o.status) && !isCancelled;
-                      case 'paid': return isPaid && !isCancelled && !isRefunded;
-                      case 'processing': return o.status === 'processing';
-                      case 'shipped': return o.status === 'shipped';
-                      case 'cancelled': return isCancelled;
-                      case 'refunded': return isRefunded;
-                      default: return true;
-                    }
-                  }).length;
-
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setOrderFilter(tab.id as any)}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                        orderFilter === tab.id
-                          ? 'bg-[#f00856] text-white shadow-lg shadow-[#f00856]/25'
-                          : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 border border-white/5'
-                      }`}
-                    >
-                      <span>{tab.label}</span>
-                      <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono ${
-                        orderFilter === tab.id ? 'bg-black/30 text-white' : 'bg-white/10 text-slate-400'
-                      }`}>
-                        {count}
-                      </span>
-                    </button>
-                  );
-                })}
+                {/* Botón de alternar entre Historial Principal y Pedidos Ocultos */}
+                <div className="shrink-0 flex items-center">
+                  <button
+                    onClick={() => {
+                      setShowHiddenOrders(!showHiddenOrders);
+                      setOrderFilter('all');
+                    }}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
+                      showHiddenOrders
+                        ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-lg shadow-amber-500/10'
+                        : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 border-white/10'
+                    }`}
+                  >
+                    {showHiddenOrders ? (
+                      <>
+                        <Eye className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Ver pedidos principales</span>
+                      </>
+                    ) : (
+                      <>
+                        <EyeOff className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Ver pedidos ocultos</span>
+                        {hiddenOrderIds.size > 0 && (
+                          <span className="px-1.5 py-0.2 rounded-md text-[10px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                            {hiddenOrderIds.size}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
+
+              {/* Mensaje de Confirmación Visual Transitorio */}
+              {hidingSuccessMsg && (
+                <div className="bg-emerald-500/15 border border-emerald-500/30 rounded-2xl p-4 flex items-center gap-3 text-emerald-300 text-xs font-bold animate-fade-in shadow-lg shadow-emerald-500/5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{hidingSuccessMsg}</span>
+                </div>
+              )}
 
               {/* Error state with retry button */}
               {ordersError && (
@@ -1375,6 +1498,29 @@ export default function CustomerPortal() {
                         >
                           <HelpCircle className="w-3.5 h-3.5" /> Asistencia
                         </button>
+
+                        {/* Opción Discreta: Eliminar del historial / Restaurar al historial */}
+                        {showHiddenOrders ? (
+                          <button
+                            onClick={() => handleRestoreOrder(order)}
+                            disabled={actionInProgressId === order.id}
+                            className="flex items-center gap-1.5 px-3.5 py-2 ml-auto text-amber-400 hover:text-amber-300 hover:bg-amber-500/10 font-bold text-xs rounded-xl transition-colors border border-amber-500/20 disabled:opacity-50"
+                            title="Restaurar este pedido al historial principal"
+                          >
+                            <RotateCcw className={`w-3.5 h-3.5 ${actionInProgressId === order.id ? 'animate-spin' : ''}`} />
+                            <span>{actionInProgressId === order.id ? 'Restaurando...' : 'Restaurar al historial'}</span>
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setHidingOrderModal(order)}
+                            disabled={actionInProgressId === order.id}
+                            className="flex items-center gap-1.5 px-3 py-2 ml-auto text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 font-medium text-xs rounded-xl transition-colors border border-transparent hover:border-rose-500/20 disabled:opacity-50"
+                            title="Eliminar de la lista visible de compras"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Eliminar del historial</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -2467,6 +2613,72 @@ export default function CustomerPortal() {
                 className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-lg shadow-rose-600/30"
               >
                 {cancellingOrder ? 'Cancelando...' : 'Confirmar Cancelación'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmación: Eliminar Pedido del Historial */}
+      {hidingOrderModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0e131f] border border-white/10 rounded-2xl max-w-md w-full p-6 space-y-5 animate-scale-up shadow-2xl">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white">¿Eliminar este pedido de tu historial?</h3>
+                  <p className="text-xs text-slate-400 font-mono">
+                    {hidingOrderModal.order_number || `#${hidingOrderModal.id.slice(0, 8).toUpperCase()}`}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setHidingOrderModal(null)}
+                disabled={actionInProgressId === hidingOrderModal.id}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-300 leading-relaxed space-y-2">
+              <p>
+                El pedido <strong>{hidingOrderModal.order_number || `#${hidingOrderModal.id.slice(0, 8).toUpperCase()}`}</strong> dejará de aparecer en tu lista principal de compras.
+              </p>
+              <div className="p-3 bg-white/5 border border-white/10 rounded-xl text-[11px] text-slate-400 space-y-1">
+                <p className="font-semibold text-slate-200">Información importante:</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  <li>Esta acción no cancela pagos, devoluciones ni gestiones pendientes.</li>
+                  <li>No modifica tu estado ante vendedores, envíos ni facturación.</li>
+                  <li>Podrás recuperarlo en cualquier momento desde <strong>Pedidos ocultos</strong>.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                onClick={() => setHidingOrderModal(null)}
+                disabled={actionInProgressId === hidingOrderModal.id}
+                className="px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition disabled:opacity-50"
+              >
+                No, conservar
+              </button>
+              <button
+                onClick={handleHideOrderConfirm}
+                disabled={actionInProgressId === hidingOrderModal.id}
+                className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition disabled:opacity-50 flex items-center justify-center gap-1.5 shadow-lg shadow-rose-600/30"
+              >
+                {actionInProgressId === hidingOrderModal.id ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Ocultando...
+                  </span>
+                ) : (
+                  <span>Eliminar del historial</span>
+                )}
               </button>
             </div>
           </div>
