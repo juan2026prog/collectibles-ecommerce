@@ -33,9 +33,9 @@ Deno.serve(async (req: Request) => {
     console.log("create-handy-payment started");
 
     const user = await verifyOptionalAuth(req);
-    const body = (await req.json()) as CreateHandyPaymentRequest;
-    const orderId = body.order_id;
-    const customerEmail = (body.customer_email || "").trim().toLowerCase();
+    const body = (await req.json()) as any;
+    const orderId = body?.order_id || body?.orderId;
+    const customerEmail = (body?.customer_email || body?.customerEmail || "").trim().toLowerCase();
 
     console.log("order_id:", orderId);
 
