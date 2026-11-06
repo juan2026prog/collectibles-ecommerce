@@ -258,14 +258,14 @@ Deno.serve(async (req: Request) => {
     // CallbackUrl must be exactly:
     const callbackUrl = "https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/handy-webhook";
 
-    const requestPayload = {
+    // Strictly match official Handy Boton de Pago v2.0 specification
+    const requestPayload: Record<string, any> = {
       Cart: {
         Currency: currencyCode,
         TotalAmount: finalTotalAmount,
         TaxedAmount: 0.0,
         Products: products,
         InvoiceNumber: invoiceNumber,
-        LinkImageUrl: linkImageUrl,
         TransactionExternalId: transactionExternalId,
       },
       Client: {
@@ -273,20 +273,22 @@ Deno.serve(async (req: Request) => {
         SiteUrl: returnSuccessUrl,
       },
       CallbackURL: callbackUrl,
-      CallbackUrl: callbackUrl, // Send both casings to be absolutely foolproof
-      RedirectUrl: returnSuccessUrl,
-      RedirectURL: returnSuccessUrl,
-      ReturnUrl: returnSuccessUrl,
-      ReturnURL: returnSuccessUrl,
-      SuccessUrl: returnSuccessUrl,
-      SuccessURL: returnSuccessUrl,
       ResponseType: "Json",
-      Customer: {
-        Name: getCustomerName(order),
+    };
+
+    if (linkImageUrl) {
+      requestPayload.Cart.LinkImageUrl = linkImageUrl;
+    }
+
+    // Include Customer if available
+    const customerName = getCustomerName(order);
+    if (order.customer_email || customerName) {
+      requestPayload.Customer = {
+        Name: customerName,
         Email: order.customer_email,
         Phone: order.customer_phone || undefined,
-      },
-    };
+      };
+    }
 
     console.log("Handy payload:", JSON.stringify(requestPayload, null, 2));
 
