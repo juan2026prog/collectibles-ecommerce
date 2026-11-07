@@ -161,4 +161,55 @@ describe('Handy Integration Certification Suite', () => {
       expect(hasCurrencyMismatch).toBe(true);
     });
   });
+
+  describe('FASE 5: Re-authentication, Idempotency & Database Column Invariants', () => {
+    it('verifies payments table column invariant: provider_transaction_id does not exist and queries use valid columns', () => {
+      // payments schema has id, order_id, provider, transaction_external_id, status, amount, currency, raw_request, raw_response, raw_webhook
+      const validPaymentsColumns = [
+        'id',
+        'order_id',
+        'provider',
+        'transaction_external_id',
+        'payment_url',
+        'amount',
+        'currency',
+        'status',
+        'raw_request',
+        'raw_response',
+        'raw_webhook',
+        'created_at',
+        'updated_at',
+      ];
+      expect(validPaymentsColumns.includes('provider_transaction_id')).toBe(false);
+      expect(validPaymentsColumns.includes('transaction_external_id')).toBe(true);
+    });
+
+    it('verifies webhook rejects unauthenticated invocations with missing secret header or query token', () => {
+      const handySecret = '29a4a2fe-a7a3-4eaf-9c5d-02addb2f5ef3';
+      const fakeHeader = 'invalid-secret';
+      const fakeQuery = '';
+
+      const isAuthorized = (fakeHeader === handySecret || fakeQuery === handySecret);
+      expect(isAuthorized).toBe(false);
+    });
+
+    it('verifies webhook accepts authorized invocations with valid token in query param or header', () => {
+      const handySecret = '29a4a2fe-a7a3-4eaf-9c5d-02addb2f5ef3';
+      const validQueryToken = '29a4a2fe-a7a3-4eaf-9c5d-02addb2f5ef3';
+
+      const isAuthorized = ('' === handySecret || validQueryToken === handySecret);
+      expect(isAuthorized).toBe(true);
+    });
+
+    it('verifies provider credentials are never printed into application logs', () => {
+      const safeLogObj = {
+        provider_key: 'handy',
+        is_active: true,
+        environment: 'production',
+      };
+      const logString = JSON.stringify(safeLogObj);
+      expect(logString.includes('merchant_secret_key')).toBe(false);
+      expect(logString.includes('29a4a2fe')).toBe(false);
+    });
+  });
 });

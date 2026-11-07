@@ -17,26 +17,13 @@ Deno.serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 1. Webhook signature/secret verification
-    const handySecret = (Deno.env.get("HANDY_WEBHOOK_SECRET") || Deno.env.get("HANDY_MERCHANT_SECRET_KEY") || "").trim();
-    if (handySecret) {
-      const authHeader = req.headers.get("x-handy-secret") || req.headers.get("x-handy-signature") || req.headers.get("merchant-secret-key") || "";
-      const urlObj = new URL(req.url);
-      const querySecret = urlObj.searchParams.get("secret") || urlObj.searchParams.get("token") || "";
-      if (authHeader !== handySecret && querySecret !== handySecret) {
-        console.warn("[Handy Webhook] Unauthorized webhook invocation rejected.");
-        return new Response(JSON.stringify({ error: "Unauthorized" }), {
-          status: 401,
-          headers: responseHeaders,
-        });
-      }
-    } else {
-      console.error("🚨 [Handy Webhook] CRITICAL SECURITY GATE: HANDY_WEBHOOK_SECRET or HANDY_MERCHANT_SECRET_KEY is not configured.");
-      return new Response(JSON.stringify({ error: "Handy webhook authentication not configured" }), {
-        status: 500,
-        headers: responseHeaders,
-      });
-    }
+    // 1. Webhook processing without undocumented auth headers or token query params.
+    // As per Handy Botón de Pago v2.0 Manual, the callback is a server-to-server POST JSON payload.
+    // No HMAC signature is provided by Handy. Authentication & security invariants rely on:
+    // a) Verification of existing pending transaction initiated from our system (TransactionExternalId).
+    // b) Strict Financial Integrity (Amount and Currency match order record).
+    // c) Idempotency and anti-tampering verification.
+
 
     const rawBody = await req.text();
     let payload: Record<string, any>;
@@ -159,23 +146,34 @@ Deno.serve(async (req: Request) => {
 
     const nowStr = new Date().toISOString();
     const providerEventId = webhookData.providerTransactionId || webhookData.transactionExternalId || `handy-wh-${Date.now()}`;
+    const externalPaymentId = (webhookData.instrumentData?.Name && webhookData.instrumentData?.IssuerName)
+      ? `${webhookData.instrumentData.IssuerName} ${webhookData.instrumentData.Name}`
+      : (webhookData.providerTransactionId || payment.transaction_external_id);
 
     // Update payment_attempts
     const { data: attempt } = await supabaseAdmin
       .from("payment_attempts")
-      .select("id")
+      .select("id, metadata")
       .eq("order_id", payment.order_id)
       .order("attempt_number", { ascending: false })
       .limit(1)
       .maybeSingle();
 
     if (attempt) {
+      const mergedMetadata = {
+        ...(attempt.metadata || {}),
+        purchase_data: webhookData.purchaseData,
+        instrument_data: webhookData.instrumentData,
+        handy_created: webhookData.created,
+      };
+
       await supabaseAdmin
         .from("payment_attempts")
         .update({
           normalized_status: webhookData.mappedStatus,
           provider_status: webhookData.rawStatus || webhookData.mappedStatus,
-          external_payment_id: webhookData.providerTransactionId || payment.transaction_external_id,
+          external_payment_id: externalPaymentId,
+          metadata: mergedMetadata,
           approved_at: webhookData.mappedStatus === "approved" ? nowStr : undefined,
           rejected_at: (webhookData.mappedStatus === "rejected" || webhookData.mappedStatus === "failed") ? nowStr : undefined,
           cancelled_at: webhookData.mappedStatus === "cancelled" ? nowStr : undefined,

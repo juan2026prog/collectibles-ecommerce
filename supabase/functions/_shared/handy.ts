@@ -93,12 +93,45 @@ export function extractHandyWebhookData(payload: Record<string, any>) {
 
   const statusStr = String(rawStatus ?? "");
 
+  const purchaseData = payload.PurchaseData || payload.purchaseData || null;
+  const instrumentData = payload.InstrumentData || payload.instrumentData || null;
+
+  const totalAmount = Number(getFirstValue(payload, [
+    "PurchaseData.TotalAmount",
+    "purchaseData.totalAmount",
+    "PurchaseData.Amount",
+    "purchaseData.amount",
+    "TotalAmount",
+    "totalAmount",
+    "Amount",
+    "amount",
+  ]) || 0);
+
+  const currency = Number(getFirstValue(payload, [
+    "PurchaseData.Currency",
+    "purchaseData.currency",
+    "Currency",
+    "currency",
+  ]) || 858);
+
+  const created = String(getFirstValue(payload, [
+    "PurchaseData.Created",
+    "purchaseData.created",
+    "Created",
+    "created",
+  ]) || "");
+
   return {
     transactionExternalId,
     providerTransactionId,
     status: statusStr,
     rawStatus: statusStr,
     mappedStatus: mapHandyPaymentStatus(rawStatus),
+    totalAmount,
+    currency,
+    created,
+    purchaseData,
+    instrumentData,
   };
 }
 

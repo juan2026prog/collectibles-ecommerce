@@ -291,7 +291,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: handyPayment } = await supabaseClient
         .from("payments")
-        .select("id, status, transaction_external_id, provider_transaction_id")
+        .select("id, status, transaction_external_id")
         .eq("order_id", order_id)
         .eq("provider", "handy")
         .order("created_at", { ascending: false })
@@ -304,7 +304,7 @@ Deno.serve(async (req: Request) => {
           supabaseUrl,
           supabaseServiceRoleKey,
           order_id,
-          handyPayment.provider_transaction_id || handyPayment.transaction_external_id || handyPayment.id,
+          handyPayment.transaction_external_id || handyPayment.id,
         );
 
         return new Response(JSON.stringify({ 

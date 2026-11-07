@@ -44,8 +44,6 @@ Deno.serve(async (req: Request) => {
     }
 
     const handy = await getHandyProviderConfig(supabaseAdmin);
-    
-    console.log("Handy provider raw:", handy.provider);
 
     if (handy.provider.is_active !== true) {
       return new Response(
@@ -55,7 +53,6 @@ Deno.serve(async (req: Request) => {
           details: {
             provider_key: handy.provider.provider_key,
             is_active: handy.provider.is_active,
-            config: handy.provider.config
           }
         }),
         {
