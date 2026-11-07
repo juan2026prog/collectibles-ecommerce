@@ -74,7 +74,13 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // STRICT FINANCIAL INTEGRITY VALIDATION: Verify Amount and Currency against order
+    // STRICT FINANCIAL INTEGRITY VALIDATION:
+    // When Handy reports approved status, require valid PurchaseData.TotalAmount and PurchaseData.Currency.
+    // Zero fallbacks to order amounts or default currencies.
+    // Compare in minor units (cents / integer comparison) with math rounding.
+    let financialValidationPassed = false;
+    let financialValidationError: string | null = null;
+
     if (webhookData.mappedStatus === "approved") {
       const { data: orderRecord } = await supabaseAdmin
         .from("orders")
@@ -90,51 +96,57 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const receivedAmount = Number(getFirstValue(payload, [
-        "Amount",
-        "amount",
-        "TotalAmount",
-        "totalAmount",
-        "PurchaseData.Amount",
-        "purchaseData.amount",
-        "Cart.TotalAmount",
-        "cart.totalAmount"
-      ]) || payment.amount || 0);
+      const receivedAmount = webhookData.totalAmount;
+      const receivedCurrency = webhookData.currency;
 
-      const orderAmount = Number(orderRecord.total_amount || 0);
-      const expectedCurrency = String(orderRecord.currency || "UYU").toUpperCase();
-      const expectedHandyCurrencyCode = expectedCurrency === "USD" ? 840 : 858;
+      if (!Number.isFinite(receivedAmount) || receivedAmount <= 0) {
+        financialValidationError = "Missing or invalid PurchaseData.TotalAmount";
+        console.error(`🚨 [Handy Webhook] INVALID_AMOUNT for order ${payment.order_id}: received ${receivedAmount}`);
+      } else if (!Number.isFinite(receivedCurrency) || (receivedCurrency !== 858 && receivedCurrency !== 840)) {
+        financialValidationError = "Missing or invalid PurchaseData.Currency";
+        console.error(`🚨 [Handy Webhook] INVALID_CURRENCY for order ${payment.order_id}: received ${receivedCurrency}`);
+      } else {
+        const expectedCurrency = String(orderRecord.currency || "UYU").toUpperCase();
+        const expectedHandyCurrencyCode = expectedCurrency === "USD" ? 840 : 858;
 
-      const receivedCurrency = Number(getFirstValue(payload, [
-        "Currency",
-        "currency",
-        "CurrencyCode",
-        "currencyCode",
-        "PurchaseData.Currency",
-        "purchaseData.currency",
-        "Cart.Currency",
-        "cart.currency"
-      ]) || 858);
+        if (receivedCurrency !== expectedHandyCurrencyCode) {
+          financialValidationError = `Currency mismatch: expected ${expectedHandyCurrencyCode}, received ${receivedCurrency}`;
+          console.error(`🚨 [Handy Webhook] CURRENCY_MISMATCH for order ${payment.order_id}: ${financialValidationError}`);
+        } else {
+          // Compare amounts using minor currency units (cents) to avoid IEEE 754 precision issues
+          const receivedCents = Math.round(receivedAmount * 100);
+          const orderCents = Math.round(Number(orderRecord.total_amount || 0) * 100);
 
-      if (receivedCurrency && receivedCurrency !== expectedHandyCurrencyCode) {
-        console.error(`🚨 [Handy Webhook] CURRENCY MISMATCH for order ${payment.order_id}: expected code ${expectedHandyCurrencyCode}, received ${receivedCurrency}`);
-        return new Response(JSON.stringify({ received: true, error: "Currency mismatch" }), {
-          status: 200,
-          headers: responseHeaders,
-        });
+          if (receivedCents !== orderCents) {
+            financialValidationError = `Amount mismatch: expected ${orderCents} cents, received ${receivedCents} cents`;
+            console.error(`🚨 [Handy Webhook] AMOUNT_MISMATCH for order ${payment.order_id}: ${financialValidationError}`);
+          } else {
+            financialValidationPassed = true;
+          }
+        }
       }
+    }
 
-      if (receivedAmount && Math.abs(receivedAmount - orderAmount) > 1.0) {
-        console.error(`🚨 [Handy Webhook] AMOUNT MISMATCH for order ${payment.order_id}: expected ${orderAmount}, received ${receivedAmount}`);
-        return new Response(JSON.stringify({ received: true, error: "Amount mismatch" }), {
-          status: 200,
-          headers: responseHeaders,
-        });
+    // Check if auto-confirmation is allowed.
+    // SECURITY GATE: In Handy Botón de Pago v2.0, Handy does NOT provide an HMAC signature or transaction status query API.
+    // Automated auto-confirmation is ONLY permitted if explicit env flag HANDY_AUTO_CONFIRM_ENABLED is set to 'true'.
+    // Otherwise, all valid approved notifications are securely registered with reconciliation_status = 'pending_reconciliation'
+    // and payment_attempts normalized_status = 'manual_verification_required', requiring administrative verification.
+    const autoConfirmEnabled = (Deno.env.get("HANDY_AUTO_CONFIRM_ENABLED") || "false").trim().toLowerCase() === "true";
+    const canAutoConfirm = autoConfirmEnabled && financialValidationPassed && webhookData.mappedStatus === "approved";
+
+    // Determine normalized status to persist
+    let normalizedAttemptStatus = webhookData.mappedStatus;
+    if (webhookData.mappedStatus === "approved") {
+      if (!financialValidationPassed) {
+        normalizedAttemptStatus = "manual_verification_required";
+      } else if (!canAutoConfirm) {
+        normalizedAttemptStatus = "manual_verification_required";
       }
     }
 
     const paymentUpdate: Record<string, any> = {
-      status: webhookData.mappedStatus,
+      status: canAutoConfirm ? "approved" : (webhookData.mappedStatus === "approved" ? "pending" : webhookData.mappedStatus),
       raw_webhook: payload,
       updated_at: new Date().toISOString(),
     };
@@ -165,16 +177,19 @@ Deno.serve(async (req: Request) => {
         purchase_data: webhookData.purchaseData,
         instrument_data: webhookData.instrumentData,
         handy_created: webhookData.created,
+        financial_validation_passed: financialValidationPassed,
+        financial_validation_error: financialValidationError,
+        auto_confirm_applied: canAutoConfirm,
       };
 
       await supabaseAdmin
         .from("payment_attempts")
         .update({
-          normalized_status: webhookData.mappedStatus,
+          normalized_status: normalizedAttemptStatus,
           provider_status: webhookData.rawStatus || webhookData.mappedStatus,
           external_payment_id: externalPaymentId,
           metadata: mergedMetadata,
-          approved_at: webhookData.mappedStatus === "approved" ? nowStr : undefined,
+          approved_at: canAutoConfirm ? nowStr : undefined,
           rejected_at: (webhookData.mappedStatus === "rejected" || webhookData.mappedStatus === "failed") ? nowStr : undefined,
           cancelled_at: webhookData.mappedStatus === "cancelled" ? nowStr : undefined,
           expired_at: webhookData.mappedStatus === "expired" ? nowStr : undefined,
@@ -189,19 +204,23 @@ Deno.serve(async (req: Request) => {
       payment_attempt_id: attempt?.id,
       provider: "handy",
       event_type: `webhook_${webhookData.mappedStatus}`,
-      normalized_status: webhookData.mappedStatus,
+      normalized_status: normalizedAttemptStatus,
       provider_status: webhookData.rawStatus || webhookData.mappedStatus,
       provider_event_id: providerEventId,
       source: "webhook",
       payload_sanitized: payload,
-      processing_result: `Webhook de Handy procesado: ${webhookData.mappedStatus}`,
+      processing_result: canAutoConfirm
+        ? `Webhook de Handy procesado y aprobado automáticamente.`
+        : (financialValidationPassed
+            ? `Webhook de Handy recibido. Pendiente de verificación administrativa (confirmación automática inactiva).`
+            : `Webhook de Handy rechazado por validación financiera: ${financialValidationError}`),
       occurred_at: nowStr,
     });
     if (eventInsertError) {
       console.warn("[Handy Webhook] Note on payment_event insert:", eventInsertError.message);
     }
 
-    if (webhookData.mappedStatus === "approved") {
+    if (canAutoConfirm) {
       await finalizeOrderIfNeeded(
         supabaseAdmin,
         supabaseUrl,
@@ -209,6 +228,16 @@ Deno.serve(async (req: Request) => {
         payment.order_id,
         webhookData.providerTransactionId || webhookData.transactionExternalId,
       );
+    } else if (webhookData.mappedStatus === "approved") {
+      // Order remains awaiting confirmation / pending_reconciliation
+      await supabaseAdmin
+        .from("orders")
+        .update({
+          payment_status: "pending",
+          reconciliation_status: "pending_reconciliation",
+          updated_at: nowStr,
+        })
+        .eq("id", payment.order_id);
     } else if (webhookData.mappedStatus === "refunded") {
       await supabaseAdmin
         .from("orders")

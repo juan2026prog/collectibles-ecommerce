@@ -96,23 +96,18 @@ export function extractHandyWebhookData(payload: Record<string, any>) {
   const purchaseData = payload.PurchaseData || payload.purchaseData || null;
   const instrumentData = payload.InstrumentData || payload.instrumentData || null;
 
-  const totalAmount = Number(getFirstValue(payload, [
-    "PurchaseData.TotalAmount",
-    "purchaseData.totalAmount",
-    "PurchaseData.Amount",
-    "purchaseData.amount",
-    "TotalAmount",
-    "totalAmount",
-    "Amount",
-    "amount",
-  ]) || 0);
+  // STRICT FINANCIAL EXTRACTION:
+  // Must come strictly from PurchaseData.TotalAmount (or PurchaseData.Amount) without falling back to order/payment values
+  const rawTotalAmount = purchaseData ? (purchaseData.TotalAmount ?? purchaseData.totalAmount ?? purchaseData.Amount ?? purchaseData.amount) : undefined;
+  const parsedTotalAmount = rawTotalAmount !== undefined && rawTotalAmount !== null && rawTotalAmount !== ""
+    ? Number(rawTotalAmount)
+    : NaN;
 
-  const currency = Number(getFirstValue(payload, [
-    "PurchaseData.Currency",
-    "purchaseData.currency",
-    "Currency",
-    "currency",
-  ]) || 858);
+  // Must come strictly from PurchaseData.Currency without falling back to 858
+  const rawCurrency = purchaseData ? (purchaseData.Currency ?? purchaseData.currency) : undefined;
+  const parsedCurrency = rawCurrency !== undefined && rawCurrency !== null && rawCurrency !== ""
+    ? Number(rawCurrency)
+    : NaN;
 
   const created = String(getFirstValue(payload, [
     "PurchaseData.Created",
@@ -127,8 +122,8 @@ export function extractHandyWebhookData(payload: Record<string, any>) {
     status: statusStr,
     rawStatus: statusStr,
     mappedStatus: mapHandyPaymentStatus(rawStatus),
-    totalAmount,
-    currency,
+    totalAmount: parsedTotalAmount,
+    currency: parsedCurrency,
     created,
     purchaseData,
     instrumentData,

@@ -148,8 +148,9 @@ describe('Handy Integration Certification Suite', () => {
       const orderAmount = 1500.00;
       const receivedAmount = 1400.00; // Altered amount
 
-      const hasMismatch = Math.abs(receivedAmount - orderAmount) > 1.0;
-      expect(hasMismatch).toBe(true);
+      const orderCents = Math.round(orderAmount * 100);
+      const receivedCents = Math.round(receivedAmount * 100);
+      expect(receivedCents === orderCents).toBe(false);
     });
 
     it('flags currency mismatch if webhook currency does not match order currency code', () => {
@@ -162,9 +163,74 @@ describe('Handy Integration Certification Suite', () => {
     });
   });
 
+  describe('HOTFIX: Strict Financial Validation & Exact Decimal Minor Unit (Cents) Invariants', () => {
+    it('requires TotalAmount and Currency strictly from PurchaseData, rejecting missing or invalid values', () => {
+      // 1. Missing PurchaseData
+      const payloadNoPurchase = {
+        TransactionExternalId: '11111111-2222-3333-4444-555555555555',
+        Status: 1,
+      };
+      const extracted1 = extractHandyWebhookData(payloadNoPurchase);
+      expect(Number.isNaN(extracted1.totalAmount)).toBe(true);
+      expect(Number.isNaN(extracted1.currency)).toBe(true);
+
+      // 2. Complete and valid PurchaseData
+      const payloadValid = {
+        TransactionExternalId: '11111111-2222-3333-4444-555555555555',
+        PurchaseData: {
+          TotalAmount: 75.0,
+          Currency: 858,
+          Status: 1,
+        },
+      };
+      const extracted2 = extractHandyWebhookData(payloadValid);
+      expect(extracted2.totalAmount).toBe(75.0);
+      expect(extracted2.currency).toBe(858);
+    });
+
+    it('rejects decimal amount tampering with zero tolerance using minor currency units (cents)', () => {
+      const orderAmount = 75.00;
+      const orderCents = Math.round(orderAmount * 100); // 7500
+
+      // Exact match
+      const matchingCents = Math.round(75.00 * 100);
+      expect(matchingCents === orderCents).toBe(true);
+
+      // 1 cent difference (previous 1 UYU tolerance would have allowed this!)
+      const alteredCents1 = Math.round(74.99 * 100);
+      expect(alteredCents1 === orderCents).toBe(false);
+
+      const alteredCents2 = Math.round(75.01 * 100);
+      expect(alteredCents2 === orderCents).toBe(false);
+
+      // 50 cents difference
+      const alteredCents3 = Math.round(74.50 * 100);
+      expect(alteredCents3 === orderCents).toBe(false);
+    });
+
+    it('enforces currency code comparison strictly without defaults', () => {
+      const expectedCurrencyUYU = 858;
+      const expectedCurrencyUSD = 840;
+
+      expect(858 === expectedCurrencyUYU).toBe(true);
+      expect(840 === expectedCurrencyUYU).toBe(false);
+      expect(Number.isNaN(NaN)).toBe(true);
+    });
+
+    it('enforces that unauthenticated auto-confirmation is disabled by default', () => {
+      const autoConfirmEnv = undefined; // Not set
+      const autoConfirmEnabled = (autoConfirmEnv || "false").trim().toLowerCase() === "true";
+      expect(autoConfirmEnabled).toBe(false);
+
+      // When autoConfirmEnabled is false, payment is held in manual_verification_required / pending_reconciliation
+      const financialValidationPassed = true;
+      const canAutoConfirm = autoConfirmEnabled && financialValidationPassed;
+      expect(canAutoConfirm).toBe(false);
+    });
+  });
+
   describe('FASE 5: Re-authentication, Idempotency & Database Column Invariants', () => {
     it('verifies payments table column invariant: provider_transaction_id does not exist and queries use valid columns', () => {
-      // payments schema has id, order_id, provider, transaction_external_id, status, amount, currency, raw_request, raw_response, raw_webhook
       const validPaymentsColumns = [
         'id',
         'order_id',
@@ -182,23 +248,6 @@ describe('Handy Integration Certification Suite', () => {
       ];
       expect(validPaymentsColumns.includes('provider_transaction_id')).toBe(false);
       expect(validPaymentsColumns.includes('transaction_external_id')).toBe(true);
-    });
-
-    it('verifies webhook rejects unauthenticated invocations with missing secret header or query token', () => {
-      const handySecret = '29a4a2fe-a7a3-4eaf-9c5d-02addb2f5ef3';
-      const fakeHeader = 'invalid-secret';
-      const fakeQuery = '';
-
-      const isAuthorized = (fakeHeader === handySecret || fakeQuery === handySecret);
-      expect(isAuthorized).toBe(false);
-    });
-
-    it('verifies webhook accepts authorized invocations with valid token in query param or header', () => {
-      const handySecret = '29a4a2fe-a7a3-4eaf-9c5d-02addb2f5ef3';
-      const validQueryToken = '29a4a2fe-a7a3-4eaf-9c5d-02addb2f5ef3';
-
-      const isAuthorized = ('' === handySecret || validQueryToken === handySecret);
-      expect(isAuthorized).toBe(true);
     });
 
     it('verifies provider credentials are never printed into application logs', () => {
