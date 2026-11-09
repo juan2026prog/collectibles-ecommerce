@@ -139,6 +139,9 @@ serve(async (req: Request) => {
     const origin = req.headers.get("origin") || "https://collectibles-ecommerce.vercel.app";
 
     if (provider === "dlocal") {
+      if (config.payments_dlocal_go_enabled !== "true") {
+        throw new Error("dLocal Go no está habilitado para Uruguay.");
+      }
       const apiKey = (config.payments_dlocal_go_api_key || "").trim();
       if (!apiKey) {
         throw new Error("dLocal Go API key not configured. Set it in Admin > Settings > Payments.");
