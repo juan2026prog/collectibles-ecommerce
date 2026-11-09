@@ -2046,7 +2046,7 @@ export default function Checkout() {
   }, []);
 
   const mercadopagoEnabled = settings['payments_mercadopago_enabled'] !== 'false';
-  const dlocalgoEnabled = settings['payments_dlocal_go_enabled'] !== 'false';
+  const dlocalgoEnabled = settingsLoaded && settings['payments_dlocal_go_enabled'] === 'true';
   const paypalEnabled = settings['payments_paypal_enabled'] !== 'false';
   const handyProvider = publicPaymentProviders.find((provider) => provider.provider_key === 'handy');
   const handyEnabled = !!handyProvider?.is_active;
