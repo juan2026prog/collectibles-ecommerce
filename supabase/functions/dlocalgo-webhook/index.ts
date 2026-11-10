@@ -36,25 +36,31 @@ serve(async (req) => {
 
     const { data: settings } = await supabase.from("site_settings").select("key, value");
     const config = Object.fromEntries((settings || []).map((item: any) => [item.key, item.value]));
-    const isSandbox = config.payments_dlocal_go_sandbox === "true";
     const xLogin = (config.payments_dlocal_go_x_login || "").trim();
     const secretKey = (config.payments_dlocal_go_secret_key || "").trim();
     const xDate = req.headers.get("X-Date") || "";
     const authorization = req.headers.get("Authorization") || "";
 
-    if (xLogin && secretKey) {
-      const expectedSignature = await createSignature(secretKey, xLogin, xDate, rawBody);
-      if (!authorization || authorization !== expectedSignature) {
-        console.error("Invalid dLocal signature", { xDate, authorization });
-        return new Response(JSON.stringify({ error: "Invalid webhook signature" }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    } else if (!isSandbox) {
-      console.error("dLocal webhook credentials missing in production");
-      return new Response(JSON.stringify({ error: "Webhook signature credentials are missing" }), {
-        status: 500,
+    // Sandbox callbacks must be authenticated too: never accept unsigned
+    // requests capable of marking orders paid or modifying inventory.
+    if (!xLogin || !secretKey) {
+      console.error("dLocal webhook signature configuration missing");
+      return new Response(JSON.stringify({ error: "Webhook authentication not configured" }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (!xDate || !authorization) {
+      return new Response(JSON.stringify({ error: "Missing webhook authentication" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const expectedSignature = await createSignature(secretKey, xLogin, xDate, rawBody);
+    if (authorization !== expectedSignature) {
+      console.error("Invalid dLocal webhook signature");
+      return new Response(JSON.stringify({ error: "Invalid webhook signature" }), {
+        status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
