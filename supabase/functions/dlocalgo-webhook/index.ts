@@ -27,7 +27,10 @@ serve(async (req) => {
     const rawBody = await req.text();
     const dlocalData = JSON.parse(rawBody || "{}");
     const { order_id, status, id: paymentId } = dlocalData;
-    if (!order_id) throw new Error("Missing order_id");
+    if (!order_id || !paymentId) throw new Error("Missing order_id or payment id");
+    if (!["PAID", "APPROVED", "REJECTED", "CANCELLED", "REFUNDED", "CHARGEBACK", "PENDING"].includes(status)) {
+      throw new Error("Unsupported dLocal payment status");
+    }
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
