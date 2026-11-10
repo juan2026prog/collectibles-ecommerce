@@ -2046,7 +2046,11 @@ export default function Checkout() {
   }, []);
 
   const mercadopagoEnabled = settings['payments_mercadopago_enabled'] !== 'false';
-  const dlocalgoEnabled = settingsLoaded && settings['payments_dlocal_go_enabled'] === 'true';
+  // Isolated staging preview: public settings can lag behind the staging DB
+  // because of the public catalog bundle and browser cache. The backend still
+  // enforces the staging payment flag and sandbox endpoint independently.
+  const isIsolatedPaymentSandbox = import.meta.env.VITE_SUPABASE_URL === 'https://csnudufkpfzveoonjumy.supabase.co';
+  const dlocalgoEnabled = isIsolatedPaymentSandbox || (settingsLoaded && settings['payments_dlocal_go_enabled'] === 'true');
   const paypalEnabled = settings['payments_paypal_enabled'] !== 'false';
   const handyProvider = publicPaymentProviders.find((provider) => provider.provider_key === 'handy');
   const handyEnabled = !!handyProvider?.is_active;
