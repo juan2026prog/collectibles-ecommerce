@@ -76,9 +76,17 @@ serve(async (req) => {
 
     const { data: existingOrder } = await supabase
       .from("orders")
-      .select("status, payment_processed_at")
+      .select("status, payment_processed_at, payment_id, payment_method")
       .eq("id", order_id)
       .single();
+
+    if (!existingOrder || existingOrder.payment_method !== "dlocalgo" ||
+        !existingOrder.payment_id || String(existingOrder.payment_id) !== String(paymentId)) {
+      return new Response(JSON.stringify({ error: "Payment does not match the order" }), {
+        status: 409,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (existingOrder?.payment_processed_at && dbStatus === "paid") {
       return new Response(JSON.stringify({ received: true, skipped: true }), {
