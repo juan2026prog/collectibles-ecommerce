@@ -642,6 +642,14 @@ export function useProduct(slug: string | undefined) {
     async function fetch() {
       setLoading(true);
       try {
+        // Dedicated sandbox product: bypass production D1 and the full catalog joins,
+        // which are intentionally not replicated in the isolated staging database.
+        if (import.meta.env.VITE_SUPABASE_URL === 'https://csnudufkpfzveoonjumy.supabase.co' && slug === 'sandbox-dlocalgo-uruguay-prueba') {
+          const { data, error } = await supabase.from('products').select('*').eq('slug', slug).eq('status', 'published').eq('is_active', true).maybeSingle();
+          if (error) throw error;
+          setProduct(data ? { ...data, images: [], variants: [], product_tags: [], category: null, brand: null, vendor: null, vendor_store: null, reviews: [], product_group_items: [] } : null);
+          return;
+        }
         const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
         await PublicCatalogProvider.ensureRuntimeConfigReady();
         if (PublicCatalogProvider.isDomainEnabled('productDetail') && slug) {
