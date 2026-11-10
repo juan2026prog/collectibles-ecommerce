@@ -119,7 +119,7 @@ serve(async (req: Request) => {
           }
         }
 
-        if (allowedProvidersIntersection !== null && !allowedProvidersIntersection.includes(provider)) {
+        if (allowedProvidersIntersection !== null && !allowedProvidersIntersection.includes(provider === "dlocal" ? "dlocalgo" : provider)) {
           throw new Error(`El proveedor de pago ${provider} no está permitido para uno o más productos de esta orden.`);
         }
       }
