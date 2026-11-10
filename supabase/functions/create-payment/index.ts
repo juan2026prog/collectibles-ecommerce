@@ -180,33 +180,24 @@ serve(async (req: Request) => {
         throw new Error(`dLocal Go Error (${result.errorCode || response.status}): ${errorMessage}`);
       }
 
-      const checkoutUrl = result.redirect_url || result.checkout_url || result.link;
+      const checkoutUrl = result.redirect_url || result.checkout_url || result.link ||
+        (result.id ? `https://checkout.dlocalgo.com/collect/${encodeURIComponent(String(result.id))}` : null);
       if (checkoutUrl) {
-        await supabaseAdmin
+        // Keep the provider identity with the order so callbacks can be matched.
+        const { error: updateError } = await supabaseAdmin
           .from("orders")
           .update({
             payment_status: "redirected",
+            payment_method: "dlocalgo",
+            payment_id: result.id ? String(result.id) : null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", orderId);
-
-        return new Response(JSON.stringify({ checkout_url: checkoutUrl }), {
-          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-        });
-      }
-
-      if (result.id) {
-        await supabaseAdmin
-          .from("orders")
-          .update({
-            payment_status: "redirected",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", orderId);
+        if (updateError) throw updateError;
 
         return new Response(JSON.stringify({
-          checkout_url: `https://checkout.dlocalgo.com/collect/${result.id}`,
-          payment_id: result.id,
+          checkout_url: checkoutUrl,
+          payment_id: result.id || null,
         }), {
           headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         });
