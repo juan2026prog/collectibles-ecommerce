@@ -647,7 +647,9 @@ export function useProduct(slug: string | undefined) {
         if (import.meta.env.VITE_SUPABASE_URL === 'https://csnudufkpfzveoonjumy.supabase.co' && slug === 'sandbox-dlocalgo-uruguay-prueba') {
           const { data, error } = await supabase.from('products').select('*').eq('slug', slug).eq('status', 'published').eq('is_active', true).maybeSingle();
           if (error) throw error;
-          setProduct(data ? { ...data, images: [], variants: [], product_tags: [], category: null, brand: null, vendor: null, vendor_store: null, reviews: [], product_group_items: [] } : null);
+          const { data: sandboxVariants, error: variantError } = await supabase.from('product_variants').select('id, product_id, sku, name, price_adjustment, inventory_count, is_active').eq('product_id', data?.id || '00000000-0000-0000-0000-000000000000').eq('is_active', true);
+          if (variantError) throw variantError;
+          setProduct(data ? { ...data, images: [], variants: sandboxVariants || [], product_tags: [], category: null, brand: null, vendor: null, vendor_store: null, reviews: [], product_group_items: [] } : null);
           return;
         }
         const { PublicCatalogProvider } = await import('../lib/providers/PublicCatalogProvider');
