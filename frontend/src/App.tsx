@@ -163,6 +163,11 @@ function App() {
 
   return (
     <ErrorBoundary>
+    {import.meta.env.VITE_SUPABASE_URL === 'https://csnudufkpfzveoonjumy.supabase.co' && (
+      <div role="status" style={{position:'fixed',top:0,left:0,right:0,zIndex:99999,background:'#7c2d12',color:'#fff',textAlign:'center',fontWeight:700,padding:'6px 12px',fontSize:13,pointerEvents:'none'}}>
+        SANDBOX — SOLO PRUEBAS — NO REALIZAR PAGOS REALES
+      </div>
+    )}
     <BrowserRouter>
       <ScrollToTop />
       <AnalyticsProvider>
