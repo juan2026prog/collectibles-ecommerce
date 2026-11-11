@@ -300,9 +300,17 @@ Deno.serve(async (req: Request) => {
         throw new Error("La validación del pago no coincide con la orden.");
       }
       if (remoteStatus === "PAID" || remoteStatus === "APPROVED") {
-        const paidOrder = await finalizeOrderIfNeeded(
-          supabaseClient, supabaseUrl, supabaseServiceRoleKey, order_id, remoteId,
-        );
+        const { data: confirmation, error: confirmationError } = await supabaseClient.rpc("confirm_payment_atomic", {
+          p_order_id: order_id,
+          p_payment_provider: "dlocalgo",
+          p_payment_ref: remoteId,
+        });
+        if (confirmationError || !confirmation?.success) {
+          throw new Error(confirmationError?.message || confirmation?.code || "No se pudo confirmar el pago.");
+        }
+        const { data: paidOrder, error: paidOrderError } = await supabaseClient
+          .from("orders").select("*").eq("id", order_id).single();
+        if (paidOrderError || !paidOrder) throw new Error("No se pudo recuperar la orden confirmada.");
         return new Response(JSON.stringify({
           success: true, status: "paid", order: orderSummary(paidOrder, isFullyAuthorized),
         }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
