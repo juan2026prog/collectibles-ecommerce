@@ -147,6 +147,11 @@ serve(async (req: Request) => {
         throw new Error("dLocal Go API key not configured. Set it in Admin > Settings > Payments.");
       }
 
+      const secretKey = (config.payments_dlocal_go_secret_key || "").trim();
+      if (!secretKey) {
+        throw new Error("dLocal Go Secret Key not configured in backend settings.");
+      }
+
       const isSandbox = config.payments_dlocal_go_sandbox === "true";
       const apiBaseUrl = isSandbox ? "https://api-sbx.dlocalgo.com" : "https://api.dlocalgo.com";
       const requestBody = JSON.stringify({
@@ -169,7 +174,7 @@ serve(async (req: Request) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
+          "Authorization": `Bearer ${apiKey}:${secretKey}`,
         },
         body: requestBody,
       });
