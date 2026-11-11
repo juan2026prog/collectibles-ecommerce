@@ -170,7 +170,7 @@ serve(async (req: Request) => {
         },
       });
 
-      const response = await fetch(`${apiBaseUrl}/v1/checkout`, {
+      const response = await fetch(`${apiBaseUrl}/v1/payments`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
