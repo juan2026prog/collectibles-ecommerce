@@ -203,7 +203,7 @@ serve(async (req: Request) => {
         // Persist the provider transaction before returning the redirect.
         const { error: paymentRecordError } = await supabaseAdmin
           .from("payments")
-          .upsert({
+          .insert({
             order_id: orderId,
             provider: "dlocalgo",
             transaction_external_id: result.id ? String(result.id) : null,
@@ -212,7 +212,7 @@ serve(async (req: Request) => {
             currency,
             payment_url: checkoutUrl,
             updated_at: new Date().toISOString(),
-          }, { onConflict: "provider,transaction_external_id" });
+          });
         if (paymentRecordError) {
           console.error("Failed to persist dLocal payment", paymentRecordError.message);
           throw new Error("No se pudo registrar la transacción dLocal Go.");
