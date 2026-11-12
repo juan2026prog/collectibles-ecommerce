@@ -1,4 +1,8 @@
 -- Complete a verified manual refund atomically. This RPC never initiates a gateway refund.
+ALTER TABLE public.manual_refund_tasks
+  ADD COLUMN IF NOT EXISTS refund_id uuid REFERENCES public.refunds(id) ON DELETE SET NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS manual_refund_tasks_refund_id_uidx
+  ON public.manual_refund_tasks (refund_id) WHERE refund_id IS NOT NULL;
 -- Requires an administrator to have independently verified the payment-provider reversal.
 CREATE OR REPLACE FUNCTION public.confirm_manual_refund_atomic(
   p_refund_id uuid,
@@ -62,10 +66,10 @@ BEGIN
   UPDATE public.manual_refund_tasks
   SET status = 'completed', completed_at = now(), completed_by = v_actor,
       external_reference = v_reference, proof_url = v_proof
-  WHERE order_id = v_refund.order_id
+  WHERE refund_id = p_refund_id
+    AND order_id = v_refund.order_id
     AND payment_provider = 'handy'
-    AND status = 'pending'
-    AND amount = v_refund.amount;
+    AND status = 'pending';
 
   IF v_refund.suborder_id IS NOT NULL THEN
     -- A partial item refund must never mark the entire suborder as refunded.
