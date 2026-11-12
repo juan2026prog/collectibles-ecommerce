@@ -286,6 +286,31 @@ Deno.serve(async (req: Request) => {
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
+      } else if (refundRes.ok && refundResult.manualRequired === true) {
+        // Handy/dLocal require a verified manual refund. This is an accepted cancellation
+        // request, NOT a failed gateway refund and NOT proof the money was returned.
+        // refund-order already records the pending refund and administrative task.
+        const { error: pendingUpdateError } = await supabaseAdmin
+          .from("unified_order_requests")
+          .update({
+            status: "REFUND_PENDING",
+            admin_notes: "Devolución manual pendiente de verificación en la pasarela. No marcar como reembolsado hasta registrar comprobante y confirmación."
+          })
+          .eq("id", pendingReq.id);
+
+        if (pendingUpdateError) throw pendingUpdateError;
+
+        return new Response(JSON.stringify({
+          success: true,
+          manualRequired: true,
+          refundCompleted: false,
+          message: "Cancelación solicitada. La devolución del dinero requiere verificación y gestión administrativa.",
+          requestId: pendingReq.id,
+          status: "REFUND_PENDING"
+        }), {
+          status: 202,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
       } else {
         // Falló la reversión en la pasarela: marcar como REFUND_FAILED
         await supabaseAdmin
