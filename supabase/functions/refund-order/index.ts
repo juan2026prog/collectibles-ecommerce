@@ -196,10 +196,25 @@ Deno.serve(async (req: Request) => {
       .from("payments")
       .select("*")
       .eq("order_id", orderId)
-      .eq("status", "approved")
+      .in("status", ["approved", "partially_refunded"])
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    // If Handy already has a manual refund in progress, reconciliation must
+    // finish before opening another financial operation on the same payment.
+    if (order.payment_method === "handy") {
+      const { data: unresolvedRefunds, error: unresolvedError } = await supabaseAdmin
+        .from("refunds")
+        .select("id")
+        .eq("order_id", orderId)
+        .in("status", ["manual_refund_required", "reconciliation_required"])
+        .limit(1);
+      if (unresolvedError) throw unresolvedError;
+      if (unresolvedRefunds?.length) {
+        throw new Error("Hay una devolución Handy pendiente de verificación. Completá la conciliación antes de iniciar otro reembolso.");
+      }
+    }
 
     // 4. Validate Vendor Liquidation Status (Finance Protection)
     if (suborderId) {
