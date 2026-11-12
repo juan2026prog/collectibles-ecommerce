@@ -23,6 +23,7 @@ const ORDER_STATUSES = [
   { value: 'para_retirar', label: 'Lista para Retirar', color: 'bg-orange-100 text-orange-800' },
   { value: 'entregado', label: 'Entregada', color: 'bg-green-100 text-green-800' },
   { value: 'abandonada', label: 'Abandonada', color: 'bg-gray-100 text-gray-700' },
+  { value: 'refund_pending_manual', label: 'Devolución manual pendiente', color: 'bg-amber-100 text-amber-900' },
   { value: 'cancelada', label: 'Cancelada', color: 'bg-red-100 text-red-800' }
 ];
 
@@ -74,6 +75,10 @@ function getEffectivePaymentInfo(order: any, attempts: any[] = [], events: any[]
     statusLabel = 'PAGO CANCELADO / REEMBOLSADO';
     badgeColor = 'bg-purple-100 text-purple-800 border-purple-300';
     explanatoryMessage = 'El pago fue cancelado o reembolsado.';
+  } else if (normalizedStatus === 'manual_refund_required') {
+    statusLabel = 'DEVOLUCIÓN MANUAL PENDIENTE';
+    badgeColor = 'bg-amber-100 text-amber-900 border-amber-300';
+    explanatoryMessage = 'La devolución debe verificarse y registrarse administrativamente en la pasarela. No consta como reembolsada.';
   } else if (normalizedStatus === 'no_payment_attempt') {
     statusLabel = 'SIN INTENTO DE PAGO';
     badgeColor = 'bg-gray-100 text-gray-700 border-gray-300';
@@ -1678,7 +1683,7 @@ export default function AdminOrders() {
                 </h4>
 
                 {/* CANCELAR ORDEN - always visible except if already cancelada */}
-                {selectedOrder.status !== 'cancelada' && (
+                {!['cancelada', 'refund_pending_manual'].includes(selectedOrder.status) && (
                   <>
                     <p className="text-xs text-red-700">
                       {selectedOrder.status === 'pending' 

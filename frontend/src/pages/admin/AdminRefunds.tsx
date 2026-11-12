@@ -20,6 +20,7 @@ export default function AdminRefunds() {
 
   // Data lists
   const [refunds, setRefunds] = useState<any[]>([]);
+  const [manualProofFiles, setManualProofFiles] = useState<Record<string, File>>({});
   const [disputes, setDisputes] = useState<any[]>([]);
   const [adjustments, setAdjustments] = useState<any[]>([]);
   const [customerRequests, setCustomerRequests] = useState<any[]>([]);
@@ -405,157 +406,99 @@ export default function AdminRefunds() {
     }
   }
 
-  // Retry / Confirm Manual Refund
+  // Verify Handy manual refund via a single audited, server-side transaction.
+  // The admin must first perform and verify the refund in the Handy backoffice.
   async function handleResolveManualRefund(refund: any) {
-    const providerRefundId = await prompt('Introduce el ID de transacción de reembolso de la pasarela (opcional):', {
-      title: 'Confirmar Devolución Manual Realizada',
-      placeholder: 'ID de reembolso del portal de pago...'
+    if (refund.provider !== 'handy') {
+      toast.error('La confirmación manual de esta pantalla está habilitada solo para Handy.');
+      return;
+    }
+    const providerRefundId = await prompt('Referencia REAL de la devolución ya realizada en Handy (obligatoria):', {
+      title: 'Verificar devolución Handy',
+      placeholder: 'Identificador del reembolso en Handy'
     });
+    if (!providerRefundId?.trim()) return;
 
-    if (providerRefundId === null) return;
+    const proofFile = manualProofFiles[refund.id];
+    if (!proofFile) {
+      toast.error('Adjuntá el comprobante privado (PDF o imagen) antes de confirmar la devolución.');
+      return;
+    }
+    const allowedTypes: Record<string, string> = {
+      'application/pdf': 'pdf',
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp'
+    };
+    const proofExtension = allowedTypes[proofFile.type];
+    if (!proofExtension || proofFile.size <= 0 || proofFile.size > 10 * 1024 * 1024) {
+      toast.error('El comprobante debe ser PDF/JPG/PNG/WEBP y no superar 10 MB.');
+      return;
+    }
+
+    const approved = await confirm(
+      'Confirmá únicamente si el dinero YA fue devuelto en Handy y verificaste el comprobante. Esta acción registrará el reembolso de forma definitiva.',
+      { title: 'Confirmar devolución real', danger: true, confirmText: 'Confirmar devolución verificada', cancelText: 'Volver' }
+    );
+    if (!approved) return;
 
     try {
-      // 1. Update refund status to completed
-      const { error: refundErr } = await supabase
-        .from('refunds')
-        .update({
-          status: 'completed',
-          provider_refund_id: providerRefundId || 'MANUAL-' + Date.now(),
-          processed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', refund.id);
-
-      if (refundErr) throw refundErr;
-
-      // 2. Update payment status to refunded/partially_refunded
-      if (refund.payment_id) {
-        const { error: payErr } = await supabase
-          .from('payments')
-          .update({
-            status: refund.suborder_id ? 'partially_refunded' : 'refunded',
-            provider_refund_id: providerRefundId || 'MANUAL-' + Date.now(),
-            refund_amount: refund.amount,
-            refund_date: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', refund.payment_id);
-
-        if (payErr) throw payErr;
-      }
-
-      // 3. Update order / suborder status & recalculate parent order status
-      if (refund.suborder_id) {
-        const { error: subErr } = await supabase
-          .from('order_suborders')
-          .update({
-            status: 'refunded',
-            liquidation_status: refund.suborder?.liquidation_status === 'paid' ? 'paid' : 'cancelled',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', refund.suborder_id);
-
-        if (subErr) throw subErr;
-
-        // Check if all suborders are now refunded/cancelled
-        const { data: updatedSubs } = await supabase
-          .from('order_suborders')
-          .select('status')
-          .eq('parent_order_id', refund.order_id);
-
-        const allCancelledOrRefunded = updatedSubs && updatedSubs.every((s: any) => s.status === 'cancelled' || s.status === 'refunded');
-        const anyCancelledOrRefunded = updatedSubs && updatedSubs.some((s: any) => s.status === 'cancelled' || s.status === 'refunded');
-
-        let nextOrderStatus = refund.order?.status;
-        if (allCancelledOrRefunded) {
-          nextOrderStatus = 'refunded';
-        } else if (anyCancelledOrRefunded) {
-          nextOrderStatus = 'partially_refunded';
-        }
-
-        await supabase
-          .from('orders')
-          .update({
-            payment_status: allCancelledOrRefunded ? 'refunded' : 'partially_refunded',
-            status: nextOrderStatus,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', refund.order_id);
-
-      } else {
-        // Full order refunded
-        const { error: subErr } = await supabase
-          .from('order_suborders')
-          .update({
-            status: 'refunded',
-            liquidation_status: 'cancelled',
-            updated_at: new Date().toISOString()
-          })
-          .eq('parent_order_id', refund.order_id);
-
-        if (subErr) throw subErr;
-
-        const { error: ordErr } = await supabase
-          .from('orders')
-          .update({
-            status: 'refunded',
-            payment_status: 'refunded',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', refund.order_id);
-
-        if (ordErr) throw ordErr;
-      }
-
-      // 4. Log in payment_audit_logs
-      await supabase.from('payment_audit_logs').insert({
-        action: 'manual_refund_resolved',
-        order_id: refund.order_id,
-        suborder_id: refund.suborder_id,
-        payment_id: refund.payment_id,
-        refund_id: refund.id,
-        provider: refund.provider,
-        amount: refund.amount,
-        api_response: { resolved_manually: true, input_refund_id: providerRefundId }
+      const { data: userResult, error: userError } = await supabase.auth.getUser();
+      if (userError || !userResult.user) throw new Error('La sesión administrativa expiró.');
+      const path = `${userResult.user.id}/${refund.order_id}/handy-refund-${refund.id}-${Date.now()}.${proofExtension}`;
+      const { error: uploadError } = await supabase.storage
+        .from('order-dispute-evidence')
+        .upload(path, proofFile, { upsert: false, contentType: proofFile.type });
+      if (uploadError) throw uploadError;
+      const proofReference = 'storage://order-dispute-evidence/' + path;
+      const { data, error } = await supabase.rpc('confirm_manual_refund_atomic', {
+        p_refund_id: refund.id,
+        p_provider_refund_id: providerRefundId.trim(),
+        p_proof_url: proofReference
       });
-
-      toast.success('El reembolso manual ha sido marcado como COMPLETADO.');
+      if (error) throw error;
+      if (!data?.success) throw new Error('No se recibió confirmación del servidor.');
+      toast.success(data.idempotent ? 'Esta devolución ya estaba registrada.' : 'Devolución Handy registrada y conciliada.');
+      setManualProofFiles(prev => {
+        const next = { ...prev };
+        delete next[refund.id];
+        return next;
+      });
       fetchRefunds();
     } catch (err: any) {
       console.error('Error completing manual refund:', err);
-      toast.error('Error al resolver reembolso: ' + err.message);
-    }
-  }
-
-  // Cancel / Reject pending refund request
-  async function handleRejectRefund(refundId: string) {
-    const ok = await confirm('¿Está seguro de que desea rechazar y cancelar esta solicitud de reembolso?', {
-      title: 'Rechazar Solicitud de Reembolso',
-      danger: true,
-      confirmText: 'Sí, Rechazar',
-      cancelText: 'Cancelar'
-    });
-
-    if (!ok) return;
-
-    try {
-      const { error } = await supabase
-        .from('refunds')
-        .update({
-          status: 'rejected',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', refundId);
-
-      if (error) throw error;
-      toast.success('La solicitud de reembolso fue rechazada.');
-      fetchRefunds();
-    } catch (err: any) {
-      toast.error('Error al rechazar reembolso: ' + err.message);
+      toast.error('No se confirmó la devolución: ' + err.message);
     }
   }
 
   // Aprobar Solicitud de Posventa y Ejecutar Reembolso Automático vía refund-order
+  async function handleRejectCustomerRequest(req: any) {
+    const reason = await prompt('Motivo de rechazo (obligatorio, mínimo 8 caracteres):', {
+      title: 'Rechazar solicitud sin devolución iniciada',
+      placeholder: 'Explicá el motivo para el cliente y la auditoría'
+    });
+    if (!reason || reason.trim().length < 8) return;
+    const ok = await confirm('¿Confirmás el rechazo? Solo se admite si no se inició ningún reembolso.', {
+      title: 'Rechazar solicitud',
+      danger: true,
+      confirmText: 'Confirmar rechazo',
+      cancelText: 'Volver'
+    });
+    if (!ok) return;
+    try {
+      const { data, error } = await supabase.rpc('admin_reject_customer_request', {
+        p_request_id: req.id,
+        p_reason: reason.trim()
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error('No se confirmó el rechazo');
+      toast.success('Solicitud rechazada con auditoría');
+      fetchCustomerRequests();
+    } catch (err: any) {
+      toast.error('No se rechazó la solicitud: ' + err.message);
+    }
+  }
+
   async function handleApproveAndExecuteRequest(req: any) {
     // 1. Determinar tipo de operación comercial según request_type
     const isPhysicalReturn = ['voluntary_return', 'defective_product', 'wrong_product', 'damaged_in_transit'].includes(req.request_type);
@@ -636,6 +579,13 @@ export default function AdminRefunds() {
 
       const data = await res.json().catch(() => ({}));
 
+      if (res.ok && data.manualRequired === true) {
+        toast.warning('Solicitud aceptada. La devolución Handy debe completarse manualmente y verificarse con comprobante. No se acreditó dinero automáticamente.');
+        fetchCustomerRequests();
+        fetchRefunds();
+        return;
+      }
+
       if (!res.ok || !data.refundSuccess) {
         const errorMsg = data.error || data.message || 'Error desconocido al ejecutar reembolso.';
         // Marcar en UI y persistir estado si hubo fallo registrado
@@ -709,7 +659,7 @@ export default function AdminRefunds() {
                 : 'border-transparent text-gray-500 hover:text-gray-800'
             }`}
           >
-            Reembolsos Realizados ({activeTab === 'refunds' ? totalRecords : '...'})
+            Reembolsos y Pendientes ({activeTab === 'refunds' ? totalRecords : '...'})
           </button>
           <button
             onClick={() => { setActiveTab('disputes'); setStatusFilter('all'); }}
@@ -865,15 +815,27 @@ export default function AdminRefunds() {
                           <span className="text-xs font-semibold text-emerald-600">Completada</span>
                         ) : req.status === 'REJECTED' ? (
                           <span className="text-xs font-semibold text-red-500">Rechazada</span>
+                        ) : ['REFUND_PENDING','REFUND_PROCESSING','CANCELLATION_PENDING','CANCELLATION_CONFIRMED'].includes(req.status) ? (
+                          <span className="text-xs font-semibold text-amber-700">Gestión financiera en curso</span>
                         ) : ['WAITING_VENDOR', 'WAITING_SUPPLIER'].includes(req.status) ? (
                           <span className="text-xs font-semibold text-purple-600">Requiere Vendedor/Proveedor</span>
+                        ) : req.status === 'REFUND_FAILED' ? (
+                          <span className="text-xs font-semibold text-red-700">Conciliación necesaria</span>
                         ) : (
-                          <button
-                            onClick={() => handleApproveAndExecuteRequest(req)}
-                            className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-sm"
-                          >
-                            Aprobar y Reembolsar
-                          </button>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => handleApproveAndExecuteRequest(req)}
+                              className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-sm"
+                            >
+                              Aprobar y Reembolsar
+                            </button>
+                            {['REQUESTED', 'UNDER_REVIEW'].includes(req.status) && (
+                              <button
+                                onClick={() => handleRejectCustomerRequest(req)}
+                                className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700"
+                              >Rechazar</button>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -958,20 +920,30 @@ export default function AdminRefunds() {
                             API Resp
                           </button>
                         )}
-                        {(refund.status === 'pending' || refund.status === 'manual_refund_required') && (
+                        {refund.status === 'manual_refund_required' && refund.provider === 'handy' && (
                           <>
                             <button
                               onClick={() => handleResolveManualRefund(refund)}
                               className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded bg-green-600 hover:bg-green-700 text-white"
                             >
-                              {refund.status === 'manual_refund_required' ? 'Confirmar Devolución Manual' : 'Resolver'}
+                              Confirmar devolución verificada
                             </button>
-                            <button
-                              onClick={() => handleRejectRefund(refund.id)}
-                              className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded bg-red-50 hover:bg-red-100 text-red-700"
-                            >
-                              Rechazar
-                            </button>
+                            <input
+                              type="file"
+                              accept="application/pdf,image/jpeg,image/png,image/webp"
+                              aria-label="Adjuntar comprobante privado de devolución Handy"
+                              onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                if (file) setManualProofFiles(prev => ({ ...prev, [refund.id]: file }));
+                              }}
+                              className="block max-w-44 text-[10px] text-gray-500 file:mr-1 file:rounded file:border-0 file:bg-gray-100 file:px-2 file:py-1"
+                            />
+                            {manualProofFiles[refund.id] && (
+                              <span className="text-[10px] text-green-700">
+                                Archivo: {manualProofFiles[refund.id].name}
+                              </span>
+                            )}
+
                           </>
                         )}
                       </td>

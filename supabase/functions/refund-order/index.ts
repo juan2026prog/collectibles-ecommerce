@@ -143,6 +143,28 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // Idempotency for manual Handy refunds: never open a second refund task
+    // for an existing pending manual reversal with the same stable key.
+    if (idempotencyKey) {
+      const { data: pendingManualRefund, error: pendingManualError } = await supabaseAdmin
+        .from("refunds")
+        .select("id, order_id, status, amount")
+        .eq("idempotency_key", idempotencyKey)
+        .eq("order_id", orderId)
+        .eq("status", "manual_refund_required")
+        .maybeSingle();
+      if (pendingManualError) throw pendingManualError;
+      if (pendingManualRefund) {
+        return new Response(JSON.stringify({
+          success: true,
+          refundSuccess: false,
+          manualRequired: true,
+          idempotent: true,
+          refundDetails: { refund_id: pendingManualRefund.id, status: "manual_refund_required" }
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
     // 1. Fetch Order
     const { data: fetchedOrder, error: orderErr } = await supabaseAdmin
       .from("orders")
@@ -174,10 +196,25 @@ Deno.serve(async (req: Request) => {
       .from("payments")
       .select("*")
       .eq("order_id", orderId)
-      .eq("status", "approved")
+      .in("status", ["approved", "partially_refunded"])
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    // If Handy already has a manual refund in progress, reconciliation must
+    // finish before opening another financial operation on the same payment.
+    if (order.payment_method === "handy") {
+      const { data: unresolvedRefunds, error: unresolvedError } = await supabaseAdmin
+        .from("refunds")
+        .select("id")
+        .eq("order_id", orderId)
+        .in("status", ["manual_refund_required", "reconciliation_required"])
+        .limit(1);
+      if (unresolvedError) throw unresolvedError;
+      if (unresolvedRefunds?.length) {
+        throw new Error("Hay una devolución Handy pendiente de verificación. Completá la conciliación antes de iniciar otro reembolso.");
+      }
+    }
 
     // 4. Validate Vendor Liquidation Status (Finance Protection)
     if (suborderId) {
@@ -1313,24 +1350,90 @@ Deno.serve(async (req: Request) => {
       });
 
     } else if (isManualRefundRequired) {
-      // B. MANUAL REVERSAL RECORD (PENDING STATE)
+      // Handy: one server-side transaction must reserve the refund, create the
+      // manual task, block fulfillment and audit. Never split those writes.
+      if (order.payment_method === "handy") {
+        if (!processingRefundId) throw new Error("No atomic Handy refund reservation");
+        const { data: manualPending, error: manualPendingError } = await supabaseAdmin
+          .rpc("register_handy_manual_refund_pending_atomic", {
+            p_refund_id: processingRefundId,
+            p_order_id: orderId,
+            p_suborder_id: suborderId || null,
+            p_order_item_id: orderItemId || null,
+            p_payment_id: paymentIdUuid,
+            p_vendor_id: vendorId,
+            p_amount: refundAmount,
+            p_reason: reason || "Devolución Handy pendiente",
+            p_actor: requestedBy || null,
+            p_ip: clientIp || null
+          });
+        if (manualPendingError || !manualPending?.success) {
+          throw manualPendingError || new Error("No se pudo reservar devolución manual Handy");
+        }
+
+        if (!manualPending.idempotent) {
+          await fetch(supabaseUrl + "/functions/v1/transactional-emails", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${supabaseServiceKey}`
+            },
+            body: JSON.stringify({
+              type: "admin_refund_manual_required",
+              order_number: order.order_number,
+              amount: refundAmount.toFixed(2),
+              provider: "handy",
+              reason: reason || "Reembolso manual"
+            })
+          }).catch(e => console.error("Handy refund notification error:", e));
+          if (order.customer_email) {
+            await fetch(supabaseUrl + "/functions/v1/transactional-emails", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${supabaseServiceKey}`
+              },
+              body: JSON.stringify({
+                type: "client_refund_requested",
+                email: order.customer_email,
+                phone: order.customer_phone,
+                order_number: order.order_number
+              })
+            }).catch(e => console.error("Client refund notification error:", e));
+          }
+        }
+        return new Response(JSON.stringify({
+          success: true,
+          refundSuccess: false,
+          manualRequired: true,
+          refundCompleted: false,
+          idempotent: Boolean(manualPending.idempotent),
+          refundDetails: {refund_id: manualPending.refund_id, task_id: manualPending.task_id}
+        }), {headers: {...corsHeaders, "Content-Type": "application/json"}});
+      }
+
+      // Existing dLocal manual flow is unchanged and out of scope.
+      // Scope cancellation to the affected suborder on partial returns.
+      const manualScopeSuborderId = suborderId || (orderItemId ? targetOrderItem?.suborder_id : null) || null;
+
+      // B. Reuse the acquired atomic refund lock rather than creating a second row.
+      // This preserves the unique idempotency key and prevents orphan 'processing' refunds.
+      if (!processingRefundId) throw new Error("No atomic refund reservation found");
       const { data: dbRefund, error: refundInsertErr } = await supabaseAdmin
         .from("refunds")
-        .insert({
-          order_id: orderId,
-          suborder_id: suborderId || null,
+        .update({
+          suborder_id: manualScopeSuborderId,
+          order_item_id: orderItemId || null,
           vendor_id: vendorId,
           payment_id: paymentIdUuid,
           provider: order.payment_method,
           amount: refundAmount,
           reason: reason || "Reembolso manual pendiente de confirmación",
           status: "manual_refund_required",
-          requested_by: requestedBy,
-          api_response: {
-            ...refundDetails,
-            idempotency_key: idempotencyKey || undefined
-          }
+          api_response: { ...refundDetails, idempotency_key: idempotencyKey }
         })
+        .eq("id", processingRefundId)
+        .eq("status", "processing")
         .select("id")
         .single();
 
@@ -1365,6 +1468,7 @@ Deno.serve(async (req: Request) => {
       const { error: taskErr } = await supabaseAdmin
         .from("manual_refund_tasks")
         .insert({
+          refund_id: dbRefund.id,
           order_id: orderId,
           payment_provider: order.payment_method,
           payment_id: order.payment_id || 'UNKNOWN',
@@ -1381,14 +1485,14 @@ Deno.serve(async (req: Request) => {
       }
 
       // Update orders and order_suborders to refund_pending_manual
-      if (suborderId) {
+      if (manualScopeSuborderId) {
         await supabaseAdmin
           .from("order_suborders")
           .update({
             status: "refund_pending_manual",
             updated_at: new Date().toISOString()
           })
-          .eq("id", suborderId);
+          .eq("id", manualScopeSuborderId);
       } else {
         await supabaseAdmin
           .from("order_suborders")
@@ -1402,7 +1506,7 @@ Deno.serve(async (req: Request) => {
       await supabaseAdmin
         .from("orders")
         .update({
-          status: "refund_pending_manual",
+          status: manualScopeSuborderId ? order.status : "refund_pending_manual",
           updated_at: new Date().toISOString()
         })
         .eq("id", orderId);

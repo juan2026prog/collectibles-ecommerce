@@ -5,6 +5,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { DACAdapter } from "../_shared/adapters/shipping-adapter.ts";
+import { assertDispatchAllowed } from "../_shared/cancellation-dispatch-guard.ts";
 
 serve(async (req) => {
   const optionsResponse = handleOptions(req);
@@ -83,6 +84,9 @@ serve(async (req) => {
       resolvedCustomerPhone = orderData.customer_phone;
       resolvedCustomerEmail = orderData.customer_email;
     }
+
+    // Fail closed before DAC can create a carrier shipment or label.
+    await assertDispatchAllowed(supabase, parentOrderId, isSuborder ? order_id : null);
 
     // Weight and Quantity resolution
     let totalWt = 1.0;

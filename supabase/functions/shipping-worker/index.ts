@@ -8,6 +8,7 @@ import { DACAdapter, SoyDeliveryAdapter } from "../_shared/adapters/shipping-ada
 import { SkyPostalAdapter } from "../_shared/adapters/skypostal-adapter.ts";
 import { sanitizeProviderPayload } from "../_shared/skypostal/skypostal-sanitizer.ts";
 import { validateShipmentBeforeDispatch } from "../_shared/logistics-rules.ts";
+import { assertDispatchAllowed } from "../_shared/cancellation-dispatch-guard.ts";
 
 serve(async (req) => {
   const optionsResponse = handleOptions(req);
@@ -71,6 +72,9 @@ serve(async (req) => {
           .single();
 
         if (parentErr || !parentOrder) throw new Error(`Parent order not found: ${parentErr?.message}`);
+
+        // Guard before any provider adapter call; DB trigger is a second defense.
+        await assertDispatchAllowed(supabase, suborder.parent_order_id, suborder.id);
 
         const resolvedAddress = parentOrder.shipping_address || {};
 

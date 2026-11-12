@@ -186,7 +186,7 @@ Deno.serve(async (req: Request) => {
 
       // Validar fecha real de pago comprobada
       const approvedPayment = order.payments?.find((p: any) => p.status === 'approved');
-      const realPaymentDateStr = approvedPayment?.created_at || order.paid_at;
+      const realPaymentDateStr = order.paid_at || order.payment_processed_at || approvedPayment?.approved_at;
 
       if (!realPaymentDateStr) {
         return new Response(JSON.stringify({ error: "La orden no cuenta con pago confirmado verificable para cancelación inmediata." }), {
@@ -284,6 +284,31 @@ Deno.serve(async (req: Request) => {
           requestId: pendingReq.id,
           refund: refundResult
         }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      } else if (refundRes.ok && refundResult.manualRequired === true) {
+        // Handy/dLocal require a verified manual refund. This is an accepted cancellation
+        // request, NOT a failed gateway refund and NOT proof the money was returned.
+        // refund-order already records the pending refund and administrative task.
+        const { error: pendingUpdateError } = await supabaseAdmin
+          .from("unified_order_requests")
+          .update({
+            status: "REFUND_PENDING",
+            admin_notes: "Devolución manual pendiente de verificación en la pasarela. No marcar como reembolsado hasta registrar comprobante y confirmación."
+          })
+          .eq("id", pendingReq.id);
+
+        if (pendingUpdateError) throw pendingUpdateError;
+
+        return new Response(JSON.stringify({
+          success: true,
+          manualRequired: true,
+          refundCompleted: false,
+          message: "Cancelación solicitada. La devolución del dinero requiere verificación y gestión administrativa.",
+          requestId: pendingReq.id,
+          status: "REFUND_PENDING"
+        }), {
+          status: 202,
           headers: { ...corsHeaders, "Content-Type": "application/json" }
         });
       } else {

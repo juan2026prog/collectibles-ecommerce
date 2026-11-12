@@ -61,14 +61,14 @@ export function mapRequestStatusBadge(status: string) {
     case 'REFUND_PROCESSING':
       return {
         label: 'Reembolso en proceso',
-        desc: 'La pasarela de pago (Mercado Pago) está procesando la acreditación de tu dinero.',
+        desc: 'La devolución está pendiente de gestión o confirmación. Si pagaste con Handy, la verificamos manualmente; con Mercado Pago, consultamos el resultado de la pasarela. Esto no significa que el dinero ya se haya acreditado.',
         color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
         icon: RefreshCw
       };
     case 'REFUNDED':
       return {
         label: 'Reembolso confirmado',
-        desc: 'El dinero fue acreditado exitosamente en tu medio de pago.',
+        desc: 'El reembolso fue confirmado. El tiempo para verlo reflejado en tu medio de pago depende del proveedor y del emisor.',
         color: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
         icon: CheckCircle2
       };

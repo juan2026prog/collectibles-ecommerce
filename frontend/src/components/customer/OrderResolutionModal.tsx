@@ -88,7 +88,7 @@ export default function OrderResolutionModal({
 
   // Ventana de 10 minutos para cancelación inmediata nacional
   const approvedPayment = order?.payments?.find((p: any) => p.status === 'approved');
-  const realPaymentDateStr = approvedPayment?.created_at || order?.paid_at;
+  const realPaymentDateStr = order?.paid_at || order?.payment_processed_at || approvedPayment?.approved_at;
   const paymentDate = realPaymentDateStr ? new Date(realPaymentDateStr).getTime() : 0;
   const diffMinutes = paymentDate > 0 ? (Date.now() - paymentDate) / (1000 * 60) : 999;
   const isWithin10m = isCollectiblesNational && ['paid', 'confirmed'].includes(order?.status) && diffMinutes <= 10;
