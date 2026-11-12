@@ -38,6 +38,12 @@ BEGIN
       OR (OLD.external_guide IS NULL AND NEW.external_guide IS NOT NULL);
   END IF;
 
+  IF v_is_progression AND lower(coalesce(v_order.status,'')) IN
+     ('refund_pending_manual','refunded','cancelada','cancelled') THEN
+    RAISE EXCEPTION 'DISPATCH_BLOCKED_BY_CANCELLATION: order already cancelled or refunded'
+      USING ERRCODE = 'P0001';
+  END IF;
+
   IF v_is_progression AND EXISTS (
     SELECT 1 FROM public.unified_order_requests r
     WHERE r.order_id = NEW.order_id
@@ -74,6 +80,19 @@ BEGIN
       AND lower(coalesce(NEW.shipping_status,'')) IN
         ('shipped','dispatched','despachado','en_transito','in_transit','delivered','entregado'))
   ) THEN RETURN NEW; END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.orders o
+    WHERE o.id = NEW.parent_order_id
+      AND lower(coalesce(o.payment_method,'')) IN ('handy','mercadopago')
+      AND o.ml_order_id IS NULL
+      AND lower(coalesce(o.order_source,'')) NOT LIKE '%mercadolibre%'
+      AND lower(coalesce(o.status,'')) IN
+        ('refund_pending_manual','refunded','cancelada','cancelled')
+  ) THEN
+    RAISE EXCEPTION 'DISPATCH_BLOCKED_BY_CANCELLATION: order already cancelled or refunded'
+      USING ERRCODE = 'P0001';
+  END IF;
 
   IF EXISTS (
     SELECT 1 FROM public.orders o
