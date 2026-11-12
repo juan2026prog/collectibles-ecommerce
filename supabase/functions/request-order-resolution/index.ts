@@ -186,7 +186,7 @@ Deno.serve(async (req: Request) => {
 
       // Validar fecha real de pago comprobada
       const approvedPayment = order.payments?.find((p: any) => p.status === 'approved');
-      const realPaymentDateStr = approvedPayment?.created_at || order.paid_at;
+      const realPaymentDateStr = order.paid_at || order.payment_processed_at || approvedPayment?.approved_at;
 
       if (!realPaymentDateStr) {
         return new Response(JSON.stringify({ error: "La orden no cuenta con pago confirmado verificable para cancelación inmediata." }), {
