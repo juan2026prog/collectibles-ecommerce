@@ -14,6 +14,7 @@ CREATE TABLE public.profiles(id uuid PRIMARY KEY, is_admin boolean);
 CREATE TABLE public.orders (
   id uuid PRIMARY KEY, total_amount numeric NOT NULL,
   payment_method text, payment_status text, reconciliation_status text,
+  payment_id text, currency text,
   status text, order_source text, ml_order_id text,
   updated_at timestamptz DEFAULT now()
 );
@@ -31,8 +32,8 @@ CREATE TABLE public.payments (
 CREATE TABLE public.refunds (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id uuid NOT NULL REFERENCES public.orders(id),
-  suborder_id uuid, payment_id uuid,
-  provider text, provider_refund_id text,
+  suborder_id uuid, payment_id uuid, vendor_id uuid, order_item_id uuid,
+  reason text, provider text, provider_refund_id text,
   amount numeric NOT NULL, status text NOT NULL,
   processed_at timestamptz, updated_at timestamptz DEFAULT now(),
   api_response jsonb DEFAULT '{}'::jsonb
@@ -41,7 +42,7 @@ CREATE TABLE public.manual_refund_tasks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   order_id uuid REFERENCES public.orders(id),
   payment_provider text, payment_id text, amount numeric,
-  status text, completed_at timestamptz,
+  currency text, reason text, note text, status text, completed_at timestamptz,
   completed_by uuid, external_reference text, proof_url text
 );
 CREATE TABLE public.unified_order_requests (
@@ -55,7 +56,7 @@ CREATE TABLE public.payment_audit_logs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid, action text,
   order_id uuid, suborder_id uuid, payment_id uuid,
-  refund_id uuid, provider text, amount numeric, api_response jsonb,
+  refund_id uuid, provider text, amount numeric, api_response jsonb, ip_address text,
   created_at timestamptz DEFAULT now()
 );
 CREATE TABLE public.payment_attempts (
