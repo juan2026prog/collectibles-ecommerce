@@ -3,8 +3,7 @@ on:
   pull_request:
     paths:
       - 'frontend/**'
-      - 'supabase/functions/refund-order/**'
-      - 'supabase/functions/request-order-resolution/**'
+      - 'supabase/functions/**'
       - 'supabase/migrations/20261112*'
       - '.github/workflows/cancellation-refund-ci.yml'
   workflow_dispatch:
@@ -26,3 +25,30 @@ jobs:
         run: npx vitest run src/tests/cancellation_eligibility.test.ts
       - name: Frontend typecheck and build
         run: npm run build
+
+  backend-guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Dispatch guard tests
+        run: deno test supabase/functions/_shared/cancellation-dispatch-guard.test.ts
+  migration-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL syntax parser
+        run: python -m pip install pglast
+      - name: Validate migration grammar
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from pglast import parse_sql
+          files = sorted(Path('supabase/migrations').glob('20261112*.sql'))
+          assert files, 'Migration files missing'
+          for file in files:
+              parse_sql(file.read_text())
+              print('Validated', file)
+          PY
