@@ -20,6 +20,7 @@ DECLARE
   v_reference text := nullif(btrim(p_provider_refund_id), '');
   v_order_id uuid;
   v_suborder_due numeric;
+  v_tasks_updated integer;
   v_proof text := nullif(btrim(p_proof_url), '');
 BEGIN
   IF v_actor IS NULL OR NOT EXISTS (
@@ -34,6 +35,10 @@ BEGIN
   IF v_proof IS NULL OR length(v_proof) > 2000
      OR v_proof NOT LIKE 'storage://order-dispute-evidence/%' THEN
     RAISE EXCEPTION 'Private storage proof reference required';
+  END IF;
+  IF v_proof NOT LIKE
+    ('storage://order-dispute-evidence/' || v_actor::text || '/%/handy-refund-' || p_refund_id::text || '-%') THEN
+    RAISE EXCEPTION 'Refund proof must be uploaded by this administrator for this refund';
   END IF;
   IF NOT EXISTS (
     SELECT 1 FROM storage.objects obj
@@ -80,6 +85,10 @@ BEGIN
     AND order_id = v_refund.order_id
     AND payment_provider = 'handy'
     AND status = 'pending';
+  GET DIAGNOSTICS v_tasks_updated = ROW_COUNT;
+  IF v_tasks_updated <> 1 THEN
+    RAISE EXCEPTION 'A unique pending manual refund task must exist for this refund';
+  END IF;
 
   IF v_refund.suborder_id IS NOT NULL THEN
     -- A partial item refund must never mark the entire suborder as refunded.
