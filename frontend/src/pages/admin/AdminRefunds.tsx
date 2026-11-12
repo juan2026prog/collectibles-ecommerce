@@ -877,7 +877,7 @@ export default function AdminRefunds() {
                             API Resp
                           </button>
                         )}
-                        {(refund.status === 'pending' || refund.status === 'manual_refund_required') && (
+                        {refund.status === 'manual_refund_required' && refund.provider === 'handy' && (
                           <>
                             <button
                               onClick={() => handleResolveManualRefund(refund)}
@@ -885,12 +885,7 @@ export default function AdminRefunds() {
                             >
                               {refund.status === 'manual_refund_required' ? 'Confirmar Devolución Manual' : 'Resolver'}
                             </button>
-                            <button
-                              onClick={() => handleRejectRefund(refund.id)}
-                              className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded bg-red-50 hover:bg-red-100 text-red-700"
-                            >
-                              Rechazar
-                            </button>
+
                           </>
                         )}
                       </td>
