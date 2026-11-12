@@ -51,3 +51,21 @@ https://supabase.com/docs/guides/deployment/branching/troubleshooting
 
 **Certificación de código y compatibilidad de esquema: aprobada.
 Certificación E2E de Supabase/PSP y despliegue producción: pendiente.**
+
+## Auditoría adicional de migraciones históricas — 12/11/2026
+Consulta de solo lectura confirmó que `storage.objects` y `storage.buckets`
+pertenecen a `supabase_storage_admin` y tienen RLS habilitada.
+El historial SQL persistido contiene seis migraciones con DDL/policies sobre esos
+objetos gestionados. Por ello, eliminar solo el primer ALTER no prueba que las
+ramas futuras se puedan reconstruir.
+
+Herramienta reproducible de diagnóstico **solo lectura**:
+`scripts/audit_supabase_branch_migration_replay.sql`.
+
+Incidencia de seguimiento P0:
+https://github.com/juan2026prog/collectibles-ecommerce/issues/45
+
+La remediación requiere migraciones reproducibles o una baseline del esquema real,
+validando cada paso en entorno aislado. **No editar los registros de historial de
+producción ni transferir ownership de Storage sin un backup, un plan de reversión
+y revisión del impacto en servicios Supabase administrados.**
