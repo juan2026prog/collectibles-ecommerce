@@ -33,6 +33,18 @@ export async function assertDispatchAllowed(
   if (['refund_pending_manual','cancelada','cancelled','refunded'].includes(order.status)) {
     throw new Error('DISPATCH_BLOCKED: order is cancelled or awaiting a refund');
   }
+  if (suborderId) {
+    const { data: suborder, error: suborderError } = await supabaseAdmin
+      .from('order_suborders')
+      .select('status')
+      .eq('id', suborderId)
+      .eq('parent_order_id', parentOrderId)
+      .single();
+    if (suborderError || !suborder) throw new Error('DISPATCH_BLOCKED: suborder lookup failed');
+    if (['refund_pending_manual','cancelled','refunded'].includes(suborder.status)) {
+      throw new Error('DISPATCH_BLOCKED: suborder is cancelled or awaiting a refund');
+    }
+  }
   let query = supabaseAdmin.from('unified_order_requests')
     .select('id')
     .eq('order_id', parentOrderId)
