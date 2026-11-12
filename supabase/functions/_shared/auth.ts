@@ -164,7 +164,7 @@ export async function verifyRole(req: Request, role: 'is_admin' | 'is_vendor' | 
     .eq('id', user.id)
     .single();
 
-  if (error || !profile?.[role]) {
+  if (error || !(profile as unknown as Record<string, boolean> | null)?.[role]) {
     throw new Error(`Acceso denegado: Se requiere el rol '${role}'`);
   }
 
