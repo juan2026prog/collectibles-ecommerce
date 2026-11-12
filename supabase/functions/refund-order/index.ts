@@ -1335,13 +1335,16 @@ Deno.serve(async (req: Request) => {
       });
 
     } else if (isManualRefundRequired) {
+      // Scope cancellation to the affected suborder on partial returns.
+      const manualScopeSuborderId = suborderId || (orderItemId ? targetOrderItem?.suborder_id : null) || null;
+
       // B. Reuse the acquired atomic refund lock rather than creating a second row.
       // This preserves the unique idempotency key and prevents orphan 'processing' refunds.
       if (!processingRefundId) throw new Error("No atomic refund reservation found");
       const { data: dbRefund, error: refundInsertErr } = await supabaseAdmin
         .from("refunds")
         .update({
-          suborder_id: suborderId || null,
+          suborder_id: manualScopeSuborderId,
           order_item_id: orderItemId || null,
           vendor_id: vendorId,
           payment_id: paymentIdUuid,
@@ -1404,14 +1407,14 @@ Deno.serve(async (req: Request) => {
       }
 
       // Update orders and order_suborders to refund_pending_manual
-      if (suborderId) {
+      if (manualScopeSuborderId) {
         await supabaseAdmin
           .from("order_suborders")
           .update({
             status: "refund_pending_manual",
             updated_at: new Date().toISOString()
           })
-          .eq("id", suborderId);
+          .eq("id", manualScopeSuborderId);
       } else {
         await supabaseAdmin
           .from("order_suborders")
@@ -1425,7 +1428,7 @@ Deno.serve(async (req: Request) => {
       await supabaseAdmin
         .from("orders")
         .update({
-          status: "refund_pending_manual",
+          status: manualScopeSuborderId ? order.status : "refund_pending_manual",
           updated_at: new Date().toISOString()
         })
         .eq("id", orderId);
