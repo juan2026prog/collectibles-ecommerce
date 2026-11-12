@@ -17,12 +17,19 @@ BEGIN
      OR lower(coalesce(v_order.order_source,'')) LIKE '%mercadolibre%'
   THEN RETURN NEW; END IF;
 
-  v_is_progression := (
-     (TG_OP = 'INSERT' OR coalesce(OLD.shipping_status,'') IS DISTINCT FROM coalesce(NEW.shipping_status,''))
-     AND lower(coalesce(NEW.shipping_status,'')) IN
+  IF TG_OP = 'INSERT' THEN
+    v_is_progression := lower(coalesce(NEW.shipping_status,'')) IN
        ('ready_for_dispatch','ready_to_ship','label_created','dispatched',
         'shipped','in_transit','out_for_delivery','delivered','picked_up')
-  );
+       OR NEW.dispatched_at IS NOT NULL
+       OR NEW.shipping_label_url IS NOT NULL
+       OR NEW.external_guide IS NOT NULL;
+  ELSE
+    v_is_progression := coalesce(OLD.shipping_status,'') IS DISTINCT FROM coalesce(NEW.shipping_status,'')
+       AND lower(coalesce(NEW.shipping_status,'')) IN
+       ('ready_for_dispatch','ready_to_ship','label_created','dispatched',
+        'shipped','in_transit','out_for_delivery','delivered','picked_up');
+  END IF;
 
   IF NOT v_is_progression AND TG_OP = 'UPDATE' THEN
     v_is_progression :=
