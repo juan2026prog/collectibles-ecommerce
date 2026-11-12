@@ -88,6 +88,15 @@ BEGIN
   IF (SELECT payment_status FROM public.orders WHERE id=v_ord)<>'partially_refunded' THEN
     RAISE EXCEPTION 'FAILED: partial refund should not mark full order refunded'; END IF;
 
+  -- A remaining suborder must still be able to ship after a partial Handy refund.
+  INSERT INTO public.shipments(id,order_id,suborder_id,shipping_status)
+    VALUES('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',v_ord,v_sub_b,'shipped');
+  v_hit:=false;
+  BEGIN
+    UPDATE public.shipments SET shipping_status='shipped' WHERE id=v_shipment;
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN v_hit:=true; END;
+  IF NOT v_hit THEN RAISE EXCEPTION 'FAILED: refunded suborder shipment must remain blocked'; END IF;
+
   v_result:=public.confirm_manual_refund_atomic(v_refund,'HANDY-REF-1234',v_proof);
   IF v_result->>'idempotent'<>'true' THEN
     RAISE EXCEPTION 'FAILED: replay must be idempotent'; END IF;
