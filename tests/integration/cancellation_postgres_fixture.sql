@@ -14,7 +14,7 @@ CREATE TABLE public.orders (
 );
 CREATE TABLE public.order_suborders (
   id uuid PRIMARY KEY, parent_order_id uuid REFERENCES public.orders(id),
-  status text, shipping_status text, product_subtotal numeric,
+  suborder_number text, status text, shipping_status text, product_subtotal numeric,
   discount_total numeric DEFAULT 0, shipping_charged_to_customer numeric DEFAULT 0,
   updated_at timestamptz DEFAULT now()
 );
