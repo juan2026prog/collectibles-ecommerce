@@ -1350,6 +1350,69 @@ Deno.serve(async (req: Request) => {
       });
 
     } else if (isManualRefundRequired) {
+      // Handy: one server-side transaction must reserve the refund, create the
+      // manual task, block fulfillment and audit. Never split those writes.
+      if (order.payment_method === "handy") {
+        if (!processingRefundId) throw new Error("No atomic Handy refund reservation");
+        const { data: manualPending, error: manualPendingError } = await supabaseAdmin
+          .rpc("register_handy_manual_refund_pending_atomic", {
+            p_refund_id: processingRefundId,
+            p_order_id: orderId,
+            p_suborder_id: suborderId || null,
+            p_order_item_id: orderItemId || null,
+            p_payment_id: paymentIdUuid,
+            p_vendor_id: vendorId,
+            p_amount: refundAmount,
+            p_reason: reason || "Devolución Handy pendiente",
+            p_actor: requestedBy || null,
+            p_ip: clientIp || null
+          });
+        if (manualPendingError || !manualPending?.success) {
+          throw manualPendingError || new Error("No se pudo reservar devolución manual Handy");
+        }
+
+        if (!manualPending.idempotent) {
+          await fetch(supabaseUrl + "/functions/v1/transactional-emails", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${supabaseServiceKey}`
+            },
+            body: JSON.stringify({
+              type: "admin_refund_manual_required",
+              order_number: order.order_number,
+              amount: refundAmount.toFixed(2),
+              provider: "handy",
+              reason: reason || "Reembolso manual"
+            })
+          }).catch(e => console.error("Handy refund notification error:", e));
+          if (order.customer_email) {
+            await fetch(supabaseUrl + "/functions/v1/transactional-emails", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${supabaseServiceKey}`
+              },
+              body: JSON.stringify({
+                type: "client_refund_requested",
+                email: order.customer_email,
+                phone: order.customer_phone,
+                order_number: order.order_number
+              })
+            }).catch(e => console.error("Client refund notification error:", e));
+          }
+        }
+        return new Response(JSON.stringify({
+          success: true,
+          refundSuccess: false,
+          manualRequired: true,
+          refundCompleted: false,
+          idempotent: Boolean(manualPending.idempotent),
+          refundDetails: {refund_id: manualPending.refund_id, task_id: manualPending.task_id}
+        }), {headers: {...corsHeaders, "Content-Type": "application/json"}});
+      }
+
+      // Existing dLocal manual flow is unchanged and out of scope.
       // Scope cancellation to the affected suborder on partial returns.
       const manualScopeSuborderId = suborderId || (orderItemId ? targetOrderItem?.suborder_id : null) || null;
 
