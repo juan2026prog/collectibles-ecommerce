@@ -35,6 +35,13 @@ jobs:
           deno-version: v2.x
       - name: Dispatch guard tests
         run: deno test supabase/functions/_shared/cancellation-dispatch-guard.test.ts
+      - name: Typecheck affected Supabase Edge Functions
+        run: |
+          deno check --no-lock supabase/functions/refund-order/index.ts
+          deno check --no-lock supabase/functions/request-order-resolution/index.ts
+          deno check --no-lock supabase/functions/dac-create-shipment/index.ts
+          deno check --no-lock supabase/functions/distrilogic-create-shipment/index.ts
+          deno check --no-lock supabase/functions/shipping-worker/index.ts
   migration-syntax:
     runs-on: ubuntu-latest
     steps:
