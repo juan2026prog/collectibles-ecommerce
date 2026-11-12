@@ -1387,6 +1387,7 @@ Deno.serve(async (req: Request) => {
       const { error: taskErr } = await supabaseAdmin
         .from("manual_refund_tasks")
         .insert({
+          refund_id: dbRefund.id,
           order_id: orderId,
           payment_provider: order.payment_method,
           payment_id: order.payment_id || 'UNKNOWN',
