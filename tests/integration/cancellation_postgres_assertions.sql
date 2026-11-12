@@ -101,5 +101,59 @@ BEGIN
   IF v_result->>'idempotent'<>'true' THEN
     RAISE EXCEPTION 'FAILED: replay must be idempotent'; END IF;
 
+  -- New atomic Handy manual-refund registration must have no partial writes.
+  INSERT INTO public.orders(id,total_amount,payment_method,payment_status,status,currency)
+    VALUES('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',80,'handy','approved','confirmed','UYU');
+  INSERT INTO public.order_suborders(id,parent_order_id,status,shipping_status,product_subtotal)
+    VALUES('cccccccc-cccc-4ccc-8ccc-cccccccccccc','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+           'preparing','preparing',80);
+  INSERT INTO public.payments(id,order_id,status)
+    VALUES('dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+           'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','approved');
+  INSERT INTO public.refunds(id,order_id,payment_id,provider,amount,status)
+    VALUES('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+           'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+           'dddddddd-dddd-4ddd-8ddd-dddddddddddd','handy',80,'processing');
+
+  PERFORM set_config('request.jwt.claim.role','service_role',false);
+  v_result:=public.register_handy_manual_refund_pending_atomic(
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    NULL, 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    NULL,80,'Test refund',v_admin,'127.0.0.1');
+  IF v_result->>'success'<>'true' THEN
+    RAISE EXCEPTION 'FAILED: atomic Handy manual pending registration';
+  END IF;
+  IF (SELECT count(*) FROM public.manual_refund_tasks
+      WHERE refund_id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee')<>1
+      OR (SELECT status FROM public.order_suborders
+          WHERE id='cccccccc-cccc-4ccc-8ccc-cccccccccccc')<>'refund_pending_manual'
+      OR (SELECT status FROM public.payments
+          WHERE id='dddddddd-dddd-4ddd-8ddd-dddddddddddd')<>'manual_refund_required'
+      OR (SELECT status FROM public.refunds
+          WHERE id='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee')<>'manual_refund_required'
+  THEN RAISE EXCEPTION 'FAILED: atomic manual refund state inconsistent'; END IF;
+  v_result:=public.register_handy_manual_refund_pending_atomic(
+    'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+    'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+    NULL, 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    NULL,80,'Test refund',v_admin,'127.0.0.1');
+  IF v_result->>'idempotent'<>'true' THEN
+    RAISE EXCEPTION 'FAILED: duplicate manual registration';
+  END IF;
+  PERFORM set_config('request.jwt.claim.role','authenticated',false);
+  v_hit:=false;
+  BEGIN
+    PERFORM public.register_handy_manual_refund_pending_atomic(
+      'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      NULL,'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      NULL,80,'Test refund',v_admin,'127.0.0.1');
+  EXCEPTION WHEN insufficient_privilege THEN v_hit:=true; END;
+  IF NOT v_hit THEN RAISE EXCEPTION 'FAILED: direct customer access to refund RPC'; END IF;
+
   RAISE NOTICE 'PASS: shipment holds, suborder scope, paid cancellation, cap, admin auth, proof, partial and idempotency';
 END $$;
