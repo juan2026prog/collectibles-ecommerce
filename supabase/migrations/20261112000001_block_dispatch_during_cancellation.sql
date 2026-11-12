@@ -44,6 +44,15 @@ BEGIN
       USING ERRCODE = 'P0001';
   END IF;
 
+  IF v_is_progression AND NEW.suborder_id IS NOT NULL AND EXISTS (
+    SELECT 1 FROM public.order_suborders so
+    WHERE so.id = NEW.suborder_id AND so.parent_order_id = NEW.order_id
+      AND so.status IN ('refund_pending_manual','cancelled','refunded')
+  ) THEN
+    RAISE EXCEPTION 'DISPATCH_BLOCKED_BY_CANCELLATION: suborder refunded or pending manual refund'
+      USING ERRCODE = 'P0001';
+  END IF;
+
   IF v_is_progression AND EXISTS (
     SELECT 1 FROM public.unified_order_requests r
     WHERE r.order_id = NEW.order_id
@@ -80,6 +89,11 @@ BEGIN
       AND lower(coalesce(NEW.shipping_status,'')) IN
         ('shipped','dispatched','despachado','en_transito','in_transit','delivered','entregado'))
   ) THEN RETURN NEW; END IF;
+
+  IF OLD.status IN ('refund_pending_manual','cancelled','refunded') THEN
+    RAISE EXCEPTION 'DISPATCH_BLOCKED_BY_CANCELLATION: suborder refunded or pending manual refund'
+      USING ERRCODE = 'P0001';
+  END IF;
 
   IF EXISTS (
     SELECT 1 FROM public.orders o
