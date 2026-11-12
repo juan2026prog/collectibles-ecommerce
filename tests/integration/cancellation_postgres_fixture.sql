@@ -1,5 +1,10 @@
 -- Minimal isolated PostgreSQL fixture for cancel/refund migrations.
 -- No production database, merchant credentials or actual customer data involved.
+DO $ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='authenticated') THEN
+    CREATE ROLE authenticated NOLOGIN;
+  END IF;
+END $;
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE SCHEMA IF NOT EXISTS storage;
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE
