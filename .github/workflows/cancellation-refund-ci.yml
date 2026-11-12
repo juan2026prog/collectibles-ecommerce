@@ -5,6 +5,7 @@ on:
       - 'frontend/**'
       - 'supabase/functions/**'
       - 'supabase/migrations/20261112*'
+      - 'tests/integration/cancellation_postgres*'
       - '.github/workflows/cancellation-refund-ci.yml'
   workflow_dispatch:
 jobs:
