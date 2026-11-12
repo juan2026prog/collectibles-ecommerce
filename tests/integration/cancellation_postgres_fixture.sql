@@ -1,10 +1,15 @@
 -- Minimal isolated PostgreSQL fixture for cancel/refund migrations.
 -- No production database, merchant credentials or actual customer data involved.
 CREATE ROLE authenticated NOLOGIN;
+CREATE ROLE anon NOLOGIN;
+CREATE ROLE service_role NOLOGIN;
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE SCHEMA IF NOT EXISTS storage;
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE
 AS $$ SELECT nullif(current_setting('request.jwt.claim.sub', true),'')::uuid $$;
+CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE
+AS $ SELECT jsonb_build_object('role',coalesce(nullif(current_setting('request.jwt.claim.role',true),''),'authenticated')) $;
+CREATE TABLE public.order_items(id uuid PRIMARY KEY,order_id uuid,suborder_id uuid);
 CREATE TABLE public.profiles(id uuid PRIMARY KEY, is_admin boolean);
 CREATE TABLE public.orders (
   id uuid PRIMARY KEY, total_amount numeric NOT NULL,
