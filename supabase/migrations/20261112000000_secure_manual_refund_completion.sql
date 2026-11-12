@@ -14,6 +14,8 @@ DECLARE
   v_refunded numeric;
   v_full boolean;
   v_reference text := nullif(btrim(p_provider_refund_id), '');
+  v_order_id uuid;
+  v_suborder_due numeric;
   v_proof text := nullif(btrim(p_proof_url), '');
 BEGIN
   IF v_actor IS NULL OR NOT EXISTS (
@@ -27,8 +29,15 @@ BEGIN
     RAISE EXCEPTION 'Verified HTTPS proof URL required';
   END IF;
 
-  SELECT * INTO v_refund FROM public.refunds WHERE id = p_refund_id FOR UPDATE;
+  -- Lock order first, matching refund-order lock order to avoid deadlocks.
+  SELECT order_id INTO v_order_id FROM public.refunds WHERE id = p_refund_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'Refund not found'; END IF;
+  SELECT * INTO v_order FROM public.orders WHERE id = v_order_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Order not found'; END IF;
+  SELECT * INTO v_refund FROM public.refunds WHERE id = p_refund_id FOR UPDATE;
+  IF NOT FOUND OR v_refund.order_id <> v_order_id THEN
+    RAISE EXCEPTION 'Refund changed during confirmation';
+  END IF;
   IF v_refund.status = 'completed' THEN
     IF v_refund.provider_refund_id = v_reference THEN
       RETURN jsonb_build_object('success', true, 'idempotent', true, 'refund_id', p_refund_id);
@@ -42,9 +51,6 @@ BEGIN
     SELECT 1 FROM public.refunds r
     WHERE r.provider = 'handy' AND r.provider_refund_id = v_reference AND r.id <> p_refund_id
   ) THEN RAISE EXCEPTION 'Provider reference already used'; END IF;
-
-  SELECT * INTO v_order FROM public.orders WHERE id = v_refund.order_id FOR UPDATE;
-  IF NOT FOUND THEN RAISE EXCEPTION 'Order not found'; END IF;
 
   UPDATE public.refunds SET status = 'completed', provider_refund_id = v_reference,
     processed_at = now(), updated_at = now(),
@@ -62,17 +68,34 @@ BEGIN
     AND amount = v_refund.amount;
 
   IF v_refund.suborder_id IS NOT NULL THEN
-    UPDATE public.order_suborders SET status = 'refunded', updated_at = now()
-    WHERE id = v_refund.suborder_id AND parent_order_id = v_refund.order_id;
+    -- A partial item refund must never mark the entire suborder as refunded.
+    SELECT greatest(0, coalesce(product_subtotal,0)
+           - coalesce(discount_total,0) + coalesce(shipping_charged_to_customer,0))
+      INTO v_suborder_due FROM public.order_suborders
+     WHERE id = v_refund.suborder_id AND parent_order_id = v_refund.order_id;
+    IF v_suborder_due IS NULL THEN RAISE EXCEPTION 'Suborder not found'; END IF;
+    IF (
+      SELECT coalesce(sum(r.amount),0) FROM public.refunds r
+      WHERE r.suborder_id = v_refund.suborder_id AND r.status = 'completed'
+    ) >= v_suborder_due THEN
+      UPDATE public.order_suborders SET status = 'refunded', updated_at = now()
+       WHERE id = v_refund.suborder_id AND parent_order_id = v_refund.order_id;
+    END IF;
   ELSE
-    UPDATE public.order_suborders SET status = 'refunded', updated_at = now()
-    WHERE parent_order_id = v_refund.order_id
-      AND status NOT IN ('refunded', 'cancelled');
+    -- Whole-order refund: apply to every suborder only when the full order
+    -- amount has been refunded (computed below).
+    NULL;
   END IF;
 
   SELECT COALESCE(sum(amount), 0) INTO v_refunded FROM public.refunds
   WHERE order_id = v_refund.order_id AND status = 'completed';
   v_full := v_refunded >= v_order.total_amount;
+
+  IF v_full THEN
+    UPDATE public.order_suborders SET status = 'refunded', updated_at = now()
+     WHERE parent_order_id = v_refund.order_id
+       AND status NOT IN ('refunded','cancelled');
+  END IF;
 
   UPDATE public.orders SET
     payment_status = CASE WHEN v_full THEN 'refunded' ELSE 'partially_refunded' END,
