@@ -527,6 +527,13 @@ export default function AdminRefunds() {
 
       const data = await res.json().catch(() => ({}));
 
+      if (res.ok && data.manualRequired === true) {
+        toast.warning('Solicitud aceptada. La devolución Handy debe completarse manualmente y verificarse con comprobante. No se acreditó dinero automáticamente.');
+        fetchCustomerRequests();
+        fetchRefunds();
+        return;
+      }
+
       if (!res.ok || !data.refundSuccess) {
         const errorMsg = data.error || data.message || 'Error desconocido al ejecutar reembolso.';
         // Marcar en UI y persistir estado si hubo fallo registrado
@@ -600,7 +607,7 @@ export default function AdminRefunds() {
                 : 'border-transparent text-gray-500 hover:text-gray-800'
             }`}
           >
-            Reembolsos Realizados ({activeTab === 'refunds' ? totalRecords : '...'})
+            Reembolsos y Pendientes ({activeTab === 'refunds' ? totalRecords : '...'})
           </button>
           <button
             onClick={() => { setActiveTab('disputes'); setStatusFilter('all'); }}
