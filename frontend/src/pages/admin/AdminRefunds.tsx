@@ -405,125 +405,44 @@ export default function AdminRefunds() {
     }
   }
 
-  // Retry / Confirm Manual Refund
+  // Verify Handy manual refund via a single audited, server-side transaction.
+  // The admin must first perform and verify the refund in the Handy backoffice.
   async function handleResolveManualRefund(refund: any) {
-    const providerRefundId = await prompt('Introduce el ID de transacción de reembolso de la pasarela (opcional):', {
-      title: 'Confirmar Devolución Manual Realizada',
-      placeholder: 'ID de reembolso del portal de pago...'
+    if (refund.provider !== 'handy') {
+      toast.error('La confirmación manual de esta pantalla está habilitada solo para Handy.');
+      return;
+    }
+    const providerRefundId = await prompt('Referencia REAL de la devolución ya realizada en Handy (obligatoria):', {
+      title: 'Verificar devolución Handy',
+      placeholder: 'Identificador del reembolso en Handy'
     });
+    if (!providerRefundId?.trim()) return;
 
-    if (providerRefundId === null) return;
+    const proofUrl = await prompt('URL HTTPS del comprobante de devolución (obligatoria):', {
+      title: 'Comprobante verificado',
+      placeholder: 'https://...'
+    });
+    if (!proofUrl?.trim()) return;
+
+    const approved = await confirm(
+      'Confirmá únicamente si el dinero YA fue devuelto en Handy y verificaste el comprobante. Esta acción registrará el reembolso de forma definitiva.',
+      { title: 'Confirmar devolución real', danger: true, confirmText: 'Confirmar devolución verificada', cancelText: 'Volver' }
+    );
+    if (!approved) return;
 
     try {
-      // 1. Update refund status to completed
-      const { error: refundErr } = await supabase
-        .from('refunds')
-        .update({
-          status: 'completed',
-          provider_refund_id: providerRefundId || 'MANUAL-' + Date.now(),
-          processed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', refund.id);
-
-      if (refundErr) throw refundErr;
-
-      // 2. Update payment status to refunded/partially_refunded
-      if (refund.payment_id) {
-        const { error: payErr } = await supabase
-          .from('payments')
-          .update({
-            status: refund.suborder_id ? 'partially_refunded' : 'refunded',
-            provider_refund_id: providerRefundId || 'MANUAL-' + Date.now(),
-            refund_amount: refund.amount,
-            refund_date: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', refund.payment_id);
-
-        if (payErr) throw payErr;
-      }
-
-      // 3. Update order / suborder status & recalculate parent order status
-      if (refund.suborder_id) {
-        const { error: subErr } = await supabase
-          .from('order_suborders')
-          .update({
-            status: 'refunded',
-            liquidation_status: refund.suborder?.liquidation_status === 'paid' ? 'paid' : 'cancelled',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', refund.suborder_id);
-
-        if (subErr) throw subErr;
-
-        // Check if all suborders are now refunded/cancelled
-        const { data: updatedSubs } = await supabase
-          .from('order_suborders')
-          .select('status')
-          .eq('parent_order_id', refund.order_id);
-
-        const allCancelledOrRefunded = updatedSubs && updatedSubs.every((s: any) => s.status === 'cancelled' || s.status === 'refunded');
-        const anyCancelledOrRefunded = updatedSubs && updatedSubs.some((s: any) => s.status === 'cancelled' || s.status === 'refunded');
-
-        let nextOrderStatus = refund.order?.status;
-        if (allCancelledOrRefunded) {
-          nextOrderStatus = 'refunded';
-        } else if (anyCancelledOrRefunded) {
-          nextOrderStatus = 'partially_refunded';
-        }
-
-        await supabase
-          .from('orders')
-          .update({
-            payment_status: allCancelledOrRefunded ? 'refunded' : 'partially_refunded',
-            status: nextOrderStatus,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', refund.order_id);
-
-      } else {
-        // Full order refunded
-        const { error: subErr } = await supabase
-          .from('order_suborders')
-          .update({
-            status: 'refunded',
-            liquidation_status: 'cancelled',
-            updated_at: new Date().toISOString()
-          })
-          .eq('parent_order_id', refund.order_id);
-
-        if (subErr) throw subErr;
-
-        const { error: ordErr } = await supabase
-          .from('orders')
-          .update({
-            status: 'refunded',
-            payment_status: 'refunded',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', refund.order_id);
-
-        if (ordErr) throw ordErr;
-      }
-
-      // 4. Log in payment_audit_logs
-      await supabase.from('payment_audit_logs').insert({
-        action: 'manual_refund_resolved',
-        order_id: refund.order_id,
-        suborder_id: refund.suborder_id,
-        payment_id: refund.payment_id,
-        refund_id: refund.id,
-        provider: refund.provider,
-        amount: refund.amount,
-        api_response: { resolved_manually: true, input_refund_id: providerRefundId }
+      const { data, error } = await supabase.rpc('confirm_manual_refund_atomic', {
+        p_refund_id: refund.id,
+        p_provider_refund_id: providerRefundId.trim(),
+        p_proof_url: proofUrl.trim()
       });
-
-      toast.success('El reembolso manual ha sido marcado como COMPLETADO.');
+      if (error) throw error;
+      if (!data?.success) throw new Error('No se recibió confirmación del servidor.');
+      toast.success(data.idempotent ? 'Esta devolución ya estaba registrada.' : 'Devolución Handy registrada y conciliada.');
       fetchRefunds();
     } catch (err: any) {
       console.error('Error completing manual refund:', err);
-      toast.error('Error al resolver reembolso: ' + err.message);
+      toast.error('No se confirmó la devolución: ' + err.message);
     }
   }
 
