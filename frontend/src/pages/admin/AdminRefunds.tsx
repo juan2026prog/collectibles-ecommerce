@@ -447,6 +447,33 @@ export default function AdminRefunds() {
   }
 
   // Aprobar Solicitud de Posventa y Ejecutar Reembolso Automático vía refund-order
+  async function handleRejectCustomerRequest(req: any) {
+    const reason = await prompt('Motivo de rechazo (obligatorio, mínimo 8 caracteres):', {
+      title: 'Rechazar solicitud sin devolución iniciada',
+      placeholder: 'Explicá el motivo para el cliente y la auditoría'
+    });
+    if (!reason || reason.trim().length < 8) return;
+    const ok = await confirm('¿Confirmás el rechazo? Solo se admite si no se inició ningún reembolso.', {
+      title: 'Rechazar solicitud',
+      danger: true,
+      confirmText: 'Confirmar rechazo',
+      cancelText: 'Volver'
+    });
+    if (!ok) return;
+    try {
+      const { data, error } = await supabase.rpc('admin_reject_customer_request', {
+        p_request_id: req.id,
+        p_reason: reason.trim()
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error('No se confirmó el rechazo');
+      toast.success('Solicitud rechazada con auditoría');
+      fetchCustomerRequests();
+    } catch (err: any) {
+      toast.error('No se rechazó la solicitud: ' + err.message);
+    }
+  }
+
   async function handleApproveAndExecuteRequest(req: any) {
     // 1. Determinar tipo de operación comercial según request_type
     const isPhysicalReturn = ['voluntary_return', 'defective_product', 'wrong_product', 'damaged_in_transit'].includes(req.request_type);
@@ -763,15 +790,27 @@ export default function AdminRefunds() {
                           <span className="text-xs font-semibold text-emerald-600">Completada</span>
                         ) : req.status === 'REJECTED' ? (
                           <span className="text-xs font-semibold text-red-500">Rechazada</span>
+                        ) : ['REFUND_PENDING','REFUND_PROCESSING','CANCELLATION_PENDING','CANCELLATION_CONFIRMED'].includes(req.status) ? (
+                          <span className="text-xs font-semibold text-amber-700">Gestión financiera en curso</span>
                         ) : ['WAITING_VENDOR', 'WAITING_SUPPLIER'].includes(req.status) ? (
                           <span className="text-xs font-semibold text-purple-600">Requiere Vendedor/Proveedor</span>
+                        ) : req.status === 'REFUND_FAILED' ? (
+                          <span className="text-xs font-semibold text-red-700">Conciliación necesaria</span>
                         ) : (
-                          <button
-                            onClick={() => handleApproveAndExecuteRequest(req)}
-                            className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-sm"
-                          >
-                            Aprobar y Reembolsar
-                          </button>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => handleApproveAndExecuteRequest(req)}
+                              className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white transition shadow-sm"
+                            >
+                              Aprobar y Reembolsar
+                            </button>
+                            {['REQUESTED', 'UNDER_REVIEW'].includes(req.status) && (
+                              <button
+                                onClick={() => handleRejectCustomerRequest(req)}
+                                className="text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-lg border border-red-200 bg-red-50 text-red-700"
+                              >Rechazar</button>
+                            )}
+                          </div>
                         )}
                       </td>
                     </tr>
