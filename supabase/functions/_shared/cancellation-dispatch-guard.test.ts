@@ -1,7 +1,7 @@
 import { assertDispatchAllowed } from './cancellation-dispatch-guard.ts';
 
 // Intentionally dependency-free Deno tests for dispatch preflight.
-function createClient(order: Record<string, unknown> | null, requests: Array<Record<string, unknown>>, failRequest = false) {
+function createClient(order: Record<string, unknown> | null, requests: Array<Record<string, unknown>>, failRequest = false, suborderStatus = 'preparing') {
   return {
     from(table: string) {
       let suborderFilter: string | null = null;
@@ -10,7 +10,7 @@ function createClient(order: Record<string, unknown> | null, requests: Array<Rec
         eq(_field: string, _value: unknown) { return this; },
         in(_field: string, _values: unknown[]) { return this; },
         or(expression: string) { suborderFilter = expression.split('suborder_id.eq.')[1] || null; return this; },
-        single() { return Promise.resolve({ data: table === 'orders' ? order : null, error: order ? null : {message:'not found'} }); },
+        single() { return Promise.resolve({ data: table === 'orders' ? order : (table === 'order_suborders' ? {status: suborderStatus} : null), error: order ? null : {message:'not found'} }); },
         limit(_count: number) { return this; },
         then(resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) {
           const rows = suborderFilter
@@ -54,4 +54,12 @@ Deno.test('fails closed on cancellation lookup errors', async () => {
   let blocked=false;
   try { await assertDispatchAllowed(createClient({payment_method:'handy',status:'confirmed'},[],true),ORDER_ID); } catch { blocked=true; }
   if(!blocked) throw Error('Lookup failure must block dispatch');
+});
+
+Deno.test('blocks a suborder with a direct manual refund even without a request', async () => {
+  let blocked = false;
+  try {
+    await assertDispatchAllowed(createClient({payment_method:'handy',status:'confirmed'},[],false,'refund_pending_manual'),ORDER_ID,SUB_A);
+  } catch { blocked = true; }
+  if (!blocked) throw Error('Suborder manual refund must block dispatch');
 });
