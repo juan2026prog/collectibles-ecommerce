@@ -20,6 +20,7 @@ export default function AdminRefunds() {
 
   // Data lists
   const [refunds, setRefunds] = useState<any[]>([]);
+  const [manualProofFiles, setManualProofFiles] = useState<Record<string, File>>({});
   const [disputes, setDisputes] = useState<any[]>([]);
   const [adjustments, setAdjustments] = useState<any[]>([]);
   const [customerRequests, setCustomerRequests] = useState<any[]>([]);
@@ -418,11 +419,22 @@ export default function AdminRefunds() {
     });
     if (!providerRefundId?.trim()) return;
 
-    const proofUrl = await prompt('URL HTTPS del comprobante de devolución (obligatoria):', {
-      title: 'Comprobante verificado',
-      placeholder: 'https://...'
-    });
-    if (!proofUrl?.trim()) return;
+    const proofFile = manualProofFiles[refund.id];
+    if (!proofFile) {
+      toast.error('Adjuntá el comprobante privado (PDF o imagen) antes de confirmar la devolución.');
+      return;
+    }
+    const allowedTypes: Record<string, string> = {
+      'application/pdf': 'pdf',
+      'image/jpeg': 'jpg',
+      'image/png': 'png',
+      'image/webp': 'webp'
+    };
+    const proofExtension = allowedTypes[proofFile.type];
+    if (!proofExtension || proofFile.size <= 0 || proofFile.size > 10 * 1024 * 1024) {
+      toast.error('El comprobante debe ser PDF/JPG/PNG/WEBP y no superar 10 MB.');
+      return;
+    }
 
     const approved = await confirm(
       'Confirmá únicamente si el dinero YA fue devuelto en Handy y verificaste el comprobante. Esta acción registrará el reembolso de forma definitiva.',
@@ -431,14 +443,27 @@ export default function AdminRefunds() {
     if (!approved) return;
 
     try {
+      const { data: userResult, error: userError } = await supabase.auth.getUser();
+      if (userError || !userResult.user) throw new Error('La sesión administrativa expiró.');
+      const path = `${userResult.user.id}/${refund.order_id}/handy-refund-${refund.id}-${Date.now()}.${proofExtension}`;
+      const { error: uploadError } = await supabase.storage
+        .from('order-dispute-evidence')
+        .upload(path, proofFile, { upsert: false, contentType: proofFile.type });
+      if (uploadError) throw uploadError;
+      const proofReference = 'storage://order-dispute-evidence/' + path;
       const { data, error } = await supabase.rpc('confirm_manual_refund_atomic', {
         p_refund_id: refund.id,
         p_provider_refund_id: providerRefundId.trim(),
-        p_proof_url: proofUrl.trim()
+        p_proof_url: proofReference
       });
       if (error) throw error;
       if (!data?.success) throw new Error('No se recibió confirmación del servidor.');
       toast.success(data.idempotent ? 'Esta devolución ya estaba registrada.' : 'Devolución Handy registrada y conciliada.');
+      setManualProofFiles(prev => {
+        const next = { ...prev };
+        delete next[refund.id];
+        return next;
+      });
       fetchRefunds();
     } catch (err: any) {
       console.error('Error completing manual refund:', err);
@@ -901,8 +926,23 @@ export default function AdminRefunds() {
                               onClick={() => handleResolveManualRefund(refund)}
                               className="text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded bg-green-600 hover:bg-green-700 text-white"
                             >
-                              {refund.status === 'manual_refund_required' ? 'Confirmar Devolución Manual' : 'Resolver'}
+                              Confirmar devolución verificada
                             </button>
+                            <input
+                              type="file"
+                              accept="application/pdf,image/jpeg,image/png,image/webp"
+                              aria-label="Adjuntar comprobante privado de devolución Handy"
+                              onChange={(event) => {
+                                const file = event.target.files?.[0];
+                                if (file) setManualProofFiles(prev => ({ ...prev, [refund.id]: file }));
+                              }}
+                              className="block max-w-44 text-[10px] text-gray-500 file:mr-1 file:rounded file:border-0 file:bg-gray-100 file:px-2 file:py-1"
+                            />
+                            {manualProofFiles[refund.id] && (
+                              <span className="text-[10px] text-green-700">
+                                Archivo: {manualProofFiles[refund.id].name}
+                              </span>
+                            )
 
                           </>
                         )}
