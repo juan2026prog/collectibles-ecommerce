@@ -59,3 +59,39 @@ jobs:
               parse_sql(file.read_text())
               print('Validated', file)
           PY
+
+  postgres-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: collectibles_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_only_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d collectibles_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: test_only_password
+      PGDATABASE: collectibles_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - name: Create isolated schema and apply cancellation migrations
+        run: |
+          psql -X -v ON_ERROR_STOP=1 -f tests/integration/cancellation_postgres_fixture.sql
+          for m in supabase/migrations/2026111200000*.sql; do
+            echo "Applying $m"
+            psql -X -v ON_ERROR_STOP=1 -f "$m"
+          done
+      - name: Validate financial transitions, idempotency, and dispatch guards
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/integration/cancellation_postgres_assertions.sql
