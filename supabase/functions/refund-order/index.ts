@@ -143,6 +143,28 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // Idempotency for manual Handy refunds: never open a second refund task
+    // for an existing pending manual reversal with the same stable key.
+    if (idempotencyKey) {
+      const { data: pendingManualRefund, error: pendingManualError } = await supabaseAdmin
+        .from("refunds")
+        .select("id, order_id, status, amount")
+        .eq("idempotency_key", idempotencyKey)
+        .eq("order_id", orderId)
+        .eq("status", "manual_refund_required")
+        .maybeSingle();
+      if (pendingManualError) throw pendingManualError;
+      if (pendingManualRefund) {
+        return new Response(JSON.stringify({
+          success: true,
+          refundSuccess: false,
+          manualRequired: true,
+          idempotent: true,
+          refundDetails: { refund_id: pendingManualRefund.id, status: "manual_refund_required" }
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
     // 1. Fetch Order
     const { data: fetchedOrder, error: orderErr } = await supabaseAdmin
       .from("orders")
@@ -1313,24 +1335,24 @@ Deno.serve(async (req: Request) => {
       });
 
     } else if (isManualRefundRequired) {
-      // B. MANUAL REVERSAL RECORD (PENDING STATE)
+      // B. Reuse the acquired atomic refund lock rather than creating a second row.
+      // This preserves the unique idempotency key and prevents orphan 'processing' refunds.
+      if (!processingRefundId) throw new Error("No atomic refund reservation found");
       const { data: dbRefund, error: refundInsertErr } = await supabaseAdmin
         .from("refunds")
-        .insert({
-          order_id: orderId,
+        .update({
           suborder_id: suborderId || null,
+          order_item_id: orderItemId || null,
           vendor_id: vendorId,
           payment_id: paymentIdUuid,
           provider: order.payment_method,
           amount: refundAmount,
           reason: reason || "Reembolso manual pendiente de confirmación",
           status: "manual_refund_required",
-          requested_by: requestedBy,
-          api_response: {
-            ...refundDetails,
-            idempotency_key: idempotencyKey || undefined
-          }
+          api_response: { ...refundDetails, idempotency_key: idempotencyKey }
         })
+        .eq("id", processingRefundId)
+        .eq("status", "processing")
         .select("id")
         .single();
 
