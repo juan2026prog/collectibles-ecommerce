@@ -8,7 +8,7 @@ CREATE SCHEMA IF NOT EXISTS storage;
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE
 AS $$ SELECT nullif(current_setting('request.jwt.claim.sub', true),'')::uuid $$;
 CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE
-AS $ SELECT jsonb_build_object('role',coalesce(nullif(current_setting('request.jwt.claim.role',true),''),'authenticated')) $;
+AS $jwt$ SELECT jsonb_build_object('role',coalesce(nullif(current_setting('request.jwt.claim.role',true),''),'authenticated')) $jwt$;
 CREATE TABLE public.order_items(id uuid PRIMARY KEY,order_id uuid,suborder_id uuid);
 CREATE TABLE public.profiles(id uuid PRIMARY KEY, is_admin boolean);
 CREATE TABLE public.orders (
