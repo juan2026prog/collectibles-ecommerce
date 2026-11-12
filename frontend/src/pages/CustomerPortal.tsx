@@ -23,6 +23,7 @@ import CustomerRequestsTab from '../components/customer/CustomerRequestsTab';
 import OrderResolutionModal from '../components/customer/OrderResolutionModal';
 import { MessageSquare } from 'lucide-react';
 import { useSiteSettings } from '../hooks/useSiteSettings';
+import { getCancellationEligibility } from '../lib/cancellationEligibility';
 
 function getOrderItemImage(item: any): string {
   const img = item.products?.images?.[0];
@@ -436,7 +437,7 @@ export default function CustomerPortal() {
   const classifyOrderState = (order: any) => {
     const isOrderCancelled = ['cancelled', 'cancelada'].includes(order.status);
     const isOrderExpired = order.status === 'expired';
-    const isManualRefundPending = order.status === 'refund_pending_manual' || (order.payments || []).some((p: any) => p.status === 'manual_refund_required');
+    const { hasApprovedPayment, isManualRefundPending, canCancelUnpaid, canRequestPaidResolution } = getCancellationEligibility(order);
 
     // Manejo robusto de reembolsos: verificar estado completado/aprobado e importe reembolsado
     const completedRefunds = (order.refunds || []).filter((r: any) => 
@@ -448,7 +449,6 @@ export default function CustomerPortal() {
 
     const isPaymentRefunded = order.payment_status === 'refunded' || isFullRefund;
     const isPaymentPartiallyRefunded = order.payment_status === 'partially_refunded' || isPartialRefund;
-    const hasApprovedPayment = (order.payments || []).some((p: any) => p.status === 'approved') || order.payment_status === 'approved';
 
     let orderBadge = { label: 'Esperando Pago', color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' };
     if (isManualRefundPending) {
@@ -511,8 +511,6 @@ export default function CustomerPortal() {
       };
     }
 
-    const canCancelUnpaid = !isOrderCancelled && !isManualRefundPending && order.reconciliation_status !== 'pending_reconciliation' && !hasApprovedPayment && ['awaiting_payment', 'pending', 'expired'].includes(order.status);
-    const canRequestPaidResolution = !isOrderCancelled && !isManualRefundPending && hasApprovedPayment && !['shipped', 'delivered'].includes(order.status);
 
     // Contextual Action Determination (Estilo Mercado Libre)
     const activeRequest = customerRequests.find(r => r.order_id === order.id && !['CLOSED', 'REJECTED', 'REFUNDED'].includes(r.status));
