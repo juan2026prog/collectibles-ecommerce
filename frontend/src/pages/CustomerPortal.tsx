@@ -436,6 +436,7 @@ export default function CustomerPortal() {
   const classifyOrderState = (order: any) => {
     const isOrderCancelled = ['cancelled', 'cancelada'].includes(order.status);
     const isOrderExpired = order.status === 'expired';
+    const isManualRefundPending = order.status === 'refund_pending_manual' || (order.payments || []).some((p: any) => p.status === 'manual_refund_required');
 
     // Manejo robusto de reembolsos: verificar estado completado/aprobado e importe reembolsado
     const completedRefunds = (order.refunds || []).filter((r: any) => 
@@ -450,7 +451,9 @@ export default function CustomerPortal() {
     const hasApprovedPayment = (order.payments || []).some((p: any) => p.status === 'approved') || order.payment_status === 'approved';
 
     let orderBadge = { label: 'Esperando Pago', color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' };
-    if (isOrderCancelled) {
+    if (isManualRefundPending) {
+      orderBadge = { label: 'Devolución en revisión', color: 'bg-amber-500/10 text-amber-300 border-amber-500/20' };
+    } else if (isOrderCancelled) {
       orderBadge = { label: 'Cancelado', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
     } else if (isOrderExpired) {
       orderBadge = { label: 'Expirado', color: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' };
@@ -465,7 +468,9 @@ export default function CustomerPortal() {
     }
 
     let paymentBadge = { label: 'Sin Iniciar', color: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' };
-    if (isPaymentRefunded) {
+    if (isManualRefundPending && !isPaymentRefunded) {
+      paymentBadge = { label: 'Reembolso pendiente', color: 'bg-amber-500/10 text-amber-300 border-amber-500/20' };
+    } else if (isPaymentRefunded) {
       paymentBadge = { label: 'Reembolsado', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
     } else if (isPaymentPartiallyRefunded) {
       paymentBadge = { label: 'Reembolso Parcial', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
@@ -482,7 +487,9 @@ export default function CustomerPortal() {
       label: ''
     };
 
-    if (isPaymentRefunded) {
+    if (isManualRefundPending && !isPaymentRefunded) {
+      cancellationNotice = { type: 'pending_refund', label: 'Devolución manual pendiente de verificación' };
+    } else if (isPaymentRefunded) {
       cancellationNotice = {
         type: 'refunded',
         label: `Reembolsado (${formatCurrencyPrice(totalRefundedAmount || order.total_amount)})`
@@ -504,8 +511,8 @@ export default function CustomerPortal() {
       };
     }
 
-    const canCancelUnpaid = !isOrderCancelled && !hasApprovedPayment && ['awaiting_payment', 'pending', 'expired'].includes(order.status);
-    const canRequestPaidResolution = !isOrderCancelled && hasApprovedPayment && !['shipped', 'delivered'].includes(order.status);
+    const canCancelUnpaid = !isOrderCancelled && !isManualRefundPending && order.reconciliation_status !== 'pending_reconciliation' && !hasApprovedPayment && ['awaiting_payment', 'pending', 'expired'].includes(order.status);
+    const canRequestPaidResolution = !isOrderCancelled && !isManualRefundPending && hasApprovedPayment && !['shipped', 'delivered'].includes(order.status);
 
     // Contextual Action Determination (Estilo Mercado Libre)
     const activeRequest = customerRequests.find(r => r.order_id === order.id && !['CLOSED', 'REJECTED', 'REFUNDED'].includes(r.status));
