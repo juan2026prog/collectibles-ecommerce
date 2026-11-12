@@ -942,7 +942,7 @@ export default function AdminRefunds() {
                               <span className="text-[10px] text-green-700">
                                 Archivo: {manualProofFiles[refund.id].name}
                               </span>
-                            )
+                            )}
 
                           </>
                         )}
