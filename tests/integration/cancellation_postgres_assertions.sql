@@ -155,5 +155,11 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN v_hit:=true; END;
   IF NOT v_hit THEN RAISE EXCEPTION 'FAILED: direct customer access to refund RPC'; END IF;
 
+  IF has_function_privilege('authenticated',
+      'public.register_handy_manual_refund_pending_atomic(uuid,uuid,uuid,uuid,uuid,uuid,numeric,text,uuid,text)',
+      'EXECUTE') THEN RAISE EXCEPTION 'FAILED: trusted Handy RPC publicly executable'; END IF;
+  IF NOT has_function_privilege('service_role',
+      'public.register_handy_manual_refund_pending_atomic(uuid,uuid,uuid,uuid,uuid,uuid,numeric,text,uuid,text)',
+      'EXECUTE') THEN RAISE EXCEPTION 'FAILED: trusted Handy RPC not executable by backend'; END IF;
   RAISE NOTICE 'PASS: shipment holds, suborder scope, paid cancellation, cap, admin auth, proof, partial and idempotency';
 END $$;
