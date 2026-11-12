@@ -90,7 +90,7 @@ jobs:
       - name: Create isolated schema and apply cancellation migrations
         run: |
           psql -X -v ON_ERROR_STOP=1 -f tests/integration/cancellation_postgres_fixture.sql
-          for m in supabase/migrations/20261112180000_secure_manual_refund_completion.sql supabase/migrations/20261112180001_block_dispatch_during_cancellation.sql supabase/migrations/20261112180002_protect_paid_order_cancel.sql supabase/migrations/20261112180003_admin_reject_resolution.sql supabase/migrations/20261112180004_refund_reservation_cap.sql supabase/migrations/20261112180005_fulfillment_partial_refund_guard.sql; do
+          for m in supabase/migrations/20261112180000_secure_manual_refund_completion.sql supabase/migrations/20261112180001_block_dispatch_during_cancellation.sql supabase/migrations/20261112180002_protect_paid_order_cancel.sql supabase/migrations/20261112180003_admin_reject_resolution.sql supabase/migrations/20261112180004_refund_reservation_cap.sql supabase/migrations/20261112180005_fulfillment_partial_refund_guard.sql supabase/migrations/20261112180006_atomic_handy_pending_refund.sql; do
             echo "Applying $m"
             psql -X -v ON_ERROR_STOP=1 -f "$m"
           done
