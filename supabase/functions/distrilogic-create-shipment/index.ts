@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { decryptData } from "../_shared/crypto.ts";
+import { assertDispatchAllowed } from "../_shared/cancellation-dispatch-guard.ts";
 
 const DISTRILOGIC_CREATE_TEST_URL = "http://test.DISTRILOGIC.com.uy/rest/wsaltaservicioetiquetaV2";
 const DISTRILOGIC_CREATE_PROD_URL = "http://tracking.districad.com.uy/rest/wsaltaservicioetiquetaV2";
@@ -47,6 +48,9 @@ serve(async (req) => {
     if (!order_id || !vendor_id || !customer) {
       throw new Error("Faltan parámetros obligatorios: order_id, vendor_id o customer");
     }
+
+    // Preflight cancellation check before creating a Distrilogic service externally.
+    await assertDispatchAllowed(supabase, order_id);
 
     const idempotentKey = `${order_id}-${vendor_id}-${package_id}`.substring(0, 20);
 
