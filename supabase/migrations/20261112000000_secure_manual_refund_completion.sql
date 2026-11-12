@@ -29,8 +29,18 @@ BEGIN
   IF v_reference IS NULL OR length(v_reference) < 4 OR length(v_reference) > 180 THEN
     RAISE EXCEPTION 'Provider refund reference required (4-180 characters)';
   END IF;
-  IF v_proof IS NULL OR length(v_proof) > 2000 OR v_proof !~* '^https://' THEN
-    RAISE EXCEPTION 'Verified HTTPS proof URL required';
+  -- Store durable references in the existing PRIVATE order-dispute-evidence bucket.
+  -- Reject arbitrary external URLs or unverified evidence names.
+  IF v_proof IS NULL OR length(v_proof) > 2000
+     OR v_proof NOT LIKE 'storage://order-dispute-evidence/%' THEN
+    RAISE EXCEPTION 'Private storage proof reference required';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM storage.objects obj
+    WHERE obj.bucket_id = 'order-dispute-evidence'
+      AND obj.name = substr(v_proof, length('storage://order-dispute-evidence/') + 1)
+  ) THEN
+    RAISE EXCEPTION 'Refund proof file does not exist in private storage';
   END IF;
 
   -- Lock order first, matching refund-order lock order to avoid deadlocks.
