@@ -11,11 +11,12 @@ function createClient(order: Record<string, unknown> | null, requests: Array<Rec
         in(_field: string, _values: unknown[]) { return this; },
         or(expression: string) { suborderFilter = expression.split('suborder_id.eq.')[1] || null; return this; },
         single() { return Promise.resolve({ data: table === 'orders' ? order : null, error: order ? null : {message:'not found'} }); },
-        limit(_count: number) {
+        limit(_count: number) { return this; },
+        then(resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) {
           const rows = suborderFilter
             ? requests.filter(r => !r.suborder_id || r.suborder_id === suborderFilter)
             : requests;
-          return Promise.resolve({ data: rows, error: failRequest ? {message:'read failed'} : null });
+          return Promise.resolve({ data: rows, error: failRequest ? {message:'read failed'} : null }).then(resolve, reject);
         }
       };
     }
