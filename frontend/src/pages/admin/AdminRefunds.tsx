@@ -446,34 +446,6 @@ export default function AdminRefunds() {
     }
   }
 
-  // Cancel / Reject pending refund request
-  async function handleRejectRefund(refundId: string) {
-    const ok = await confirm('¿Está seguro de que desea rechazar y cancelar esta solicitud de reembolso?', {
-      title: 'Rechazar Solicitud de Reembolso',
-      danger: true,
-      confirmText: 'Sí, Rechazar',
-      cancelText: 'Cancelar'
-    });
-
-    if (!ok) return;
-
-    try {
-      const { error } = await supabase
-        .from('refunds')
-        .update({
-          status: 'rejected',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', refundId);
-
-      if (error) throw error;
-      toast.success('La solicitud de reembolso fue rechazada.');
-      fetchRefunds();
-    } catch (err: any) {
-      toast.error('Error al rechazar reembolso: ' + err.message);
-    }
-  }
-
   // Aprobar Solicitud de Posventa y Ejecutar Reembolso Automático vía refund-order
   async function handleApproveAndExecuteRequest(req: any) {
     // 1. Determinar tipo de operación comercial según request_type
