@@ -90,7 +90,7 @@ jobs:
       - name: Create isolated schema and apply cancellation migrations
         run: |
           psql -X -v ON_ERROR_STOP=1 -f tests/integration/cancellation_postgres_fixture.sql
-          for m in supabase/migrations/2026111200000*.sql; do
+          for m in supabase/migrations/2026111200000{0,1,2,3,4}_*.sql; do
             echo "Applying $m"
             psql -X -v ON_ERROR_STOP=1 -f "$m"
           done
