@@ -48,7 +48,7 @@ serve(async (req: Request) => {
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from("orders")
-      .select("id, customer_id, customer_email, customer_phone, total_amount, currency, status, payment_method, payment_id, payment_processed_at, shipping_address")
+      .select("id, customer_id, customer_email, customer_phone, total_amount, currency, status, payment_method, payment_id, payment_processed_at, shipping_address, is_international, is_shipping_quote_required")
       .eq("id", orderId)
       .single();
 
@@ -139,6 +139,16 @@ serve(async (req: Request) => {
     const origin = req.headers.get("origin") || "https://collectibles-ecommerce.vercel.app";
 
     if (provider === "dlocal") {
+      // This gateway is exclusively for Zinc international orders.
+      if (order.is_international !== true) throw new Error("DLOCAL_INTERNATIONAL_ONLY");
+      if (order.is_shipping_quote_required) throw new Error("INTERNATIONAL_SHIPPING_QUOTE_REQUIRED");
+      if (safeOrderItems.length === 0) throw new Error("EMPTY_INTERNATIONAL_ORDER");
+      const { data: cancellationHolds, error: cancellationHoldError } = await supabaseAdmin
+        .from("international_cancellation_requests")
+        .select("id").eq("order_id", orderId)
+        .not("status", "in", '("rejected","refunded")').limit(1);
+      if (cancellationHoldError) throw new Error("CANCELLATION_HOLD_UNAVAILABLE");
+      if (cancellationHolds?.length) throw new Error("CANCELLATION_ALREADY_REQUESTED");
       if (config.payments_dlocal_go_enabled !== "true") {
         throw new Error("dLocal Go no está habilitado para Uruguay.");
       }
