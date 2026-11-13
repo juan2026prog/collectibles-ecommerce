@@ -636,12 +636,11 @@ export async function triggerZincVerificationIfNeeded(
 
     console.log(`[Zinc Trigger] Order ${orderId} has international products. Committing capacity and invoking verification...`);
 
-    // Commit reserved capacity for this order
-    try {
-      await supabaseClient.rpc('commit_international_capacity', { p_order_id: orderId });
-    } catch (commitCapErr) {
-      console.warn(`[Zinc Trigger] Error committing international capacity for order ${orderId}:`, commitCapErr);
-    }
+    // Fail closed: no supplier purchase without a committed capital reservation.
+    const { data: capacityCommitted, error: capacityError } = await supabaseClient
+      .rpc("commit_international_capacity", { p_order_id: orderId });
+    if (capacityError || capacityCommitted !== true)
+      throw new Error("INTERNATIONAL_CAPITAL_NOT_RESERVED");
 
     const functionHeaders = {
       "Content-Type": "application/json",
