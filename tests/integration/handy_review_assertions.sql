@@ -14,14 +14,15 @@ BEGIN
  VALUES (v_order_id,buyer,buyer,'handy','pending_reconciliation','pending',75,'UYU');
  INSERT INTO public.payment_attempts(order_id,normalized_status) VALUES (v_order_id,'manual_verification_required');
  PERFORM set_config('request.jwt.claim.sub',buyer::text,false);
- result := public.request_handy_payment_review(v_order_id,'request_cancellation','Comprobante Handy disponible');
+ result := public.request_handy_payment_review(v_order_id,'verify_payment','Comprobante Handy disponible');
  request_id := (result->>'request_id')::uuid;
  IF result->>'success' <> 'true' OR request_id IS NULL THEN
     RAISE EXCEPTION 'Buyer request failed';
  END IF;
  result := public.request_handy_payment_review(v_order_id,'request_cancellation','Reintento');
  IF (result->>'request_id')::uuid <> request_id
-   OR (SELECT count(*) FROM public.unified_order_requests WHERE order_id=v_order_id) <> 1 THEN
+   OR (SELECT count(*) FROM public.unified_order_requests WHERE order_id=v_order_id) <> 1
+   OR NOT EXISTS(SELECT 1 FROM public.unified_order_requests WHERE id=request_id AND reason LIKE 'Solicito cancelación%') THEN
    RAISE EXCEPTION 'Duplicate request not idempotent';
  END IF;
  PERFORM set_config('request.jwt.claim.sub',other_user::text,false);
@@ -44,6 +45,11 @@ BEGIN
  END;
  IF NOT blocked THEN RAISE EXCEPTION 'Closed without payment reconciliation'; END IF;
  UPDATE public.orders SET reconciliation_status='reconciled',payment_status='approved' WHERE id=v_order_id;
+  blocked:=false;
+  BEGIN PERFORM public.admin_update_handy_payment_review(request_id,'close_after_reconciliation','Se verificó pago y ahora falta devolver el dinero');
+  EXCEPTION WHEN OTHERS THEN blocked:=true; END;
+  IF NOT blocked THEN RAISE EXCEPTION 'Cancellation closed before real refund'; END IF;
+  UPDATE public.orders SET payment_status='refunded' WHERE id=v_order_id;
  result:=public.admin_update_handy_payment_review(request_id,'close_after_reconciliation','La operación ya fue conciliada y registrada en el sistema');
  IF result->>'status'<>'CLOSED' THEN RAISE EXCEPTION 'Close after reconciliation failed'; END IF;
  RAISE NOTICE 'PASS: buyer owns, idempotency, admin-only, no premature close';
