@@ -1,4 +1,6 @@
 CREATE SCHEMA auth;
+CREATE SCHEMA storage;
+CREATE TABLE storage.objects(bucket_id text,name text);
 CREATE ROLE authenticated NOLOGIN;
 CREATE ROLE anon NOLOGIN;
 CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE
@@ -17,7 +19,8 @@ CREATE TABLE public.unified_order_requests(
  order_id uuid NOT NULL,customer_id uuid,
  business_model text NOT NULL,request_type text NOT NULL,status text NOT NULL,
  amount_requested numeric NOT NULL,currency text NOT NULL,reason text NOT NULL,
- customer_notes text,admin_notes text,updated_at timestamptz DEFAULT now(),
+ customer_notes text,admin_notes text,evidence_images jsonb,
+ updated_at timestamptz DEFAULT now(),
  resolved_by uuid,resolved_at timestamptz,idempotency_key text UNIQUE
 );
 ALTER TABLE public.unified_order_requests ADD CONSTRAINT
