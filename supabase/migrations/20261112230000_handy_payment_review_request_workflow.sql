@@ -85,6 +85,39 @@ $$;
 REVOKE ALL ON FUNCTION public.request_handy_payment_review(uuid,text,text) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.request_handy_payment_review(uuid,text,text) TO authenticated;
 
+-- The buyer can attach a proof after Super Admin asks for it.
+-- File upload itself is protected by existing Storage RLS.
+CREATE OR REPLACE FUNCTION public.add_handy_payment_review_evidence(
+ p_request_id uuid, p_storage_path text
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $
+DECLARE
+  v_actor uuid := auth.uid();
+  v_req public.unified_order_requests%ROWTYPE;
+BEGIN
+  IF v_actor IS NULL THEN RAISE EXCEPTION 'Authentication required' USING ERRCODE='42501'; END IF;
+  SELECT * INTO v_req FROM public.unified_order_requests
+   WHERE id=p_request_id AND request_type='handy_payment_review'
+     AND customer_id=v_actor FOR UPDATE;
+  IF NOT FOUND OR v_req.status NOT IN ('REQUESTED','UNDER_REVIEW') THEN
+    RAISE EXCEPTION 'Review unavailable for evidence submission' USING ERRCODE='42501';
+  END IF;
+  IF length(p_storage_path)>750
+    OR p_storage_path NOT LIKE (v_actor::text||'/'||v_req.order_id::text||'/%')
+    OR NOT EXISTS (SELECT 1 FROM storage.objects obj
+                   WHERE obj.bucket_id='order-dispute-evidence' AND obj.name=p_storage_path)
+  THEN RAISE EXCEPTION 'Private evidence file not found or not owned by buyer'; END IF;
+  IF NOT coalesce(v_req.evidence_images,'[]'::jsonb) @> jsonb_build_array(p_storage_path) THEN
+    UPDATE public.unified_order_requests
+    SET evidence_images=coalesce(evidence_images,'[]'::jsonb)||jsonb_build_array(p_storage_path),
+        updated_at=now()
+    WHERE id=p_request_id;
+  END IF;
+  RETURN jsonb_build_object('success',true,'request_id',p_request_id);
+END;
+$;
+REVOKE ALL ON FUNCTION public.add_handy_payment_review_evidence(uuid,text) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.add_handy_payment_review_evidence(uuid,text) TO authenticated;
+
 CREATE OR REPLACE FUNCTION public.admin_update_handy_payment_review(
  p_request_id uuid, p_action text, p_public_note text
 ) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $$
