@@ -51,7 +51,23 @@ export default function CustomerPortal() {
   const { wishlist } = useWishlistContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const { language, currency, setLanguage, setCurrency } = useLocale();
-  const { formatCurrencyPrice } = useCurrency();
+  const { formatProductPrice } = useCurrency();
+  // Persisted order and order_item amounts are already denominated in order.currency.
+  // Never pass UYU amounts to formatCurrencyPrice(), which expects source USD.
+  const formatOrderAmount = (amount: number, sourceCurrency?: string | null) => {
+    const source = (sourceCurrency || 'UYU').toUpperCase();
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount)) return 'Importe no disponible';
+    if (source === 'USD' || source === 'UYU') {
+      return formatProductPrice({ amount: numericAmount, sourceCurrency: source });
+    }
+    // Unsupported currency: show the original amount; do not invent an FX rate.
+    try {
+      return new Intl.NumberFormat('es-UY', { style: 'currency', currency: source }).format(numericAmount);
+    } catch {
+      return `${numericAmount.toFixed(2)} ${source}`;
+    }
+  };
   const { settings } = useSiteSettings();
   const cart = useCartContext();
   const [orders, setOrders] = useState<any[]>([]);
@@ -179,8 +195,8 @@ export default function CustomerPortal() {
             ${isItemIntl ? `<div style="font-size: 10px; color: #0284c7; font-weight: bold; margin-top: 2px;">PRODUCTO INTERNACIONAL</div>` : ''}
           </td>
           <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: center;">${item.quantity}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right;">${formatCurrencyPrice(item.unit_price)}</td>
-          <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold;">${formatCurrencyPrice(item.total_price || (item.unit_price * item.quantity))}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right;">${formatOrderAmount(item.unit_price, order.currency)}</td>
+          <td style="padding: 12px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold;">${formatOrderAmount(item.total_price ?? (item.unit_price * item.quantity), order.currency)}</td>
         </tr>
       `;
     });
@@ -255,15 +271,15 @@ export default function CustomerPortal() {
           <div class="totals">
             <div class="total-row">
               <span style="color: #64748b;">Subtotal Productos:</span>
-              <span>${formatCurrencyPrice(order.total_amount - (order.total_shipping || 0))}</span>
+              <span>${formatOrderAmount(Number(order.total_amount) - Number(order.total_shipping || 0), order.currency)}</span>
             </div>
             <div class="total-row">
               <span style="color: #64748b;">Envío Local (Uruguay):</span>
-              <span>${formatCurrencyPrice(order.total_shipping || 0)}</span>
+              <span>${formatOrderAmount(Number(order.total_shipping || 0), order.currency)}</span>
             </div>
             <div class="total-row grand">
               <span>Total Abonado:</span>
-              <span>${formatCurrencyPrice(order.total_amount)}</span>
+              <span>${formatOrderAmount(order.total_amount, order.currency)}</span>
             </div>
           </div>
 
@@ -485,12 +501,12 @@ export default function CustomerPortal() {
     if (isPaymentRefunded) {
       cancellationNotice = {
         type: 'refunded',
-        label: `Reembolsado (${formatCurrencyPrice(totalRefundedAmount || order.total_amount)})`
+        label: `Reembolsado (${formatOrderAmount(totalRefundedAmount || order.total_amount, order.currency)})`
       };
     } else if (isPaymentPartiallyRefunded) {
       cancellationNotice = {
         type: 'partial_refund',
-        label: `Reembolso Parcial (${formatCurrencyPrice(totalRefundedAmount)})`
+        label: `Reembolso Parcial (${formatOrderAmount(totalRefundedAmount, order.currency)})`
       };
     } else if (isOrderCancelled && hasApprovedPayment) {
       cancellationNotice = {
@@ -1367,7 +1383,7 @@ export default function CustomerPortal() {
                         </div>
                         <div>
                           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider text-right">TOTAL</p>
-                          <p className="font-bold text-lg text-emerald-400">{formatCurrencyPrice(order.total_amount)}</p>
+                          <p className="font-bold text-lg text-emerald-400">{formatOrderAmount(order.total_amount, order.currency)}</p>
                         </div>
                         <div className="flex flex-col items-end gap-1.5">
                           <div className="flex flex-wrap items-center gap-1.5 justify-end">
@@ -1412,7 +1428,7 @@ export default function CustomerPortal() {
                               <p className="text-[10px] font-black text-[#f00856] uppercase tracking-widest mt-0.5">
                                 Vendido por: {item.vendor_id ? (item.vendor_store?.display_name || item.vendor_store?.store_name || item.vendor_store?.name || item.vendor?.company_name || item.vendor?.store_name || 'Vendedor') : 'Collectibles.uy'}
                               </p>
-                              <p className="text-xs text-slate-400">Cant: {item.quantity} · {formatCurrencyPrice(item.unit_price)} c/u</p>
+                              <p className="text-xs text-slate-400">Cant: {item.quantity} · {formatOrderAmount(item.unit_price, order.currency)} c/u</p>
                             </div>
                           </div>
                         ))}
@@ -1537,7 +1553,7 @@ export default function CustomerPortal() {
           requests={customerRequests}
           loading={requestsLoading}
           onRefresh={loadCustomerRequests}
-          formatCurrencyPrice={formatCurrencyPrice}
+          formatRequestAmount={formatOrderAmount}
         />
       )}
 
@@ -2332,7 +2348,7 @@ export default function CustomerPortal() {
                   <div className="flex justify-between">
                     <span className="text-slate-400">Importe reintegrado:</span>
                     <span className="font-mono font-bold text-emerald-400 text-sm">
-                      {formatCurrencyPrice(Number(refundAmount))}
+                      {formatOrderAmount(Number(refundAmount), refundDetailModalOrder.currency)}
                     </span>
                   </div>
                   {latestRefund?.provider && (
@@ -2476,7 +2492,7 @@ export default function CustomerPortal() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs font-mono font-bold text-white">{formatCurrencyPrice(item.unit_price * item.quantity)}</p>
+                      <p className="text-xs font-mono font-bold text-white">{formatOrderAmount(item.unit_price * item.quantity, selectedDetailOrder.currency)}</p>
                       <p className="text-[10px] text-slate-400">x{item.quantity}</p>
                     </div>
                   </div>
@@ -2504,18 +2520,18 @@ export default function CustomerPortal() {
                 <div className="flex justify-between text-slate-400">
                   <span>Productos:</span>
                   <span className="font-mono text-white">
-                    {formatCurrencyPrice(selectedDetailOrder.total_amount - (selectedDetailOrder.total_shipping || 0))}
+                    {formatOrderAmount(Number(selectedDetailOrder.total_amount) - Number(selectedDetailOrder.total_shipping || 0), selectedDetailOrder.currency)}
                   </span>
                 </div>
                 <div className="flex justify-between text-slate-400">
                   <span>Envío:</span>
                   <span className="font-mono text-white">
-                    {formatCurrencyPrice(selectedDetailOrder.total_shipping || 0)}
+                    {formatOrderAmount(selectedDetailOrder.total_shipping || 0, selectedDetailOrder.currency)}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm font-bold text-emerald-400 border-t border-white/10 pt-2">
                   <span>Total:</span>
-                  <span className="font-mono">{formatCurrencyPrice(selectedDetailOrder.total_amount)}</span>
+                  <span className="font-mono">{formatOrderAmount(selectedDetailOrder.total_amount, selectedDetailOrder.currency)}</span>
                 </div>
               </div>
             </div>
