@@ -414,6 +414,7 @@ serve(async (req) => {
             }
           }
         } catch (zincCallErr: any) {
+          if (String(zincCallErr?.message || "").includes("CANCELLATION_HOLD_ACTIVE")) throw zincCallErr;
           const { error: itemUpdErr } = await serviceClient.from('international_order_items').update({
             purchase_status: 'zinc_failed',
             review_reason_code: 'ZINC_TIMEOUT',
