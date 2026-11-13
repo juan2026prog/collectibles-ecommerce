@@ -40,7 +40,9 @@ export default function CheckoutSuccess() {
   const isMP=provider === 'mercadopago' || order?.payment_method === 'mercadopago';
 
   const orderNumber = orderId ? orderId.slice(0, 8).toUpperCase() : '---';
-  const isExpired=order?.status === 'expired' || order?.payment_status === 'expired';
+  const isHandy = provider === 'handy' || order?.payment_method === 'handy';
+  const isHandyReconciliation = isHandy && order?.reconciliation_status === 'pending_reconciliation';
+  const isExpired = !isHandyReconciliation && (order?.status === 'expired' || order?.payment_status === 'expired');
   const isPending=!isOrderPaymentApproved(order);
 
   const shouldTrackPurchase = useMemo(() => {
@@ -55,6 +57,15 @@ export default function CheckoutSuccess() {
       setVerifying(true);
       setError('');
       try {
+        // Refresh order status from the database, not from an expired checkout snapshot.
+        // RLS limits this lookup to orders visible to the signed-in customer.
+        const { data: latestOrder } = await supabase
+          .from('orders')
+          .select('id, status, payment_status, reconciliation_status, payment_method, total_amount, currency')
+          .eq('id', orderId)
+          .maybeSingle();
+        if (latestOrder) setOrder((previous: any) => ({ ...previous, ...latestOrder }));
+
         // Fetch latest payment URL from Supabase payments table
         const { data: payData } = await supabase
           .from('payments')
@@ -237,11 +248,13 @@ export default function CheckoutSuccess() {
         </div>
 
         <h1 className="text-3xl font-black text-white mb-2">
-          {verifying ? 'Verificando pago...' : isExpired ? 'Tu orden venció' : isPending ? 'Tu orden esta pendiente' : 'Gracias por tu compra'}
+          {verifying ? 'Verificando pago...' : isHandyReconciliation ? 'Tu pago está en verificación' : isExpired ? 'Tu orden venció' : isPending ? 'Tu orden está pendiente' : 'Gracias por tu compra'}
         </h1>
         <p className="text-slate-400 mb-8">
           {verifying
             ? 'Espera un momento mientras confirmamos la transaccion.'
+            : isHandyReconciliation
+              ? 'Handy notificó una operación que requiere conciliación administrativa. No vuelvas a pagar: primero tenemos que verificar el cobro.'
             : isExpired
               ? 'Conservamos la referencia del intento anterior. Su estado debe verificarse antes de volver a pagar.'
             : isPending
@@ -249,13 +262,20 @@ export default function CheckoutSuccess() {
               : 'Recibimos tu pago y tu pedido ya esta confirmado.'}
         </p>
 
-        {isPending && !isExpired && (
+        {isPending && !isExpired && !isHandyReconciliation && (
           <div className="mb-6 p-4 border border-amber-500/30 bg-amber-500/10 text-amber-200 text-sm text-left flex items-start gap-3">
             <Clock className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
             <div>
               <div className="font-bold mb-1 text-amber-300">¡Reserva Temporal de Stock Activa!</div>
               <p className="text-amber-200/90 leading-relaxed">Tu stock está reservado de forma segura. Por favor completa tu pago antes de que expire la reserva (generalmente 30 minutos) para evitar la liberación de stock y la cancelación automática de tu orden.</p>
             </div>
+          </div>
+        )}
+
+        {isHandyReconciliation && (
+          <div className="mb-6 p-4 border border-amber-500/30 bg-amber-500/10 text-amber-200 text-sm text-left" role="status">
+            <strong>Pago Handy pendiente de verificación</strong>
+            <p className="mt-1">Conservá el comprobante de Handy. El pedido no se considera impago ni reembolsado hasta que se concilie. No realices un segundo pago.</p>
           </div>
         )}
 
@@ -296,7 +316,7 @@ export default function CheckoutSuccess() {
               <div className="flex items-center justify-between py-2 border-t border-white/10">
                 <span className="text-sm text-slate-400">Estado</span>
                 <span className={`px-2.5 py-1 text-[10px] font-black uppercase tracking-widest  ${['paid', 'confirmed'].includes(order.status) ? 'bg-green-100 text-green-700 border border-green-200' : isPending ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-white/10 text-slate-400 border border-white/10'}`}>
-                  {['paid', 'confirmed'].includes(order.status) ? 'Confirmada' : isPending ? 'Pendiente' : order.payment_status || order.status}
+                  {['paid', 'confirmed'].includes(order.status) ? 'Confirmada' : isHandyReconciliation ? 'En verificación' : isPending ? 'Pendiente' : order.payment_status || order.status}
                 </span>
               </div>
             </>
@@ -346,7 +366,7 @@ export default function CheckoutSuccess() {
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link to="/shop" className="btn-primary px-8 py-3">Seguir comprando</Link>
-          {isPending ? (
+          {isPending && !isHandyReconciliation && !isExpired ? (
             isMP ? (
               <button type="button" disabled={resuming || verifying} onClick={resumeMercadoPago} className="px-8 py-3 bg-amber-600 text-white font-bold disabled:opacity-50 inline-flex items-center justify-center gap-2">
                 <RefreshCcw className="w-4 h-4" /> {resuming ? 'Verificando intento...' : 'Verificar y continuar pago'}
@@ -366,7 +386,7 @@ export default function CheckoutSuccess() {
               </Link>
             )
           ) : (
-            <Link to="/account" className="px-8 py-3 border-2 border-white/10  font-bold text-gray-700 hover:border-white/30 transition-colors">Ver mis ordenes</Link>
+            <Link to="/account?tab=orders" className="px-8 py-3 border-2 border-white/10 font-bold text-gray-200 hover:border-white/30 transition-colors">{isHandyReconciliation ? 'Consultar pedido' : 'Ver mis órdenes'}</Link>
           )}
         </div>
       </div>

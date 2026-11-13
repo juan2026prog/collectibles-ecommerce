@@ -310,7 +310,7 @@ export default function CustomerPortal() {
     setOrdersError(null);
     try {
       const orderSelect = `
-        id, order_number, total_amount, currency, status, payment_status, created_at, paid_at, payment_method, customer_id, user_id, customer_email, shipping_address, total_shipping, is_international, fx_rate,
+        id, order_number, total_amount, currency, status, payment_status, reconciliation_status, created_at, paid_at, payment_method, customer_id, user_id, customer_email, shipping_address, total_shipping, is_international, fx_rate,
         payments(id, status, payment_url, created_at, provider, amount),
         refunds:refunds(id, amount, status, reason, created_at),
         order_items (
@@ -452,6 +452,7 @@ export default function CustomerPortal() {
   const classifyOrderState = (order: any) => {
     const isOrderCancelled = ['cancelled', 'cancelada'].includes(order.status);
     const isOrderExpired = order.status === 'expired';
+    const hasPendingHandyReconciliation = order.payment_method === 'handy' && order.reconciliation_status === 'pending_reconciliation';
 
     // Manejo robusto de reembolsos: verificar estado completado/aprobado e importe reembolsado
     const completedRefunds = (order.refunds || []).filter((r: any) => 
@@ -468,6 +469,8 @@ export default function CustomerPortal() {
     let orderBadge = { label: 'Esperando Pago', color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' };
     if (isOrderCancelled) {
       orderBadge = { label: 'Cancelado', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
+    } else if (hasPendingHandyReconciliation) {
+      orderBadge = { label: 'Pago en verificación', color: 'bg-amber-500/10 text-amber-300 border-amber-500/20' };
     } else if (isOrderExpired) {
       orderBadge = { label: 'Expirado', color: 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20' };
     } else if (['paid', 'confirmed'].includes(order.status)) {
@@ -485,6 +488,8 @@ export default function CustomerPortal() {
       paymentBadge = { label: 'Reembolsado', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
     } else if (isPaymentPartiallyRefunded) {
       paymentBadge = { label: 'Reembolso Parcial', color: 'bg-rose-500/10 text-rose-400 border-rose-500/20' };
+    } else if (hasPendingHandyReconciliation) {
+      paymentBadge = { label: 'Pendiente de verificar en Handy', color: 'bg-amber-500/10 text-amber-300 border-amber-500/20' };
     } else if (hasApprovedPayment) {
       paymentBadge = { label: 'Aprobado', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' };
     } else if (order.payment_status === 'rejected') {
@@ -520,8 +525,8 @@ export default function CustomerPortal() {
       };
     }
 
-    const canCancelUnpaid = !isOrderCancelled && !hasApprovedPayment && ['awaiting_payment', 'pending', 'expired'].includes(order.status);
-    const canRequestPaidResolution = !isOrderCancelled && hasApprovedPayment && !['shipped', 'delivered'].includes(order.status);
+    const canCancelUnpaid = !isOrderCancelled && !hasPendingHandyReconciliation && !hasApprovedPayment && ['awaiting_payment', 'pending', 'expired'].includes(order.status);
+    const canRequestPaidResolution = !isOrderCancelled && !hasPendingHandyReconciliation && hasApprovedPayment && !['shipped', 'delivered'].includes(order.status);
 
     // Contextual Action Determination (Estilo Mercado Libre)
     const activeRequest = customerRequests.find(r => r.order_id === order.id && !['CLOSED', 'REJECTED', 'REFUNDED'].includes(r.status));
@@ -533,6 +538,7 @@ export default function CustomerPortal() {
       paymentBadge,
       cancellationNotice,
       hasApprovedPayment,
+      hasPendingHandyReconciliation,
       canCancelUnpaid,
       canRequestPaidResolution,
       activeRequest,
@@ -1442,7 +1448,7 @@ export default function CustomerPortal() {
                           <Eye className="w-4 h-4 text-primary-400" /> Ver Detalle
                         </button>
 
-                        {['awaiting_payment', 'pending'].includes(order.status) && order.payments && order.payments.length > 0 && order.payments[0].payment_url && (
+                        {['awaiting_payment', 'pending'].includes(order.status) && !stateMeta.hasPendingHandyReconciliation && order.payments && order.payments.length > 0 && order.payments[0].payment_url && (
                           <a 
                             href={order.payments[0].payment_url} 
                             target="_blank" 
@@ -1489,6 +1495,13 @@ export default function CustomerPortal() {
                             className="flex items-center gap-1.5 px-4 py-2 bg-rose-600/20 text-rose-300 hover:bg-rose-600/30 font-bold text-xs rounded-xl transition-colors border border-rose-500/30"
                           >
                             <RotateCcw className="w-4 h-4 text-rose-400" /> Devolver Producto / Reclamo
+                          </button>
+                        ) : stateMeta.hasPendingHandyReconciliation ? (
+                          <button
+                            onClick={() => setSupportOrderModal(order)}
+                            className="flex items-center gap-1.5 px-4 py-2 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25 font-bold text-xs rounded-xl border border-amber-500/30"
+                          >
+                            <Clock className="w-4 h-4" /> Solicitar revisión de pago
                           </button>
                         ) : stateMeta.canCancelUnpaid ? (
                           <button
