@@ -142,6 +142,28 @@ export default function CustomerRequestsTab({
   const [uploadingHandyProof, setUploadingHandyProof] = useState(false);
   const [handyProofError, setHandyProofError] = useState('');
 
+  const [escalatingHandy, setEscalatingHandy] = useState(false);
+  async function escalateHandyCancellation() {
+    if (!selectedRequest || escalatingHandy) return;
+    if (!window.confirm('¿Querés solicitar la cancelación y devolución de esta compra Handy? La devolución del dinero no será inmediata y requiere verificación.')) return;
+    setEscalatingHandy(true);
+    setHandyProofError('');
+    try {
+      const {data,error} = await supabase.rpc('request_handy_payment_review',{
+        p_order_id:selectedRequest.order_id,
+        p_intent:'request_cancellation',
+        p_notes:selectedRequest.customer_notes || null
+      });
+      if (error || !data?.success) throw error || new Error('No se registró el cambio');
+      setSelectedRequest((prev:any)=>({
+        ...prev,reason:'Solicito cancelación y devolución luego de verificar pago Handy'
+      }));
+      onRefresh();
+    } catch(err:any) {
+      setHandyProofError(err?.message || 'No se pudo solicitar la cancelación.');
+    } finally { setEscalatingHandy(false); }
+  }
+
   async function attachHandyProof(file?: File) {
     if (!file || !selectedRequest || uploadingHandyProof) return;
     const types: Record<string, string> = {
@@ -401,6 +423,16 @@ export default function CustomerRequestsTab({
                 </div>
               )}
             </div>
+
+            {selectedRequest.request_type === 'handy_payment_review'
+              && ['REQUESTED','UNDER_REVIEW'].includes(selectedRequest.status)
+              && !String(selectedRequest.reason || '').includes('cancelación') && (
+              <button type="button" disabled={escalatingHandy}
+                onClick={escalateHandyCancellation}
+                className="w-full text-xs font-bold p-2 rounded-lg border border-rose-500/40 text-rose-200 bg-rose-500/10 disabled:opacity-50">
+                {escalatingHandy ? 'Registrando...' : 'Solicitar cancelación y devolución'}
+              </button>
+            )}
 
             {selectedRequest.request_type === 'handy_payment_review'
               && ['REQUESTED','UNDER_REVIEW'].includes(selectedRequest.status) && (
