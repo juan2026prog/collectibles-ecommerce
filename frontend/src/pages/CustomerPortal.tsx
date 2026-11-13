@@ -278,7 +278,7 @@ export default function CustomerPortal() {
               <span>${formatOrderAmount(Number(order.total_shipping || 0), order.currency)}</span>
             </div>
             <div class="total-row grand">
-              <span>Total Abonado:</span>
+              <span>Total del Pedido:</span>
               <span>${formatOrderAmount(order.total_amount, order.currency)}</span>
             </div>
           </div>
@@ -432,7 +432,7 @@ export default function CustomerPortal() {
           id, order_id, suborder_id, order_item_id, vendor_id, customer_id, business_model,
           request_type, status, amount_requested, amount_approved, currency, reason,
           customer_notes, vendor_notes, admin_notes, evidence_images, created_at, resolved_at,
-          order:orders(id, order_number, total_amount, status)
+          order:orders(id, order_number, total_amount, currency, status)
         `)
         .order('created_at', { ascending: false });
 
