@@ -253,6 +253,20 @@ export default function AdminRefunds() {
     }
   }
 
+  async function openHandyEvidence(path: string) {
+    const preview = window.open('about:blank', '_blank');
+    try {
+      const { data, error } = await supabase.storage
+        .from('order-dispute-evidence').createSignedUrl(path, 120);
+      if (error || !data?.signedUrl) throw error || new Error('Comprobante no disponible');
+      if (preview) preview.location.href = data.signedUrl;
+      else toast.error('Habilitá ventanas emergentes para visualizar el comprobante.');
+    } catch (err: any) {
+      preview?.close();
+      toast.error('No se pudo abrir el comprobante privado: ' + err.message);
+    }
+  }
+
   // Search Order for Refund Modal
   async function handleSearchOrder() {
     if (!orderSearchTerm.trim()) return;
@@ -887,6 +901,17 @@ export default function AdminRefunds() {
                         <p className="font-semibold text-gray-800 truncate" title={req.reason}>{req.reason}</p>
                         {req.customer_notes && <p className="truncate text-gray-500 mt-0.5">{req.customer_notes}</p>}
                         {req.request_type === 'handy_payment_review' && req.admin_notes && <p className="text-amber-800 mt-1">{req.admin_notes}</p>}
+                        {req.request_type === 'handy_payment_review'
+                          && Array.isArray(req.evidence_images) && req.evidence_images.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {req.evidence_images.map((path: string, index: number) => (
+                              <button key={path} onClick={() => openHandyEvidence(path)}
+                                className="text-[10px] font-bold text-blue-700 underline">
+                                Ver comprobante {index + 1}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-right whitespace-nowrap">
                         {['REFUNDED', 'CLOSED'].includes(req.status) ? (
