@@ -104,6 +104,7 @@ export function mapRequestStatusBadge(status: string) {
 }
 
 export function mapRequestTypeLabel(reqType: string) {
+  if (reqType === 'handy_payment_review') return 'Verificación y cancelación de pago Handy';
   switch (reqType) {
     case 'cancel_immediate_10m':
       return 'Cancelación Inmediata (10 min)';
