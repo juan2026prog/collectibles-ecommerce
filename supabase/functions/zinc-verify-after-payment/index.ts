@@ -28,7 +28,7 @@ serve(async (req) => {
     
     // Authorization check: service role, admin, or customer ownership
     let isServiceCall = false;
-    if (authHeader.includes(serviceRoleKey)) {
+    if (serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`) {
       isServiceCall = true;
     }
 
@@ -316,6 +316,11 @@ serve(async (req) => {
         };
 
         try {
+          // Last-second cancellation check before spending Zinc wallet balance.
+          const { data: latestHolds, error: latestHoldError } = await serviceClient
+            .from("international_cancellation_requests").select("id")
+            .eq("order_id", order_id).not("status","in",'("rejected","refunded")').limit(1);
+          if (latestHoldError || latestHolds?.length) throw new Error("CANCELLATION_HOLD_ACTIVE");
           const zincOrdersUrl = 'https://api.zinc.com/orders';
           const zincRes = await fetch(zincOrdersUrl, {
             method: 'POST',
