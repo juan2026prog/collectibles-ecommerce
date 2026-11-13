@@ -48,7 +48,7 @@ serve(async (req: Request) => {
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from("orders")
-      .select("id, customer_id, customer_email, customer_phone, total_amount, currency, status, payment_method, payment_id, payment_processed_at, shipping_address, is_international, is_shipping_quote_required")
+      .select("id, customer_id, customer_email, customer_phone, total_amount, currency, status, payment_method, payment_id, payment_processed_at, shipping_address, is_international, is_shipping_quote_required, shipping_cost_ars, shipping_provider")
       .eq("id", orderId)
       .single();
 
@@ -142,6 +142,11 @@ serve(async (req: Request) => {
       // This gateway is exclusively for Zinc international orders.
       if (order.is_international !== true) throw new Error("DLOCAL_INTERNATIONAL_ONLY");
       if (order.is_shipping_quote_required) throw new Error("INTERNATIONAL_SHIPPING_QUOTE_REQUIRED");
+      // Argentina requires a verified courier allocation contract. Do not charge
+      // an AR shipping-inclusive payment while split settlement is unavailable.
+      if (Number(order.shipping_cost_ars || 0) > 0 || String(order.shipping_provider || "").toLowerCase() === "mbe")
+        throw new Error("AR_SPLIT_PAYMENTS_NOT_CERTIFIED");
+
       if (safeOrderItems.length === 0) throw new Error("EMPTY_INTERNATIONAL_ORDER");
       const { data: cancellationHolds, error: cancellationHoldError } = await supabaseAdmin
         .from("international_cancellation_requests")
