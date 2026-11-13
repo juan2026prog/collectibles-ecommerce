@@ -25,12 +25,29 @@ BEGIN
    OR NOT EXISTS(SELECT 1 FROM public.unified_order_requests WHERE id=request_id AND reason LIKE 'Solicito cancelación%') THEN
    RAISE EXCEPTION 'Duplicate request not idempotent';
  END IF;
+ -- Buyer uploads a private Handy ticket and may safely retry linking it.
+ INSERT INTO storage.objects(bucket_id,name) VALUES(
+   'order-dispute-evidence',buyer::text||'/'||v_order_id::text||'/ticket-handy-test.pdf'
+ );
+ result:=public.add_handy_payment_review_evidence(
+   request_id,buyer::text||'/'||v_order_id::text||'/ticket-handy-test.pdf');
+ IF result->>'success'<>'true' THEN RAISE EXCEPTION 'Buyer could not attach evidence'; END IF;
+ result:=public.add_handy_payment_review_evidence(
+   request_id,buyer::text||'/'||v_order_id::text||'/ticket-handy-test.pdf');
+ IF (SELECT jsonb_array_length(evidence_images) FROM public.unified_order_requests WHERE id=request_id)<>1 THEN
+   RAISE EXCEPTION 'Duplicate evidence was not idempotent';
+ END IF;
  PERFORM set_config('request.jwt.claim.sub',other_user::text,false);
  blocked := false;
  BEGIN PERFORM public.request_handy_payment_review(v_order_id,'verify_payment',null);
  EXCEPTION WHEN insufficient_privilege THEN blocked:=true;
  END;
  IF NOT blocked THEN RAISE EXCEPTION 'Non-owner can request review'; END IF;
+ blocked := false;
+ BEGIN PERFORM public.add_handy_payment_review_evidence(
+   request_id,buyer::text||'/'||v_order_id::text||'/ticket-handy-test.pdf');
+ EXCEPTION WHEN insufficient_privilege THEN blocked:=true; END;
+ IF NOT blocked THEN RAISE EXCEPTION 'Other customer can attach proof'; END IF;
  blocked := false;
  BEGIN PERFORM public.admin_update_handy_payment_review(request_id,'in_review','Estoy revisando el ticket Handy');
  EXCEPTION WHEN insufficient_privilege THEN blocked:=true;
