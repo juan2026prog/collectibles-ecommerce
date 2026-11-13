@@ -267,6 +267,48 @@ Deno.serve(async (req: Request) => {
     }
 
     if (provider === "dlocalgo" || provider === "dlocal") {
+      // The browser return is not proof of payment. Verify server-to-server.
+      if (currentOrder.payment_method !== "dlocalgo" || !currentOrder.payment_id) {
+        throw new Error("La orden no tiene un pago dLocal Go asociado.");
+      }
+      const apiKey = (config.payments_dlocal_go_api_key || "").trim();
+      const secretKey = (config.payments_dlocal_go_secret_key || "").trim();
+      if (!apiKey || !secretKey) throw new Error("Credenciales dLocal Go no configuradas.");
+      const apiBase = config.payments_dlocal_go_sandbox === "true"
+        ? "https://api-sbx.dlocalgo.com" : "https://api.dlocalgo.com";
+      const verification = await fetch(
+        `${apiBase}/v1/payments/${encodeURIComponent(String(currentOrder.payment_id))}`,
+        { headers: { Authorization: `Bearer ${apiKey}:${secretKey}`, Accept: "application/json" } },
+      );
+      if (!verification.ok) {
+        console.error("dLocal payment verification failed", verification.status);
+        throw new Error("No se pudo verificar el estado del pago con dLocal Go.");
+      }
+      const payment = await verification.json();
+      const remoteStatus = String(payment.status || "").toUpperCase();
+      const remoteId = String(payment.id || "");
+      const remoteOrderId = String(payment.order_id || "");
+      const remoteAmount = Number(payment.amount);
+      const expectedAmount = Number(currentOrder.total_amount);
+      const remoteCurrency = String(payment.currency || "").toUpperCase();
+      const expectedCurrency = String(currentOrder.currency || "UYU").toUpperCase();
+      if (remoteId !== String(currentOrder.payment_id) ||
+          remoteOrderId !== String(order_id) ||
+          !Number.isFinite(remoteAmount) || Math.abs(remoteAmount - expectedAmount) > 0.01 ||
+          remoteCurrency !== expectedCurrency) {
+        console.error("dLocal payment identity/amount mismatch", { order_id, remoteStatus });
+        throw new Error("La validación del pago no coincide con la orden.");
+      }
+      if (remoteStatus === "PAID" || remoteStatus === "APPROVED") {
+        // Reuse the shared atomic finalization and durable post-payment outbox.
+        // Never bypass it on browser return: webhook and return can race.
+        const paidOrder = await finalizeOrderIfNeeded(
+          supabaseClient, supabaseUrl, supabaseServiceRoleKey, order_id, remoteId
+        );
+        return new Response(JSON.stringify({
+          success: true, status: "paid", order: orderSummary(paidOrder, isFullyAuthorized),
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
       return new Response(JSON.stringify({ 
         success: true, 
         status: currentOrder.status || "pending", 

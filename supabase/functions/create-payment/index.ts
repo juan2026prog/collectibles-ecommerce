@@ -48,7 +48,7 @@ serve(async (req: Request) => {
 
     const { data: order, error: orderError } = await supabaseAdmin
       .from("orders")
-      .select("id, customer_id, customer_email, customer_phone, total_amount, currency, status, payment_method, payment_id, payment_processed_at, shipping_address")
+      .select("id, customer_id, customer_email, customer_phone, total_amount, currency, status, payment_method, payment_id, payment_processed_at, shipping_address, is_international, is_shipping_quote_required, shipping_cost_ars, shipping_provider")
       .eq("id", orderId)
       .single();
 
@@ -119,7 +119,7 @@ serve(async (req: Request) => {
           }
         }
 
-        if (allowedProvidersIntersection !== null && !allowedProvidersIntersection.includes(provider)) {
+        if (allowedProvidersIntersection !== null && !allowedProvidersIntersection.includes(provider === "dlocal" ? "dlocalgo" : provider)) {
           throw new Error(`El proveedor de pago ${provider} no está permitido para uno o más productos de esta orden.`);
         }
       }
@@ -139,9 +139,32 @@ serve(async (req: Request) => {
     const origin = req.headers.get("origin") || "https://collectibles-ecommerce.vercel.app";
 
     if (provider === "dlocal") {
+      // This gateway is exclusively for Zinc international orders.
+      if (order.is_international !== true) throw new Error("DLOCAL_INTERNATIONAL_ONLY");
+      if (order.is_shipping_quote_required) throw new Error("INTERNATIONAL_SHIPPING_QUOTE_REQUIRED");
+      // Argentina requires a verified courier allocation contract. Do not charge
+      // an AR shipping-inclusive payment while split settlement is unavailable.
+      if (Number(order.shipping_cost_ars || 0) > 0 || String(order.shipping_provider || "").toLowerCase() === "mbe")
+        throw new Error("AR_SPLIT_PAYMENTS_NOT_CERTIFIED");
+
+      if (safeOrderItems.length === 0) throw new Error("EMPTY_INTERNATIONAL_ORDER");
+      const { data: cancellationHolds, error: cancellationHoldError } = await supabaseAdmin
+        .from("international_cancellation_requests")
+        .select("id").eq("order_id", orderId)
+        .not("status", "in", '("rejected","refunded")').limit(1);
+      if (cancellationHoldError) throw new Error("CANCELLATION_HOLD_UNAVAILABLE");
+      if (cancellationHolds?.length) throw new Error("CANCELLATION_ALREADY_REQUESTED");
+      if (config.payments_dlocal_go_enabled !== "true") {
+        throw new Error("dLocal Go no está habilitado para Uruguay.");
+      }
       const apiKey = (config.payments_dlocal_go_api_key || "").trim();
       if (!apiKey) {
         throw new Error("dLocal Go API key not configured. Set it in Admin > Settings > Payments.");
+      }
+
+      const secretKey = (config.payments_dlocal_go_secret_key || "").trim();
+      if (!secretKey) {
+        throw new Error("dLocal Go Secret Key not configured in backend settings.");
       }
 
       const isSandbox = config.payments_dlocal_go_sandbox === "true";
@@ -162,11 +185,11 @@ serve(async (req: Request) => {
         },
       });
 
-      const response = await fetch(`${apiBaseUrl}/v1/checkout`, {
+      const response = await fetch(`${apiBaseUrl}/v1/payments`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
+          "Authorization": `Bearer ${apiKey}:${secretKey}`,
         },
         body: requestBody,
       });
@@ -177,33 +200,42 @@ serve(async (req: Request) => {
         throw new Error(`dLocal Go Error (${result.errorCode || response.status}): ${errorMessage}`);
       }
 
-      const checkoutUrl = result.redirect_url || result.checkout_url || result.link;
+      const checkoutUrl = result.redirect_url || result.checkout_url || result.link ||
+        (result.id ? `https://checkout.dlocalgo.com/collect/${encodeURIComponent(String(result.id))}` : null);
       if (checkoutUrl) {
-        await supabaseAdmin
+        // Keep the provider identity with the order so callbacks can be matched.
+        const { error: updateError } = await supabaseAdmin
           .from("orders")
           .update({
             payment_status: "redirected",
+            payment_method: "dlocalgo",
+            payment_id: result.id ? String(result.id) : null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", orderId);
+        if (updateError) throw updateError;
 
-        return new Response(JSON.stringify({ checkout_url: checkoutUrl }), {
-          headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-        });
-      }
-
-      if (result.id) {
-        await supabaseAdmin
-          .from("orders")
-          .update({
-            payment_status: "redirected",
+        // Persist the provider transaction before returning the redirect.
+        const { error: paymentRecordError } = await supabaseAdmin
+          .from("payments")
+          .insert({
+            order_id: orderId,
+            provider: "dlocalgo",
+            transaction_external_id: result.id ? String(result.id) : null,
+            status: "pending",
+            amount,
+            currency,
+            payment_url: checkoutUrl,
             updated_at: new Date().toISOString(),
-          })
-          .eq("id", orderId);
+          });
+        if (paymentRecordError) {
+          console.error("Failed to persist dLocal payment", paymentRecordError.message);
+          throw new Error("No se pudo registrar la transacción dLocal Go.");
+        }
 
         return new Response(JSON.stringify({
-          checkout_url: `https://checkout.dlocalgo.com/collect/${result.id}`,
-          payment_id: result.id,
+          checkout_url: checkoutUrl,
+          payment_id: result.id || null,
         }), {
           headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
         });

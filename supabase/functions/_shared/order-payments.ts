@@ -582,6 +582,21 @@ export async function triggerZincVerificationIfNeeded(
   orderId: string
 ) {
   try {
+    // A cancellation request is a HOLD, not proof of a supplier cancellation.
+    // Fail closed if the hold cannot be checked. Never spend prepaid Zinc balance
+    // while a cancellation is awaiting human/supplier reconciliation.
+    const { data: cancellationHolds, error: holdError } = await supabaseClient
+      .from("international_cancellation_requests")
+      .select("id,status")
+      .eq("order_id", orderId)
+      .not("status", "in", '("rejected","refunded")')
+      .limit(1);
+    if (holdError) throw new Error("ZINC_CANCELLATION_HOLD_CHECK_FAILED");
+    if (cancellationHolds?.length) {
+      console.warn("[Zinc Trigger] Cancellation hold prevents automatic purchase", orderId);
+      return;
+    }
+
     // 1. Check if the order has international items
     const { data: orderItems, error: itemsErr } = await supabaseClient
       .from("order_items")
@@ -621,12 +636,11 @@ export async function triggerZincVerificationIfNeeded(
 
     console.log(`[Zinc Trigger] Order ${orderId} has international products. Committing capacity and invoking verification...`);
 
-    // Commit reserved capacity for this order
-    try {
-      await supabaseClient.rpc('commit_international_capacity', { p_order_id: orderId });
-    } catch (commitCapErr) {
-      console.warn(`[Zinc Trigger] Error committing international capacity for order ${orderId}:`, commitCapErr);
-    }
+    // Fail closed: no supplier purchase without a committed capital reservation.
+    const { data: capacityCommitted, error: capacityError } = await supabaseClient
+      .rpc("commit_international_capacity", { p_order_id: orderId });
+    if (capacityError || capacityCommitted !== true)
+      throw new Error("INTERNATIONAL_CAPITAL_NOT_RESERVED");
 
     const functionHeaders = {
       "Content-Type": "application/json",
