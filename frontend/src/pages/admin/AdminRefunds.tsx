@@ -226,6 +226,33 @@ export default function AdminRefunds() {
     setLoading(false);
   }
 
+  // Super Admin review workflow: NEVER approves a payment or executes a refund.
+  // Actual payment reconciliation and verified Handy refund remain separate operations.
+  async function handleHandyPaymentReview(req: any, action: 'in_review' | 'request_evidence' | 'close_after_reconciliation') {
+    const note = await prompt(
+      action === 'request_evidence'
+        ? 'Mensaje visible para el comprador: indicá qué comprobante o referencia de Handy necesitás (mínimo 8 caracteres).'
+        : action === 'close_after_reconciliation'
+          ? 'Resumen de la conciliación ya completada, visible para el comprador (mínimo 8 caracteres).'
+          : 'Observaciones para el comprador sobre la revisión de Handy (mínimo 8 caracteres).',
+      { title: 'Gestión de pago Handy', placeholder: 'Número de ticket, verificación y próximo paso' }
+    );
+    if (!note || note.trim().length < 8) return;
+    try {
+      const { data, error } = await supabase.rpc('admin_update_handy_payment_review', {
+        p_request_id: req.id,
+        p_action: action,
+        p_public_note: note.trim()
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error('No se actualizó la gestión.');
+      toast.success('Gestión Handy actualizada para el comprador');
+      await fetchCustomerRequests();
+    } catch (err: any) {
+      toast.error('No fue posible actualizar Handy: ' + err.message);
+    }
+  }
+
   // Search Order for Refund Modal
   async function handleSearchOrder() {
     if (!orderSearchTerm.trim()) return;
@@ -859,12 +886,28 @@ export default function AdminRefunds() {
                       <td className="px-6 py-4 max-w-xs text-xs text-gray-600">
                         <p className="font-semibold text-gray-800 truncate" title={req.reason}>{req.reason}</p>
                         {req.customer_notes && <p className="truncate text-gray-500 mt-0.5">{req.customer_notes}</p>}
+                        {req.request_type === 'handy_payment_review' && req.admin_notes && <p className="text-amber-800 mt-1">{req.admin_notes}</p>}
                       </td>
                       <td className="px-6 py-4 text-right whitespace-nowrap">
                         {['REFUNDED', 'CLOSED'].includes(req.status) ? (
                           <span className="text-xs font-semibold text-emerald-600">Completada</span>
                         ) : req.status === 'REJECTED' ? (
                           <span className="text-xs font-semibold text-red-500">Rechazada</span>
+                        ) : req.request_type === 'handy_payment_review' ? (
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              onClick={() => handleHandyPaymentReview(req, 'in_review')}
+                              className="text-[10px] font-bold px-2 py-1.5 rounded bg-amber-100 text-amber-900"
+                            >Tomar revisión</button>
+                            <button
+                              onClick={() => handleHandyPaymentReview(req, 'request_evidence')}
+                              className="text-[10px] font-bold px-2 py-1.5 rounded bg-blue-100 text-blue-900"
+                            >Pedir comprobante</button>
+                            <button
+                              onClick={() => handleHandyPaymentReview(req, 'close_after_reconciliation')}
+                              className="text-[10px] font-bold px-2 py-1.5 rounded bg-emerald-100 text-emerald-900"
+                            >Cerrar tras conciliar</button>
+                          </div>
                         ) : ['WAITING_VENDOR', 'WAITING_SUPPLIER'].includes(req.status) ? (
                           <span className="text-xs font-semibold text-purple-600">Requiere Vendedor/Proveedor</span>
                         ) : (
