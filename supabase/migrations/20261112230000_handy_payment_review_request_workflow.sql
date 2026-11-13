@@ -89,7 +89,7 @@ GRANT EXECUTE ON FUNCTION public.request_handy_payment_review(uuid,text,text) TO
 -- File upload itself is protected by existing Storage RLS.
 CREATE OR REPLACE FUNCTION public.add_handy_payment_review_evidence(
  p_request_id uuid, p_storage_path text
-) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $
+) RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp AS $proof$
 DECLARE
   v_actor uuid := auth.uid();
   v_req public.unified_order_requests%ROWTYPE;
@@ -114,7 +114,7 @@ BEGIN
   END IF;
   RETURN jsonb_build_object('success',true,'request_id',p_request_id);
 END;
-$;
+$proof$;
 REVOKE ALL ON FUNCTION public.add_handy_payment_review_evidence(uuid,text) FROM PUBLIC,anon;
 GRANT EXECUTE ON FUNCTION public.add_handy_payment_review_evidence(uuid,text) TO authenticated;
 
