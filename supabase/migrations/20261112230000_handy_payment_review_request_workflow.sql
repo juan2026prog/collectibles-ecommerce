@@ -66,6 +66,17 @@ BEGIN
       WHERE idempotency_key=v_key AND customer_id=v_actor;
   END IF;
   IF v_req.id IS NULL THEN RAISE EXCEPTION 'Review request could not be retrieved'; END IF;
+  -- A buyer can escalate an existing payment-verification request into a
+  -- cancellation request without creating a duplicate or erasing admin notes.
+  IF p_intent='request_cancellation'
+    AND v_req.status IN ('REQUESTED','UNDER_REVIEW')
+    AND v_req.reason NOT LIKE 'Solicito cancelación%' THEN
+    UPDATE public.unified_order_requests
+    SET reason=v_reason,
+        customer_notes=coalesce(nullif(btrim(coalesce(p_notes,'')),''), customer_notes),
+        updated_at=now()
+    WHERE id=v_req.id;
+  END IF;
   RETURN jsonb_build_object('success',true,'request_id',v_req.id,
                             'status',v_req.status,'message',
                             'Solicitud recibida. No efectúes otro pago mientras verificamos Handy.');
@@ -101,9 +112,13 @@ BEGIN
   END IF;
   IF p_action='close_after_reconciliation' THEN
     SELECT * INTO v_order FROM public.orders WHERE id=v_req.order_id;
-    IF v_order.reconciliation_status IS DISTINCT FROM 'reconciled'
-       AND coalesce(v_order.payment_status,'') NOT IN ('refunded','partially_refunded')
-    THEN RAISE EXCEPTION 'Financial reconciliation must be completed first';
+    IF v_req.reason LIKE 'Solicito cancelación%' THEN
+      IF coalesce(v_order.payment_status,'') <> 'refunded' THEN
+        RAISE EXCEPTION 'Cancellation request cannot close before the customer refund is confirmed';
+      END IF;
+    ELSIF v_order.reconciliation_status IS DISTINCT FROM 'reconciled'
+       AND coalesce(v_order.payment_status,'') NOT IN ('refunded','partially_refunded') THEN
+      RAISE EXCEPTION 'Financial reconciliation must be completed first';
     END IF;
     v_status := 'CLOSED';
   ELSE
