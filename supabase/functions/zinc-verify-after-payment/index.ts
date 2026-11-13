@@ -229,7 +229,7 @@ serve(async (req) => {
       }
 
       // 7. Place Order in Zinc with Deterministic PO Number
-      if (settings.auto_purchase_enabled || isServiceCall || (userObj && order.status === 'paid')) {
+      if (settings.auto_purchase_enabled === true) {
         // Enforce Server-Side Hard Production Safety Gate
         try {
           assertProductionGate(ZINC_API_KEY, settings.zinc_production_enabled === true);
