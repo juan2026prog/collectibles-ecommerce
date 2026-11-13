@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { supabase } from '../../lib/supabase';
 import { 
   FileText, Clock, CheckCircle2, AlertCircle, RefreshCw, 
   ExternalLink, ChevronRight, X, Image as ImageIcon, MessageSquare, ShieldCheck
@@ -138,6 +139,44 @@ export default function CustomerRequestsTab({
   formatRequestAmount
 }: CustomerRequestsTabProps) {
   const [selectedRequest, setSelectedRequest] = useState<any | null>(null);
+  const [uploadingHandyProof, setUploadingHandyProof] = useState(false);
+  const [handyProofError, setHandyProofError] = useState('');
+
+  async function attachHandyProof(file?: File) {
+    if (!file || !selectedRequest || uploadingHandyProof) return;
+    const types: Record<string, string> = {
+      'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp',
+      'application/pdf': 'pdf'
+    };
+    const ext = types[file.type];
+    if (!ext || file.size === 0 || file.size > 10 * 1024 * 1024) {
+      setHandyProofError('Adjuntá un PDF o imagen JPG/PNG/WEBP de hasta 10 MB.');
+      return;
+    }
+    setUploadingHandyProof(true);
+    setHandyProofError('');
+    try {
+      const { data: authResult, error: authError } = await supabase.auth.getUser();
+      if (authError || !authResult.user) throw new Error('Iniciá sesión para adjuntar comprobantes.');
+      const path = `${authResult.user.id}/${selectedRequest.order_id}/handy-review-${selectedRequest.id}-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('order-dispute-evidence').upload(path,file,{ upsert:false,contentType:file.type });
+      if (uploadError) throw uploadError;
+      const { data, error } = await supabase.rpc('add_handy_payment_review_evidence',{
+        p_request_id:selectedRequest.id,p_storage_path:path
+      });
+      if (error || !data?.success) throw error || new Error('No se adjuntó el comprobante.');
+      setSelectedRequest((prev: any) => ({
+        ...prev,evidence_images:[...(prev?.evidence_images || []),path]
+      }));
+      onRefresh();
+    } catch (err: any) {
+      setHandyProofError(err?.message || 'No se pudo adjuntar el comprobante.');
+    } finally {
+      setUploadingHandyProof(false);
+    }
+  }
+
 
   if (loading) {
     return (
@@ -362,6 +401,27 @@ export default function CustomerRequestsTab({
                 </div>
               )}
             </div>
+
+            {selectedRequest.request_type === 'handy_payment_review'
+              && ['REQUESTED','UNDER_REVIEW'].includes(selectedRequest.status) && (
+              <div className="space-y-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                <label className="block text-xs font-bold text-amber-200">
+                  Adjuntar comprobante de Handy
+                </label>
+                <p className="text-[11px] text-slate-300">
+                  Podés adjuntar el ticket o comprobante de la operación, incluso después de haber enviado la solicitud.
+                  Ocultá números completos de tarjeta y datos sensibles.
+                </p>
+                <input
+                  type="file" accept="application/pdf,image/jpeg,image/png,image/webp"
+                  disabled={uploadingHandyProof}
+                  onChange={e => { const file=e.target.files?.[0]; void attachHandyProof(file); e.target.value=''; }}
+                  className="text-xs text-slate-200 block w-full"
+                />
+                {uploadingHandyProof && <p className="text-xs text-amber-200">Adjuntando comprobante...</p>}
+                {handyProofError && <p role="alert" className="text-xs text-rose-300">{handyProofError}</p>}
+              </div>
+            )}
 
             {/* Fotos de Evidencia */}
             {Array.isArray(selectedRequest.evidence_images) && selectedRequest.evidence_images.length > 0 && (
