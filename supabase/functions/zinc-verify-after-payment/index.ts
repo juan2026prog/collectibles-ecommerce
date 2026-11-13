@@ -73,6 +73,11 @@ serve(async (req) => {
     if (Deno.env.get("ZINC_AUTO_PURCHASE_CERTIFIED") !== "true")
       throw new Error("ZINC_AUTO_PURCHASE_NOT_CERTIFIED");
 
+    // Capital accounting must exist before any external purchase.
+    const { data: capacityRoutines, error: capacityError } = await serviceClient
+      .rpc("international_purchase_preflight", { p_order_id: order_id });
+    if (capacityError || capacityRoutines?.ready !== true)
+      throw new Error("INTERNATIONAL_CAPITAL_PREFLIGHT_UNAVAILABLE");
     const { data: settings } = await serviceClient.from('international_sync_settings').select('*').eq('id', 1).single();
     if (!settings) throw new Error("International sync settings not found");
 
