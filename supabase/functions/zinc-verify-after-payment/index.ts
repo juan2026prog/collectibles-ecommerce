@@ -54,10 +54,24 @@ serve(async (req) => {
 
     // Enforce authorization: only service role, admin, or order owner can trigger purchase verification
     if (!isServiceCall && !isAdmin) {
-      if (order.user_id !== userObj.id) {
+      if (order.customer_id !== userObj.id) {
         throw new Error("Forbidden: caller is not authorized for this order");
       }
     }
+
+    // Safety gate: only paid international orders can reach prepaid Zinc.
+    if (order.is_international !== true || order.payment_method !== "dlocalgo")
+      throw new Error("ZINC_INTERNATIONAL_DLOCAL_ONLY");
+    if (order.payment_status !== "paid" && order.payment_status !== "approved")
+      throw new Error("PAYMENT_NOT_CONFIRMED");
+    const { data: holds, error: holdError } = await serviceClient
+      .from("international_cancellation_requests").select("id")
+      .eq("order_id", order_id).not("status", "in", '("rejected","refunded")').limit(1);
+    if (holdError) throw new Error("CANCELLATION_HOLD_UNAVAILABLE");
+    if (holds?.length) throw new Error("CANCELLATION_HOLD_ACTIVE");
+    // Disabled by default until wallet, API, and race tests pass.
+    if (Deno.env.get("ZINC_AUTO_PURCHASE_CERTIFIED") !== "true")
+      throw new Error("ZINC_AUTO_PURCHASE_NOT_CERTIFIED");
 
     const { data: settings } = await serviceClient.from('international_sync_settings').select('*').eq('id', 1).single();
     if (!settings) throw new Error("International sync settings not found");
@@ -130,7 +144,7 @@ serve(async (req) => {
       let reasonCode = "";
 
       // 3. Check if order is paid
-      if (order.payment_status !== 'approved' && order.status !== 'paid') {
+      if (order.payment_status !== 'approved' && order.payment_status !== 'paid') {
         failureMessage = "La orden no está marcada como pagada.";
         reasonCode = "PAYMENT_INCONSISTENCY";
       }
