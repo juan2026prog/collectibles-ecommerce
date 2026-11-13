@@ -73,6 +73,11 @@ export default function CustomerPortal() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [supportOrderModal, setSupportOrderModal] = useState<any | null>(null);
+  const [handyReviewOrder, setHandyReviewOrder] = useState<any | null>(null);
+  const [handyReviewIntent, setHandyReviewIntent] = useState<'verify_payment' | 'request_cancellation'>('verify_payment');
+  const [handyReviewNotes, setHandyReviewNotes] = useState('');
+  const [handyReviewError, setHandyReviewError] = useState('');
+  const [submittingHandyReview, setSubmittingHandyReview] = useState(false);
   const [resolutionOrder, setResolutionOrder] = useState<any | null>(null);
   const [refundDetailModalOrder, setRefundDetailModalOrder] = useState<any | null>(null);
 
@@ -575,6 +580,29 @@ export default function CustomerPortal() {
       setCancelError(err?.message || 'No se pudo cancelar el pedido. Verifica el estado o contacta a soporte.');
     } finally {
       setCancellingOrder(false);
+    }
+  };
+
+  const submitHandyReview = async () => {
+    if (!handyReviewOrder || submittingHandyReview) return;
+    setSubmittingHandyReview(true);
+    setHandyReviewError('');
+    try {
+      const { data, error } = await supabase.rpc('request_handy_payment_review', {
+        p_order_id: handyReviewOrder.id,
+        p_intent: handyReviewIntent,
+        p_notes: handyReviewNotes.trim()
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.message || 'No se registró la gestión');
+      setHandyReviewOrder(null);
+      setHandyReviewNotes('');
+      await Promise.all([loadCustomerRequests(), loadOrders()]);
+      setActiveTab('requests');
+    } catch (err: any) {
+      setHandyReviewError(err?.message || 'No se pudo registrar la solicitud');
+    } finally {
+      setSubmittingHandyReview(false);
     }
   };
 
@@ -1498,7 +1526,12 @@ export default function CustomerPortal() {
                           </button>
                         ) : stateMeta.hasPendingHandyReconciliation ? (
                           <button
-                            onClick={() => setSupportOrderModal(order)}
+                            onClick={() => {
+                              setHandyReviewOrder(order);
+                              setHandyReviewIntent('verify_payment');
+                              setHandyReviewNotes('');
+                              setHandyReviewError('');
+                            }}
                             className="flex items-center gap-1.5 px-4 py-2 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25 font-bold text-xs rounded-xl border border-amber-500/30"
                           >
                             <Clock className="w-4 h-4" /> Solicitar revisión de pago
@@ -2555,6 +2588,54 @@ export default function CustomerPortal() {
                 className="px-5 py-2.5 bg-white/10 hover:bg-white/15 text-white font-bold text-xs rounded-xl transition"
               >
                 Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HANDY: la solicitud entra a la misma bandeja de gestiones del comprador y Super Admin.
+          No registra un cobro como aprobado ni realiza devoluciones. */}
+      {handyReviewOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+          <div className="bg-[#0e131f] border border-amber-500/30 rounded-2xl max-w-md w-full p-6 space-y-4">
+            <h3 className="font-black text-white text-lg">Revisión del pago Handy</h3>
+            <p className="text-sm text-slate-300">
+              Pedido {handyReviewOrder.order_number} · {formatOrderAmount(handyReviewOrder.total_amount, handyReviewOrder.currency)}.
+              Tu pago está pendiente de conciliación. No vuelvas a pagarlo.
+            </p>
+            <label className="block text-sm text-slate-300">
+              ¿Qué necesitás?
+              <select
+                className="mt-2 w-full rounded-lg border border-white/20 bg-[#171e2c] text-white p-2"
+                value={handyReviewIntent}
+                onChange={e => setHandyReviewIntent(e.target.value as 'verify_payment' | 'request_cancellation')}
+              >
+                <option value="verify_payment">Verificar mi pago</option>
+                <option value="request_cancellation">Solicitar cancelación y devolución</option>
+              </select>
+            </label>
+            <label className="block text-sm text-slate-300">
+              Información adicional (opcional)
+              <textarea
+                className="mt-2 w-full rounded-lg border border-white/20 bg-[#171e2c] text-white p-2"
+                rows={3} maxLength={1500} value={handyReviewNotes}
+                onChange={e => setHandyReviewNotes(e.target.value)}
+                placeholder="Número de ticket de Handy y cualquier referencia útil. No ingreses datos completos de la tarjeta."
+              />
+            </label>
+            <p className="text-xs text-amber-200">
+              La solicitud no confirma un cobro ni una devolución. Super Admin verificará la operación antes de cualquier cambio financiero.
+            </p>
+            {handyReviewError && <p role="alert" className="text-rose-300 text-xs">{handyReviewError}</p>}
+            <div className="grid grid-cols-2 gap-3">
+              <button type="button" disabled={submittingHandyReview}
+                onClick={() => setHandyReviewOrder(null)}
+                className="rounded-lg bg-white/10 p-2 text-white">Volver</button>
+              <button type="button" disabled={submittingHandyReview}
+                onClick={submitHandyReview}
+                className="rounded-lg bg-amber-500 p-2 font-bold text-black disabled:opacity-50">
+                {submittingHandyReview ? 'Enviando...' : 'Enviar solicitud'}
               </button>
             </div>
           </div>

@@ -1,0 +1,52 @@
+name: Handy buyer and Super Admin review
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/pages/CustomerPortal.tsx'
+      - 'frontend/src/components/customer/CustomerRequestsTab.tsx'
+      - 'frontend/src/pages/admin/AdminRefunds.tsx'
+      - 'supabase/migrations/20261112230000_handy_payment_review_request_workflow.sql'
+      - 'tests/integration/handy_review_*.sql'
+      - '.github/workflows/handy-buyer-superadmin-case.yml'
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: collectibles_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: test_only_password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d collectibles_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: test_only_password
+      PGDATABASE: collectibles_test
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update -qq && sudo apt-get install -y postgresql-client
+      - run: psql -X -v ON_ERROR_STOP=1 -f tests/integration/handy_review_fixture.sql
+      - run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20261112230000_handy_payment_review_request_workflow.sql
+      - run: psql -X -v ON_ERROR_STOP=1 -f tests/integration/handy_review_assertions.sql
