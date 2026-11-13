@@ -8,7 +8,7 @@ export interface CustomerRequestsTabProps {
   requests: any[];
   loading: boolean;
   onRefresh: () => void;
-  formatCurrencyPrice: (amount: number) => string;
+  formatRequestAmount: (amount: number, sourceCurrency?: string | null) => string;
 }
 
 export function mapRequestStatusBadge(status: string) {
@@ -134,7 +134,7 @@ export default function CustomerRequestsTab({
   requests,
   loading,
   onRefresh,
-  formatCurrencyPrice
+  formatRequestAmount
 }: CustomerRequestsTabProps) {
   const [selectedRequest, setSelectedRequest] = useState<any | null>(null);
 
@@ -231,7 +231,7 @@ export default function CustomerRequestsTab({
                   <div className="text-right">
                     <span className="text-[10px] uppercase font-bold text-slate-500 block">Importe Involucrado</span>
                     <span className="text-sm font-black font-mono text-emerald-400">
-                      {formatCurrencyPrice(Number(req.amount_approved || req.amount_requested || 0))}
+                      {formatRequestAmount(Number(req.amount_approved ?? req.amount_requested ?? 0), req.currency ?? req.order?.currency)}
                     </span>
                   </div>
 
@@ -311,14 +311,14 @@ export default function CustomerRequestsTab({
               <div className="flex justify-between border-t border-white/5 pt-2">
                 <span className="text-slate-400">Monto solicitado:</span>
                 <span className="text-white font-mono font-bold">
-                  {formatCurrencyPrice(Number(selectedRequest.amount_requested || 0))}
+                  {formatRequestAmount(Number(selectedRequest.amount_requested ?? 0), selectedRequest.currency ?? selectedRequest.order?.currency)}
                 </span>
               </div>
               {Number(selectedRequest.amount_approved) > 0 && (
                 <div className="flex justify-between text-emerald-400 font-bold">
                   <span>Monto autorizado / devuelto:</span>
                   <span className="font-mono">
-                    {formatCurrencyPrice(Number(selectedRequest.amount_approved))}
+                    {formatRequestAmount(Number(selectedRequest.amount_approved), selectedRequest.currency ?? selectedRequest.order?.currency)}
                   </span>
                 </div>
               )}
