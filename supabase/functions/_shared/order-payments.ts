@@ -582,6 +582,21 @@ export async function triggerZincVerificationIfNeeded(
   orderId: string
 ) {
   try {
+    // A cancellation request is a HOLD, not proof of a supplier cancellation.
+    // Fail closed if the hold cannot be checked. Never spend prepaid Zinc balance
+    // while a cancellation is awaiting human/supplier reconciliation.
+    const { data: cancellationHolds, error: holdError } = await supabaseClient
+      .from("international_cancellation_requests")
+      .select("id,status")
+      .eq("order_id", orderId)
+      .not("status", "in", '("rejected","refunded")')
+      .limit(1);
+    if (holdError) throw new Error("ZINC_CANCELLATION_HOLD_CHECK_FAILED");
+    if (cancellationHolds?.length) {
+      console.warn("[Zinc Trigger] Cancellation hold prevents automatic purchase", orderId);
+      return;
+    }
+
     // 1. Check if the order has international items
     const { data: orderItems, error: itemsErr } = await supabaseClient
       .from("order_items")
