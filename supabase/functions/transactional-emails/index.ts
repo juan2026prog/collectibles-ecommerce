@@ -10,6 +10,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 declare const Deno: any;
 
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || 'mock-resend-key';
+const RESEND_FROM = Deno.env.get('RESEND_FROM') || 'Collectibles Marketplace <notificaciones@collectibles.uy>';
 const WHATSAPP_TOKEN = Deno.env.get('WHATSAPP_TOKEN') || 'mock-whatsapp-key';
 const WHATSAPP_PHONE_ID = Deno.env.get('WHATSAPP_PHONE_ID') || '1234567890';
 
@@ -18,13 +19,45 @@ const supabaseClient = createClient(
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
 );
 
-// Helper for Email Sending and Logging
-async function sendEmailAndLog(recipientEmail: string, subject: string, htmlContent: string, emailType: string, customerId?: string) {
+function maskEmail(email: string): string {
+  if (!email) return '***@***';
+  const parts = email.split('@');
+  if (parts.length !== 2) return '***@***';
+  const name = parts[0];
+  return `${name.length > 2 ? name.slice(0, 2) + '***' : '***'}@${parts[1]}`;
+}
+
+// Helper for Email Sending and Logging (Unified with notification_logs & idempotency)
+async function sendEmailAndLog(
+  recipientEmail: string,
+  subject: string,
+  htmlContent: string,
+  emailType: string,
+  customerId?: string,
+  idempotencyKey?: string,
+  scope: 'customer' | 'vendor' | 'admin' = 'customer'
+) {
+  if (idempotencyKey) {
+    const { data: existing } = await supabaseClient
+      .from('notification_logs')
+      .select('id, status')
+      .eq('idempotency_key', idempotencyKey)
+      .in('status', ['sent', 'delivered', 'processing'])
+      .maybeSingle();
+    if (existing) {
+      console.log(`[Transactional Emails] Skipping duplicate email for key: ${idempotencyKey}`);
+      return;
+    }
+  }
+
   let status = 'sent';
   let errorMsg = null;
+  let providerMessageId = null;
   
   if (RESEND_API_KEY === 'mock-resend-key') {
-    console.log(`[Dev Mode] Simulated Email to ${recipientEmail} | Subject: ${subject}`);
+    status = 'provider_unavailable';
+    errorMsg = 'RESEND_API_KEY no configurado';
+    console.warn(`[Transactional Emails] RESEND_API_KEY missing for ${maskEmail(recipientEmail)}`);
   } else {
     try {
       const res = await fetch("https://api.resend.com/emails", {
@@ -34,7 +67,7 @@ async function sendEmailAndLog(recipientEmail: string, subject: string, htmlCont
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          from: "Collectibles <ventas@collectibles.com>", // Update to verified domain
+          from: RESEND_FROM,
           to: [recipientEmail],
           subject: subject,
           html: htmlContent
@@ -42,7 +75,8 @@ async function sendEmailAndLog(recipientEmail: string, subject: string, htmlCont
       });
       const data = await res.json();
       if (!res.ok) throw new Error(JSON.stringify(data));
-      console.log(`Resend success to ${recipientEmail}`);
+      providerMessageId = data?.id || null;
+      console.log(`Resend success to ${maskEmail(recipientEmail)}`);
     } catch (err: any) {
       status = 'failed';
       errorMsg = err.message;
@@ -50,22 +84,50 @@ async function sendEmailAndLog(recipientEmail: string, subject: string, htmlCont
     }
   }
 
+  // Insert into unified notification_logs
+  try {
+    const logPayload: Record<string, any> = {
+      scope,
+      user_id: customerId || null,
+      event_type: emailType,
+      recipient_number_masked: maskEmail(recipientEmail),
+      channel: 'email',
+      provider: 'resend',
+      status,
+      idempotency_key: idempotencyKey || null,
+      provider_message_id: providerMessageId,
+      error_message: errorMsg,
+      sent_at: status === 'sent' ? new Date().toISOString() : null
+    };
+    if (idempotencyKey) {
+      await supabaseClient.from('notification_logs').upsert(logPayload, { onConflict: 'idempotency_key' });
+    } else {
+      await supabaseClient.from('notification_logs').insert(logPayload);
+    }
+  } catch (logErr: any) {
+    console.warn("notification_logs insert warning:", logErr.message);
+  }
+
   // Insert into email_logs
-  await supabaseClient.from('email_logs').insert({
-    customer_id: customerId || null,
-    recipient_email: recipientEmail,
-    subject,
-    email_type: emailType,
-    status,
-    error_message: errorMsg
-  });
+  try {
+    await supabaseClient.from('email_logs').insert({
+      customer_id: customerId || null,
+      recipient_email: maskEmail(recipientEmail),
+      subject,
+      email_type: emailType,
+      status,
+      error_message: errorMsg,
+      provider_message_id: providerMessageId
+    });
+  } catch (err: any) {
+    console.warn("email_logs insert warning:", err.message);
+  }
 }
 
-// Helper WhatsApp function
+// Helper WhatsApp function (Disabled cleanly when credentials are not configured — never fakes delivery)
 async function sendWhatsAppMessage(toPhone: string, message: string) {
-  if (WHATSAPP_TOKEN === 'mock-whatsapp-key') {
-     console.log(`[Dev Mode] Simulated WhatsApp a ${toPhone}: ${message}`);
-     return;
+  if (!WHATSAPP_TOKEN || WHATSAPP_TOKEN === 'mock-whatsapp-key' || !WHATSAPP_PHONE_ID || WHATSAPP_PHONE_ID === '1234567890') {
+    return;
   }
   
   const cleanPhone = toPhone.replace(/[\+\s\-]/g, '');
@@ -94,7 +156,7 @@ serve(async (req: Request) => {
 
   try {
     const payload = await req.json();
-    console.log("Transactional Email Request:", payload);
+    console.log("Transactional Email Request:", payload?.type || payload?.table);
 
     // 1. CAMPAIGN BULK MAILING (Triggered manually via AdminMailing.tsx)
     if (payload.type === 'campaign') {
@@ -102,7 +164,6 @@ serve(async (req: Request) => {
       const { data: campaign } = await supabaseClient.from('mailing_campaigns').select('*').eq('id', campaign_id).single();
       if (!campaign) return new Response("Campaign not found", { status: 404, headers: corsHeaders });
 
-      // Fetch subscribers based on segment (simplified for MVP: fetch all active emails)
       const { data: subscribers } = await supabaseClient.from('profiles').select('id, email, first_name').not('email', 'is', null);
       if (!subscribers) return new Response("No subscribers", { status: 400, headers: corsHeaders });
 
@@ -110,22 +171,28 @@ serve(async (req: Request) => {
       for (const sub of subscribers) {
         if (!sub.email) continue;
         const personalizedHtml = campaign.body_html.replace('{{name}}', sub.first_name || 'Cliente');
-        await sendEmailAndLog(sub.email, campaign.subject, personalizedHtml, 'newsletter_campaign', sub.id);
+        await sendEmailAndLog(sub.email, campaign.subject, personalizedHtml, 'newsletter_campaign', sub.id, `campaign:${campaign_id}:${sub.id}:email`);
       }
       return new Response(JSON.stringify({ success: true, count: subscribers.length }), { headers: corsHeaders });
     }
 
-    // 2. ORDER TRANSACTIONAL WEBHOOK (Triggered by Postgres on Orders table update)
+    // 2. ORDER TRANSACTIONAL WEBHOOK (Shared idempotency key with notification-dispatcher to prevent double send)
     if (payload.table === 'orders' && payload.record) {
       const { type, record, old_record } = payload;
 
       // ORDER PAID CONFIRMATION
       if ((record.status === 'paid' || record.status === 'confirmed') && 
           (type === 'INSERT' || (old_record?.status !== 'paid' && old_record?.status !== 'confirmed'))) {
+         // Strict validation: never send confirmation unless payment is actually approved/processed
+         const isCertified = record.payment_processed_at !== null || ['approved', 'paid', 'accredited'].includes(record.payment_status);
+         if (!isCertified) {
+           return new Response(JSON.stringify({ success: true, skipped: true, reason: 'payment_not_certified' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
+         }
+
          const customerEmail = record.customer_email || 'noreply@collectibles.com';
          const orderNum = record.order_number || `COL-${record.id.slice(0, 8).toUpperCase()}`;
          const isArgentina = (record.shipping_address?.country || '').toLowerCase().trim() === 'argentina' || (record.shipping_address?.country || '').toLowerCase().trim() === 'ar';
-         const subject = `¡Confirmación de tu Orden #${orderNum}!`;
+         const subject = `✅ ¡Confirmación de tu Orden #${orderNum}!`;
          
          const displayAmount = isArgentina && record.display_total 
            ? `${record.display_currency || 'ARS'} ${record.display_total}` 
@@ -145,11 +212,12 @@ serve(async (req: Request) => {
              <p><strong>Total de la compra:</strong> ${displayAmount}</p>
              <p><strong>Estado del Pago:</strong> Aprobado ✅</p>
              ${handyNotice}
-             <p style="margin-top: 200px; font-size: 12px; color: #666;">Te avisaremos por correo apenas tu orden sea despachada a la logística de Mail Boxes Etc. (MBE).</p>
+             <p style="margin-top: 24px; font-size: 12px; color: #666;">Te avisaremos por correo apenas tu orden sea despachada con su número de guía.</p>
              <p>Saludos,<br />El Equipo de Collectibles.uy</p>
            </div>
          `;
-         await sendEmailAndLog(customerEmail, subject, html, 'order_confirmation', record.customer_id);
+         // Shared idempotency key with notification-dispatcher (`customer_order_paid:${record.id}:email`)
+         await sendEmailAndLog(customerEmail, subject, html, 'order_paid', record.customer_id, `customer_order_paid:${record.id}:email`, 'customer');
 
          if (record.customer_phone) {
             await sendWhatsAppMessage(record.customer_phone, `✨ ¡Gracias por tu compra!\n\nTu orden #${orderNum} por ${displayAmount} está confirmada y en preparación ✅.`);
@@ -161,7 +229,7 @@ serve(async (req: Request) => {
          const customerEmail = record.customer_email;
          if (!customerEmail) return new Response("No email", { status: 200, headers: corsHeaders });
          
-         const trackingSnippet = record.tracking_number ? `<p><strong>Guía / Tracking:</strong> ${record.tracking_provider} - ${record.tracking_number}</p>` : '';
+         const trackingSnippet = record.tracking_number ? `<p><strong>Guía / Tracking:</strong> ${record.tracking_provider || 'Logística'} - ${record.tracking_number}</p>` : '';
          const subject = `¡Tu orden va en camino! 🚚`;
          const html = `
            <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa;">
@@ -169,10 +237,10 @@ serve(async (req: Request) => {
              <p>Tu orden #${record.id.slice(0, 8).toUpperCase()} ya fue despachada y está en manos de nuestra logística.</p>
              ${trackingSnippet}
              <p>Mantente atento porque la recibirás muy pronto.</p>
-             <p>Saludos,<br />El Equipo.</p>
+             <p>Saludos,<br />El Equipo de Collectibles.uy</p>
            </div>
          `;
-         await sendEmailAndLog(customerEmail, subject, html, 'shipping_update', record.customer_id);
+         await sendEmailAndLog(customerEmail, subject, html, 'order_shipped', record.customer_id, `customer_shipped:${record.id}:email`, 'customer');
 
          if (record.customer_phone) {
             await sendWhatsAppMessage(record.customer_phone, `🚚 ¡Tu orden va en camino!\n\nOrden #${record.id.slice(0,8).toUpperCase()} despachada. ${record.tracking_number ? `Tracking: ${record.tracking_number}` : ''}`);
@@ -196,17 +264,16 @@ serve(async (req: Request) => {
              <p>Te informamos que tu orden <strong>#${order.id.slice(0, 8).toUpperCase()}</strong> ha sido cancelada y el dinero ha sido reembolsado automáticamente a tu método de pago original (Tarjeta o saldo de Mercado Pago).</p>
              <p><strong>Motivo de cancelación:</strong> ${reasonText}</p>
              <p>Si tienes dudas, por favor contáctanos.</p>
-             <p>Saludos,<br />El Equipo.</p>
+             <p>Saludos,<br />El Equipo de Collectibles.uy</p>
            </div>
          `;
-         await sendEmailAndLog(customerEmail, subject, html, 'order_cancellation', order.customer_id);
+         await sendEmailAndLog(customerEmail, subject, html, 'order_cancellation', order.customer_id, `customer_order_cancelled:${order.id}:email`, 'customer');
 
          if (order.customer_phone) {
             await sendWhatsAppMessage(order.customer_phone, `⛔ *Orden Cancelada*\n\nTu orden #${order.id.slice(0,8).toUpperCase()} fue cancelada y el pago está en proceso de reembolso.\n\nMotivo: ${reasonText}`);
          }
          return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
-
 
     // 2.6 NEW PAYMENT AND REFUND NOTIFICATIONS
     if (payload.type === 'client_refund_requested') {
@@ -219,10 +286,10 @@ serve(async (req: Request) => {
              <h2 style="color: #111;">Solicitud de Reembolso Recibida</h2>
              <p>Te informamos que hemos recibido tu solicitud de reembolso para el pedido <strong>#${order_number}</strong>.</p>
              <p>Nuestros administradores de soporte están evaluando la solicitud. Si se requiere alguna validación adicional, te contactaremos.</p>
-             <p>Saludos,<br />El Equipo de Collectibles.</p>
+             <p>Saludos,<br />El Equipo de Collectibles.uy</p>
            </div>
          `;
-         await sendEmailAndLog(email, subject, html, 'client_refund_requested');
+         await sendEmailAndLog(email, subject, html, 'client_refund_requested', undefined, `client_refund_requested:${order_number}:email`, 'customer');
          if (phone) {
             await sendWhatsAppMessage(phone, `⏳ *Reembolso Solicitado*\\n\\nHemos recibido tu solicitud de reembolso para el pedido #${order_number}. Está siendo revisada por soporte.`);
          }
@@ -239,10 +306,10 @@ serve(async (req: Request) => {
              <h2 style="color: #16a34a;">Reembolso Aprobado 🎉</h2>
              <p>Queremos informarte que el reembolso de tu pedido <strong>#${order_number}</strong> por un monto de <strong>$${amount}</strong> ha sido procesado con éxito.</p>
              <p>El dinero debería verse reflejado en tu cuenta original de pago en los próximos días hábiles (dependiendo de la pasarela y tu entidad financiera).</p>
-             <p>Saludos,<br />El Equipo de Collectibles.</p>
+             <p>Saludos,<br />El Equipo de Collectibles.uy</p>
            </div>
          `;
-         await sendEmailAndLog(email, subject, html, 'client_refund_completed');
+         await sendEmailAndLog(email, subject, html, 'client_refund_completed', undefined, `client_refund_completed:${order_number}:${amount}:email`, 'customer');
          if (phone) {
             await sendWhatsAppMessage(phone, `✅ *Reembolso Aprobado*\\n\\nTu reembolso por $${amount} para el pedido #${order_number} ha sido completado con éxito.`);
          }
@@ -260,10 +327,10 @@ serve(async (req: Request) => {
              <p>Te informamos que tu solicitud de reembolso para el pedido <strong>#${order_number}</strong> ha sido rechazada.</p>
              <p><strong>Motivo indicado:</strong> ${reason || 'Políticas de devolución del marketplace'}</p>
              <p>Si tienes alguna consulta, puedes responder directamente a este correo.</p>
-             <p>Saludos,<br />El Equipo de Collectibles.</p>
+             <p>Saludos,<br />El Equipo de Collectibles.uy</p>
            </div>
          `;
-         await sendEmailAndLog(email, subject, html, 'client_refund_rejected');
+         await sendEmailAndLog(email, subject, html, 'client_refund_rejected', undefined, `client_refund_rejected:${order_number}:email`, 'customer');
          if (phone) {
             await sendWhatsAppMessage(phone, `❌ *Reembolso Rechazado*\\n\\nLa solicitud para el pedido #${order_number} fue rechazada. Motivo: ${reason || 'Políticas del marketplace'}`);
          }
@@ -283,7 +350,7 @@ serve(async (req: Request) => {
              <p>Saludos,<br />El Equipo de Soporte.</p>
            </div>
          `;
-         await sendEmailAndLog(email, subject, html, 'client_chargeback');
+         await sendEmailAndLog(email, subject, html, 'client_chargeback', undefined, `client_chargeback:${order_number}:email`, 'customer');
          if (phone) {
             await sendWhatsAppMessage(phone, `⚠️ *Disputa Registrada*\\n\\nSe ha reportado un contracargo por $${amount} en tu orden #${order_number}. El caso está bajo revisión.`);
          }
@@ -304,7 +371,7 @@ serve(async (req: Request) => {
              <p>Saludos,<br />Administración de Finanzas.</p>
            </div>
          `;
-         await sendEmailAndLog(email, subject, html, 'vendor_refund_applied');
+         await sendEmailAndLog(email, subject, html, 'vendor_refund_applied', undefined, `vendor_refund_applied:${order_number}:${amount}:email`, 'vendor');
          return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
@@ -327,7 +394,7 @@ serve(async (req: Request) => {
              <p>Saludos,<br />Administración de Finanzas.</p>
            </div>
          `;
-         await sendEmailAndLog(email, subject, html, 'vendor_adjustment_created');
+         await sendEmailAndLog(email, subject, html, 'vendor_adjustment_created', undefined, `vendor_adj_legacy:${order_number}:${amount}:email`, 'vendor');
          return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
@@ -346,13 +413,12 @@ serve(async (req: Request) => {
              <p>Saludos,<br />Protección Financiera del Vendedor.</p>
            </div>
          `;
-         await sendEmailAndLog(email, subject, html, 'vendor_chargeback');
+         await sendEmailAndLog(email, subject, html, 'vendor_chargeback', undefined, `vendor_chargeback:${order_number}:email`, 'vendor');
          return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
     if (payload.type === 'admin_chargeback_received') {
          const { dispute, order, vendor } = payload;
-         
          const subject = `[ADMIN] Alerta: Nuevo Contracargo Recibido`;
          const html = `
            <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px; border: 2px solid #dc2626;">
@@ -370,13 +436,12 @@ serve(async (req: Request) => {
              <p>El sistema ha congelado automáticamente la liquidación de esta suborden. Por favor, ingresa al panel de control de reembolsos para adjuntar las pruebas de entrega.</p>
            </div>
          `;
-         await sendEmailAndLog('admin@collectibles.com', subject, html, 'admin_chargeback_received');
+         await sendEmailAndLog('notificaciones@collectibles.uy', subject, html, 'admin_chargeback_received', undefined, `admin_chargeback:${dispute?.id}:email`, 'admin');
          return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
     if (payload.type === 'admin_refund_manual_required') {
          const { order_number, amount, provider, reason } = payload;
-         
          const subject = `[ADMIN] Reembolso Manual Requerido - Pasarela: ${provider}`;
          const html = `
            <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px; border: 2px solid #ea580c;">
@@ -391,13 +456,23 @@ serve(async (req: Request) => {
              <p><strong>Instrucciones:</strong> Por favor, ingresa al portal de ${provider}, realiza la devolución de fondos y luego confirma la transacción en la interfaz administrativa para actualizar los estados del pedido.</p>
            </div>
          `;
-         await sendEmailAndLog('admin@collectibles.com', subject, html, 'admin_refund_manual_required');
+         await supabaseClient.from('user_notifications').upsert({
+           role_scope: 'admin',
+           category: 'alerts',
+           event_type: 'admin_refund_manual_required',
+           title: `🚨 Reembolso Manual Requerido — #${order_number}`,
+           body: `Pasarela ${provider} · Monto $${amount} · Motivo: ${reason}`,
+           action_url: '/admin/refunds',
+           severity: 'priority',
+           idempotency_key: `inapp:admin:manual_refund:${order_number}:${amount}`
+         }, { onConflict: 'idempotency_key', ignoreDuplicates: true });
+
+         await sendEmailAndLog('notificaciones@collectibles.uy', subject, html, 'admin_refund_manual_required', undefined, `admin_manual_refund:${order_number}:${amount}:email`, 'admin');
          return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
     if (payload.type === 'admin_refund_failed') {
          const { order_number, amount, provider, error_msg } = payload;
-         
          const subject = `[ADMIN] ERROR: Falló Reembolso Automático`;
          const html = `
            <div style="font-family: Arial, sans-serif; padding: 20px; background: #fafafa; border-radius: 8px; border: 2px solid #dc2626;">
@@ -412,7 +487,18 @@ serve(async (req: Request) => {
              <p>Por favor, revisa el estado del pago directamente en el portal de la pasarela y gestiona la devolución manual.</p>
            </div>
          `;
-         await sendEmailAndLog('admin@collectibles.com', subject, html, 'admin_refund_failed');
+         await supabaseClient.from('user_notifications').upsert({
+           role_scope: 'admin',
+           category: 'alerts',
+           event_type: 'admin_refund_failed',
+           title: `🚨 Error en Reembolso Automático — #${order_number}`,
+           body: `Pasarela ${provider} · Monto $${amount} · Error: ${error_msg}`,
+           action_url: '/admin/refunds',
+           severity: 'priority',
+           idempotency_key: `inapp:admin:refund_failed:${order_number}:${Date.now()}`
+         }, { onConflict: 'idempotency_key', ignoreDuplicates: true });
+
+         await sendEmailAndLog('notificaciones@collectibles.uy', subject, html, 'admin_refund_failed', undefined, undefined, 'admin');
          return new Response(JSON.stringify({ success: true }), { headers: corsHeaders });
     }
 
@@ -427,10 +513,10 @@ serve(async (req: Request) => {
              <h2 style="color: #111;">¡Hey! Notamos que no finalizaste tu compra.</h2>
              <p>Tu orden <strong>#${order.id.slice(0, 8).toUpperCase()}</strong> quedó pendiente.</p>
              <p>Queremos darte un pequeño empujón: usa el cupón <strong>${discountCode || 'VUELVE10'}</strong> para obtener un descuento especial si finalizas tu compra hoy.</p>
-             <p>Saludos,<br />El Equipo.</p>
+             <p>Saludos,<br />El Equipo de Collectibles.uy</p>
            </div>
          `;
-         await sendEmailAndLog(customerEmail, subject, html, 'abandoned_order_recovery', order.customer_id);
+         await sendEmailAndLog(customerEmail, subject, html, 'abandoned_order_recovery', order.customer_id, `abandoned_order:${order.id}:email`, 'customer');
 
          if (order.customer_phone) {
             await sendWhatsAppMessage(order.customer_phone, `🎁 *¡Hola!*\n\nVimos que no finalizaste tu orden #${order.id.slice(0,8).toUpperCase()}.\nSi aún la quieres, usa el cupón *${discountCode || 'VUELVE10'}* antes de pagar para obtener un descuento exclusivo.\n¡Te esperamos!`);
@@ -457,16 +543,14 @@ serve(async (req: Request) => {
           <p>Tus productos por un total de <strong>$${total}</strong> siguen esperándote en tu carrito.</p>
           <p>Termina tu compra en 1 clic antes de que alguien más se los lleve usando este enlace:</p>
           <p style="margin-top:20px; margin-bottom:20px;">
-             <a href="https://collectibles.com/checkout?recover=${cart.id}" style="padding: 12px 24px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Recuperar mi carrito</a>
+             <a href="https://collectibles.uy/checkout?recover=${cart.id}" style="padding: 12px 24px; background: #f00856; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Recuperar mi carrito</a>
           </p>
           <p style="color: #666; font-size: 12px;">Si necesitas ayuda o tienes problemas técnicos con el pago, responde a este correo.</p>
-          <p>Saludos,<br />El Equipo de Collectibles.</p>
+          <p>Saludos,<br />El Equipo de Collectibles.uy</p>
         </div>
       `;
       
-      await sendEmailAndLog(email, subject, html, 'abandoned_cart', cart.customer_id);
-      
-      // Marcar como enviado
+      await sendEmailAndLog(email, subject, html, 'abandoned_cart', cart.customer_id, `abandoned_cart:${cart.id}:email`, 'customer');
       await supabaseClient.from('abandoned_checkouts').update({ recovery_email_sent: true }).eq('id', cart.id);
 
       return new Response(JSON.stringify({ success: true, email }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
@@ -499,7 +583,7 @@ serve(async (req: Request) => {
         </div>
       `;
 
-      await sendEmailAndLog(email, subject, html, 'vendor_invitation');
+      await sendEmailAndLog(email, subject, html, 'vendor_invitation', undefined, undefined, 'vendor');
 
       return new Response(JSON.stringify({ success: true, email }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
     }
@@ -532,7 +616,7 @@ serve(async (req: Request) => {
         </div>
       `;
 
-      await sendEmailAndLog(email, subject, html, 'welcome_email', payload.customer_id);
+      await sendEmailAndLog(email, subject, html, 'welcome_email', payload.customer_id, `welcome_email:${email.toLowerCase()}`, 'customer');
 
       return new Response(JSON.stringify({ success: true, email }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }});
     }

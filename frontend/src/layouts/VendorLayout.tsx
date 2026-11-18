@@ -14,6 +14,7 @@ import { ConfirmModalProvider } from '../components/admin/ConfirmModal';
 import { supabase } from '../lib/supabase';
 import MobileDrawer from '../components/admin/MobileDrawer';
 import MobileHeader from '../components/admin/MobileHeader';
+import { NotificationBell } from '../components/common/NotificationBell';
 
 export default function VendorLayout() {
   const navigate = useNavigate();
@@ -206,6 +207,8 @@ export default function VendorLayout() {
             onOpenDrawer={() => setMobileDrawerOpen(true)}
             userEmail={user?.email}
             onSignOut={handleSignOut}
+            roleScope="vendor"
+            viewAllUrl="/vendor?tab=settings&sub=notifications"
           />
 
           {/* Mobile Drawer (<1024px) */}
@@ -284,6 +287,7 @@ export default function VendorLayout() {
                 >
                   Importar CSV
                 </button>
+                <NotificationBell roleScope="vendor" theme="light" viewAllUrl="/vendor?tab=settings&sub=notifications" />
                 <div className="border-l border-gray-200 pl-4 ml-2">
                   <LocaleSwitcher compact />
                 </div>

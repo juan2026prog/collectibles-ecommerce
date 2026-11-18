@@ -847,12 +847,32 @@ function sanitizePayloadForLogging(data: any) {
       const { data: affiliate } = await supabase
         .from("affiliates")
         .select("id")
-        .eq("code", payload.affiliate_code)
+        .eq("code", payload.affiliate_code.toUpperCase())
         .eq("status", "active")
-        .single();
+        .maybeSingle();
 
       if (affiliate?.id) {
         affiliateId = affiliate.id;
+      }
+    }
+
+    // If coupon is tied to an active affiliate and no direct affiliate link was set, attribute to the coupon's affiliate
+    if (!affiliateId && couponId) {
+      const { data: cpnAff } = await supabase
+        .from("coupons")
+        .select("affiliate_id")
+        .eq("id", couponId)
+        .maybeSingle();
+      if (cpnAff?.affiliate_id) {
+        const { data: validAff } = await supabase
+          .from("affiliates")
+          .select("id")
+          .eq("id", cpnAff.affiliate_id)
+          .eq("status", "active")
+          .maybeSingle();
+        if (validAff?.id) {
+          affiliateId = validAff.id;
+        }
       }
     }
 

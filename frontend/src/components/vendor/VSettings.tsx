@@ -11,6 +11,7 @@ import VCancellationsSettings from './VCancellationsSettings';
 import { User, CreditCard, Truck, Link2, FileText, Save, UploadCloud, Bell, AlertCircle, CheckCircle2, RefreshCw, ToggleLeft, ToggleRight, ShieldCheck, Smartphone, Mail, MessageSquare, BellRing, Settings, RotateCcw } from 'lucide-react';
 import { EmailRecipientsModal, type EmailRecipient } from '../common/EmailRecipientsModal';
 import { MobilePushSetup } from '../common/MobilePushSetup';
+import { NotificationCenterPanel } from '../common/NotificationCenterPanel';
 import {
   requestAndRegisterPush,
   unregisterCurrentDevice,
@@ -85,6 +86,12 @@ export default function VSettings() {
     notify_product_questions: true,
     notify_payment_received: false,
     notify_order_shipped: false,
+    notify_order_delivered: true,
+    notify_order_cancelled: true,
+    notify_returns_and_refunds: true,
+    notify_financial_adjustments: true,
+    notify_liquidations: true,
+    notify_disputes: true,
     notify_low_stock: false,
     notify_payout_paid: false,
     notify_test: false,
@@ -217,6 +224,12 @@ export default function VSettings() {
       notify_product_questions: targetState.notify_product_questions,
       notify_payment_received: targetState.notify_payment_received,
       notify_order_shipped: targetState.notify_order_shipped,
+      notify_order_delivered: targetState.notify_order_delivered,
+      notify_order_cancelled: targetState.notify_order_cancelled,
+      notify_returns_and_refunds: targetState.notify_returns_and_refunds,
+      notify_financial_adjustments: targetState.notify_financial_adjustments,
+      notify_liquidations: targetState.notify_liquidations,
+      notify_disputes: targetState.notify_disputes,
       notify_low_stock: targetState.notify_low_stock,
       notify_payout_paid: targetState.notify_payout_paid,
       notify_test: targetState.notify_test,
@@ -325,6 +338,12 @@ export default function VSettings() {
           notify_product_questions: data.notify_product_questions !== undefined ? !!data.notify_product_questions : true,
           notify_payment_received: !!data.notify_payment_received,
           notify_order_shipped: !!data.notify_order_shipped,
+          notify_order_delivered: data.notify_order_delivered !== undefined ? !!data.notify_order_delivered : true,
+          notify_order_cancelled: data.notify_order_cancelled !== undefined ? !!data.notify_order_cancelled : true,
+          notify_returns_and_refunds: data.notify_returns_and_refunds !== undefined ? !!data.notify_returns_and_refunds : true,
+          notify_financial_adjustments: data.notify_financial_adjustments !== undefined ? !!data.notify_financial_adjustments : true,
+          notify_liquidations: data.notify_liquidations !== undefined ? !!data.notify_liquidations : true,
+          notify_disputes: data.notify_disputes !== undefined ? !!data.notify_disputes : true,
           notify_low_stock: !!data.notify_low_stock,
           notify_payout_paid: !!data.notify_payout_paid,
           notify_test: !!data.notify_test,
@@ -348,6 +367,12 @@ export default function VSettings() {
           notify_product_questions: true,
           notify_payment_received: true,
           notify_order_shipped: true,
+          notify_order_delivered: true,
+          notify_order_cancelled: true,
+          notify_returns_and_refunds: true,
+          notify_financial_adjustments: true,
+          notify_liquidations: true,
+          notify_disputes: true,
           notify_low_stock: true,
           notify_payout_paid: true,
           notify_test: false,
@@ -997,9 +1022,15 @@ export default function VSettings() {
                 {[
                   { key: 'notify_new_sale', label: 'Nueva venta asignada', desc: 'Aviso inmediato cuando una orden con tus productos fue pagada.' },
                   { key: 'notify_product_questions', label: 'Preguntas sobre tus productos', desc: 'Avisos cuando un coleccionista hace una consulta sobre tus productos.' },
-                  { key: 'notify_order_shipped', label: 'Estados de envío', desc: 'Actualizaciones logísticas sobre órdenes en camino o entregadas.' },
+                  { key: 'notify_order_shipped', label: 'Estados de envío', desc: 'Actualizaciones logísticas sobre órdenes en preparación o en camino.' },
+                  { key: 'notify_order_delivered', label: 'Pedido entregado', desc: 'Confirmación cuando el transportista entrega la suborden al comprador.' },
+                  { key: 'notify_order_cancelled', label: 'Venta pagada cancelada', desc: 'Alerta prioritaria para no preparar ni despachar una suborden cancelada.' },
+                  { key: 'notify_returns_and_refunds', label: 'Devoluciones y reembolsos', desc: 'Solicitudes de devolución, resoluciones aprobadas y reembolsos aplicados.' },
+                  { key: 'notify_financial_adjustments', label: 'Ajustes financieros', desc: 'Avisos de ajustes de débito o crédito registrados en tu cuenta.' },
+                  { key: 'notify_liquidations', label: 'Liquidación disponible', desc: 'Aviso cuando se genera una nueva liquidación de tus ventas entregadas.' },
+                  { key: 'notify_payout_paid', label: 'Liquidación pagada', desc: 'Confirmación cuando Collectibles procesa el pago a tu cuenta bancaria.' },
+                  { key: 'notify_disputes', label: 'Disputas y contracargos', desc: 'Alerta urgente si se abre una disputa bancaria sobre una orden.' },
                   { key: 'notify_low_stock', label: 'Stock bajo', desc: 'Alerta cuando tus publicaciones quedan con poco inventario (<= 2).' },
-                  { key: 'notify_payout_paid', label: 'Liquidación pagada', desc: 'Confirmación cuando Collectibles procesa el pago de tus ventas.' },
                 ].map(item => (
                   <label key={item.key} className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm">
                     <input 
@@ -1021,6 +1052,11 @@ export default function VSettings() {
               </div>
             </div>
           </div>
+
+            {/* Historial de Actividad del Vendor */}
+            <div className="pt-2">
+              <NotificationCenterPanel roleScope="vendor" theme="light" showPreferences={false} />
+            </div>
 
             {/* Email Recipients Modal */}
             <EmailRecipientsModal

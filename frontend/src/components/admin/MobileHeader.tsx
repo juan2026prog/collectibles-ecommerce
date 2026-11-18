@@ -2,6 +2,7 @@ import React from 'react';
 import { Menu, Search, User, LogOut } from 'lucide-react';
 import { STORE_ISOLOGO_URL } from '../../lib/brand';
 import LocaleSwitcher from '../LocaleSwitcher';
+import { NotificationBell, type NotificationRoleScope } from '../common/NotificationBell';
 
 interface MobileHeaderProps {
   title?: string;
@@ -10,6 +11,8 @@ interface MobileHeaderProps {
   onOpenSearch?: () => void;
   userEmail?: string;
   onSignOut?: () => void;
+  roleScope?: NotificationRoleScope;
+  viewAllUrl?: string;
 }
 
 export default function MobileHeader({
@@ -18,7 +21,9 @@ export default function MobileHeader({
   onOpenDrawer,
   onOpenSearch,
   userEmail,
-  onSignOut
+  onSignOut,
+  roleScope = 'admin',
+  viewAllUrl
 }: MobileHeaderProps) {
   const [showUserMenu, setShowUserMenu] = React.useState(false);
 
@@ -57,6 +62,8 @@ export default function MobileHeader({
             <Search className="w-5 h-5" />
           </button>
         )}
+
+        <NotificationBell roleScope={roleScope} theme="light" viewAllUrl={viewAllUrl} />
 
         <div className="relative">
           <button

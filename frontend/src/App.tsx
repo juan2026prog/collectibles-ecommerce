@@ -101,6 +101,7 @@ const InternationalMarketTemplate = lazy(() => import('./pages/international/Int
 const AdminRefunds = lazy(() => import('./pages/admin/AdminRefunds'));
 const AdminZinc = lazy(() => import('./pages/admin/AdminZinc'));
 const AdminQuestions = lazy(() => import('./pages/admin/AdminQuestions'));
+const AdminNotifications = lazy(() => import('./pages/admin/AdminNotifications'));
 const AdminCurrencies = lazy(() => import('./pages/admin/AdminCurrencies'));
 const AdminAIControlCenter = lazy(() => import('./pages/superadmin/AdminAIControlCenter'));
 const AdminAISystemTest = lazy(() => import('./pages/superadmin/AdminAISystemTest'));
@@ -363,6 +364,7 @@ function App() {
                   <Route path="themes" element={<AdminThemes />} />
                   <Route path="customers" element={<AdminCustomers />} />
                   <Route path="questions" element={<AdminQuestions />} />
+                  <Route path="notifications" element={<AdminNotifications />} />
                   <Route path="coupons" element={<AdminCoupons />} />
                   <Route path="banners" element={<AdminBanners />} />
                   <Route path="brands" element={<AdminBrands />} />

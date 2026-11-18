@@ -8,6 +8,8 @@ import { useAuth } from '../contexts/AuthContext';
 import LocaleSwitcher from '../components/LocaleSwitcher';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { STORE_ISOLOGO_URL } from '../lib/brand';
+import { Bell } from 'lucide-react';
+import { NotificationBell } from '../components/common/NotificationBell';
 
 export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'affiliate' | 'star2fan' }) {
   const location = useLocation();
@@ -56,6 +58,7 @@ export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'af
       { name: 'Resumen', path: '/affiliate?tab=overview', icon: Home },
       { name: 'Tus Pagos', path: '/affiliate?tab=payments', icon: DollarSign },
       { name: 'Material Promo', path: '/affiliate?tab=materials', icon: Share2 },
+      { name: 'Notificaciones', path: '/affiliate?tab=notifications', icon: Bell },
       { name: 'Configuración', path: '/affiliate?tab=settings', icon: Settings },
     ];
   } else if (type === 'star2fan') {
@@ -115,6 +118,11 @@ export default function PortalLayout({ type }: { type: 'vendor' | 'artist' | 'af
           <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             <LocaleSwitcher />
             <div className="w-[1px] h-8 bg-white/10 mx-1 hidden sm:block" />
+            <NotificationBell
+              roleScope={type === 'affiliate' ? 'affiliate' : 'customer'}
+              theme="dark"
+              viewAllUrl={type === 'affiliate' ? '/affiliate?tab=notifications' : '/account?tab=notifications'}
+            />
             <button className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all hover:scale-105 active:scale-95 group">
               <span className="text-lg sm:text-xl group-hover:animate-pulse">👤</span>
             </button>

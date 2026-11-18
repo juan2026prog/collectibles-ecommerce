@@ -1208,6 +1208,91 @@ Deno.serve(async (req: Request) => {
         }
       }
 
+      // ════════════════════════════════════════════════════════════════════════
+      // RECONCILIACIÓN FINANCIERA DE COMISIONES DE AFILIADOS / INFLUENCERS
+      // ════════════════════════════════════════════════════════════════════════
+      try {
+        const { data: affCommissions } = await supabaseAdmin
+          .from("affiliate_commissions")
+          .select("*")
+          .eq("order_id", orderId);
+
+        if (affCommissions && affCommissions.length > 0) {
+          for (const comm of affCommissions) {
+            const origBase = Number(comm.base_amount || order.total_amount || 0);
+            const commRate = Number(comm.commission_rate || 5);
+            const prevRefunded = Number(comm.refunded_amount || 0);
+            const totalRefundedSoFar = Math.min(origBase, prevRefunded + Number(refundAmount || 0));
+            const isFullRefund = isFullOrderRefund || (origBase > 0 && totalRefundedSoFar >= origBase - 0.01);
+            const remainingBase = Math.max(0, origBase - totalRefundedSoFar);
+            const newCommissionAmount = isFullRefund ? 0 : Number(((remainingBase * commRate) / 100).toFixed(2));
+            const commissionDelta = Number((Number(comm.amount || 0) - newCommissionAmount).toFixed(2));
+
+            if (comm.status === "paid") {
+              // Commission was already paid: record compensatory adjustment balance without unauthorized debit
+              const nextAdjustment = Number((Number(comm.adjustment_amount || 0) + commissionDelta).toFixed(2));
+              await supabaseAdmin
+                .from("affiliate_commissions")
+                .update({
+                  refunded_amount: totalRefundedSoFar,
+                  adjustment_amount: nextAdjustment,
+                  notes: `Reembolso post-liquidación ($${refundAmount.toFixed(2)}). Ajuste compensatorio registrado: $${nextAdjustment.toFixed(2)}`,
+                  updated_at: new Date().toISOString()
+                })
+                .eq("id", comm.id);
+
+              await supabaseAdmin.from("commission_activity_log").insert({
+                commission_id: comm.id,
+                event_type: "commission_post_payout_adjustment",
+                event_label: `Ajuste compensatorio por reembolso ($${commissionDelta.toFixed(2)}) sobre comisión ya pagada`,
+                metadata: {
+                  order_id: orderId,
+                  refund_id: dbRefund.id,
+                  refund_amount: refundAmount,
+                  adjustment_delta: commissionDelta,
+                  total_adjustment_amount: nextAdjustment
+                }
+              });
+            } else {
+              // Commission is pending or available: reverse in full or adjust proportionally
+              const nextStatus = isFullRefund ? "cancelled" : comm.status;
+              await supabaseAdmin
+                .from("affiliate_commissions")
+                .update({
+                  amount: newCommissionAmount,
+                  refunded_amount: totalRefundedSoFar,
+                  status: nextStatus,
+                  cancelled_at: isFullRefund ? new Date().toISOString() : comm.cancelled_at,
+                  notes: isFullRefund
+                    ? `Comisión anulada por reembolso total del pedido ($${refundAmount.toFixed(2)})`
+                    : `Comisión ajustada proporcionalmente por reembolso parcial ($${refundAmount.toFixed(2)}). Nueva base: $${remainingBase.toFixed(2)}`,
+                  updated_at: new Date().toISOString()
+                })
+                .eq("id", comm.id);
+
+              await supabaseAdmin.from("commission_activity_log").insert({
+                commission_id: comm.id,
+                event_type: isFullRefund ? "commission_cancelled" : "commission_adjusted",
+                event_label: isFullRefund
+                  ? `Comisión anulada por reembolso total ($${refundAmount.toFixed(2)})`
+                  : `Comisión ajustada de $${comm.amount} a $${newCommissionAmount} por reembolso parcial ($${refundAmount.toFixed(2)})`,
+                metadata: {
+                  order_id: orderId,
+                  refund_id: dbRefund.id,
+                  refund_amount: refundAmount,
+                  previous_commission: comm.amount,
+                  new_commission: newCommissionAmount,
+                  remaining_base: remainingBase,
+                  status: nextStatus
+                }
+              });
+            }
+          }
+        }
+      } catch (affErr: any) {
+        console.error("[Refund] Affiliate commission reconciliation warning:", affErr.message);
+      }
+
       // Send Completion emails/WhatsApp
       if (order.customer_email) {
         // Client completed notification

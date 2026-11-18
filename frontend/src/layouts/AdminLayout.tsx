@@ -18,6 +18,8 @@ import AdminBreadcrumbs from '../components/admin/AdminBreadcrumbs';
 import { useFeatures } from '../contexts/FeatureToggleContext';
 import MobileDrawer from '../components/admin/MobileDrawer';
 import MobileHeader from '../components/admin/MobileHeader';
+import { Bell } from 'lucide-react';
+import { NotificationBell } from '../components/common/NotificationBell';
 
 export default function AdminLayout() {
   const location = useLocation();
@@ -48,6 +50,7 @@ export default function AdminLayout() {
     ] : []),
     { name: 'Afiliados', path: '/admin/affiliates', icon: Megaphone },
     { name: 'Pedidos', path: '/admin/orders', icon: ShoppingBag },
+    { name: 'Notificaciones', path: '/admin/notifications', icon: Bell },
     { name: 'Pasarelas de Pago', path: '/admin/settings?tab=payments', icon: CreditCard },
     { name: 'Configuracion', path: '/admin/settings', icon: Settings },
     { name: 'Módulos & Plugins', path: '/admin/settings?tab=modules', icon: Sliders },
@@ -268,6 +271,7 @@ export default function AdminLayout() {
                   <span className="hidden sm:inline">Buscar...</span>
                   <kbd className="text-[9px] font-mono bg-gray-200 px-1.5 py-0.5 rounded">⌘K</kbd>
                 </button>
+                <NotificationBell roleScope="admin" theme="light" viewAllUrl="/admin/notifications" />
                 {isSuperAdmin && <span className="px-2.5 py-1 rounded-full bg-[#f00856]/10 text-[#f00856] text-[10px] font-bold tracking-wider">SUPER ADMIN</span>}
                 <LocaleSwitcher compact />
               </div>

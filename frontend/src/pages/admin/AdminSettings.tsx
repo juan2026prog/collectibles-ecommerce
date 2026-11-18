@@ -638,6 +638,14 @@ export default function AdminSettings() {
     whatsapp_numbers: [] as { label: string; number: string; enabled: boolean }[],
     email_recipients: [] as EmailRecipient[],
     notify_own_sales: false,
+    sales_notification_mode: 'own_only' as 'all' | 'own_only' | 'vendors_only' | 'international_only' | 'influencer_only' | 'daily_summary_only' | 'custom',
+    notify_international_sales: true,
+    notify_influencer_sales: true,
+    notify_payment_rejected: true,
+    notify_order_cancelled: true,
+    notify_returns_and_claims: true,
+    notify_refunds: true,
+    notify_disputes: true,
     notify_product_questions: true,
     notify_vendor_sales: false,
     notify_payment_received: false,
@@ -668,6 +676,14 @@ export default function AdminSettings() {
           whatsapp_numbers: paddedNumbers.slice(0, 3),
           email_recipients: dbEmailRecipients,
           notify_own_sales: !!data.notify_own_sales,
+          sales_notification_mode: (data.sales_notification_mode || 'own_only') as any,
+          notify_international_sales: data.notify_international_sales !== undefined ? !!data.notify_international_sales : true,
+          notify_influencer_sales: data.notify_influencer_sales !== undefined ? !!data.notify_influencer_sales : true,
+          notify_payment_rejected: data.notify_payment_rejected !== undefined ? !!data.notify_payment_rejected : true,
+          notify_order_cancelled: data.notify_order_cancelled !== undefined ? !!data.notify_order_cancelled : true,
+          notify_returns_and_claims: data.notify_returns_and_claims !== undefined ? !!data.notify_returns_and_claims : true,
+          notify_refunds: data.notify_refunds !== undefined ? !!data.notify_refunds : true,
+          notify_disputes: data.notify_disputes !== undefined ? !!data.notify_disputes : true,
           notify_product_questions: data.notify_product_questions !== undefined ? !!data.notify_product_questions : true,
           notify_vendor_sales: !!data.notify_vendor_sales,
           notify_payment_received: !!data.notify_payment_received,
@@ -746,6 +762,14 @@ export default function AdminSettings() {
         whatsapp_numbers: numbers,
         email_recipients: emails,
         notify_own_sales: targetState.notify_own_sales,
+        sales_notification_mode: targetState.sales_notification_mode || 'own_only',
+        notify_international_sales: targetState.notify_international_sales,
+        notify_influencer_sales: targetState.notify_influencer_sales,
+        notify_payment_rejected: targetState.notify_payment_rejected,
+        notify_order_cancelled: targetState.notify_order_cancelled,
+        notify_returns_and_claims: targetState.notify_returns_and_claims,
+        notify_refunds: targetState.notify_refunds,
+        notify_disputes: targetState.notify_disputes,
         notify_product_questions: targetState.notify_product_questions,
         notify_vendor_sales: targetState.notify_vendor_sales,
         notify_payment_received: targetState.notify_payment_received,
@@ -2755,6 +2779,31 @@ export default function AdminSettings() {
             {/* Config Toggles */}
             <div className="bg-gray-50/50 p-6 rounded-xl border border-gray-200/50 space-y-4 shadow-sm mt-6">
               <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Avisos Disponibles para Collectibles</h4>
+              <div className="bg-white p-4 rounded-xl border border-gray-200 mb-4 space-y-2">
+                <label className="block text-xs font-extrabold text-gray-900 uppercase tracking-wider">
+                  Modo de Notificaciones Inmediatas de Ventas Pagadas
+                </label>
+                <p className="text-[11px] text-gray-500">
+                  Definí qué ventas confirmadas disparan alerta inmediata por Email y Push al equipo de Administración (todas quedan registradas siempre en el Centro de Actividad).
+                </p>
+                <select
+                  value={adminNotifications.sales_notification_mode || 'own_only'}
+                  onChange={(e) => {
+                    const next = { ...adminNotifications, sales_notification_mode: e.target.value as any };
+                    setAdminNotifications(next);
+                    saveAdminNotifications(true, next).catch(() => {});
+                  }}
+                  className="w-full mt-1 bg-gray-50 border border-gray-300 rounded-xl px-3.5 py-2.5 text-xs font-bold text-gray-900 focus:ring-2 focus:ring-[#f00856] outline-none"
+                >
+                  <option value="own_only">Solamente ventas propias de Collectibles (Predeterminado)</option>
+                  <option value="all">Todas las ventas (Propias + Vendors + Internacionales + Influencers)</option>
+                  <option value="vendors_only">Solamente ventas de Vendors del Marketplace</option>
+                  <option value="international_only">Solamente ventas internacionales</option>
+                  <option value="influencer_only">Solamente ventas atribuidas a Influencers / Afiliados</option>
+                  <option value="daily_summary_only">Resumen diario únicamente (sin alertas inmediatas por venta)</option>
+                  <option value="custom">Combinación personalizada (según casillas activas debajo)</option>
+                </select>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {[
                   { key: 'notify_own_sales', label: 'Venta propia Collectibles', desc: 'Cuando una venta propia ya fue pagada y debe prepararse.' },
@@ -2764,12 +2813,23 @@ export default function AdminSettings() {
                   { key: 'notify_low_stock', label: 'Stock bajo', desc: 'Alerta general cuando algún producto o variante queda con poco stock (<= 2).' },
                   { key: 'notify_shipping_events', label: 'Eventos de envío', desc: 'Actualización sobre etiquetas generadas, despachadas o entregas finalizadas.' },
                   { key: 'notify_payout_pending', label: 'Liquidaciones pendientes', desc: 'Alertas para revisión de liquidaciones pendientes a vendedores.' },
+                  { key: 'notify_international_sales', label: 'Ventas internacionales', desc: 'Alertas de compras internacionales y estado de procesamiento Zinc.' },
+                  { key: 'notify_influencer_sales', label: 'Ventas con código de Influencer', desc: 'Avisos cuando se genera o liquida una comisión de afiliado.' },
+                  { key: 'notify_payment_rejected', label: 'Pagos rechazados', desc: 'Registro cuando una pasarela rechaza un intento de cobro.' },
+                  { key: 'notify_order_cancelled', label: 'Pedido pagado cancelado', desc: 'Alerta cuando se cancela comercialmente una orden previamente pagada.' },
+                  { key: 'notify_returns_and_claims', label: 'Devoluciones y reclamos posventa', desc: 'Aviso inmediato cuando un comprador abre una solicitud o reclamo.' },
+                  { key: 'notify_refunds', label: 'Reembolsos (automáticos y manuales)', desc: 'Alertas prioritarias de reembolsos completados o que requieren acción manual.' },
+                  { key: 'notify_disputes', label: 'Contracargos y disputas', desc: 'Alerta crítica ante disputas abiertas en pasarelas de pago.' },
                 ].map(item => (
                   <label key={item.key} className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 cursor-pointer hover:border-gray-300 transition-colors shadow-sm">
                     <input 
                       type="checkbox"
                       checked={!!(adminNotifications as any)[item.key]}
-                      onChange={(e) => setAdminNotifications(p => ({ ...p, [item.key]: e.target.checked }))}
+                      onChange={(e) => {
+                        const next = { ...adminNotifications, [item.key]: e.target.checked };
+                        setAdminNotifications(next);
+                        saveAdminNotifications(false, next).catch(() => {});
+                      }}
                       className="w-4 h-4 text-black border-gray-300 rounded focus:ring-black mt-0.5 cursor-pointer"
                     />
                     <div>

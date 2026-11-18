@@ -5,8 +5,9 @@ import {
   ShoppingCart, Menu, Search, User, Heart, X, ChevronDown, ChevronRight,
   Truck, Shield, RotateCcw, Headphones, MapPin, Phone, Mail, LogIn,
   LayoutDashboard, Store, Star, Share2, Package, LogOut, Video,
-  Sparkles, Radio, Scale, Archive, GraduationCap
+  Sparkles, Radio, Scale, Archive, GraduationCap, Bell
 } from 'lucide-react';
+import { NotificationBell } from '../components/common/NotificationBell';
 import { useCartContext } from '../contexts/CartContext';
 import { useWishlistContext } from '../contexts/WishlistContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -579,6 +580,9 @@ export default function StorefrontLayout() {
                 </span>
               )}
             </Link>
+            {user && (
+              <NotificationBell roleScope="customer" theme="dark" viewAllUrl="/account?tab=notifications" />
+            )}
             <div className="relative" ref={userMenuRef}>
               <button 
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
@@ -628,6 +632,13 @@ export default function StorefrontLayout() {
                           className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 text-sm font-bold text-slate-200 transition-colors"
                         >
                            <Package className="w-4 h-4 text-blue-400" /> Mis pedidos
+                        </Link>
+                        <Link 
+                          to="/account?tab=notifications" 
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-3 px-4 py-2.5 rounded-xl hover:bg-white/5 text-sm font-bold text-slate-200 transition-colors"
+                        >
+                           <Bell className="w-4 h-4 text-[#f00856]" /> Notificaciones
                         </Link>
                         <Link 
                           to="/wishlist" 

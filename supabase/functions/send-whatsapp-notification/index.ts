@@ -1,15 +1,16 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
+declare const Deno: any;
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-collectibles-cron-secret, x-webhook-secret',
 };
 
 /**
  * SECURE WRAPPER: send-whatsapp-notification
- * Forwards authenticated requests to notification-dispatcher.
- * Enforces that anonymous callers CANNOT obtain privileged access.
+ * Forwards authenticated requests (JWT, Cron Secret, or Webhook Secret) to notification-dispatcher.
  */
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -19,25 +20,29 @@ serve(async (req: Request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const authHeader = req.headers.get('Authorization');
+    const cronSecret = req.headers.get('x-collectibles-cron-secret');
+    const webhookSecret = req.headers.get('x-webhook-secret');
 
-    if (!authHeader) {
+    const payload = await req.json();
+
+    if (!authHeader && !cronSecret && !webhookSecret && !payload?.webhook_secret) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized: Missing Authorization header.' }),
+        JSON.stringify({ error: 'Unauthorized: Missing credentials.' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const payload = await req.json();
+    const forwardHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (authHeader) forwardHeaders['Authorization'] = authHeader;
+    if (cronSecret) forwardHeaders['x-collectibles-cron-secret'] = cronSecret;
+    if (webhookSecret) forwardHeaders['x-webhook-secret'] = webhookSecret;
 
-    // Forward to notification-dispatcher preserving caller token
     const dispatcherUrl = `${supabaseUrl}/functions/v1/notification-dispatcher`;
-
     const response = await fetch(dispatcherUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authHeader,
-      },
+      headers: forwardHeaders,
       body: JSON.stringify(payload),
     });
 

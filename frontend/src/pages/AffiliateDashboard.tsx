@@ -8,6 +8,8 @@ import {
   AlertCircle, Edit2, Save, X
 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { Bell } from 'lucide-react';
+import { NotificationCenterPanel } from '../components/common/NotificationCenterPanel';
 import { BackofficePageHeader, BackofficeKPI, BackofficeTabs, BackofficeStatusBadge, BackofficeCompactRow, BackofficePrimaryAction } from '../components/backoffice';
 
 export default function AffiliateDashboard() {
@@ -156,8 +158,9 @@ export default function AffiliateDashboard() {
 
   const useDemoData = commissions.length === 0;
   const totalClicks = useDemoData ? 1245 : clicks.length;
-  const totalSales = useDemoData ? 47 : commissions.length;
-  const totalCommissionsValue = useDemoData ? 450.50 : commissions.reduce((sum, c) => sum + Number(c.amount), 0);
+  const activeCommissions = commissions.filter(c => c.status !== 'cancelled' && c.status !== 'reversed');
+  const totalSales = useDemoData ? 47 : activeCommissions.length;
+  const totalCommissionsValue = useDemoData ? 450.50 : activeCommissions.reduce((sum, c) => sum + Number(c.amount) - Number(c.adjustment_amount || 0), 0);
   const paidCommissions = useDemoData ? 150.00 : payouts.filter(p => p.status === 'paid').reduce((sum, p) => sum + Number(p.amount), 0);
   const pendingPayouts = useDemoData ? 0 : payouts.filter(p => p.status === 'pending').reduce((sum, p) => sum + Number(p.amount), 0);
   const availableBalance = useDemoData ? (totalCommissionsValue - paidCommissions) : (totalCommissionsValue - paidCommissions - pendingPayouts);
@@ -185,6 +188,7 @@ export default function AffiliateDashboard() {
               { id: 'overview', label: 'Dashboard', icon: BarChart3 },
               { id: 'payments', label: 'Finanzas', icon: DollarSign },
               { id: 'materials', label: 'Recursos', icon: Gift },
+              { id: 'notifications', label: 'Notificaciones', icon: Bell },
               { id: 'settings', label: 'Configuración', icon: Settings }
            ].map(tab => {
               const Icon = tab.icon;
@@ -333,8 +337,13 @@ export default function AffiliateDashboard() {
                           {new Date(act.date || act.created_at).toLocaleDateString()}
                         </td>
                         <td className="px-10 py-6">
-                          <div className="text-sm font-black text-white">{act.product_name || `Orden #${act.id.substring(0,6).toUpperCase()}`}</div>
-                          <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Direct attribution</div>
+                          <div className="text-sm font-black text-white">{act.order_reference || act.product_name || `Ref #${act.id.substring(0,6).toUpperCase()}`}</div>
+                          <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
+                            {act.coupon_code ? `Código: ${act.coupon_code}` : 'Atribución directa'}
+                            {act.base_amount ? ` · Base: $${Number(act.base_amount).toFixed(2)}` : ''}
+                            {act.commission_rate ? ` (${act.commission_rate}%)` : ''}
+                            {Number(act.refunded_amount || 0) > 0 ? ` · Reembolsado: $${Number(act.refunded_amount).toFixed(2)}` : ''}
+                          </div>
                         </td>
                         <td className="px-10 py-6 text-center">
                           <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 ${
@@ -479,6 +488,12 @@ export default function AffiliateDashboard() {
         )}
 
         {/* SETTINGS SECTION */}
+        {activeTab === 'notifications' && (
+          <div className="animate-fade-in">
+            <NotificationCenterPanel roleScope="affiliate" theme="dark" showPreferences={true} />
+          </div>
+        )}
+
         {activeTab === 'settings' && (
           <div className="animate-fade-in max-w-4xl">
             <div className="glass border border-white/10 p-12 mb-1">

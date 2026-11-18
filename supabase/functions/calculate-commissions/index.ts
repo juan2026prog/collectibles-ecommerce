@@ -3,6 +3,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders, handleOptions } from "../_shared/cors.ts";
 
+declare const Deno: any;
+
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
@@ -16,7 +18,7 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // 1. Fetch the order with its affiliate reference
+    // 1. Fetch the order with its affiliate and coupon reference
     const { data: order, error: orderErr } = await supabase
       .from('orders')
       .select('*, order_items(*, product_variants(*))')
@@ -24,11 +26,21 @@ serve(async (req) => {
       .single();
 
     if (orderErr || !order) throw new Error('Order not found: ' + order_id);
-    if (order.status !== 'paid') {
+
+    // STRICT PAYMENT CONFIRMATION CHECK:
+    // Commissions are ONLY generated after a payment is effectively confirmed!
+    const isPaymentConfirmed =
+      order.status === 'paid' ||
+      order.status === 'confirmed' ||
+      order.payment_status === 'approved' ||
+      order.payment_status === 'paid' ||
+      order.payment_status === 'accredited';
+
+    if (!isPaymentConfirmed) {
       return new Response(JSON.stringify({ 
         success: false, 
         skipped: true, 
-        reason: 'Order not in paid status' 
+        reason: 'Order payment is not confirmed' 
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
@@ -36,41 +48,96 @@ serve(async (req) => {
 
     const results: any[] = [];
 
-    // ─── AFFILIATE COMMISSIONS ───
-    if (order.affiliate_id) {
+    // ─── AFFILIATE COMMISSIONS (Link attribution OR Coupon attribution, never double) ───
+    let resolvedAffiliateId: string | null = order.affiliate_id || null;
+    let attributionType: 'link' | 'coupon' = 'link';
+    let usedCouponCode: string | null = null;
+
+    if (order.coupon_id) {
+      const { data: couponRow } = await supabase
+        .from('coupons')
+        .select('code, affiliate_id')
+        .eq('id', order.coupon_id)
+        .maybeSingle();
+
+      if (couponRow) {
+        usedCouponCode = couponRow.code;
+        if (!resolvedAffiliateId && couponRow.affiliate_id) {
+          resolvedAffiliateId = couponRow.affiliate_id;
+          attributionType = 'coupon';
+        }
+      }
+    }
+
+    if (resolvedAffiliateId) {
       const { data: affiliate } = await supabase
         .from('affiliates')
-        .select('base_commission_rate')
-        .eq('id', order.affiliate_id)
-        .single();
+        .select('id, code, base_commission_rate, status')
+        .eq('id', resolvedAffiliateId)
+        .maybeSingle();
 
-      if (affiliate) {
-        const commissionRate = affiliate.base_commission_rate || 5;
-        const commissionAmount = (order.total_amount * commissionRate) / 100;
+      if (affiliate && affiliate.status === 'active') {
+        const commissionRate = Number(affiliate.base_commission_rate ?? 5);
+        // Commissionable base: subtotal of products minus discounts (or order.total_amount - shipping if subtotal_products not set)
+        const baseAmount = Math.max(
+          0,
+          Number(order.subtotal_products || (Number(order.total_amount || 0) - Number(order.total_shipping || 0))) - Number(order.total_discounts || 0)
+        ) || Number(order.total_amount || 0);
 
-        // Prevent duplicate commissions
+        const commissionAmount = Number(((baseAmount * commissionRate) / 100).toFixed(2));
+        const orderRef = order.order_number ? `#${order.order_number.replace(/^#/, '')}` : `#COL-${order.id.slice(0, 8).toUpperCase()}`;
+
+        // Prevent duplicate commissions for the same order & affiliate
         const { data: existing } = await supabase
           .from('affiliate_commissions')
-          .select('id')
+          .select('id, amount, status')
           .eq('order_id', order_id)
-          .eq('affiliate_id', order.affiliate_id)
-          .single();
+          .eq('affiliate_id', resolvedAffiliateId)
+          .maybeSingle();
 
         if (!existing) {
-          const { error: insertErr } = await supabase
+          const { data: insertedComm, error: insertErr } = await supabase
             .from('affiliate_commissions')
             .insert({
-              affiliate_id: order.affiliate_id,
+              affiliate_id: resolvedAffiliateId,
               order_id: order_id,
               amount: commissionAmount,
+              base_amount: baseAmount,
+              commission_rate: commissionRate,
+              refunded_amount: 0,
+              adjustment_amount: 0,
+              coupon_code: usedCouponCode || affiliate.code,
+              attribution_type: attributionType,
+              order_reference: orderRef,
               status: 'pending'
+            })
+            .select('id')
+            .single();
+
+          if (!insertErr && insertedComm) {
+            // Audit trail in commission_activity_log
+            await supabase.from('commission_activity_log').insert({
+              commission_id: insertedComm.id,
+              event_type: 'commission_created',
+              event_label: `Comisión generada (${commissionRate}%) sobre base $${baseAmount}`,
+              metadata: {
+                order_id,
+                order_reference: orderRef,
+                affiliate_id: resolvedAffiliateId,
+                base_amount: baseAmount,
+                commission_rate: commissionRate,
+                commission_amount: commissionAmount,
+                attribution_type: attributionType,
+                code: usedCouponCode || affiliate.code
+              }
             });
 
-          if (!insertErr) {
             results.push({
               type: 'affiliate_commission',
-              affiliate_id: order.affiliate_id,
+              commission_id: insertedComm.id,
+              affiliate_id: resolvedAffiliateId,
               amount: commissionAmount,
+              base_amount: baseAmount,
               rate: commissionRate
             });
           }
@@ -81,7 +148,6 @@ serve(async (req) => {
     }
 
     // ─── VENDOR PAYOUTS ───
-    // Group order items by vendor_id
     const vendorTotals: Record<string, number> = {};
     for (const item of (order.order_items || [])) {
       if (item.vendor_id) {
@@ -114,7 +180,6 @@ serve(async (req) => {
         continue;
       }
 
-      // We check if there's a payout for this specific period (simplified: one per order)
       const { error: payoutErr } = await supabase
         .from('vendor_payouts')
         .insert({
@@ -145,7 +210,6 @@ serve(async (req) => {
     }
 
     // ─── LOYALTY POINTS ───
-    // Award 1 point per $100 spent
     const loyaltyPoints = Math.floor(order.total_amount / 100);
     if (loyaltyPoints > 0 && order.customer_id) {
       await supabase.from('loyalty_points').insert({

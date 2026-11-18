@@ -71,8 +71,20 @@ serve(async (req: Request) => {
 
     const authHeader = req.headers.get('Authorization');
     const token = authHeader?.replace('Bearer ', '');
+    const cronSecretHeader = req.headers.get('x-collectibles-cron-secret')?.trim();
 
-    if (token !== supabaseServiceKey) {
+    let isAuthorized = token === supabaseServiceKey;
+    if (!isAuthorized && cronSecretHeader && cronSecretHeader.length >= 16) {
+      const envCronSecret = Deno.env.get('COLLECTIBLES_CRON_SECRET');
+      if (envCronSecret && cronSecretHeader === envCronSecret) {
+        isAuthorized = true;
+      } else {
+        const { data: cronValid } = await supabaseAdmin.rpc('verify_internal_cron_secret', { p_secret: cronSecretHeader });
+        if (cronValid === true) isAuthorized = true;
+      }
+    }
+
+    if (!isAuthorized) {
       console.warn("[Admin Daily Summary Cron] Unauthorized call.");
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
     }

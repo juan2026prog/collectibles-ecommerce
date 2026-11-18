@@ -10,8 +10,9 @@ import {
   Phone, Plus, Trash2, Lock, Eye, EyeOff, Edit3, Store, Truck, AlertCircle, 
   FileText, Globe, CreditCard, Clock, ShieldCheck, Heart, Sparkles, Trophy, 
   Award, Flame, ExternalLink, ChevronRight, LayoutDashboard, Compass, Star,
-  HelpCircle, MessageCircle, X, CheckCircle2
+  HelpCircle, MessageCircle, X, CheckCircle2, Bell
 } from 'lucide-react';
+import { NotificationCenterPanel } from '../components/common/NotificationCenterPanel';
 import { useLocale } from '../contexts/LocaleContext';
 import { useCurrency } from '../contexts/CurrencyContext';
 import { URUGUAY_LOCATIONS, DEPARTAMENTOS } from '../utils/uruguayLocations';
@@ -87,7 +88,7 @@ export default function CustomerPortal() {
 
   // Supported tabs
   const tabFromUrl = searchParams.get('tab');
-  const validTabs = ['orders', 'requests', 'questions', 'import_hub', 'profile', 'franchise', 'couriers', 'security'] as const;
+  const validTabs = ['orders', 'requests', 'questions', 'notifications', 'import_hub', 'profile', 'franchise', 'couriers', 'security'] as const;
   type TabType = typeof validTabs[number];
   
   const initialTab: TabType = validTabs.includes(tabFromUrl as any) ? (tabFromUrl as TabType) : 'orders';
@@ -1027,6 +1028,7 @@ export default function CustomerPortal() {
                 { key: 'orders', icon: Package, label: 'Mis Pedidos', badge: orders.length > 0 ? String(orders.length) : undefined, color: 'text-blue-400' },
                 { key: 'requests', icon: ShieldCheck, label: 'Mis Gestiones', badge: customerRequests.length > 0 ? String(customerRequests.length) : undefined, color: 'text-emerald-400' },
                 { key: 'questions', icon: MessageSquare, label: 'Mis Preguntas', color: 'text-pink-400' },
+                { key: 'notifications', icon: Bell, label: 'Notificaciones y Avisos', color: 'text-amber-400' },
                 { key: 'import_hub', icon: Globe, label: 'Importador HUB (Aduana & Casilla)', badge: '2026', color: 'text-sky-400' },
                 { key: 'profile', icon: User, label: 'Mis Datos y Direcciones', color: 'text-purple-400' },
                 { key: 'security', icon: Lock, label: 'Seguridad y Acceso', color: 'text-rose-400' },
@@ -1191,6 +1193,11 @@ export default function CustomerPortal() {
           {/* ═══ TAB: Mis Preguntas ═══ */}
           {activeTab === 'questions' && (
             <CustomerQuestionsTab />
+          )}
+
+          {/* ═══ TAB: Notificaciones ═══ */}
+          {activeTab === 'notifications' && (
+            <NotificationCenterPanel roleScope="customer" theme="dark" showPreferences={true} />
           )}
 
           {/* ═══ TAB: Mis Pedidos ═══ */}
