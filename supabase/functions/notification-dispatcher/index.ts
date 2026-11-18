@@ -7,7 +7,7 @@ declare const Deno: any;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-collectibles-cron-secret, x-webhook-secret',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-collectibles-cron-secret, x-webhook-secret, svix-id, svix-timestamp, svix-signature, x-onesignal-signature',
 };
 
 export function maskPhone(phone: string): string {
@@ -24,6 +24,74 @@ export function maskEmail(email: string): string {
   const name = parts[0];
   const maskedName = name.length > 2 ? `${name.slice(0, 2)}***` : '***';
   return `${maskedName}@${parts[1]}`;
+}
+
+/**
+ * Verifies Resend / Svix HMAC-SHA256 webhook signature.
+ * Header format:
+ *   svix-id: msg_...
+ *   svix-timestamp: <unix_epoch_seconds>
+ *   svix-signature: v1,<base64_hmac> [v1,<base64_hmac2>]
+ * Secret format: whsec_<base64_key>
+ */
+export async function verifySvixWebhookSignature(
+  rawBody: string,
+  svixId: string | null,
+  svixTimestamp: string | null,
+  svixSignature: string | null,
+  secret: string
+): Promise<boolean> {
+  try {
+    if (!svixId || !svixTimestamp || !svixSignature || !secret) return false;
+    const tsSeconds = Number(svixTimestamp);
+    if (!Number.isFinite(tsSeconds)) return false;
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    // Reject replay attacks older/newer than 5 minutes
+    if (Math.abs(nowSeconds - tsSeconds) > 300) return false;
+
+    const cleanSecret = secret.startsWith('whsec_') ? secret.slice(6) : secret;
+    const binarySecret = atob(cleanSecret);
+    const keyBytes = new Uint8Array(binarySecret.length);
+    for (let i = 0; i < binarySecret.length; i++) {
+      keyBytes[i] = binarySecret.charCodeAt(i);
+    }
+
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      keyBytes,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+
+    const signedContent = `${svixId}.${svixTimestamp}.${rawBody}`;
+    const sigBuffer = await crypto.subtle.sign(
+      'HMAC',
+      cryptoKey,
+      new TextEncoder().encode(signedContent)
+    );
+    const sigBytes = new Uint8Array(sigBuffer);
+    let binarySig = '';
+    for (let i = 0; i < sigBytes.length; i++) {
+      binarySig += String.fromCharCode(sigBytes[i]);
+    }
+    const expectedBase64 = btoa(binarySig);
+
+    const candidates = svixSignature.split(' ').map((s) => s.trim());
+    for (const candidate of candidates) {
+      const [version, sigVal] = candidate.split(',');
+      if (version === 'v1' && sigVal && sigVal.length === expectedBase64.length) {
+        let diff = 0;
+        for (let i = 0; i < expectedBase64.length; i++) {
+          diff |= sigVal.charCodeAt(i) ^ expectedBase64.charCodeAt(i);
+        }
+        if (diff === 0) return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 export type RoleScope = 'customer' | 'vendor' | 'admin' | 'affiliate';
@@ -96,7 +164,35 @@ serve(async (req: Request) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    const body: NotificationPayload = await req.json().catch(() => ({ event_type: 'unknown' }));
+    const rawBody = await req.text().catch(() => '{}');
+    let parsedBody: any = {};
+    try {
+      parsedBody = rawBody ? JSON.parse(rawBody) : {};
+    } catch {
+      parsedBody = { event_type: 'unknown' };
+    }
+
+    // Normalize native Resend Svix webhook payloads ({ type: 'email.delivered', data: { email_id: '...' } })
+    const isNativeResendWebhook =
+      typeof parsedBody?.type === 'string' &&
+      parsedBody.type.startsWith('email.') &&
+      Boolean(parsedBody?.data?.email_id);
+
+    // Normalize native OneSignal webhook payloads ({ event: 'notification.delivered', notification_id: '...' })
+    const isNativeOneSignalWebhook =
+      typeof parsedBody?.event === 'string' &&
+      parsedBody.event.startsWith('notification.') &&
+      Boolean(parsedBody?.notification_id || parsedBody?.id);
+
+    const body: NotificationPayload & Record<string, any> = {
+      ...parsedBody,
+      event_type: isNativeResendWebhook
+        ? 'provider_delivery_webhook'
+        : isNativeOneSignalWebhook
+        ? 'onesignal_delivery_webhook'
+        : parsedBody.event_type || 'unknown',
+    };
+
     const {
       event_type,
       webhook_secret,
@@ -112,6 +208,9 @@ serve(async (req: Request) => {
     const token = authHeader?.replace(/^Bearer\s+/i, '').trim();
     const cronSecretHeader = req.headers.get('x-collectibles-cron-secret')?.trim();
     const webhookSecretHeader = req.headers.get('x-webhook-secret')?.trim() || webhook_secret;
+    const svixId = req.headers.get('svix-id')?.trim() || null;
+    const svixTimestamp = req.headers.get('svix-timestamp')?.trim() || null;
+    const svixSignature = req.headers.get('svix-signature')?.trim() || null;
 
     let isAuthorized = false;
     let isSystemCaller = false;
@@ -141,16 +240,48 @@ serve(async (req: Request) => {
       }
     }
 
-    // Layer C: Webhook Secret from site_settings
+    // Layer C: Webhook Secret from site_settings or env
     if (!isAuthorized && webhookSecretHeader) {
-      const { data: secretSetting } = await supabaseAdmin
-        .from('site_settings')
-        .select('value')
-        .eq('key', 'whatsapp_webhook_secret')
-        .maybeSingle();
-      if (secretSetting && secretSetting.value && secretSetting.value === webhookSecretHeader) {
+      const envWebhookSecret = Deno.env.get('RESEND_WEBHOOK_SECRET') || Deno.env.get('WEBHOOK_SECRET');
+      if (envWebhookSecret && webhookSecretHeader === envWebhookSecret) {
         isAuthorized = true;
         isSystemCaller = true;
+      } else {
+        const { data: secretSettings } = await supabaseAdmin
+          .from('site_settings')
+          .select('key, value')
+          .in('key', ['whatsapp_webhook_secret', 'resend_webhook_secret']);
+        const matched = (secretSettings || []).some((s: any) => s.value && s.value === webhookSecretHeader);
+        if (matched) {
+          isAuthorized = true;
+          isSystemCaller = true;
+        }
+      }
+    }
+
+    // Layer E: Cryptographic Svix HMAC-SHA256 Verification for Resend Webhooks
+    if (!isAuthorized && svixId && svixTimestamp && svixSignature) {
+      let resendWebhookSecret = Deno.env.get('RESEND_WEBHOOK_SECRET') || '';
+      if (!resendWebhookSecret) {
+        const { data: rsRow } = await supabaseAdmin
+          .from('site_settings')
+          .select('value')
+          .eq('key', 'resend_webhook_secret')
+          .maybeSingle();
+        resendWebhookSecret = rsRow?.value || '';
+      }
+      if (resendWebhookSecret) {
+        const svixValid = await verifySvixWebhookSignature(
+          rawBody,
+          svixId,
+          svixTimestamp,
+          svixSignature,
+          resendWebhookSecret
+        );
+        if (svixValid) {
+          isAuthorized = true;
+          isSystemCaller = true;
+        }
       }
     }
 
@@ -182,7 +313,18 @@ serve(async (req: Request) => {
 
     // Granular operation-level permission check for non-system callers
     if (!isSystemCaller) {
-      const adminOnlyEvents = ['admin_daily_summary', 'admin_vendor_daily_summary', 'order_dispute_opened', 'vendor_payout_processed', 'campaign_broadcast', 'process_outbox', 'retry_notification'];
+      const adminOnlyEvents = [
+        'admin_daily_summary',
+        'admin_vendor_daily_summary',
+        'order_dispute_opened',
+        'vendor_payout_processed',
+        'campaign_broadcast',
+        'process_outbox',
+        'retry_notification',
+        'check_providers_health',
+        'provider_delivery_webhook',
+        'onesignal_delivery_webhook',
+      ];
       if (body.scope === 'admin' || adminOnlyEvents.includes(event_type)) {
         if (!isAdmin) {
           return new Response(JSON.stringify({ error: 'Forbidden: Admin privileges required for this event.' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -2592,8 +2734,300 @@ serve(async (req: Request) => {
     };
 
     // ════════════════════════════════════════════════════════════════════════
-    // 5. SPECIAL OPERATIONS: OUTBOX DRAIN, RETRY & TEST NOTIFICATION
+    // 5. SPECIAL OPERATIONS: WEBHOOKS, HEALTH CHECK, OUTBOX DRAIN, RETRY & TEST
     // ════════════════════════════════════════════════════════════════════════
+
+    // 5A. RESEND DELIVERABILITY WEBHOOK (Svix / Provider Delivery Status)
+    if (event_type === 'provider_delivery_webhook') {
+      const resendType = String(body.type || body.webhook_type || '');
+      const emailData = body.data || {};
+      const emailId = String(emailData.email_id || body.provider_message_id || '').trim();
+      const webhookEventId = String(svixId || body.webhook_event_id || `${resendType}:${emailId}`).trim();
+      const eventTimestampIso = emailData.created_at || body.created_at || new Date().toISOString();
+
+      if (!emailId || !resendType.startsWith('email.')) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid Resend webhook payload: missing email_id or type' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Check existing log row for idempotency & state progression
+      const { data: existingLog } = await supabaseAdmin
+        .from('notification_logs')
+        .select('id, status, webhook_event_id, delivered_at, bounced_at, metadata')
+        .eq('provider_message_id', emailId)
+        .maybeSingle();
+
+      if (existingLog && existingLog.webhook_event_id === webhookEventId) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            idempotent_skip: true,
+            provider_message_id: emailId,
+            status: existingLog.status,
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Prevent out-of-order regression (e.g., email.sent arriving after email.delivered or email.bounced)
+      const terminalStates = ['delivered', 'bounced', 'rejected'];
+      if (
+        existingLog &&
+        terminalStates.includes(existingLog.status) &&
+        (resendType === 'email.sent' || resendType === 'email.delivery_delayed')
+      ) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            ignored_out_of_order: true,
+            provider_message_id: emailId,
+            status: existingLog.status,
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      let nextStatus = 'sent';
+      let errorMsg: string | null = null;
+      let isPermanent = false;
+      let deliveredAt: string | null = existingLog?.delivered_at || null;
+      let bouncedAt: string | null = existingLog?.bounced_at || null;
+
+      switch (resendType) {
+        case 'email.sent':
+          nextStatus = 'sent';
+          break;
+        case 'email.delivered':
+          nextStatus = 'delivered';
+          deliveredAt = eventTimestampIso;
+          errorMsg = null;
+          break;
+        case 'email.delivery_delayed':
+          nextStatus = 'delivery_delayed';
+          errorMsg = 'Entrega demorada temporalmente por el servidor de correo del destinatario';
+          isPermanent = false;
+          break;
+        case 'email.bounced':
+          nextStatus = 'bounced';
+          bouncedAt = eventTimestampIso;
+          errorMsg =
+            emailData?.bounce?.message ||
+            emailData?.bounce?.type ||
+            body.error_message ||
+            'Correo rebotado por el servidor destinatario (hard/soft bounce)';
+          isPermanent = true;
+          break;
+        case 'email.complained':
+          nextStatus = 'rejected';
+          errorMsg = 'Rechazado por el destinatario / Reporte de queja (spam complaint)';
+          isPermanent = true;
+          break;
+        case 'email.failed':
+          nextStatus = 'failed';
+          errorMsg =
+            emailData?.failed?.reason ||
+            body.error_message ||
+            'Fallo de entrega reportado por Resend';
+          isPermanent = true;
+          break;
+        default:
+          return new Response(
+            JSON.stringify({ success: true, ignored_event: resendType }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+      }
+
+      const logUpdatePayload: Record<string, any> = {
+        status: nextStatus,
+        last_webhook_event: resendType,
+        webhook_event_id: webhookEventId,
+        is_permanent_error: isPermanent,
+        error_message: errorMsg,
+      };
+      if (deliveredAt) logUpdatePayload.delivered_at = deliveredAt;
+      if (bouncedAt) logUpdatePayload.bounced_at = bouncedAt;
+
+      const { data: updatedLogs } = await supabaseAdmin
+        .from('notification_logs')
+        .update(logUpdatePayload)
+        .eq('provider_message_id', emailId)
+        .select('id, status, delivered_at, bounced_at, last_webhook_event');
+
+      // Mirror final deliverability status into email_logs as well
+      const emailLogUpdate: Record<string, any> = {
+        status: nextStatus,
+        last_webhook_event: resendType,
+        error_message: errorMsg,
+      };
+      if (deliveredAt) emailLogUpdate.delivered_at = deliveredAt;
+      if (bouncedAt) emailLogUpdate.bounced_at = bouncedAt;
+
+      await supabaseAdmin
+        .from('email_logs')
+        .update(emailLogUpdate)
+        .eq('provider_message_id', emailId);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          provider: 'resend',
+          provider_message_id: emailId,
+          webhook_event: resendType,
+          webhook_event_id: webhookEventId,
+          new_status: nextStatus,
+          updated_count: updatedLogs?.length || 0,
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 5B. ONESIGNAL PUSH DELIVERY WEBHOOK
+    if (event_type === 'onesignal_delivery_webhook') {
+      const osEvent = String(body.event || body.webhook_type || '');
+      const notificationId = String(body.notification_id || body.provider_message_id || body.id || '').trim();
+      const webhookEventId = String(body.webhook_event_id || `${osEvent}:${notificationId}`).trim();
+      const nowIso = new Date().toISOString();
+
+      if (!notificationId) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid OneSignal webhook payload: missing notification_id' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      let nextStatus = 'sent';
+      let errorMsg: string | null = null;
+      let deliveredAt: string | null = null;
+
+      if (osEvent === 'notification.delivered' || osEvent === 'notification.clicked') {
+        nextStatus = 'delivered';
+        deliveredAt = nowIso;
+      } else if (osEvent === 'notification.failed' || osEvent === 'notification.undelivered') {
+        nextStatus = 'failed';
+        errorMsg = body.reason || 'Push no entregado reportado por OneSignal';
+      }
+
+      const updateObj: Record<string, any> = {
+        status: nextStatus,
+        last_webhook_event: osEvent || 'onesignal_callback',
+        webhook_event_id: webhookEventId,
+      };
+      if (deliveredAt) updateObj.delivered_at = deliveredAt;
+      if (errorMsg) updateObj.error_message = errorMsg;
+
+      const { data: updatedOsLogs } = await supabaseAdmin
+        .from('notification_logs')
+        .update(updateObj)
+        .eq('provider_message_id', notificationId)
+        .select('id, status, delivered_at');
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          provider: 'onesignal',
+          provider_message_id: notificationId,
+          new_status: nextStatus,
+          updated_count: updatedOsLogs?.length || 0,
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 5C. LIVE PROVIDER & DOMAIN DELIVERABILITY HEALTH CHECK
+    if (event_type === 'check_providers_health') {
+      let resendDomains: any[] = [];
+      let resendWebhooks: any[] = [];
+      let resendApiStatus = 'unconfigured';
+      let collectiblesDomainStatus = 'unknown';
+
+      if (RESEND_API_KEY && RESEND_API_KEY !== 'mock-resend-key') {
+        try {
+          const [domRes, whRes] = await Promise.all([
+            fetch('https://api.resend.com/domains', {
+              headers: { Authorization: `Bearer ${RESEND_API_KEY}` },
+              signal: AbortSignal.timeout(8000),
+            }),
+            fetch('https://api.resend.com/webhooks', {
+              headers: { Authorization: `Bearer ${RESEND_API_KEY}` },
+              signal: AbortSignal.timeout(8000),
+            }),
+          ]);
+
+          if (domRes.ok) {
+            const domJson = await domRes.json().catch(() => ({}));
+            resendDomains = Array.isArray(domJson?.data) ? domJson.data : [];
+            resendApiStatus = 'connected';
+            const colDom = resendDomains.find((d: any) => d.name === 'collectibles.uy');
+            collectiblesDomainStatus = colDom ? colDom.status : 'not_found_in_resend';
+          } else {
+            resendApiStatus = `http_${domRes.status}`;
+          }
+
+          if (whRes.ok) {
+            const whJson = await whRes.json().catch(() => ({}));
+            resendWebhooks = Array.isArray(whJson?.data) ? whJson.data : [];
+          }
+        } catch (err: any) {
+          resendApiStatus = `error: ${err.message}`;
+        }
+      }
+
+      const { count: activeDevicesCount } = await supabaseAdmin
+        .from('user_notification_devices')
+        .select('*', { count: 'exact', head: true })
+        .eq('active', true);
+
+      const { data: rsSecretRow } = await supabaseAdmin
+        .from('site_settings')
+        .select('value')
+        .eq('key', 'resend_webhook_secret')
+        .maybeSingle();
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          checked_at: new Date().toISOString(),
+          canonical_domain: 'https://collectibles.uy',
+          temporary_access_domain: 'https://collectibles-ecommerce.vercel.app',
+          providers: {
+            resend: {
+              configured: Boolean(RESEND_API_KEY && RESEND_API_KEY !== 'mock-resend-key'),
+              api_status: resendApiStatus,
+              from_address: RESEND_FROM,
+              domain_collectibles_uy_status: collectiblesDomainStatus,
+              domains: resendDomains.map((d: any) => ({
+                id: d.id,
+                name: d.name,
+                status: d.status,
+                region: d.region,
+                created_at: d.created_at,
+              })),
+              webhooks_count: resendWebhooks.length,
+              webhooks: resendWebhooks.map((w: any) => ({
+                id: w.id,
+                endpoint: w.endpoint,
+                status: w.status,
+                events: w.events,
+              })),
+              svix_secret_configured: Boolean(Deno.env.get('RESEND_WEBHOOK_SECRET') || rsSecretRow?.value),
+            },
+            onesignal: {
+              configured: Boolean(ONESIGNAL_APP_ID && ONESIGNAL_REST_API_KEY),
+              app_id: ONESIGNAL_APP_ID,
+              rest_api_key_present: Boolean(ONESIGNAL_REST_API_KEY),
+              active_registered_devices: activeDevicesCount || 0,
+            },
+            whatsapp: {
+              configured: isWhatsAppConfigured,
+              status: isWhatsAppConfigured ? 'enabled' : 'disabled_missing_credentials',
+            },
+          },
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     if (event_type === 'process_outbox') {
       const workerId = `dispatcher-outbox-${Math.random().toString(36).slice(2, 8)}`;
       const batchSize = Math.min(50, Math.max(1, Number(body.batch_size || 20)));

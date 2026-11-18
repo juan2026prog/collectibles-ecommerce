@@ -189,14 +189,16 @@ export default function AdminNotifications() {
   });
 
   const errorLogs = logItems.filter((l) =>
-    ['failed', 'retrying', 'exhausted', 'provider_unavailable'].includes(l.status)
+    ['failed', 'retrying', 'exhausted', 'bounced', 'rejected', 'delivery_delayed', 'provider_unavailable'].includes(l.status)
   );
+  const historicalExpiredCount = logItems.filter((l) => l.status === 'expired').length;
   const errorOutbox = outboxItems.filter((o) =>
     ['failed', 'retrying', 'exhausted'].includes(o.status)
   );
 
   // Metrics
   const sentCount = logItems.filter((l) => l.status === 'sent' || l.status === 'delivered').length;
+  const deliveredConfirmedCount = logItems.filter((l) => l.status === 'delivered').length;
   const pendingOutboxCount = outboxItems.filter((o) =>
     ['pending', 'processing', 'retrying'].includes(o.status)
   ).length;
@@ -219,22 +221,57 @@ export default function AdminNotifications() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'sent':
       case 'delivered':
+        return 'bg-emerald-100 text-emerald-800 border-emerald-300';
+      case 'sent':
         return 'bg-emerald-50 text-emerald-700 border-emerald-200';
       case 'pending':
       case 'queued':
       case 'processing':
         return 'bg-blue-50 text-blue-700 border-blue-200';
       case 'retrying':
+      case 'delivery_delayed':
         return 'bg-amber-50 text-amber-700 border-amber-200';
       case 'provider_unavailable':
         return 'bg-orange-50 text-orange-700 border-orange-200';
+      case 'bounced':
+      case 'rejected':
       case 'failed':
       case 'exhausted':
         return 'bg-rose-50 text-rose-700 border-rose-200';
+      case 'expired':
+        return 'bg-slate-100 text-slate-600 border-slate-200';
       default:
         return 'bg-gray-50 text-gray-700 border-gray-200';
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'queued':
+        return 'En cola (queued)';
+      case 'sent':
+        return 'Aceptado API (sent)';
+      case 'delivered':
+        return 'Entregado (delivered)';
+      case 'delivery_delayed':
+        return 'Demorado (delayed)';
+      case 'bounced':
+        return 'Rebotado (bounced)';
+      case 'rejected':
+        return 'Rechazado (complained)';
+      case 'failed':
+        return 'Fallido (failed)';
+      case 'retrying':
+        return 'Reintentando';
+      case 'exhausted':
+        return 'Agotado DLQ';
+      case 'provider_unavailable':
+        return 'Proveedor No Disponible';
+      case 'expired':
+        return 'Histórico Legacy (expired)';
+      default:
+        return status;
     }
   };
 
@@ -311,7 +348,7 @@ export default function AdminNotifications() {
           </div>
           <p className="text-2xl font-black text-emerald-600 mt-2">{sentCount}</p>
           <p className="text-[11px] text-gray-500 mt-1">
-            Resend (notificaciones@collectibles.uy) & OneSignal
+            {deliveredConfirmedCount} entregados confirmados · {sentCount - deliveredConfirmedCount} aceptados API
           </p>
         </div>
 
@@ -331,13 +368,13 @@ export default function AdminNotifications() {
         <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-              Incidencias / Fallos
+              Incidencias Activas
             </span>
             <ShieldAlert className="w-4 h-4 text-rose-600" />
           </div>
           <p className="text-2xl font-black text-rose-600 mt-2">{totalErrorsCount}</p>
           <p className="text-[11px] text-gray-500 mt-1">
-            WhatsApp: Deshabilitado limpiamente (sin credenciales)
+            Histórico legacy (Jun–Ago): {historicalExpiredCount} archivados sin reproceso
           </p>
         </div>
       </div>
@@ -462,12 +499,18 @@ export default function AdminNotifications() {
                 className="text-xs font-bold border border-gray-200 rounded-xl px-3 py-2 bg-gray-50 text-gray-700"
               >
                 <option value="all">Todos los Estados</option>
-                <option value="sent">Enviado (sent)</option>
-                <option value="pending">Pendiente (pending)</option>
+                <option value="delivered">Entregado Confirmado (delivered)</option>
+                <option value="sent">Aceptado API (sent)</option>
+                <option value="queued">En Cola (queued)</option>
+                <option value="pending">Pendiente Outbox (pending)</option>
+                <option value="delivery_delayed">Entrega Demorada (delayed)</option>
                 <option value="retrying">Reintentando (retrying)</option>
+                <option value="bounced">Rebotado (bounced)</option>
+                <option value="rejected">Rechazado / Spam (rejected)</option>
                 <option value="failed">Fallido (failed)</option>
                 <option value="exhausted">Agotado DLQ (exhausted)</option>
-                <option value="provider_unavailable">Proveedor No Configurado</option>
+                <option value="provider_unavailable">Proveedor No Disponible</option>
+                <option value="expired">Histórico Legacy Jun-Ago (expired)</option>
               </select>
             )}
           </div>
@@ -617,14 +660,14 @@ export default function AdminNotifications() {
                             log.status
                           )}`}
                         >
-                          {log.status === 'sent' ? 'Enviado API' : log.status}
+                          {getStatusLabel(log.status)}
                         </span>
                       </td>
                       <td className="px-5 py-3.5 text-gray-500 max-w-xs truncate">
                         {log.error_message || log.provider_message_id || '-'}
                       </td>
                       <td className="px-5 py-3.5 text-right">
-                        {['failed', 'retrying', 'exhausted'].includes(log.status) &&
+                        {['failed', 'retrying', 'exhausted', 'bounced', 'rejected'].includes(log.status) &&
                           log.outbox_id && (
                             <button
                               type="button"
@@ -789,7 +832,7 @@ export default function AdminNotifications() {
                               log.status
                             )}`}
                           >
-                            {log.status}
+                            {getStatusLabel(log.status)}
                           </span>
                         </div>
                         <p className="text-gray-500 mt-1">{log.error_message || '-'}</p>
@@ -809,6 +852,23 @@ export default function AdminNotifications() {
                   ))}
                 </div>
               )}
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span className="font-bold text-slate-800">Archivo Histórico Legacy (Jun–Ago 2026):</span>{' '}
+                Los registros históricos del sistema anterior con estado <code className="font-mono bg-slate-200/70 px-1 py-0.5 rounded">expired</code> (canal WhatsApp pre-migración) se conservan para trazabilidad, se encuentran excluidos del reprocesamiento automático y no alteran los indicadores operativos actuales.
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter('expired');
+                  setActiveTab('logs');
+                }}
+                className="px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 shrink-0 cursor-pointer"
+              >
+                Ver archivo histórico
+              </button>
             </div>
           </div>
         )}

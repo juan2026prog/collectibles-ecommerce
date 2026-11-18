@@ -233,4 +233,182 @@ describe('Collectibles 2026 — Unified Notifications & Activity Center Suite (F
       expect(computeBackoffSec(10)).toBe(3600);
     });
   });
+
+  describe('6. Resend / Svix Webhook Verification & Final Deliverability State Machine', () => {
+    async function verifySvixSignatureTest(
+      rawBody: string,
+      svixId: string,
+      svixTimestamp: string,
+      svixSignature: string,
+      secret: string
+    ): Promise<boolean> {
+      const tsSeconds = Number(svixTimestamp);
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      if (!Number.isFinite(tsSeconds) || Math.abs(nowSeconds - tsSeconds) > 300) return false;
+
+      const cleanSecret = secret.startsWith('whsec_') ? secret.slice(6) : secret;
+      const binarySecret = atob(cleanSecret);
+      const keyBytes = new Uint8Array(binarySecret.length);
+      for (let i = 0; i < binarySecret.length; i++) keyBytes[i] = binarySecret.charCodeAt(i);
+
+      const cryptoKey = await crypto.subtle.importKey(
+        'raw',
+        keyBytes,
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      const sigBuffer = await crypto.subtle.sign(
+        'HMAC',
+        cryptoKey,
+        new TextEncoder().encode(`${svixId}.${svixTimestamp}.${rawBody}`)
+      );
+      const sigBytes = new Uint8Array(sigBuffer);
+      let binarySig = '';
+      for (let i = 0; i < sigBytes.length; i++) binarySig += String.fromCharCode(sigBytes[i]);
+      const expectedBase64 = btoa(binarySig);
+
+      return svixSignature
+        .split(' ')
+        .some((candidate) => candidate.trim() === `v1,${expectedBase64}`);
+    }
+
+    it('accepts a valid Svix HMAC-SHA256 signature and rejects tampered payloads or stale timestamps', async () => {
+      const secretKeyRaw = 'collectibles-resend-svix-test-secret-32b';
+      const secret = `whsec_${btoa(secretKeyRaw)}`;
+      const svixId = 'msg_2p9xyz12345';
+      const svixTimestamp = String(Math.floor(Date.now() / 1000));
+      const payload = JSON.stringify({
+        type: 'email.delivered',
+        data: { email_id: 're_msg_001', to: ['buyer@example.com'] },
+      });
+
+      // Compute valid signature
+      const keyBytes = new TextEncoder().encode(secretKeyRaw);
+      const cryptoKey = await crypto.subtle.importKey(
+        'raw',
+        keyBytes,
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      const sigBuf = await crypto.subtle.sign(
+        'HMAC',
+        cryptoKey,
+        new TextEncoder().encode(`${svixId}.${svixTimestamp}.${payload}`)
+      );
+      let bin = '';
+      new Uint8Array(sigBuf).forEach((b) => (bin += String.fromCharCode(b)));
+      const validHeader = `v1,${btoa(bin)}`;
+
+      expect(
+        await verifySvixSignatureTest(payload, svixId, svixTimestamp, validHeader, secret)
+      ).toBe(true);
+
+      // Tampered payload must fail
+      const tamperedPayload = JSON.stringify({
+        type: 'email.delivered',
+        data: { email_id: 're_msg_999' },
+      });
+      expect(
+        await verifySvixSignatureTest(tamperedPayload, svixId, svixTimestamp, validHeader, secret)
+      ).toBe(false);
+
+      // Stale timestamp (> 5 min old) must fail
+      const staleTs = String(Math.floor(Date.now() / 1000) - 600);
+      expect(
+        await verifySvixSignatureTest(payload, svixId, staleTs, validHeader, secret)
+      ).toBe(false);
+    });
+
+    it('transitions email states accurately (sent -> delivered / bounced / rejected) with idempotency and out-of-order guard', () => {
+      type LogState = {
+        status: string;
+        webhook_event_id: string | null;
+        delivered_at: string | null;
+        bounced_at: string | null;
+      };
+
+      const applyResendWebhook = (
+        current: LogState,
+        eventType: string,
+        eventId: string,
+        ts: string
+      ): { state: LogState; idempotentSkip: boolean; ignoredOutOfOrder: boolean } => {
+        if (current.webhook_event_id === eventId) {
+          return { state: current, idempotentSkip: true, ignoredOutOfOrder: false };
+        }
+        const terminal = ['delivered', 'bounced', 'rejected'];
+        if (
+          terminal.includes(current.status) &&
+          (eventType === 'email.sent' || eventType === 'email.delivery_delayed')
+        ) {
+          return { state: current, idempotentSkip: false, ignoredOutOfOrder: true };
+        }
+        const next: LogState = { ...current, webhook_event_id: eventId };
+        if (eventType === 'email.sent') next.status = 'sent';
+        else if (eventType === 'email.delivery_delayed') next.status = 'delivery_delayed';
+        else if (eventType === 'email.delivered') {
+          next.status = 'delivered';
+          next.delivered_at = ts;
+        } else if (eventType === 'email.bounced') {
+          next.status = 'bounced';
+          next.bounced_at = ts;
+        } else if (eventType === 'email.complained') {
+          next.status = 'rejected';
+        } else if (eventType === 'email.failed') {
+          next.status = 'failed';
+        }
+        return { state: next, idempotentSkip: false, ignoredOutOfOrder: false };
+      };
+
+      let log: LogState = {
+        status: 'sent',
+        webhook_event_id: null,
+        delivered_at: null,
+        bounced_at: null,
+      };
+
+      // 1. Delivery delayed
+      const step1 = applyResendWebhook(log, 'email.delivery_delayed', 'evt_1', '2026-11-18T15:00:00Z');
+      expect(step1.state.status).toBe('delivery_delayed');
+
+      // 2. Delivered confirmed
+      const step2 = applyResendWebhook(step1.state, 'email.delivered', 'evt_2', '2026-11-18T15:01:00Z');
+      expect(step2.state.status).toBe('delivered');
+      expect(step2.state.delivered_at).toBe('2026-11-18T15:01:00Z');
+
+      // 3. Duplicate webhook event_id is skipped idempotently
+      const step3 = applyResendWebhook(step2.state, 'email.delivered', 'evt_2', '2026-11-18T15:01:05Z');
+      expect(step3.idempotentSkip).toBe(true);
+      expect(step3.state.status).toBe('delivered');
+
+      // 4. Out-of-order email.sent after delivered is ignored without downgrading state
+      const step4 = applyResendWebhook(step2.state, 'email.sent', 'evt_0_late', '2026-11-18T15:02:00Z');
+      expect(step4.ignoredOutOfOrder).toBe(true);
+      expect(step4.state.status).toBe('delivered');
+    });
+  });
+
+  describe('7. Historical Legacy Segregation & RLS Immutability Rules', () => {
+    it('excludes historical legacy expired logs from active error counters', () => {
+      const sampleLogs = [
+        { id: '1', status: 'expired', channel: 'whatsapp' },
+        { id: '2', status: 'expired', channel: 'whatsapp' },
+        { id: '3', status: 'sent', channel: 'email' },
+        { id: '4', status: 'delivered', channel: 'email' },
+        { id: '5', status: 'bounced', channel: 'email' },
+      ];
+
+      const activeErrors = sampleLogs.filter((l) =>
+        ['failed', 'retrying', 'exhausted', 'bounced', 'rejected', 'delivery_delayed', 'provider_unavailable'].includes(
+          l.status
+        )
+      );
+      const historicalExpired = sampleLogs.filter((l) => l.status === 'expired');
+
+      expect(activeErrors.map((e) => e.id)).toEqual(['5']);
+      expect(historicalExpired.length).toBe(2);
+    });
+  });
 });
