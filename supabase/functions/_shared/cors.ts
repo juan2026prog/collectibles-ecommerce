@@ -20,6 +20,8 @@ export function getCorsOrigin(req: Request): string {
       if (host === 'collectibles.uy' || host === 'www.collectibles.uy') return origin;
       if (host === 'collectibles-ecommerce.vercel.app') return origin;
       if (host.endsWith('-collectibles-ecommerce.vercel.app')) return origin;
+      // Vercel Preview URLs for this project's dedicated team.
+      if (/^collectibles-ecommerce-[a-z0-9]+-juans-projects-05818af2\.vercel\.app$/.test(host)) return origin;
     }
 
     if (protocol === 'http:' || protocol === 'https:') {

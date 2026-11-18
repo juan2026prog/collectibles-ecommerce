@@ -1,299 +1,70 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
-import { corsHeaders } from "../_shared/cors.ts";
-import { enqueueMlSyncEvent } from "../_shared/mercadolibre.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { triggerZincVerificationIfNeeded } from "../_shared/order-payments.ts";
 
-async function createSignature(secretKey: string, xLogin: string, xDate: string, rawBody: string) {
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secretKey),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-
-  const payload = `${xLogin}${xDate}${rawBody}`;
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
-  const bytes = new Uint8Array(signature);
-  const binary = Array.from(bytes).map((byte) => String.fromCharCode(byte)).join("");
-  return `V2-HMAC-SHA256, Signature: ${btoa(binary)}`;
+const jsonHeaders = { "Content-Type": "application/json" };
+const reply = (body: Record<string,unknown>, status = 200) => new Response(JSON.stringify(body), { status, headers: jsonHeaders });
+async function signature(secret: string, login: string, date: string, raw: string) {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(login + date + raw));
+  return "V2-HMAC-SHA256, Signature: " + btoa(String.fromCharCode(...new Uint8Array(sig)));
 }
-
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
+  if (req.method !== "POST") return reply({ error: "METHOD_NOT_ALLOWED" }, 405);
   try {
-    const rawBody = await req.text();
-    const dlocalData = JSON.parse(rawBody || "{}");
-    const { order_id, status, id: paymentId } = dlocalData;
-    if (!order_id) throw new Error("Missing order_id");
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-    );
-
-    const { data: settings } = await supabase.from("site_settings").select("key, value");
-    const config = Object.fromEntries((settings || []).map((item: any) => [item.key, item.value]));
-    const isSandbox = config.payments_dlocal_go_sandbox === "true";
-    const xLogin = (config.payments_dlocal_go_x_login || "").trim();
-    const secretKey = (config.payments_dlocal_go_secret_key || "").trim();
-    const xDate = req.headers.get("X-Date") || "";
-    const authorization = req.headers.get("Authorization") || "";
-
-    if (xLogin && secretKey) {
-      const expectedSignature = await createSignature(secretKey, xLogin, xDate, rawBody);
-      if (!authorization || authorization !== expectedSignature) {
-        console.error("Invalid dLocal signature", { xDate, authorization });
-        return new Response(JSON.stringify({ error: "Invalid webhook signature" }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    } else if (!isSandbox) {
-      console.error("dLocal webhook credentials missing in production");
-      return new Response(JSON.stringify({ error: "Webhook signature credentials are missing" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const raw = await req.text();
+    const event = JSON.parse(raw);
+    const url = Deno.env.get("SUPABASE_URL") || "";
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+    if (!url || !serviceKey) return reply({ error: "SERVER_NOT_CONFIGURED" }, 503);
+    const db = createClient(url, serviceKey);
+    const { data: settings, error: settingsError } = await db.from("site_settings").select("key,value");
+    if (settingsError) throw settingsError;
+    const cfg = Object.fromEntries((settings || []).map((x: any) => [x.key,x.value]));
+    const login = String(cfg.payments_dlocal_go_x_login || "").trim();
+    const secret = String(cfg.payments_dlocal_go_secret_key || "").trim();
+    const date = req.headers.get("X-Date") || "";
+    const auth = req.headers.get("Authorization") || "";
+    if (!login || !secret) return reply({ error: "SIGNATURE_NOT_CONFIGURED" }, 503);
+    if (!date || !auth) return reply({ error: "UNAUTHENTICATED" }, 401);
+    // Reject stale callbacks to reduce replay surface. Reconciliation handles older events.
+    const timestamp = Date.parse(date);
+    if (!Number.isFinite(timestamp) || Math.abs(Date.now() - timestamp) > 300000) return reply({ error: "STALE_EVENT" }, 401);
+    const expected = await signature(secret,login,date,raw);
+    const a = new TextEncoder().encode(auth), b = new TextEncoder().encode(expected);
+    if (a.length !== b.length || a.reduce((diff, v, i) => diff | (v ^ b[i]),0) !== 0) return reply({ error: "INVALID_SIGNATURE" }, 401);
+    const orderId = String(event.order_id || "");
+    const paymentId = String(event.id || "");
+    if (!orderId || !paymentId) return reply({ error: "MISSING_PAYMENT_ID" }, 400);
+    const { data: order, error: orderError } = await db.from("orders").select("id,status,is_international,payment_method,payment_id,total_amount,currency,payment_processed_at,payment_status").eq("id",orderId).maybeSingle();
+    if (orderError || !order || order.is_international !== true || order.payment_method !== "dlocalgo" || String(order.payment_id) !== paymentId) return reply({ error: "PAYMENT_ORDER_MISMATCH" }, 409);
+    // Never trust callback status/amount alone; reconcile against provider.
+    const apiKey = String(cfg.payments_dlocal_go_api_key || "").trim();
+    if (!apiKey) return reply({ error: "API_KEY_NOT_CONFIGURED" }, 503);
+    const apiBase = cfg.payments_dlocal_go_sandbox === "true" ? "https://api-sbx.dlocalgo.com" : "https://api.dlocalgo.com";
+    const providerResponse = await fetch(`${apiBase}/v1/payments/${encodeURIComponent(paymentId)}`, { headers: { Authorization: `Bearer ${apiKey}:${secret}`, Accept: "application/json" } });
+    if (!providerResponse.ok) return reply({ error: "PROVIDER_VERIFICATION_UNAVAILABLE" }, 503);
+    const remote = await providerResponse.json();
+    if (String(remote.id) !== paymentId || String(remote.order_id) !== orderId ||
+      String(remote.currency || "").toUpperCase() !== String(order.currency || "").toUpperCase() ||
+      !Number.isFinite(Number(remote.amount)) ||
+      Math.abs(Number(remote.amount) - Number(order.total_amount)) > 0.01) return reply({ error: "FINANCIAL_MISMATCH" }, 409);
+    const status = String(remote.status || "").toUpperCase();
+    if (["PAID","APPROVED"].includes(status)) {
+      const { data: confirmed, error: confirmError } = await db.rpc("confirm_payment_atomic", { p_order_id: orderId, p_payment_provider: "dlocalgo", p_payment_ref: paymentId });
+      if (confirmError || !confirmed?.success) return reply({ error: "PAYMENT_RECONCILIATION_REQUIRED" }, 503);
+      // A failed Zinc dispatch must be retried by reconciliation; never reverse an approved payment here.
+      try { await triggerZincVerificationIfNeeded(db,url,serviceKey,orderId); }
+      catch (e) { console.error("ZINC_DISPATCH_RECONCILIATION_REQUIRED",orderId,e); return reply({ error: "ZINC_DISPATCH_RECONCILIATION_REQUIRED" },503); }
+      return reply({ received: true, status: "paid" });
     }
-
-    let dbStatus = "pending";
-    if (status === "PAID" || status === "APPROVED") dbStatus = "paid";
-    if (status === "REJECTED" || status === "CANCELLED") dbStatus = "cancelled";
-    if (status === "REFUNDED") dbStatus = "refunded";
-    if (status === "CHARGEBACK") dbStatus = "chargeback";
-
-    const { data: existingOrder } = await supabase
-      .from("orders")
-      .select("status, payment_processed_at")
-      .eq("id", order_id)
-      .single();
-
-    if (existingOrder?.payment_processed_at && dbStatus === "paid") {
-      return new Response(JSON.stringify({ received: true, skipped: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (dbStatus === "refunded") {
-      // Revert status and stock
-      await supabase
-        .from("orders")
-        .update({
-          status: "cancelada",
-          payment_status: "refunded",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", order_id);
-
-      await supabase
-        .from("order_suborders")
-        .update({
-          status: "refunded",
-          liquidation_status: "cancelled",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("parent_order_id", order_id)
-        .neq("liquidation_status", "paid");
-
-      const { data: dbPayment } = await supabase
-        .from("payments")
-        .select("id, amount")
-        .eq("order_id", order_id)
-        .eq("provider", "dlocalgo")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const paymentUuid = dbPayment?.id || null;
-      const paymentAmount = dbPayment?.amount || 0;
-
-      if (paymentUuid) {
-        await supabase
-          .from("payments")
-          .update({
-            status: "refunded",
-            refund_amount: paymentAmount,
-            refund_date: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", paymentUuid);
-      }
-
-      // Create refunds record if not exists
-      const { data: existingRefund } = await supabase
-        .from("refunds")
-        .select("id")
-        .eq("order_id", order_id)
-        .eq("status", "completed")
-        .maybeSingle();
-
-      if (!existingRefund) {
-        await supabase.from("refunds").insert({
-          order_id: order_id,
-          payment_id: paymentUuid,
-          provider: "dlocalgo",
-          amount: paymentAmount,
-          reason: "Reembolso notificado por webhook de dLocal Go",
-          status: "completed",
-          processed_at: new Date().toISOString(),
-          api_response: dlocalData
-        });
-      }
-
-      return new Response(JSON.stringify({ received: true, mappedStatus: dbStatus }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (dbStatus === "chargeback") {
-      await supabase
-        .from("orders")
-        .update({
-          payment_status: "charged_back",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", order_id);
-
-      await supabase
-        .from("order_suborders")
-        .update({
-          status: "claim_open",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("parent_order_id", order_id);
-
-      const { data: dbPayment } = await supabase
-        .from("payments")
-        .select("id, amount")
-        .eq("order_id", order_id)
-        .eq("provider", "dlocalgo")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const paymentUuid = dbPayment?.id || null;
-      const paymentAmount = dbPayment?.amount || 0;
-
-      if (paymentUuid) {
-        await supabase
-          .from("payments")
-          .update({
-            status: "failed",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", paymentUuid);
-      }
-
-      // Create dispute record
-      await supabase.from("payment_disputes").insert({
-        provider: "dlocalgo",
-        payment_id: paymentUuid,
-        order_id: order_id,
-        dispute_reason: "charged_back",
-        status: "open",
-        amount: paymentAmount
-      });
-
-      return new Response(JSON.stringify({ received: true, mappedStatus: dbStatus }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const updateData: Record<string, any> = {
-      status: dbStatus,
-      payment_status: dbStatus === "paid" ? "approved" : dbStatus === "cancelled" ? "cancelled" : "pending_payment",
-      payment_id: paymentId?.toString() || null,
-      updated_at: new Date().toISOString(),
-    };
-    if (dbStatus === "paid") {
-      updateData.payment_processed_at = new Date().toISOString();
-    }
-
-    const { error } = await supabase
-      .from("orders")
-      .update(updateData)
-      .eq("id", order_id);
-
-    if (error) throw error;
-
-    if (dbStatus === "paid") {
-      const { data: orderItems } = await supabase
-        .from("order_items")
-        .select("*")
-        .eq("order_id", order_id);
-
-      if (orderItems) {
-        for (const item of orderItems) {
-          if (item.variant_id) {
-            const { error: invErr } = await supabase.rpc("decrement_inventory", {
-              p_variant_id: item.variant_id,
-              p_quantity: item.quantity,
-            });
-            if (invErr) {
-              console.error("Inventory error:", invErr);
-            } else {
-              // Enqueue ML stock sync event
-              await enqueueMlSyncEvent(supabase, item.variant_id);
-            }
-          }
-        }
-      }
-
-      const functionHeaders = {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-      };
-
-      await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/calculate-commissions`, {
-        method: "POST",
-        headers: functionHeaders,
-        body: JSON.stringify({ order_id }),
-      }).catch((err) => console.error("Error triggering commissions:", err));
-
-      const { data: order } = await supabase
-        .from("orders")
-        .select("*")
-        .eq("id", order_id)
-        .single();
-
-      if (order) {
-        await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/transactional-emails`, {
-          method: "POST",
-          headers: functionHeaders,
-          body: JSON.stringify({
-            type: "UPDATE",
-            table: "orders",
-            record: order,
-            old_record: { ...order, status: "pending" },
-          }),
-        }).catch((err) => console.error("Error triggering email:", err));
-
-        await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/soydelivery-sync`, {
-          method: "POST",
-          headers: functionHeaders,
-          body: JSON.stringify({ order_id }),
-        }).catch((err) => console.error("Error triggering SoyDelivery:", err));
-
-        await triggerZincVerificationIfNeeded(
-          supabase,
-          Deno.env.get("SUPABASE_URL") ?? "",
-          Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-          order_id
-        );
-      }
-    }
-
-    return new Response(JSON.stringify({ received: true, mappedStatus: dbStatus }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (err: any) {
-    console.error("dLocal Webhook Error:", err);
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
+    // Refunds, disputes and declines are never automatically interpreted as proof
+    // that Zinc was cancelled or shipping collaborator funds were recovered.
+    // Keep financial state untouched until a dedicated reconciliation workflow verifies it.
+    console.warn("DLOCAL_MANUAL_RECONCILIATION_REQUIRED",orderId,paymentId,status);
+    return reply({ received: true, status, reconciliation_required: true });
+  } catch (e) {
+    console.error("DLOCAL_WEBHOOK_FAILURE",e);
+    return reply({ error: "WEBHOOK_FAILED" },500);
   }
 });
