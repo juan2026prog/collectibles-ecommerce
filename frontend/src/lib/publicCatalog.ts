@@ -16,24 +16,24 @@ export async function fetchPublicCatalog(filters: Record<string, unknown>, signa
       });
 
       if (mode === 'facets' && Object.keys(cleanFilters).some(k => !['mode', 'limit', 'availability'].includes(k))) {
-        const { data } = await PublicCatalogProvider.getPublicCatalogCompatible(cleanFilters);
-        return data;
+        const { data, staleFallback } = await PublicCatalogProvider.getPublicCatalogCompatible(cleanFilters);
+        return staleFallback ? { ...data, stale_fallback: true } : data;
       }
 
       if (mode === 'facets') {
-        const { data } = await PublicCatalogProvider.getPublicCatalogCompatible(cleanFilters);
-        return data;
+        const { data, staleFallback } = await PublicCatalogProvider.getPublicCatalogCompatible(cleanFilters);
+        return staleFallback ? { ...data, stale_fallback: true } : data;
       }
 
-      const { data } = await PublicCatalogProvider.getTaxonomies(
+      const { data, staleFallback } = await PublicCatalogProvider.getTaxonomies(
         filters.brand_id ? String(filters.brand_id) : undefined
       );
-      return data;
+      return staleFallback ? { ...data, stale_fallback: true } : data;
     } catch (err) {
+      // Failover to /api/public-catalog on kill-switch OR transient Worker 5xx/timeout/network failure
       if (!(err instanceof CatalogKillSwitchError)) {
-        throw err;
+        console.warn('[publicCatalog] Worker taxonomies/facets failed; failing over to /api/public-catalog:', (err as Error)?.message);
       }
-      // Runtime kill-switch activated: fall through immediately to /api/public-catalog
     }
   }
 
@@ -46,19 +46,20 @@ export async function fetchPublicCatalog(filters: Record<string, unknown>, signa
           cleanFilters[key] = typeof value === 'boolean' || typeof value === 'number' ? value : String(value);
         }
       });
-      const { data } = await PublicCatalogProvider.getProducts(cleanFilters);
+      const { data, staleFallback } = await PublicCatalogProvider.getProducts(cleanFilters);
       const count = data.count ?? data.pagination?.total ?? data.products?.length ?? 0;
       registerMediaVariants(data.image_variants || []);
       return {
         ...data,
         count,
         totalCount: count,
+        ...(staleFallback ? { stale_fallback: true } : {}),
       };
     } catch (err) {
+      // Failover to /api/public-catalog on kill-switch OR transient Worker 5xx/timeout/network failure
       if (!(err instanceof CatalogKillSwitchError)) {
-        throw err;
+        console.warn('[publicCatalog] Worker products failed; failing over to /api/public-catalog:', (err as Error)?.message);
       }
-      // Runtime kill-switch activated: fall through immediately to /api/public-catalog
     }
   }
 

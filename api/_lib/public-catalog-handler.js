@@ -110,7 +110,7 @@ export function createCatalogHandler(getRepository = getCatalogRepository) {
               slug: p.slug || p.id,
               title: p.title,
               description: p.description,
-              base_price: Number(p.origin === 'international' ? p.final_price_usd * (filters.exchangeRate || 1) : (p.base_price || 0)),
+              base_price: Number(p.origin === 'international' ? (p.final_price_usd || 0) : (p.base_price || 0)),
               created_at: p.created_at,
               status: p.status,
               is_active: p.is_active,

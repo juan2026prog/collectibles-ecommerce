@@ -1,5 +1,43 @@
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import { createPublicSupabase } from './public-supabase.js';
+
+export const SNAPSHOT_ENVELOPE_VERSION = 2;
+
+export function computeSnapshotChecksum(raw) {
+  return crypto.createHash('sha256').update(JSON.stringify(raw)).digest('hex');
+}
+
+export function isValidRawCatalogSnapshot(raw) {
+  if (!raw || typeof raw !== 'object') return false;
+  const requiredArrays = ['local', 'international', 'categories', 'brands', 'licenses', 'themes', 'licenseThemes', 'groups'];
+  return requiredArrays.every(key => Array.isArray(raw[key]));
+}
+
+export function serializeVerifiedSnapshot(raw, loadedAt) {
+  const checksum = computeSnapshotChecksum(raw);
+  return JSON.stringify({
+    version: SNAPSHOT_ENVELOPE_VERSION,
+    loadedAt,
+    checksum,
+    raw,
+  });
+}
+
+export function parseVerifiedSnapshot(jsonString, nowMs, maxAgeMs) {
+  const saved = JSON.parse(jsonString);
+  if (!saved || typeof saved !== 'object') return null;
+  if (saved.version !== undefined && saved.version !== SNAPSHOT_ENVELOPE_VERSION) return null;
+  if (typeof saved.loadedAt !== 'number' || !Number.isFinite(saved.loadedAt)) return null;
+  const age = nowMs - saved.loadedAt;
+  if (age < 0 || age >= maxAgeMs) return null;
+  if (!isValidRawCatalogSnapshot(saved.raw)) return null;
+  const expectedChecksum = computeSnapshotChecksum(saved.raw);
+  if (saved.version === SNAPSHOT_ENVELOPE_VERSION || saved.checksum !== undefined) {
+    if (saved.checksum !== expectedChecksum) return null;
+  }
+  return { raw: saved.raw, loadedAt: saved.loadedAt, checksum: expectedChecksum };
+}
 
 export const normalize = (value = '') => String(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 const SYNONYMS = {
@@ -282,7 +320,11 @@ export function createCatalogRepository(client, now = Date.now) {
       snapshot = prepareCatalog(raw);
       loadedAt = now(); retryAt = 0;
       try {
-        fs.promises.writeFile(DISK_SNAPSHOT_PATH, JSON.stringify({ raw, loadedAt })).catch(() => {});
+        const tmpPath = `${DISK_SNAPSHOT_PATH}.${process.pid}.${Date.now()}.tmp`;
+        const serialized = serializeVerifiedSnapshot(raw, loadedAt);
+        fs.promises.writeFile(tmpPath, serialized)
+          .then(() => fs.promises.rename(tmpPath, DISK_SNAPSHOT_PATH))
+          .catch(() => { fs.promises.unlink(tmpPath).catch(() => {}); });
       } catch {}
       return snapshot;
     } catch (error) {
@@ -301,10 +343,10 @@ export function createCatalogRepository(client, now = Date.now) {
         try {
           if (fs.existsSync(DISK_SNAPSHOT_PATH)) {
             const diskContent = fs.readFileSync(DISK_SNAPSHOT_PATH, 'utf8');
-            const saved = JSON.parse(diskContent);
-            if (saved?.raw && (now() - (saved.loadedAt || 0) < MAX_FALLBACK_AGE_MS)) {
-              snapshot = prepareCatalog(saved.raw);
-              loadedAt = saved.loadedAt;
+            const verified = parseVerifiedSnapshot(diskContent, now(), MAX_FALLBACK_AGE_MS);
+            if (verified) {
+              snapshot = prepareCatalog(verified.raw);
+              loadedAt = verified.loadedAt;
             }
           }
         } catch {}

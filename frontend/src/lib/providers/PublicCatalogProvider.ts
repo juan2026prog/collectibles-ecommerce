@@ -238,22 +238,77 @@ export function isCatalogDomainEnabled(domain: CatalogDomainFlag): boolean {
   return Boolean(cfg.domains[domain]);
 }
 
+const MAX_PERSISTENT_SNAPSHOTS = 30;
+const SNAPSHOT_SCHEMA_VERSION = 2;
+
+function isValidCatalogPayload(data: unknown): boolean {
+  if (!data || typeof data !== 'object') return false;
+  if ((data as any).ok === false) return false;
+  return true;
+}
+
+function prunePersistentSnapshots(now: number): void {
+  try {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    const keys: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (k && k.startsWith(SNAPSHOT_PREFIX)) keys.push(k);
+    }
+    const entries: Array<{ storageKey: string; staleUntil: number }> = [];
+    for (const k of keys) {
+      try {
+        const parsed = JSON.parse(window.localStorage.getItem(k) || 'null');
+        if (!parsed || typeof parsed.staleUntil !== 'number' || parsed.staleUntil <= now || !isValidCatalogPayload(parsed.data)) {
+          window.localStorage.removeItem(k);
+        } else {
+          entries.push({ storageKey: k, staleUntil: parsed.staleUntil });
+        }
+      } catch {
+        window.localStorage.removeItem(k);
+      }
+    }
+    if (entries.length > MAX_PERSISTENT_SNAPSHOTS) {
+      entries.sort((a, b) => a.staleUntil - b.staleUntil);
+      const toRemove = entries.length - MAX_PERSISTENT_SNAPSHOTS;
+      for (let i = 0; i < toRemove; i++) {
+        window.localStorage.removeItem(entries[i].storageKey);
+      }
+    }
+  } catch {
+    // ignore storage errors
+  }
+}
+
 function readPersistentSnapshot<T>(key: string): T | null {
   try {
     if (typeof window === 'undefined' || !window.localStorage) return null;
     const raw = window.localStorage.getItem(SNAPSHOT_PREFIX + key);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (parsed && parsed.staleUntil > Date.now()) {
+    const now = Date.now();
+    if (
+      parsed &&
+      typeof parsed.staleUntil === 'number' &&
+      parsed.staleUntil > now &&
+      isValidCatalogPayload(parsed.data)
+    ) {
       return parsed.data as T;
     }
+    // Remove expired or corrupt entry
+    window.localStorage.removeItem(SNAPSHOT_PREFIX + key);
   } catch {
-    // ignore storage errors
+    try {
+      window.localStorage.removeItem(SNAPSHOT_PREFIX + key);
+    } catch {
+      // ignore
+    }
   }
   return null;
 }
 
 function writePersistentSnapshot(key: string, data: unknown, ttlMs: number, staleMs: number): void {
+  if (!isValidCatalogPayload(data)) return;
   const now = Date.now();
   memoryCache.set(key, {
     data,
@@ -265,8 +320,9 @@ function writePersistentSnapshot(key: string, data: unknown, ttlMs: number, stal
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.setItem(
         SNAPSHOT_PREFIX + key,
-        JSON.stringify({ data, expiresAt: now + ttlMs, staleUntil: now + staleMs })
+        JSON.stringify({ v: SNAPSHOT_SCHEMA_VERSION, data, expiresAt: now + ttlMs, staleUntil: now + staleMs })
       );
+      prunePersistentSnapshots(now);
     }
   } catch {
     // ignore quota errors
@@ -489,6 +545,9 @@ export async function fetchFromCloudflareCatalog<T>(
       }
 
       const json = (await res.json()) as T;
+      if (!isValidCatalogPayload(json)) {
+        throw new Error('Cloudflare Catalog API returned invalid or error payload');
+      }
       consecutiveWorkerFailures = 0;
       circuitOpenUntil = 0;
       writePersistentSnapshot(cacheKey, json, ttlMs, staleMs);

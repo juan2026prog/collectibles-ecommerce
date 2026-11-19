@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import fs from 'node:fs';
 import { prepareCatalog, parseFilters, selectCatalog, createCatalogRepository } from '../../../api/_lib/public-catalog.js';
 import { createCatalogHandler } from '../../../api/_lib/public-catalog-handler.js';
 
@@ -80,6 +81,12 @@ describe('Catalog aggregation preserves self-excluding facets', () => {
 });
 
 describe('Snapshot cancellation and safe diagnostics', () => {
+  beforeEach(() => {
+    fs.rmSync('/tmp/collectibles_catalog_snapshot.json', { force: true });
+  });
+  afterEach(() => {
+    fs.rmSync('/tmp/collectibles_catalog_snapshot.json', { force: true });
+  });
   it('aborts in-flight siblings and removes queued pages after the first failed snapshot read', async () => {
     let fail = true;
     const dispatched: string[] = [], aborted: string[] = [];
@@ -189,17 +196,20 @@ describe('Snapshot cancellation and safe diagnostics', () => {
     const diskPath = '/tmp/collectibles_catalog_snapshot.json';
     const raw = fixture();
     fs.writeFileSync(diskPath, JSON.stringify({ raw, loadedAt: 5000 }), 'utf8');
+    try {
+      let now = 60000;
+      const failingClient = {
+        rpc: async () => { throw new Error('Database down'); },
+        from() { throw new Error('Database down'); },
+      };
 
-    let now = 60000;
-    const failingClient = {
-      rpc: async () => { throw new Error('Database down'); },
-      from() { throw new Error('Database down'); },
-    };
-
-    const repo = createCatalogRepository(failingClient as any, () => now);
-    const recovered = await repo.get();
-    expect(recovered.stale).toBe(false);
-    expect(recovered.catalog.rows).toHaveLength(4);
-    expect(recovered.catalog.rows[0].title).toBe('First');
+      const repo = createCatalogRepository(failingClient as any, () => now);
+      const recovered = await repo.get();
+      expect(recovered.stale).toBe(false);
+      expect(recovered.catalog.rows).toHaveLength(4);
+      expect(recovered.catalog.rows[0].title).toBe('First');
+    } finally {
+      fs.rmSync(diskPath, { force: true });
+    }
   });
 });
