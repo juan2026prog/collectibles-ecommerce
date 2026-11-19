@@ -16,11 +16,12 @@
 --   NO automatic backfill is executed here. Review ambiguous historical rows
 --   first using the commented dry-run query at the bottom of this file.
 --
--- Rollback Plan:
---   1. Restore 33-arg `create_order_atomic_v2` from `20271102090000_atomic_order_idempotency.sql`.
---   2. DROP INDEX IF EXISTS idx_orders_destination_country_status_created;
---   3. ALTER TABLE public.orders DROP COLUMN IF EXISTS destination_country_code;
---   4. ALTER TABLE public.order_suborders DROP COLUMN IF EXISTS destination_country_code;
+-- Safe Non-Destructive Rollback Plan (NEVER drops columns that may hold order data):
+--   1. Restore 33-arg `create_order_atomic_v2` from `20271102090000_atomic_order_idempotency.sql`
+--      (keeping `destination_country_code` column and all persisted values intact).
+--   2. Optionally drop only the secondary index if needed:
+--      DROP INDEX IF EXISTS idx_orders_destination_country_status_created;
+--   3. DO NOT execute `ALTER TABLE ... DROP COLUMN destination_country_code`.
 -- =============================================================================
 
 ALTER TABLE public.orders

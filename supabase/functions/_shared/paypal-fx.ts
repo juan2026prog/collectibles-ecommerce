@@ -106,3 +106,50 @@ export function resolvePayPalChargeFromRate(
     fxRateEffectiveAt: rateRow.effective_at || new Date(nowMs).toISOString(),
   };
 }
+
+export interface PayPalCaptureVerificationInput {
+  expectedPaymentCurrency?: string | null;
+  expectedPaymentTotal?: number | string | null;
+  captureData: any;
+}
+
+/**
+ * Verifies that the PayPal capture response matches the authoritative
+ * payment_currency and payment_total persisted during create-payment.
+ * Backward-compatible: only enforces when expectedPaymentTotal > 0 and expectedPaymentCurrency is set.
+ */
+export function verifyPayPalCaptureReconciliation(input: PayPalCaptureVerificationInput): {
+  verified: boolean;
+  capturedCurrency: string | null;
+  capturedAmount: number | null;
+} {
+  const captureUnit = input.captureData?.purchase_units?.[0]?.payments?.captures?.[0];
+  const capturedCurrency = captureUnit?.amount?.currency_code
+    ? String(captureUnit.amount.currency_code).toUpperCase().trim()
+    : null;
+  const capturedAmount = captureUnit?.amount?.value !== undefined
+    ? Number(captureUnit.amount.value)
+    : null;
+
+  const expectedCurrency = input.expectedPaymentCurrency
+    ? String(input.expectedPaymentCurrency).toUpperCase().trim()
+    : null;
+  const expectedAmount = input.expectedPaymentTotal !== undefined && input.expectedPaymentTotal !== null
+    ? Number(input.expectedPaymentTotal)
+    : null;
+
+  if (expectedCurrency && expectedAmount !== null && Number.isFinite(expectedAmount) && expectedAmount > 0) {
+    if (!capturedCurrency || capturedAmount === null || !Number.isFinite(capturedAmount)) {
+      throw new Error("PAYPAL_CAPTURE_AMOUNT_MISSING: PayPal no devolvió importe o moneda capturada para reconciliación.");
+    }
+    if (capturedCurrency !== expectedCurrency) {
+      throw new Error(`PAYPAL_CURRENCY_MISMATCH: Esperado ${expectedCurrency}, capturado ${capturedCurrency}.`);
+    }
+    if (Math.abs(capturedAmount - expectedAmount) > 0.01) {
+      throw new Error(`PAYPAL_AMOUNT_MISMATCH: Esperado ${expectedAmount.toFixed(2)} ${expectedCurrency}, capturado ${capturedAmount.toFixed(2)} ${capturedCurrency}.`);
+    }
+    return { verified: true, capturedCurrency, capturedAmount };
+  }
+
+  return { verified: false, capturedCurrency, capturedAmount };
+}

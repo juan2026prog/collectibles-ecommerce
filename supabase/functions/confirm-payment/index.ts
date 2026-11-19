@@ -6,6 +6,7 @@ import { verifyOptionalAuth } from "../_shared/auth.ts";
 import { finalizeOrderIfNeeded, orderSummary } from "../_shared/order-payments.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { getGuestTokenSecret, verifyOrderAccessToken } from "../_shared/order-token.ts";
+import { verifyPayPalCaptureReconciliation } from "../_shared/paypal-fx.ts";
 
 declare const Deno: any;
 
@@ -129,6 +130,13 @@ Deno.serve(async (req: Request) => {
       if (!captureRes.ok || (captureData.status !== "COMPLETED" && captureData.status !== "APPROVED")) {
         throw new Error(`PayPal Capture Failed: ${captureData.message || captureData.status}`);
       }
+
+      // Reconcile captured currency & amount against the authoritative payment_total/payment_currency persisted by create-payment
+      verifyPayPalCaptureReconciliation({
+        expectedPaymentCurrency: currentOrder.payment_currency,
+        expectedPaymentTotal: currentOrder.payment_total,
+        captureData,
+      });
 
       const paidOrder = await finalizeOrderIfNeeded(
         supabaseClient,

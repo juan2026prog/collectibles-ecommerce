@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { resolvePayPalChargeFromRate, type ExchangeRateRow } from '../../../supabase/functions/_shared/paypal-fx';
+import {
+  resolvePayPalChargeFromRate,
+  verifyPayPalCaptureReconciliation,
+  type ExchangeRateRow,
+} from '../../../supabase/functions/_shared/paypal-fx';
 import { resolveMarketForCountry } from '../../../supabase/functions/_shared/market-engine/index';
 import { resolveMarket, INITIAL_DEFAULT_MARKETS } from '../lib/marketEngine/marketEngine';
 import {
@@ -77,6 +81,42 @@ describe('P0/P1 Hardening — PayPal Authoritative FX Conversion', () => {
   it('rejects zero or negative amounts', () => {
     expect(() => resolvePayPalChargeFromRate(0, 'UYU', verifiedUyuRate)).toThrow(/PAYPAL_INVALID_AMOUNT/);
     expect(() => resolvePayPalChargeFromRate(-50, 'USD', null)).toThrow(/PAYPAL_INVALID_AMOUNT/);
+  });
+
+  it('reconciles PayPal capture currency & amount strictly against expected payment_total', () => {
+    const validCapture = {
+      status: 'COMPLETED',
+      purchase_units: [{ payments: { captures: [{ amount: { currency_code: 'USD', value: '100.00' } }] } }],
+    };
+    const ok = verifyPayPalCaptureReconciliation({
+      expectedPaymentCurrency: 'USD',
+      expectedPaymentTotal: 100.0,
+      captureData: validCapture,
+    });
+    expect(ok.verified).toBe(true);
+    expect(ok.capturedAmount).toBe(100);
+
+    expect(() =>
+      verifyPayPalCaptureReconciliation({
+        expectedPaymentCurrency: 'USD',
+        expectedPaymentTotal: 100.0,
+        captureData: {
+          status: 'COMPLETED',
+          purchase_units: [{ payments: { captures: [{ amount: { currency_code: 'USD', value: '50.00' } }] } }],
+        },
+      })
+    ).toThrow(/PAYPAL_AMOUNT_MISMATCH/);
+
+    expect(() =>
+      verifyPayPalCaptureReconciliation({
+        expectedPaymentCurrency: 'USD',
+        expectedPaymentTotal: 100.0,
+        captureData: {
+          status: 'COMPLETED',
+          purchase_units: [{ payments: { captures: [{ amount: { currency_code: 'EUR', value: '100.00' } }] } }],
+        },
+      })
+    ).toThrow(/PAYPAL_CURRENCY_MISMATCH/);
   });
 });
 
