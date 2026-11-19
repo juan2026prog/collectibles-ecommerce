@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import { getMasterFields } from './productFieldRegistry';
 import { supabase } from '../lib/supabase';
 import { CONDITION_OPTIONS } from '../config/conditionConfig';

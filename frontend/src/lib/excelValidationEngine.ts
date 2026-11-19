@@ -1,4 +1,3 @@
-import ExcelJS from 'exceljs';
 import { getMasterFields } from './productFieldRegistry';
 import type { ProductFieldDefinition } from './productFieldRegistry';
 import { fetchCatalogMetadataForTemplate, sanitizeExcelDefinedName, OFFICIAL_SYSTEM_BADGES } from './bulkTemplateGenerator';
@@ -51,6 +50,7 @@ export async function buildDynamicXlsxWorkbook(options: BuildExcelOptions): Prom
     ? masterFields.filter(f => f.importable && f.key !== 'id')
     : masterFields.filter(f => selectedKeys.includes(f.key));
 
+  const { default: ExcelJS } = await import('exceljs');
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'Collectibles Uruguay';
   workbook.created = new Date();

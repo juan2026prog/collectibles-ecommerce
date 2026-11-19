@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import { getMasterFields } from './productFieldRegistry';
 
 export interface ExportProductItem {

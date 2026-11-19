@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 import { Mail, Plus, Send, Trash2, Save, X, Users, Clock, CheckCircle2, Download, AlertCircle, History } from 'lucide-react';
 import { useToast } from '../../components/admin/Toast';
 import { useConfirmModal } from '../../components/admin/ConfirmModal';
-import * as XLSX from 'xlsx';
+// XLSX loaded dynamically on exportSubscribers()
 
 export default function AdminMailing() {
   const [activeTab, setActiveTab] = useState<'campaigns' | 'logs'>('campaigns');
@@ -106,6 +106,7 @@ export default function AdminMailing() {
     const { data } = await supabase.from('profiles').select('email, first_name, last_name, created_at, is_vendor, is_artist, is_affiliate').not('email', 'is', null);
     if (!data || data.length === 0) return toast.error('No hay suscriptores para exportar.');
     
+    const XLSX = await import('xlsx');
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Suscriptores');

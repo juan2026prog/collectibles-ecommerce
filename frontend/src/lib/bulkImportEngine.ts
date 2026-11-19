@@ -1,4 +1,3 @@
-import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabase';
 import { findFieldDefinition, getMasterFields } from './productFieldRegistry';
 import type { ProductFieldDefinition } from './productFieldRegistry';
@@ -89,6 +88,7 @@ export async function readRawFileRows(file: File): Promise<{ rawRows: Record<str
     });
   }
 
+  const XLSX = await import('xlsx');
   const workbook = XLSX.read(arrayBuffer, { type: 'array' });
   let firstSheetName = workbook.SheetNames.find(s => s === 'Productos' || s === 'Plantilla de Importacion') || workbook.SheetNames[0];
   const sheet = workbook.Sheets[firstSheetName];
