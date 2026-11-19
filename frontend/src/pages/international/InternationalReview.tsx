@@ -64,22 +64,8 @@ export default function InternationalReview() {
         }
       }
 
-      // If everything is OK, simulate order success
-      const orderPayload = {
-        orderId: 'INT-' + Math.floor(Math.random() * 1000000),
-        items,
-        courierInfo,
-        totals: {
-          productsUsd: totalUsd,
-          uruboxUsd: totalUruboxEstimated,
-          totalUsd: totalWithCourier
-        },
-        status: 'pending_purchase',
-        date: new Date().toISOString()
-      };
-      
-      localStorage.setItem('collectibles_international_order_preview', JSON.stringify(orderPayload));
-      navigate('/internacional/checkout/success');
+      // SECURITY GUARD: Never fabricate a fake completed order ID or redirect to a simulated success screen.
+      setError('Verificación en vivo completada. La emisión de órdenes internacionales desde esta vista de prueba está deshabilitada; utilizá el flujo de checkout oficial cuando el canal esté habilitado.');
 
     } catch (err: any) {
       console.error(err);

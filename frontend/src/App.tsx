@@ -289,14 +289,16 @@ function App() {
                   </ProtectedRoute>
                 } />
                 
-                {/* International Checkout Simulation */}
+                {/* International Checkout Simulation (SuperAdmin only — never publicly exposed) */}
                 <Route path="/internacional/cart" element={
-                  <StorefrontLayout />
+                  <ProtectedRoute requireSuperAdmin>
+                    <StorefrontLayout />
+                  </ProtectedRoute>
                 }>
                   <Route index element={<InternationalCart />} />
                 </Route>
                 <Route path="/internacional/checkout" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requireSuperAdmin>
                     <StorefrontLayout />
                   </ProtectedRoute>
                 }>

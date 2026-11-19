@@ -425,23 +425,43 @@ function sanitizePayloadForLogging(data: any) {
     if (missingProductIds.length > 0) {
       const { data: intlProds, error: intlError } = await supabase
         .from("international_products")
-        .select("id, title, final_price_uyu")
+        .select("id, title, final_price_usd, final_price_uyu")
         .in("id", missingProductIds);
 
       if (intlError) {
         console.error("Error fetching international products:", intlError);
       } else if (intlProds) {
         for (const ip of intlProds) {
+          const usdPrice = Number(ip.final_price_usd);
+          if (!Number.isFinite(usdPrice) || usdPrice <= 0) {
+            return new Response(JSON.stringify({
+              success: false,
+              error: `INTERNATIONAL_PRICE_INVALID: El producto internacional "${ip.title || ip.id}" no tiene un precio USD válido.`,
+              details: {
+                reason: "INTERNATIONAL_PRICE_INVALID",
+                product_id: ip.id
+              }
+            }), {
+              status: 400,
+              headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }
+            });
+          }
+
           productsList.push({
             id: ip.id,
             title: ip.title,
-            base_price: ip.final_price_uyu, // Use UYU price
+            base_price: usdPrice, // Canonical USD price — never mix final_price_uyu into USD orders
             category_id: null,
             brand_id: null,
             vendor_id: null,
             vendor_store_id: null,
             vendors: null,
             product_tags: [],
+            metadata: {
+              currency: 'USD',
+              price_currency: 'USD',
+              source_platform: 'zinc'
+            },
             is_international: true
           });
         }
@@ -1525,20 +1545,25 @@ function sanitizePayloadForLogging(data: any) {
       const countryCode = countryValidation.countryCode;
       
       // Check database market status if table exists
-      const { data: dbMarket } = await supabase
+      const { data: dbMarket, error: dbMarketErr } = await supabase
         .from('international_markets')
-        .select('market_status, checkout_enabled')
+        .select('market_status, checkout_enabled, metadata')
         .eq('country_code', countryCode)
         .maybeSingle();
 
-      const isLiveAndEnabled = dbMarket ? (dbMarket.market_status === 'LIVE' && dbMarket.checkout_enabled === true) : false;
+      const isKillSwitched = dbMarket?.metadata?.kill_switch === true;
+      const isLiveAndEnabled = !dbMarketErr && dbMarket
+        ? (dbMarket.market_status === 'LIVE' && dbMarket.checkout_enabled === true && !isKillSwitched)
+        : false;
 
-      // Fail-Safe: If market is not explicitly LIVE and checkout_enabled, reject immediately
+      // Fail-Safe: If market is not explicitly LIVE, checkout_enabled, and not kill-switched, reject immediately
       if (!isLiveAndEnabled) {
         return new Response(
           JSON.stringify({
             success: false,
-            error: `El checkout para ${targetCountry} se encuentra temporalmente inactivo mientras se completa la integración logística y aduanera oficial.`
+            error: isKillSwitched
+              ? `El checkout para ${targetCountry} se encuentra pausado por seguridad operativa (Kill Switch activo).`
+              : `El checkout para ${targetCountry} se encuentra temporalmente inactivo mientras se completa la integración logística y aduanera oficial.`
           }),
           { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
         );
@@ -1674,6 +1699,22 @@ function sanitizePayloadForLogging(data: any) {
     let isShippingQuoteRequired = false;
 
     if (isArgentinaOrder) {
+      // Legacy MBE Argentina checkout is permanently deprecated to eliminate UYU+USD mixing
+      // and prepare for the certified Deblex international checkout flow.
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "LEGACY_MBE_DEPRECATED: El flujo heredado MBE para Argentina fue deshabilitado. El checkout internacional de Argentina operará exclusivamente mediante el flujo certificado Deblex.",
+          details: {
+            reason: "LEGACY_MBE_DEPRECATED",
+            country_code: countryValidation.countryCode
+          }
+        }),
+        { status: 400, headers: { ...getCorsHeaders(req), 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (false && isArgentinaOrder) {
       // Authoritative database FX lookup for USD_ARS
       try {
         const { data: arsFxRow, error: fxErr } = await supabase
@@ -1916,10 +1957,13 @@ function sanitizePayloadForLogging(data: any) {
       }
     }
 
+    // Backend-authoritative order currency: NEVER trust payload.currency to relabel local UYU items as USD.
+    const authoritativeOrderCurrency: "USD" | "UYU" = hasUSDOrderItems ? "USD" : "UYU";
+
     const { data: orderResult, error: rpcError } = await supabase.rpc("create_order_atomic_v2", {
       p_customer_id: user?.id || null,
       p_total_amount: totalAmount,
-      p_currency: isArgentinaOrder ? "USD" : (hasUSDOrderItems ? "USD" : (payload.currency || "UYU")),
+      p_currency: authoritativeOrderCurrency,
       p_payment_method: payload.payment_method,
       p_customer_email: payload.customer_email,
       p_customer_phone: payload.customer_phone || null,
@@ -1934,7 +1978,7 @@ function sanitizePayloadForLogging(data: any) {
       p_email_opt_in: payload.email_opt_in,
       p_whatsapp_opt_in: payload.whatsapp_opt_in,
       p_logistics_consent: payload.logistics_consent || false,
-      p_display_currency: isArgentinaOrder ? "ARS" : (payload.currency || "UYU"),
+      p_display_currency: isArgentinaOrder ? "ARS" : authoritativeOrderCurrency,
       p_display_subtotal: isArgentinaOrder ? subtotalArs : subtotal,
       p_display_shipping: isArgentinaOrder ? intlShippingCostArs : totalShippingCost,
       p_display_total: isArgentinaOrder ? totalArs : totalAmount,
@@ -1949,7 +1993,8 @@ function sanitizePayloadForLogging(data: any) {
       p_shipping_weight_chargeable_kg: isArgentinaOrder ? totalRealWeightKg : null,
       p_shipping_rule_applied: isArgentinaOrder ? shippingRuleApplied : null,
       p_is_shipping_quote_required: isArgentinaOrder ? isShippingQuoteRequired : false,
-      p_checkout_request_key: payload.checkout_request_key || `anon_req_${crypto.randomUUID()}`
+      p_checkout_request_key: payload.checkout_request_key || `anon_req_${crypto.randomUUID()}`,
+      p_destination_country_code: countryValidation.countryCode
     });
 
     if (rpcError) {

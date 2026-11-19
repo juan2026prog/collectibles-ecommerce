@@ -7,6 +7,7 @@ import { getGuestTokenSecret, generateOrderAccessToken, verifyOrderAccessToken }
 
 import { startMercadoPagoPreference, PaymentRecoveryError } from "../_shared/mercadopago-recovery.ts";
 import { paymentTelemetry } from "../_shared/payment-telemetry.ts";
+import { resolvePayPalChargeFromRate } from "../_shared/paypal-fx.ts";
 
 interface PaymentRequest {
   provider: "dlocal" | "paypal" | "mercadopago";
@@ -235,10 +236,24 @@ serve(async (req: Request) => {
         throw new Error(`PayPal Auth Error: ${JSON.stringify(tokenData)}`);
       }
 
-      const paypalCurrency = currency === "UYU" ? "USD" : currency;
-      const paypalAmount = paypalCurrency === "USD" && currency === "UYU"
-        ? (amount / 42).toFixed(2)
-        : amount.toFixed(2);
+      let usdUyuRateRow = null;
+      if (currency === "UYU") {
+        const { data: fxRow, error: fxErr } = await supabaseAdmin
+          .from("currency_exchange_rates")
+          .select("base_currency, quote_currency, rate, status, is_active, is_manual_override, source_name, provider, effective_at, expires_at, override_expires_at")
+          .eq("base_currency", "USD")
+          .eq("quote_currency", "UYU")
+          .maybeSingle();
+
+        if (fxErr) {
+          throw new Error(`PAYPAL_FX_DB_ERROR: No se pudo consultar la cotización USD/UYU (${fxErr.message}).`);
+        }
+        usdUyuRateRow = fxRow;
+      }
+
+      const paypalCharge = resolvePayPalChargeFromRate(amount, currency, usdUyuRateRow);
+      const paypalCurrency = paypalCharge.paypalCurrency;
+      const paypalAmount = paypalCharge.paypalAmount;
 
       const orderPayload = {
         intent: "CAPTURE",
@@ -284,15 +299,50 @@ serve(async (req: Request) => {
         throw new Error(`PayPal no devolvio URL de aprobacion. Response: ${JSON.stringify(orderResult)}`);
       }
 
+      const nowIso = new Date().toISOString();
+
       await supabaseAdmin
         .from("orders")
         .update({
           payment_id: orderResult.id,
           payment_method: "paypal",
           payment_status: "redirected",
-          updated_at: new Date().toISOString(),
+          payment_currency: paypalCharge.paypalCurrency,
+          payment_total: paypalCharge.paypalAmountNumeric,
+          fx_rate: paypalCharge.fxRate,
+          fx_rate_source: paypalCharge.fxRateSource,
+          fx_rate_timestamp: paypalCharge.fxRateEffectiveAt,
+          updated_at: nowIso,
         })
         .eq("id", orderId);
+
+      // Persist auditable PayPal FX payment attempt (non-blocking if idempotency key already exists)
+      try {
+        await supabaseAdmin.from("payment_attempts").insert({
+          order_id: orderId,
+          user_id: order.customer_id || null,
+          provider: "paypal",
+          payment_method_type: "paypal",
+          amount: paypalCharge.paypalAmountNumeric,
+          currency: paypalCharge.paypalCurrency,
+          normalized_status: "redirected",
+          provider_status: orderResult.status || "PAYER_ACTION_REQUIRED",
+          provider_payment_id: orderResult.id,
+          idempotency_key: `paypal_order:${orderId}:${orderResult.id}`,
+          initiated_at: nowIso,
+          metadata: {
+            original_amount: paypalCharge.originalAmount,
+            original_currency: paypalCharge.originalCurrency,
+            paypal_amount: paypalCharge.paypalAmountNumeric,
+            paypal_currency: paypalCharge.paypalCurrency,
+            fx_rate: paypalCharge.fxRate,
+            fx_rate_source: paypalCharge.fxRateSource,
+            fx_rate_effective_at: paypalCharge.fxRateEffectiveAt,
+          },
+        });
+      } catch (attemptErr) {
+        console.warn("[create-payment] PayPal attempt audit insert warning:", attemptErr);
+      }
 
       return new Response(JSON.stringify({ checkout_url: approvalLink.href }), {
         headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },

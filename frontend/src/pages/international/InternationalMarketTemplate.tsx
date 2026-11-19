@@ -29,19 +29,21 @@ export default function InternationalMarketTemplate() {
 
   const market = getMarket(countryCode || 'CL');
   const isAdminAuthorized = Boolean(isSuperAdmin || profile?.is_admin || profile?.is_super_admin);
+  const isNonLiveStagingState = market.isPreview || market.isReadyForLive || market.marketStatus === 'SANDBOX';
+  const isKillSwitched = market.metadata?.kill_switch === true;
 
   // If international public access is globally disabled and user is not an authorized Admin previewing, block access
   if (!intlPublicEnabled && !isAdminAuthorized) {
     return <Navigate to="/" replace />;
   }
 
-  // Previews of markets are strictly restricted to authorized administrators
-  if (market.isPreview && !isAdminAuthorized) {
+  // Non-LIVE states (PREVIEW, SANDBOX, READY_FOR_LIVE) are strictly restricted to authorized administrators
+  if (isNonLiveStagingState && !isAdminAuthorized) {
     return <Navigate to="/" replace />;
   }
 
-  // If market is DISABLED and not previewable, redirect
-  if (market.isDisabled) {
+  // If market is DISABLED or Kill-Switched, block access
+  if (market.isDisabled || (isKillSwitched && !isAdminAuthorized)) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-16 text-center">
         <div className="inline-flex p-4 rounded-full bg-surface-800 text-surface-400 mb-4">

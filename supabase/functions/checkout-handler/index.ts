@@ -100,18 +100,27 @@ Deno.serve(async (req: any) => {
     const isSkyPostal = ['CL', 'PE', 'BR', 'CO', 'EC'].includes(countryCode);
     const isImportHub = ['UY', 'AR'].includes(countryCode);
 
-    // Check market status if international
-    if (isSkyPostal || countryCode === 'MX') {
-      const { data: market } = await supabase
+    // Fail-closed server-side market authorization for ALL non-UY destinations (including AR and SkyPostal).
+    // Only LIVE + checkout_enabled + non-kill-switched markets may proceed.
+    if (countryCode !== 'UY') {
+      const { data: market, error: marketErr } = await supabase
         .from('international_markets')
-        .select('*')
+        .select('market_status, checkout_enabled, metadata')
         .eq('country_code', countryCode)
         .maybeSingle();
 
-      if (!market || market.market_status === 'DISABLED') {
+      const isKillSwitched = market?.metadata?.kill_switch === true;
+      const isAuthorized = !marketErr && market
+        && market.market_status === 'LIVE'
+        && market.checkout_enabled === true
+        && !isKillSwitched;
+
+      if (!isAuthorized) {
         return new Response(JSON.stringify({
           success: false,
-          error: `El mercado de destino (${countryCode}) no está disponible para compras.`
+          error: isKillSwitched
+            ? `El mercado de destino (${countryCode}) se encuentra pausado por Kill Switch operativo.`
+            : `El mercado de destino (${countryCode}) no está habilitado para compras productivas.`
         }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }

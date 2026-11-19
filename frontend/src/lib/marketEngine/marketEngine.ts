@@ -170,8 +170,9 @@ export function resolveMarket(
     const isReadyForLive = found.market_status === 'READY_FOR_LIVE';
     const isLive = found.market_status === 'LIVE';
     const isDisabled = found.market_status === 'DISABLED';
-    const canCheckout = Boolean(found.checkout_enabled && isLive);
-    const canBrowse = Boolean(found.public_enabled || isPreview || isReadyForLive);
+    const isKillSwitched = found.metadata?.kill_switch === true;
+    const canCheckout = Boolean(found.checkout_enabled && isLive && !isKillSwitched);
+    const canBrowse = Boolean(!isKillSwitched && (found.public_enabled || isPreview || isReadyForLive));
     const commerceMode = found.commerce_mode || (found.country_code === 'UY' ? 'FULL_COMMERCE' : 'INTERNATIONAL_ONLY');
 
     return {

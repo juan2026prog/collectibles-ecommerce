@@ -470,7 +470,9 @@ export default function AdminInternationalMarkets() {
                             <option value="PREVIEW">PREVIEW</option>
                             <option value="SANDBOX">SANDBOX</option>
                             <option value="READY_FOR_LIVE">READY_FOR_LIVE</option>
-                            <option value="LIVE">LIVE</option>
+                            {market.market_status === 'LIVE' && (
+                              <option value="LIVE" disabled>LIVE (gestionar en Go-Live Gate)</option>
+                            )}
                           </select>
                         )}
                       </div>
@@ -767,41 +769,107 @@ export default function AdminInternationalMarkets() {
                   </span>
                 </div>
 
-                <button
-                  onClick={() => setShowGoLiveModal(true)}
-                  disabled={selectedGateMarket?.market_status === 'LIVE'}
-                  className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all shadow-lg ${
-                    selectedGateMarket?.market_status === 'LIVE'
-                      ? 'bg-surface-800 text-surface-500 border border-surface-700 cursor-not-allowed'
-                      : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
-                  }`}
-                >
-                  {selectedGateMarket?.market_status === 'LIVE'
-                    ? `Mercado ${selectedGateMarket?.country_name} Activo (LIVE)`
-                    : `🚀 Activar ${selectedGateMarket?.country_name} LIVE`}
-                </button>
+                {(() => {
+                  const gateChecks = [
+                    {
+                      name: `Estado previo READY_FOR_LIVE`,
+                      desc: 'El mercado debe haber completado PREVIEW y SANDBOX y encontrarse en READY_FOR_LIVE.',
+                      ok: selectedGateMarket?.market_status === 'READY_FOR_LIVE' || selectedGateMarket?.market_status === 'LIVE',
+                    },
+                    {
+                      name: `Entorno de proveedor en Producción`,
+                      desc: 'provider_environment debe estar configurado en "production" (no "test").',
+                      ok: selectedGateMarket?.provider_environment === 'production',
+                    },
+                    {
+                      name: `Kill Switch inactivo`,
+                      desc: 'No debe existir un bloqueo de emergencia activo en metadata.kill_switch.',
+                      ok: selectedGateMarket?.metadata?.kill_switch !== true,
+                    },
+                    {
+                      name: `Credenciales y API oficial certificadas`,
+                      desc: 'Requiere metadata.readiness_checklist.api_ready = true tras prueba real.',
+                      ok: selectedGateMarket?.metadata?.readiness_checklist?.api_ready === true,
+                    },
+                    {
+                      name: `Compliance aduanero y fiscal certificado`,
+                      desc: 'Requiere metadata.readiness_checklist.compliance_ready = true con validación profesional.',
+                      ok: selectedGateMarket?.metadata?.readiness_checklist?.compliance_ready === true,
+                    },
+                    {
+                      name: `Control financiero, pagos y E2E certificados`,
+                      desc: 'Requiere financial_ready = true y e2e_certified = true.',
+                      ok: selectedGateMarket?.metadata?.readiness_checklist?.financial_ready === true
+                        && selectedGateMarket?.metadata?.readiness_checklist?.e2e_certified === true,
+                    },
+                  ];
+                  const canActivateLive = selectedGateMarket?.market_status !== 'LIVE' && gateChecks.every(g => g.ok);
+                  return (
+                    <button
+                      onClick={() => setShowGoLiveModal(true)}
+                      disabled={!canActivateLive}
+                      title={!canActivateLive && selectedGateMarket?.market_status !== 'LIVE' ? 'Completá todas las verificaciones obligatorias antes de activar LIVE' : undefined}
+                      className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all shadow-lg ${
+                        !canActivateLive
+                          ? 'bg-surface-800 text-surface-500 border border-surface-700 cursor-not-allowed'
+                          : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/20'
+                      }`}
+                    >
+                      {selectedGateMarket?.market_status === 'LIVE'
+                        ? `Mercado ${selectedGateMarket?.country_name} Activo (LIVE)`
+                        : canActivateLive
+                          ? `🚀 Activar ${selectedGateMarket?.country_name} LIVE`
+                          : `🔒 Requisitos Go-Live incompletos`}
+                    </button>
+                  );
+                })()}
               </div>
             </div>
 
-            {/* 10-Point Readiness Checklist */}
+            {/* Verifiable Readiness Checklist (no hardcoded ok: true) */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
-                { name: `Compliance Aduanero ${selectedGateMarket?.country_name}`, desc: 'Documentos requeridos, límites FOB y categorías prohibidas validadas.', ok: true },
-                { name: `Tarifarios Contractuales SkyPostal 2026`, desc: 'Tramos oficiales y recargo adicional 500g verificados contra Excel.', ok: true },
-                { name: `Fuel Surcharge Index EIA`, desc: '10 bandas contractuales de queroseno spot de aviación EIA.', ok: true },
-                { name: `Pricing & Margen Comercial`, desc: 'Fórmula 35% de markup comercial sobre costo del proveedor.', ok: true },
-                { name: `Checkout Server-Side Authority`, desc: 'Validación de cotización, frescura y validación aduanera en backend.', ok: true },
-                { name: `SkyPostal Adapter Architecture`, desc: 'Mapeo de endpoints de tracking, labels y manifiestos listo.', ok: true },
-                { name: `Two-Leg Logistics & Tracking`, desc: 'Separación estricta de Leg 1 (USA Inbound) y Leg 2 (SkyPostal).', ok: true },
-                { name: `Security & RLS Hardening`, desc: 'Políticas RLS en Supabase, aislamiento de datos y cero filtraciones.', ok: true },
-                { name: `Control Financiero & Variación`, desc: 'Separación de Markup vs Margen y alertas de margen negativo.', ok: true },
-                { name: `Kill Switch Disponible`, desc: 'Mecanismo de desactivación instantánea individual y global.', ok: true }
+                {
+                  name: `Estado previo READY_FOR_LIVE`,
+                  desc: 'El mercado debe encontrarse en estado READY_FOR_LIVE antes del pase a producción.',
+                  ok: selectedGateMarket?.market_status === 'READY_FOR_LIVE' || selectedGateMarket?.market_status === 'LIVE',
+                },
+                {
+                  name: `Entorno de proveedor en Producción`,
+                  desc: 'provider_environment debe ser "production" (actual: ' + (selectedGateMarket?.provider_environment || 'test') + ').',
+                  ok: selectedGateMarket?.provider_environment === 'production',
+                },
+                {
+                  name: `Kill Switch inactivo`,
+                  desc: 'metadata.kill_switch debe ser false para permitir compras.',
+                  ok: selectedGateMarket?.metadata?.kill_switch !== true,
+                },
+                {
+                  name: `Credenciales y API oficial del operador`,
+                  desc: 'Requiere certificación real (metadata.readiness_checklist.api_ready = true).',
+                  ok: selectedGateMarket?.metadata?.readiness_checklist?.api_ready === true,
+                },
+                {
+                  name: `Compliance aduanero y fiscal validado`,
+                  desc: 'Requiere aprobación formal (metadata.readiness_checklist.compliance_ready = true).',
+                  ok: selectedGateMarket?.metadata?.readiness_checklist?.compliance_ready === true,
+                },
+                {
+                  name: `Pagos, control financiero y E2E certificados`,
+                  desc: 'Requiere financial_ready = true y e2e_certified = true.',
+                  ok: selectedGateMarket?.metadata?.readiness_checklist?.financial_ready === true
+                    && selectedGateMarket?.metadata?.readiness_checklist?.e2e_certified === true,
+                },
               ].map((gate, idx) => (
                 <div
                   key={idx}
                   className="p-3.5 rounded-xl bg-surface-950/60 border border-surface-800 flex items-start gap-3"
                 >
-                  <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                  {gate.ok ? (
+                    <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                  )}
                   <div>
                     <span className="font-bold text-white text-xs block">{gate.name}</span>
                     <span className="text-surface-400 text-[11px] leading-relaxed">{gate.desc}</span>

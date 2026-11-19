@@ -6,6 +6,8 @@ import { useCurrency } from '../contexts/CurrencyContext';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useSiteSettings } from '../hooks/useSiteSettings';
+import { useInternationalMarkets } from '../hooks/useInternationalMarkets';
+import { resolveCheckoutUsdEquivalent, isMarketCheckoutAuthorized, shouldGeoIpSwitchCountry } from '../lib/checkoutCurrencyGuard';
 import { analytics } from '../lib/analytics';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import { createCheckoutOrder, getPublicPaymentProviders, startCheckoutPayment, type PublicPaymentProvider } from '../lib/payments';
@@ -132,7 +134,10 @@ export default function Checkout() {
   const { items, total, addItem, updateQuantity, removeItem } = useCartContext();
   const { settings, loaded: settingsLoaded } = useSiteSettings();
   const freeShippingThreshold = Number(settings['free_shipping_threshold'] || 4000);
-  const { selectedCurrency, setSelectedCurrency, convertUSDToARS, convertARSToUSD, getFxRateUsdToArs } = useCurrency();
+  const { selectedCurrency, setSelectedCurrency, exchangeRates, convertUSDToARS, getFxRateUsdToArs } = useCurrency();
+  const { getMarket } = useInternationalMarkets();
+  const argentinaMarket = getMarket('AR');
+  const isArgentinaCheckoutEnabled = isMarketCheckoutAuthorized(argentinaMarket);
   const { user } = useAuth();
   const [internationalShippingRate, setInternationalShippingRate] = useState<number>(0);
 
@@ -323,14 +328,14 @@ export default function Checkout() {
     };
   }, [items, convertUSDToARS]);
 
-  // Switch to ARS for Argentina by default
+  // Switch to ARS for Argentina ONLY when Argentina checkout is LIVE & authorized
   useEffect(() => {
-    if (form.country === 'Argentina') {
+    if (form.country === 'Argentina' && isArgentinaCheckoutEnabled) {
       if (selectedCurrency !== 'ARS') {
         setSelectedCurrency('ARS');
       }
     }
-  }, [form.country, selectedCurrency, setSelectedCurrency]);
+  }, [form.country, isArgentinaCheckoutEnabled, selectedCurrency, setSelectedCurrency]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [checkoutError, setCheckoutError] = useState('');
   const initiateCheckoutTrackedRef = useRef(false);
@@ -425,9 +430,9 @@ export default function Checkout() {
         sessionStorage.setItem("geoip_detected", "true");
 
         if (data && (data.country_code === "AR" || data.country === "Argentina")) {
-          console.log("[GeoIP] Argentina detected via IP.");
-          const hasSetManual = localStorage.getItem("user_selected_country");
-          if (!hasSetManual) {
+          const hasSetManual = Boolean(localStorage.getItem("user_selected_country"));
+          if (shouldGeoIpSwitchCountry("AR", hasSetManual, argentinaMarket)) {
+            console.log("[GeoIP] Argentina detected via IP and market is LIVE.");
             setForm(prev => ({
               ...prev,
               country: "Argentina",
@@ -4712,7 +4717,17 @@ export default function Checkout() {
                   )}
 
                   {form.country === 'Argentina' && (
-                    mbeShippingDetails.isQuoteRequired ? (
+                    !isArgentinaCheckoutEnabled ? (
+                      <div className="mt-4 p-4 bg-amber-950/80 border border-amber-500/40 rounded-xl space-y-2 text-xs text-amber-200">
+                        <div className="flex items-center gap-2 font-bold text-amber-300 text-sm">
+                          <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+                          <span>Envíos a Argentina temporalmente deshabilitados</span>
+                        </div>
+                        <p className="leading-relaxed">
+                          El checkout internacional para Argentina todavía no está habilitado mientras completamos la certificación logística y aduanera oficial. Seleccioná <strong>Uruguay</strong> para comprar en Collectibles Uruguay.
+                        </p>
+                      </div>
+                    ) : mbeShippingDetails.isQuoteRequired ? (
                       <div className="mt-4 p-4 bg-orange-950/80 border border-orange-500/40 rounded-xl space-y-2 text-xs text-orange-200">
                         <div className="flex items-center gap-2 font-bold text-orange-300 text-sm">
                           <AlertCircle className="w-5 h-5 text-orange-400 shrink-0" />
@@ -4727,34 +4742,48 @@ export default function Checkout() {
                           </p>
                         )}
                       </div>
-                    ) : (
-                      <div className="mt-4 p-4 bg-indigo-950/70 border border-indigo-500/30 rounded-xl space-y-3 text-xs text-indigo-200">
-                        <div className="flex justify-between items-center text-sm font-bold text-white border-b border-indigo-500/20 pb-2">
-                          <span>Cobro final en tarjeta:</span>
-                          <span className="text-indigo-400 text-lg font-black">
-                            USD {convertARSToUSD(grandTotal).toFixed(2)}
-                          </span>
+                    ) : (() => {
+                      const usdEquivalent = resolveCheckoutUsdEquivalent(
+                        grandTotal,
+                        cartCurrencyInfo.canonicalCurrency || 'UYU',
+                        exchangeRates
+                      );
+                      return (
+                        <div className="mt-4 p-4 bg-indigo-950/70 border border-indigo-500/30 rounded-xl space-y-3 text-xs text-indigo-200">
+                          <div className="flex justify-between items-center text-sm font-bold text-white border-b border-indigo-500/20 pb-2">
+                            <span>Cobro final en tarjeta:</span>
+                            <span className="text-indigo-400 text-lg font-black">
+                              {usdEquivalent !== null ? `USD ${usdEquivalent.toFixed(2)}` : 'Cotización no disponible'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between text-indigo-300">
+                            <span>Tipo de cambio de referencia:</span>
+                            <span className="font-mono font-bold">1 USD = ARS {getFxRateUsdToArs()}</span>
+                          </div>
+                          <p className="text-[11px] text-slate-300 leading-relaxed bg-black/30 p-2.5 rounded-lg border border-white/5">
+                            💳 <strong>Cobro internacional en USD:</strong> El cobro de tu tarjeta Visa o Mastercard se realizará en dólares estadounidenses ({usdEquivalent !== null ? `USD ${usdEquivalent.toFixed(2)}` : 'monto en USD'}). El banco emisor en Argentina aplicará su tipo de cambio oficial, impuestos, percepciones o cargos de tarjeta internacional.
+                          </p>
                         </div>
-                        <div className="flex justify-between text-indigo-300">
-                          <span>Tipo de cambio de referencia:</span>
-                          <span className="font-mono font-bold">1 USD = ARS {getFxRateUsdToArs()}</span>
-                        </div>
-                        <p className="text-[11px] text-slate-300 leading-relaxed bg-black/30 p-2.5 rounded-lg border border-white/5">
-                          💳 <strong>Cobro internacional en USD:</strong> El cobro de tu tarjeta Visa o Mastercard se realizará en dólares estadounidenses (USD {convertARSToUSD(grandTotal).toFixed(2)}). El banco emisor en Argentina aplicará su tipo de cambio oficial, impuestos, percepciones o cargos de tarjeta internacional.
-                        </p>
-                      </div>
-                    )
+                      );
+                    })()
                   )}
 
                   <button
                     type="submit"
-                    disabled={isSubmitting || isPaymentBlocked() || !termsAccepted || (form.country === 'Argentina' && mbeShippingDetails.isQuoteRequired) || ((selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && dacShippingLoading)}
-                    className={`btn-primary w-full mt-4 py-3.5 text-base ${(isSubmitting || isPaymentBlocked() || !termsAccepted || (form.country === 'Argentina' && mbeShippingDetails.isQuoteRequired) || ((selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && dacShippingLoading)) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    disabled={isSubmitting || isPaymentBlocked() || !termsAccepted || (form.country === 'Argentina' && (!isArgentinaCheckoutEnabled || mbeShippingDetails.isQuoteRequired)) || ((selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && dacShippingLoading)}
+                    className={`btn-primary w-full mt-4 py-3.5 text-base ${(isSubmitting || isPaymentBlocked() || !termsAccepted || (form.country === 'Argentina' && (!isArgentinaCheckoutEnabled || mbeShippingDetails.isQuoteRequired)) || ((selectedShippingMethod === 'dac' || selectedShippingMethod === 'dac_home' || selectedShippingMethod === 'dac_agency') && dacShippingLoading)) ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     {isSubmitting 
                       ? 'Procesando...' 
                       : (form.country === 'Argentina' 
-                          ? (mbeShippingDetails.isQuoteRequired ? 'Cotización de envío requerida' : `Pagar con Handy (USD ${convertARSToUSD(grandTotal).toFixed(2)})`) 
+                          ? (!isArgentinaCheckoutEnabled
+                              ? 'Checkout Argentina no disponible'
+                              : (mbeShippingDetails.isQuoteRequired
+                                  ? 'Cotización de envío requerida'
+                                  : `Pagar con Handy (${(() => {
+                                      const eq = resolveCheckoutUsdEquivalent(grandTotal, cartCurrencyInfo.canonicalCurrency || 'UYU', exchangeRates);
+                                      return eq !== null ? `USD ${eq.toFixed(2)}` : 'USD';
+                                    })()})`))
                           : 'Finalizar compra')}
                   </button>
 
