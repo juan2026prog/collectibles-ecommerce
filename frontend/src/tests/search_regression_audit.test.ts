@@ -1,15 +1,34 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { 
-  normalizeSearchText, 
-  resolveSearchTokens, 
-  buildProductSearchOrClause 
+import {
+  normalizeSearchText,
+  resolveSearchTokens,
+  buildProductSearchOrClause
 } from '../lib/search/searchQueryNormalizer';
 import { CollectiblesSearchService } from '../services/search/collectiblesSearchService';
+import { PublicCatalogProvider } from '../lib/providers/PublicCatalogProvider';
 import { supabase } from '../lib/supabase';
+
+function createChainableQuery(data: any[] = []) {
+  const base: any = {
+    then: (resolve: any, reject: any) => Promise.resolve({ data, error: null }).then(resolve, reject),
+    single: () => Promise.resolve({ data: data[0] ?? null, error: null }),
+    maybeSingle: () => Promise.resolve({ data: data[0] ?? null, error: null }),
+    insert: () => Promise.resolve({ data: null, error: null }),
+  };
+  const proxy: any = new Proxy(base, {
+    get(target, prop) {
+      if (prop in target) return target[prop];
+      return () => proxy;
+    },
+  });
+  return proxy;
+}
 
 describe('FASE 5 — REGRESIÓN Y CALIDAD DEL BUSCADOR DE PRODUCTOS', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    // Isolate unit tests from live Cloudflare D1 Worker network calls
+    vi.spyOn(PublicCatalogProvider, 'isDomainEnabled').mockReturnValue(false);
   });
 
   it('1. Normaliza texto eliminando acentos, mayúsculas y diacríticos correctamente', () => {
@@ -21,23 +40,7 @@ describe('FASE 5 — REGRESIÓN Y CALIDAD DEL BUSCADOR DE PRODUCTOS', () => {
   });
 
   it('2. Expande sinónimos y variaciones para términos críticos requeridos', async () => {
-    // Mock Supabase select for brand/license resolution in unit tests
-    vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
-      return {
-        select: () => ({
-          eq: () => ({
-            eq: () => ({
-              ilike: () => ({
-                limit: () => Promise.resolve({ data: [], error: null })
-              })
-            }),
-            ilike: () => ({
-              limit: () => Promise.resolve({ data: [], error: null })
-            })
-          })
-        })
-      } as any;
-    });
+    vi.spyOn(supabase, 'from').mockImplementation(() => createChainableQuery([]));
 
     const pokemonTokens = await resolveSearchTokens('Pokémon');
     expect(pokemonTokens.terms).toContain('pokemon');
@@ -73,76 +76,28 @@ describe('FASE 5 — REGRESIÓN Y CALIDAD DEL BUSCADOR DE PRODUCTOS', () => {
   });
 
   it('4. Realiza búsqueda unificada con CollectiblesSearchService con normalización y filtros', async () => {
+    vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: 'mock-uuid', error: null } as any);
     vi.spyOn(supabase, 'from').mockImplementation((table: string) => {
       if (table === 'products') {
-        const queryBuilder: any = {
-          select: () => queryBuilder,
-          eq: () => queryBuilder,
-          or: () => queryBuilder,
-          lte: () => queryBuilder,
-          gte: () => queryBuilder,
-          limit: () => Promise.resolve({
-            data: [
-              {
-                id: 'p-1',
-                title: 'Figura Pokémon Pikachu Bandai',
-                slug: 'figura-pokemon-pikachu-bandai',
-                base_price: 1990,
-                compare_at_price: null,
-                badge: 'new',
-                is_featured: true,
-                is_active: true,
-                status: 'published',
-                images: [{ id: 'img-1', url: 'https://example.com/pika.webp', is_primary: true }],
-                variants: [],
-                brand: { name: 'Bandai', slug: 'bandai' },
-                category: { name: 'Figuras', slug: 'figuras' }
-              }
-            ],
-            error: null
-          })
-        };
-        return queryBuilder;
+        return createChainableQuery([
+          {
+            id: 'p-1',
+            title: 'Figura Pokémon Pikachu Bandai',
+            slug: 'figura-pokemon-pikachu-bandai',
+            base_price: 1990,
+            compare_at_price: null,
+            badge: 'new',
+            is_featured: true,
+            is_active: true,
+            status: 'published',
+            images: [{ id: 'img-1', url: 'https://example.com/pika.webp', is_primary: true }],
+            variants: [],
+            brand: { name: 'Bandai', slug: 'bandai' },
+            category: { name: 'Figuras', slug: 'figuras' }
+          }
+        ]);
       }
-
-      if (table === 'international_products') {
-        const intlBuilder: any = {
-          select: () => intlBuilder,
-          eq: () => intlBuilder,
-          ilike: () => intlBuilder,
-          lte: () => intlBuilder,
-          gte: () => intlBuilder,
-          limit: () => Promise.resolve({ data: [], error: null })
-        };
-        return intlBuilder;
-      }
-
-      if (table === 'release_events') {
-        const radarBuilder: any = {
-          select: () => radarBuilder,
-          eq: () => radarBuilder,
-          or: () => radarBuilder,
-          limit: () => Promise.resolve({ data: [], error: null })
-        };
-        return radarBuilder;
-      }
-
-      return {
-        select: () => ({
-          eq: () => ({
-            eq: () => ({
-              ilike: () => ({
-                limit: () => Promise.resolve({ data: [], error: null })
-              })
-            }),
-            ilike: () => ({
-              limit: () => Promise.resolve({ data: [], error: null })
-            })
-          })
-        }),
-        insert: () => Promise.resolve({ data: null, error: null }),
-        rpc: (fn: string) => Promise.resolve({ data: 'mock-uuid', error: null })
-      } as any;
+      return createChainableQuery([]);
     });
 
     const res = await CollectiblesSearchService.search({
@@ -168,8 +123,9 @@ describe('FASE 5 — REGRESIÓN Y CALIDAD DEL BUSCADOR DE PRODUCTOS', () => {
   });
 
   it('6. Registra telemetría segura mediante log_ai_search_event sin bloquear el flujo', async () => {
+    vi.spyOn(supabase, 'from').mockImplementation(() => createChainableQuery([]));
     const rpcSpy = vi.spyOn(supabase, 'rpc').mockResolvedValue({ data: 'telemetry-id-123', error: null } as any);
-    
+
     await CollectiblesSearchService.search({
       query: 'Chucky',
       limitLocal: 5,

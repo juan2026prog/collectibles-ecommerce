@@ -1,9 +1,97 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// Isolate SEO prerender & sitemap tests from external Staging/Prod Supabase network calls
+vi.mock('../../../api/_lib/public-supabase.js', async (importOriginal) => {
+  const actual = await importOriginal<any>();
+  const CAT_FIGURAS_ID = '11111111-1111-4111-8111-111111111111';
+  const BRAND_FUNKO_ID = '22222222-2222-4222-8222-222222222222';
+  const BRAND_NECA_ID = '33333333-3333-4333-8333-333333333333';
+
+  const mockCategories = [
+    { id: CAT_FIGURAS_ID, name: 'Figuras de Acción', slug: 'figuras', description: 'Figuras de acción coleccionables', is_active: true, status: 'approved', parent_id: null },
+  ];
+  const mockBrands = [
+    { id: BRAND_FUNKO_ID, name: 'Funko', slug: 'funko', description: 'Funko Pop coleccionables', is_active: true, is_public: true, status: 'approved' },
+    { id: BRAND_NECA_ID, name: 'NECA', slug: 'neca', description: 'Figuras de acción NECA', is_active: true, is_public: true, status: 'approved' },
+  ];
+  const mockProducts = [
+    {
+      id: '44444444-4444-4444-8444-444444444444',
+      slug: 'neca-ultimate-chucky',
+      title: 'NECA Ultimate Chucky',
+      base_price: 3490,
+      status: 'published',
+      is_active: true,
+      brand_id: BRAND_NECA_ID,
+      category_id: CAT_FIGURAS_ID,
+      updated_at: '2026-11-20T00:00:00Z',
+    },
+    {
+      id: '55555555-5555-4555-8555-555555555555',
+      slug: 'funko-pop-batman',
+      title: 'Funko Pop Batman',
+      base_price: 1290,
+      status: 'published',
+      is_active: true,
+      brand_id: BRAND_FUNKO_ID,
+      category_id: CAT_FIGURAS_ID,
+      updated_at: '2026-11-20T00:00:00Z',
+    },
+  ];
+
+  function createTableQuery(table: string) {
+    const filters: Array<{ op: string; col: string; val: any }> = [];
+    let resultMode: 'many' | 'single' | 'maybeSingle' = 'many';
+    const getRows = () => {
+      let rows: any[] =
+        table === 'categories' ? [...mockCategories] :
+        table === 'brands' ? [...mockBrands] :
+        table === 'products' ? [...mockProducts] :
+        [];
+      for (const f of filters) {
+        if (f.op === 'eq') rows = rows.filter(r => r[f.col] === f.val);
+        if (f.op === 'ilike') rows = rows.filter(r => String(r[f.col] || '').toLowerCase() === String(f.val).toLowerCase());
+      }
+      return rows;
+    };
+    const resolvePayload = () => {
+      const rows = getRows();
+      if (resultMode === 'single') {
+        return rows[0] ? { data: rows[0], error: null } : { data: null, error: { code: 'PGRST116', message: 'Not found' } };
+      }
+      if (resultMode === 'maybeSingle') {
+        return { data: rows[0] ?? null, error: null };
+      }
+      return { data: rows, count: rows.length, error: null };
+    };
+    const builder: any = {
+      eq: (col: string, val: any) => { filters.push({ op: 'eq', col, val }); return proxy; },
+      ilike: (col: string, val: any) => { filters.push({ op: 'ilike', col, val }); return proxy; },
+      single: () => { resultMode = 'single'; return proxy; },
+      maybeSingle: () => { resultMode = 'maybeSingle'; return proxy; },
+      then: (resolve: any, reject: any) => Promise.resolve(resolvePayload()).then(resolve, reject),
+    };
+    const proxy: any = new Proxy(builder, {
+      get(target, prop) {
+        if (prop in target) return target[prop as keyof typeof target];
+        return () => proxy;
+      },
+    });
+    return proxy;
+  }
+
+  return {
+    ...actual,
+    createPublicSupabase: () => ({
+      from: (table: string) => createTableQuery(table),
+      rpc: async () => ({ data: { international_public_enabled: false }, error: null }),
+    }),
+  };
+});
+
 import seoPrerenderHandler from '../../../api/seo-prerender.js';
 import sitemapHandler from '../../../api/sitemap.js';
 import { generateMetaTitle, generateMetaDescription, generateCanonical, generateProductSchema, generateBreadcrumbs } from '../seo/seoConfig';
-import fs from 'fs';
-import path from 'path';
 
 function createMockReqRes(query = {}) {
   const req = { query, headers: { 'user-agent': 'Googlebot/2.1 (+http://www.google.com/bot.html)' } };
