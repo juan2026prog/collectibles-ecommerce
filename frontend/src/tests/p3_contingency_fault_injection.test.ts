@@ -1,4 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   DEPENDENCY_MATRIX,
   CircuitBreaker,
@@ -7,6 +9,9 @@ import {
   withTimeout,
   withBoundedRetry,
   evaluateCheckoutSafety,
+  getDependencyBreaker,
+  getAllCircuitStates,
+  resetAllDependencyBreakers,
 } from '../lib/resilience/contingencyEngine';
 import {
   classifyUpstreamError,
@@ -14,6 +19,8 @@ import {
   withEdgeBoundedRetry,
   ServerCircuitBreaker,
 } from '../../../supabase/functions/_shared/resilience';
+
+const REPO_ROOT = path.resolve(__dirname, '../../..');
 
 describe('P3.1 — Dependency Matrix & Circuit Breaker State Machine', () => {
   it('classifies all 15 platform dependencies with bounded timeouts and thresholds', () => {
@@ -304,5 +311,81 @@ describe('P3.3 — Edge Function Server-Side Resilience Primitives', () => {
         15
       )
     ).rejects.toThrow(/EDGE_TIMEOUT/);
+  });
+});
+
+describe('P3.4 — Scenario 7 (HALF_OPEN Single-Probe Concurrency Gate) & Real Integration Proof', () => {
+  afterEach(() => {
+    resetAllDependencyBreakers();
+    vi.restoreAllMocks();
+  });
+
+  it('prevents thundering-herd saturation in HALF_OPEN (allows only 1 concurrent probe, rejects others)', async () => {
+    let clock = 2_000_000;
+    const cb = new CircuitBreaker('payment_paypal', {
+      failureThreshold: 2,
+      cooldownMs: 30_000,
+      now: () => clock,
+    });
+
+    await expect(cb.execute(async () => { throw new Error('503'); })).rejects.toThrow();
+    await expect(cb.execute(async () => { throw new Error('503'); })).rejects.toThrow();
+    expect(cb.getState()).toBe('OPEN');
+
+    // Cooldown expires -> HALF_OPEN
+    clock += 30_001;
+    expect(cb.getState()).toBe('HALF_OPEN');
+
+    let resolveProbe!: (v: string) => void;
+    const probePromise = cb.execute(() => new Promise<string>((r) => { resolveProbe = r; }));
+
+    // While probe #1 is in-flight, concurrent callers MUST fail fast with CircuitOpenError
+    await expect(cb.execute(async () => 'concurrent-2')).rejects.toBeInstanceOf(CircuitOpenError);
+    await expect(cb.execute(async () => 'concurrent-3')).rejects.toBeInstanceOf(CircuitOpenError);
+
+    // Probe #1 succeeds -> circuit transitions HALF_OPEN -> CLOSED
+    resolveProbe('PROBE_OK');
+    await expect(probePromise).resolves.toBe('PROBE_OK');
+    expect(cb.getState()).toBe('CLOSED');
+  });
+
+  it('enforces single-probe gate on ServerCircuitBreaker (Edge Functions)', () => {
+    let clock = 5000;
+    const scb = new ServerCircuitBreaker({ failureThreshold: 2, cooldownMs: 10_000, now: () => clock });
+    scb.recordFailure();
+    scb.recordFailure();
+    expect(scb.getState()).toBe('OPEN');
+    expect(scb.tryAcquire()).toBe(false);
+
+    clock += 10_001;
+    expect(scb.getState()).toBe('HALF_OPEN');
+    expect(scb.tryAcquire()).toBe(true);   // 1st probe admitted
+    expect(scb.tryAcquire()).toBe(false);  // 2nd concurrent probe blocked
+    scb.recordSuccess();
+    expect(scb.getState()).toBe('CLOSED');
+    expect(scb.tryAcquire()).toBe(true);
+  });
+
+  it('verifies real operational wiring in Checkout.tsx, exchangeRates.ts, paypal-webhook, and package.json build gate', () => {
+    const checkoutSrc = fs.readFileSync(path.join(REPO_ROOT, 'frontend/src/pages/Checkout.tsx'), 'utf8');
+    const fxSrc = fs.readFileSync(path.join(REPO_ROOT, 'frontend/src/services/exchangeRates.ts'), 'utf8');
+    const webhookSrc = fs.readFileSync(path.join(REPO_ROOT, 'supabase/functions/paypal-webhook/index.ts'), 'utf8');
+    const pkgSrc = fs.readFileSync(path.join(REPO_ROOT, 'frontend/package.json'), 'utf8');
+
+    expect(checkoutSrc).toContain('evaluateCheckoutSafety');
+    expect(checkoutSrc).toContain('getAllCircuitStates');
+    expect(fxSrc).toContain("getDependencyBreaker('fx_exchange_rate')");
+    expect(fxSrc).toContain('withTimeout');
+    expect(webhookSrc).toContain('withEdgeTimeout');
+    expect(pkgSrc).toContain('node scripts/validate-env.mjs');
+
+    // Live singleton registry tracks independent dependency states
+    const zinc = getDependencyBreaker('zinc_amazon_api');
+    zinc.recordFailure();
+    zinc.recordFailure();
+    zinc.recordFailure();
+    const states = getAllCircuitStates();
+    expect(states.zinc_amazon_api).toBe('OPEN');
+    expect(states.payment_mercadopago).toBeUndefined(); // independent
   });
 });

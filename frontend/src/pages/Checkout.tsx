@@ -8,6 +8,8 @@ import { supabase } from '../lib/supabase';
 import { useSiteSettings } from '../hooks/useSiteSettings';
 import { useInternationalMarkets } from '../hooks/useInternationalMarkets';
 import { resolveCheckoutUsdEquivalent, isMarketCheckoutAuthorized, shouldGeoIpSwitchCountry } from '../lib/checkoutCurrencyGuard';
+import { evaluateCheckoutSafety, getAllCircuitStates } from '../lib/resilience/contingencyEngine';
+import { getExchangeRatesFreshness } from '../services/exchangeRates';
 import { analytics } from '../lib/analytics';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import { createCheckoutOrder, getPublicPaymentProviders, startCheckoutPayment, type PublicPaymentProvider } from '../lib/payments';
@@ -2247,6 +2249,41 @@ export default function Checkout() {
     // BLOQUEO FINANCIERO CRÍTICO: Carrito mixto
     if (cartCurrencyInfo.isMixed) {
       setCheckoutError('Los productos locales e internacionales deben comprarse por separado.');
+      return;
+    }
+
+    // P3 CONTINGENCY GUARD: fail-closed checkout safety check (independent per dependency)
+    const fxFreshness = getExchangeRatesFreshness();
+    const cartCurrencyCode = (cartCurrencyInfo.canonicalCurrency === 'USD' ? 'USD' : 'UYU') as 'UYU' | 'USD';
+    const targetPaymentCurrency = (paymentMethod === 'paypal' ? 'USD' : cartCurrencyCode) as 'UYU' | 'USD';
+    const contextUsdRate = exchangeRates?.USD ?? null;
+    const safety = evaluateCheckoutSafety({
+      hasLocalItems: cartCurrencyInfo.canonicalCurrency !== 'USD',
+      hasInternationalItems: cartCurrencyInfo.canonicalCurrency === 'USD',
+      cartCurrency: cartCurrencyCode,
+      paymentCurrency: targetPaymentCurrency,
+      stockVerified: true,
+      fxRate: fxFreshness.rateUsdPerUyu ?? (contextUsdRate && contextUsdRate > 0 ? contextUsdRate : null),
+      fxAgeMs: fxFreshness.ageMs ?? (contextUsdRate && contextUsdRate > 0 ? 0 : null),
+      circuitStates: getAllCircuitStates(),
+    });
+    if (!safety.allowCheckout) {
+      const reasonMsg = safety.blockingReasons.includes('INTERNATIONAL_SOURCING_UNAVAILABLE')
+        ? 'Las compras internacionales están pausadas temporalmente por contingencia de proveedor. Los productos locales de Uruguay siguen disponibles.'
+        : safety.blockingReasons.includes('FX_RATE_UNAVAILABLE_OR_STALE')
+        ? 'No pudimos verificar la cotización cambiaria actualizada para este medio de pago. Probá con MercadoPago o Handy en pesos uruguayos.'
+        : safety.blockingReasons.includes('DB_WRITE_UNAVAILABLE')
+        ? 'El servicio de confirmación de pedidos está temporalmente en contingencia. Intentá nuevamente en unos minutos.'
+        : 'El medio de pago seleccionado no está disponible temporalmente. Elegí otro medio de pago o intentá nuevamente.';
+      setCheckoutError(reasonMsg);
+      return;
+    }
+    if (
+      (paymentMethod === 'paypal' && !safety.availableGateways.includes('paypal')) ||
+      (paymentMethod === 'mercadopago' && !safety.availableGateways.includes('mercadopago')) ||
+      (paymentMethod === 'handy' && !safety.availableGateways.includes('handy'))
+    ) {
+      setCheckoutError('El medio de pago seleccionado está temporalmente en contingencia. Podés continuar con otra pasarela disponible.');
       return;
     }
 

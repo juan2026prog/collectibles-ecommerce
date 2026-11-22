@@ -72,8 +72,10 @@ export async function withEdgeBoundedRetry<T>(
 }
 
 export class ServerCircuitBreaker {
+  private state: "CLOSED" | "OPEN" | "HALF_OPEN" = "CLOSED";
   private failures = 0;
   private openUntil = 0;
+  private halfOpenProbeInFlight = false;
   private readonly failureThreshold: number;
   private readonly cooldownMs: number;
   private readonly now: () => number;
@@ -84,23 +86,41 @@ export class ServerCircuitBreaker {
     this.now = options?.now ?? (() => Date.now());
   }
 
+  public getState(): "CLOSED" | "OPEN" | "HALF_OPEN" {
+    if (this.state === "OPEN" && this.now() >= this.openUntil) {
+      this.state = "HALF_OPEN";
+      this.halfOpenProbeInFlight = false;
+    }
+    return this.state;
+  }
+
   public isOpen(): boolean {
-    if (this.openUntil === 0) return false;
-    if (this.now() >= this.openUntil) {
-      this.openUntil = 0;
-      return false;
+    const current = this.getState();
+    return current === "OPEN" || (current === "HALF_OPEN" && this.halfOpenProbeInFlight);
+  }
+
+  public tryAcquire(): boolean {
+    const current = this.getState();
+    if (current === "OPEN") return false;
+    if (current === "HALF_OPEN") {
+      if (this.halfOpenProbeInFlight) return false;
+      this.halfOpenProbeInFlight = true;
     }
     return true;
   }
 
   public recordSuccess(): void {
+    this.state = "CLOSED";
     this.failures = 0;
     this.openUntil = 0;
+    this.halfOpenProbeInFlight = false;
   }
 
   public recordFailure(): void {
     this.failures += 1;
-    if (this.failures >= this.failureThreshold) {
+    this.halfOpenProbeInFlight = false;
+    if (this.state === "HALF_OPEN" || this.failures >= this.failureThreshold) {
+      this.state = "OPEN";
       this.openUntil = this.now() + this.cooldownMs;
     }
   }

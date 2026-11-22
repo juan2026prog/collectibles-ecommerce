@@ -1,3 +1,5 @@
+import { getDependencyBreaker, withTimeout } from '../lib/resilience/contingencyEngine';
+
 export type Currency = 'UYU' | 'USD' | 'ARS' | 'BRL';
 
 export const FALLBACK_RATES: Record<Currency, number> = {
@@ -12,6 +14,7 @@ const CACHE_TS_KEY = 'collectibles_unified_exchange_rates_ts';
 const CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 let _inMemoryRates: Record<Currency, number> | null = null;
+let _inMemoryUpdatedAt: number | null = null;
 let _pendingFetch: Promise<Record<Currency, number>> | null = null;
 const _listeners = new Set<(rates: Record<Currency, number>) => void>();
 
@@ -48,9 +51,15 @@ export async function fetchUnifiedExchangeRates(): Promise<Record<Currency, numb
   if (_pendingFetch) return _pendingFetch;
 
   _pendingFetch = (async () => {
+    const fxBreaker = getDependencyBreaker('fx_exchange_rate');
     try {
-      const res = await fetch('https://open.er-api.com/v6/latest/UYU');
-      const data = await res.json();
+      const data = await fxBreaker.execute(() =>
+        withTimeout(async () => {
+          const res = await fetch('https://open.er-api.com/v6/latest/UYU');
+          if (!res.ok) throw new Error(`FX_HTTP_${res.status}`);
+          return res.json();
+        }, 5_000)
+      );
       if (data && data.rates) {
         const liveRates: Record<Currency, number> = {
           UYU: 1,
@@ -59,10 +68,11 @@ export async function fetchUnifiedExchangeRates(): Promise<Record<Currency, numb
           BRL: data.rates.BRL || FALLBACK_RATES.BRL,
         };
         _inMemoryRates = liveRates;
+        _inMemoryUpdatedAt = Date.now();
         if (typeof window !== 'undefined') {
           try {
             localStorage.setItem(CACHE_KEY, JSON.stringify(liveRates));
-            localStorage.setItem(CACHE_TS_KEY, Date.now().toString());
+            localStorage.setItem(CACHE_TS_KEY, _inMemoryUpdatedAt.toString());
           } catch {}
         }
         _listeners.forEach(fn => fn(liveRates));
@@ -85,4 +95,27 @@ export async function fetchUnifiedExchangeRates(): Promise<Record<Currency, numb
 
 export function getExchangeRatesSync(): Record<Currency, number> {
   return getStoredRates() || FALLBACK_RATES;
+}
+
+export function getExchangeRatesFreshness(): {
+  rateUsdPerUyu: number | null;
+  ageMs: number | null;
+  isFallback: boolean;
+} {
+  let updatedAt = _inMemoryUpdatedAt;
+  if (updatedAt === null && typeof window !== 'undefined') {
+    try {
+      const ts = parseInt(localStorage.getItem(CACHE_TS_KEY) || '', 10);
+      if (Number.isFinite(ts) && ts > 0) updatedAt = ts;
+    } catch {}
+  }
+  const rates = getStoredRates();
+  if (!rates || updatedAt === null) {
+    return { rateUsdPerUyu: null, ageMs: null, isFallback: true };
+  }
+  return {
+    rateUsdPerUyu: rates.USD,
+    ageMs: Math.max(0, Date.now() - updatedAt),
+    isFallback: false,
+  };
 }

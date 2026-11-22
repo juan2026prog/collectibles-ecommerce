@@ -14,16 +14,22 @@ import {
   parsePayPalWebhookEvent,
   evaluatePayPalWebhookTransition,
 } from "../_shared/paypal-webhook-core.ts";
+import { withEdgeTimeout } from "../_shared/resilience.ts";
 
 async function getPayPalAccessToken(apiBase: string, clientId: string, clientSecret: string): Promise<string> {
-  const res = await fetch(`${apiBase}/v1/oauth2/token`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: "grant_type=client_credentials",
-  });
+  const res = await withEdgeTimeout(
+    (signal) =>
+      fetch(`${apiBase}/v1/oauth2/token`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: "grant_type=client_credentials",
+        signal,
+      }),
+    10_000
+  );
   const data = await res.json();
   if (!res.ok || !data?.access_token) {
     throw new Error(`PAYPAL_OAUTH_FAILED (${res.status})`);
@@ -49,22 +55,27 @@ async function verifyPayPalWebhookSignature(params: {
     return false;
   }
 
-  const verifyRes = await fetch(`${apiBase}/v1/notifications/verify-webhook-signature`, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      auth_algo: authAlgo,
-      cert_url: certUrl,
-      transmission_id: transmissionId,
-      transmission_sig: transmissionSig,
-      transmission_time: transmissionTime,
-      webhook_id: webhookId,
-      webhook_event: rawEvent,
-    }),
-  });
+  const verifyRes = await withEdgeTimeout(
+    (signal) =>
+      fetch(`${apiBase}/v1/notifications/verify-webhook-signature`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          auth_algo: authAlgo,
+          cert_url: certUrl,
+          transmission_id: transmissionId,
+          transmission_sig: transmissionSig,
+          transmission_time: transmissionTime,
+          webhook_id: webhookId,
+          webhook_event: rawEvent,
+        }),
+        signal,
+      }),
+    10_000
+  );
 
   if (!verifyRes.ok) {
     throw new Error(`PAYPAL_VERIFY_API_ERROR (${verifyRes.status})`);

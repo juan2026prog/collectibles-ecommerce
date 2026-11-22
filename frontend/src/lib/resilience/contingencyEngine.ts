@@ -193,6 +193,7 @@ export class CircuitBreaker {
   private state: CircuitState = 'CLOSED';
   private consecutiveFailures = 0;
   private halfOpenSuccesses = 0;
+  private halfOpenProbeInFlight = false;
   private openUntil = 0;
   private openCount = 0;
   private lastFailureAt: number | null = null;
@@ -226,6 +227,7 @@ export class CircuitBreaker {
     if (this.state === 'OPEN' && this.now() >= this.openUntil) {
       this.state = 'HALF_OPEN';
       this.halfOpenSuccesses = 0;
+      this.halfOpenProbeInFlight = false;
     }
     return this.state;
   }
@@ -246,6 +248,7 @@ export class CircuitBreaker {
   public recordSuccess(): void {
     const current = this.getState();
     this.consecutiveFailures = 0;
+    this.halfOpenProbeInFlight = false;
     if (current === 'HALF_OPEN') {
       this.halfOpenSuccesses += 1;
       if (this.halfOpenSuccesses >= this.halfOpenSuccessThreshold) {
@@ -262,6 +265,7 @@ export class CircuitBreaker {
     const ts = this.now();
     this.lastFailureAt = ts;
     this.consecutiveFailures += 1;
+    this.halfOpenProbeInFlight = false;
 
     if (this.state === 'HALF_OPEN' || this.consecutiveFailures >= this.spec.failureThreshold) {
       this.state = 'OPEN';
@@ -273,8 +277,16 @@ export class CircuitBreaker {
   }
 
   public async execute<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.getState() === 'OPEN') {
+    const current = this.getState();
+    if (current === 'OPEN') {
       throw new CircuitOpenError(this.spec.id);
+    }
+    // Single-probe concurrency gate in HALF_OPEN: prevent thundering herd on recovering service
+    if (current === 'HALF_OPEN') {
+      if (this.halfOpenProbeInFlight) {
+        throw new CircuitOpenError(this.spec.id);
+      }
+      this.halfOpenProbeInFlight = true;
     }
     try {
       const result = await fn();
@@ -290,7 +302,33 @@ export class CircuitBreaker {
     this.state = 'CLOSED';
     this.consecutiveFailures = 0;
     this.halfOpenSuccesses = 0;
+    this.halfOpenProbeInFlight = false;
     this.openUntil = 0;
+  }
+}
+
+const _registry = new Map<DependencyId, CircuitBreaker>();
+
+export function getDependencyBreaker(id: DependencyId): CircuitBreaker {
+  let breaker = _registry.get(id);
+  if (!breaker) {
+    breaker = new CircuitBreaker(id);
+    _registry.set(id, breaker);
+  }
+  return breaker;
+}
+
+export function getAllCircuitStates(): Partial<Record<DependencyId, CircuitState>> {
+  const states: Partial<Record<DependencyId, CircuitState>> = {};
+  for (const [id, breaker] of _registry.entries()) {
+    states[id] = breaker.getState();
+  }
+  return states;
+}
+
+export function resetAllDependencyBreakers(): void {
+  for (const breaker of _registry.values()) {
+    breaker.reset();
   }
 }
 
