@@ -23,7 +23,7 @@ describe('SkyPostal Audit & Multi-Country Go-Live Readiness Gate', () => {
     expect(isSkyPostalMarket(resolved)).toBe(true);
   });
 
-  it('verifies that Import Hub countries remain isolated and unaffected', () => {
+  it('verifies that Import Hub countries remain isolated (UY LIVE, AR DISABLED pending Deblex certification)', () => {
     const uruguay = resolveMarket('UY', INITIAL_DEFAULT_MARKETS);
     expect(uruguay.logisticsMode).toBe('IMPORT_HUB');
     expect(uruguay.marketStatus).toBe('LIVE');
@@ -31,8 +31,8 @@ describe('SkyPostal Audit & Multi-Country Go-Live Readiness Gate', () => {
 
     const argentina = resolveMarket('AR', INITIAL_DEFAULT_MARKETS);
     expect(argentina.logisticsMode).toBe('IMPORT_HUB');
-    expect(argentina.marketStatus).toBe('LIVE');
-    expect(argentina.canCheckout).toBe(true);
+    expect(argentina.marketStatus).toBe('DISABLED');
+    expect(argentina.canCheckout).toBe(false);
   });
 
   it('validates 10-point checklist in Chile market metadata', () => {
@@ -45,7 +45,7 @@ describe('SkyPostal Audit & Multi-Country Go-Live Readiness Gate', () => {
     expect(metadata.readiness_checklist?.rates_ready).toBe(true);
     expect(metadata.readiness_checklist?.fuel_ready).toBe(true);
     expect(metadata.readiness_checklist?.pricing_ready).toBe(true);
-    expect(metadata.readiness_checklist?.checkout_ready).toBe(true);
+    expect(metadata.readiness_checklist?.checkout_ready).toBe(false); // Honest: blocked until SkyPostal UAT + PayPal Sandbox certified
     expect(metadata.readiness_checklist?.api_ready).toBe(false); // Honest: credentials not yet wired in prod
     expect(metadata.readiness_checklist?.tracking_ready).toBe(true);
     expect(metadata.readiness_checklist?.security_ready).toBe(true);

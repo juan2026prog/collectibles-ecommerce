@@ -27,8 +27,8 @@ describe('SkyPostal Multi-Country Admin Control Matrix', () => {
     expect(resolved.canBrowse).toBe(false);
   });
 
-  it('validates that Peru, Brazil, Colombia, and Ecuador are in PREVIEW mode by default', () => {
-    ['PE', 'BR', 'CO', 'EC'].forEach(code => {
+  it('validates that Peru, Colombia, and Ecuador are in PREVIEW mode and Brazil is DISABLED by default', () => {
+    ['PE', 'CO', 'EC'].forEach(code => {
       const market = INITIAL_DEFAULT_MARKETS.find(m => m.country_code === code);
       expect(market?.market_status).toBe('PREVIEW');
       expect(market?.preview_enabled).toBe(true);
@@ -40,6 +40,11 @@ describe('SkyPostal Multi-Country Admin Control Matrix', () => {
       expect(resolved.canBrowse).toBe(true);
       expect(resolved.canCheckout).toBe(false);
     });
+
+    const brazil = INITIAL_DEFAULT_MARKETS.find(m => m.country_code === 'BR');
+    expect(brazil?.market_status).toBe('DISABLED');
+    expect(brazil?.public_enabled).toBe(false);
+    expect(brazil?.checkout_enabled).toBe(false);
   });
 
   it('validates that Chile (CL) is in audited PREVIEW state by default', () => {
@@ -49,18 +54,25 @@ describe('SkyPostal Multi-Country Admin Control Matrix', () => {
     expect(chile?.checkout_enabled).toBe(false);
   });
 
-  it('validates that Import Hub countries (UY, AR) remain 100% LIVE and isolated', () => {
-    ['UY', 'AR'].forEach(code => {
-      const market = INITIAL_DEFAULT_MARKETS.find(m => m.country_code === code);
-      expect(market?.logistics_mode).toBe('IMPORT_HUB');
-      expect(market?.market_status).toBe('LIVE');
-      expect(market?.public_enabled).toBe(true);
-      expect(market?.checkout_enabled).toBe(true);
+  it('validates that Uruguay is LIVE and Argentina remains DISABLED pending Deblex certification (isolated from SkyPostal)', () => {
+    const uy = INITIAL_DEFAULT_MARKETS.find(m => m.country_code === 'UY');
+    expect(uy?.logistics_mode).toBe('IMPORT_HUB');
+    expect(uy?.market_status).toBe('LIVE');
+    expect(uy?.public_enabled).toBe(true);
+    expect(uy?.checkout_enabled).toBe(true);
+    const resolvedUy = resolveMarket('UY', INITIAL_DEFAULT_MARKETS);
+    expect(resolvedUy.isLive).toBe(true);
+    expect(resolvedUy.canCheckout).toBe(true);
+    expect(isSkyPostalMarket(resolvedUy)).toBe(false);
 
-      const resolved = resolveMarket(code, INITIAL_DEFAULT_MARKETS);
-      expect(resolved.isLive).toBe(true);
-      expect(resolved.canCheckout).toBe(true);
-      expect(isSkyPostalMarket(resolved)).toBe(false);
-    });
+    const ar = INITIAL_DEFAULT_MARKETS.find(m => m.country_code === 'AR');
+    expect(ar?.logistics_mode).toBe('IMPORT_HUB');
+    expect(ar?.market_status).toBe('DISABLED');
+    expect(ar?.public_enabled).toBe(false);
+    expect(ar?.checkout_enabled).toBe(false);
+    const resolvedAr = resolveMarket('AR', INITIAL_DEFAULT_MARKETS);
+    expect(resolvedAr.isDisabled).toBe(true);
+    expect(resolvedAr.canCheckout).toBe(false);
+    expect(isSkyPostalMarket(resolvedAr)).toBe(false);
   });
 });

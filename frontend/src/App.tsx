@@ -35,6 +35,7 @@ const VendorStorefront = lazy(() => import('./pages/VendorStorefront'));
 const Cart = lazy(() => import('./pages/Cart'));
 const Checkout = lazy(() => import('./pages/Checkout'));
 const CheckoutSuccess = lazy(() => import('./pages/CheckoutSuccess'));
+const ArgentinaCheckoutPage = lazy(() => import('./pages/ArgentinaCheckoutPage').then(m => ({ default: m.ArgentinaCheckoutPage })));
 const MLCallback = lazy(() => import('./pages/MLCallback'));
 const VendorMLCallback = lazy(() => import('./pages/VendorMLCallback'));
 const Callback = lazy(() => import('./pages/Callback'));
@@ -105,6 +106,9 @@ const AdminNotifications = lazy(() => import('./pages/admin/AdminNotifications')
 const AdminCurrencies = lazy(() => import('./pages/admin/AdminCurrencies'));
 const AdminAIControlCenter = lazy(() => import('./pages/superadmin/AdminAIControlCenter'));
 const AdminAISystemTest = lazy(() => import('./pages/superadmin/AdminAISystemTest'));
+const AdminArgentinaLogistics = lazy(() => import('./pages/admin/AdminArgentinaLogistics').then(m => ({ default: m.AdminArgentinaLogistics })));
+const ArgentinaFinancialDashboard = lazy(() => import('./pages/admin/ArgentinaFinancialDashboard').then(m => ({ default: m.ArgentinaFinancialDashboard })));
+const DeblexEntryPage = lazy(() => import('./pages/DeblexEntryPage'));
 
 // Collector Plugins (6 official modules)
 // 01. AI Search
@@ -208,6 +212,8 @@ function App() {
                     <Route path="/help" element={<Navigate to="/page/condiciones-de-compra" replace />} />
                     <Route path="/cart" element={<Cart />} />
                     <Route path="/checkout" element={<Checkout />} />
+                    <Route path="/checkout/ar" element={<ProtectedRoute requireSuperAdmin><ArgentinaCheckoutPage /></ProtectedRoute>} />
+                    <Route path="/checkout/argentina" element={<ProtectedRoute requireSuperAdmin><ArgentinaCheckoutPage /></ProtectedRoute>} />
                     <Route path="/checkout/success" element={<CheckoutSuccess />} />
                     <Route path="/auth/callback" element={<MLCallback />} />
                     <Route path="/vendor/ml/callback" element={<VendorMLCallback />} />
@@ -256,7 +262,11 @@ function App() {
                     <Route path="/importaciones" element={<Navigate to="/import-hub" replace />} />
                     <Route path="/franquicia" element={<Navigate to="/import-hub?tab=franchise" replace />} />
                     <Route path="/franquicias" element={<Navigate to="/import-hub?tab=franchise" replace />} />
+                    <Route path="/portal" element={<ProtectedRoute><CustomerPortal /></ProtectedRoute>} />
                   </Route>
+
+                {/* Isolated Deblex Logistics Application without store header/footer */}
+                <Route path="/deblex" element={<DeblexEntryPage />} />
 
                 {/* Isolated Portals with Lateral Navigation */}
                 <Route path="/vendor" element={
@@ -402,6 +412,9 @@ function App() {
                   <Route path="internacional/zinc" element={<ProtectedRoute requireSuperAdmin><AdminZinc /></ProtectedRoute>} />
                   <Route path="international-markets" element={<ProtectedRoute requireSuperAdmin><AdminInternationalMarkets /></ProtectedRoute>} />
                   <Route path="international-markets/:countryCode/preview" element={<ProtectedRoute requireSuperAdmin><AdminInternationalMarketPreview /></ProtectedRoute>} />
+                  <Route path="argentina/logistics" element={<ProtectedRoute requireSuperAdmin><AdminArgentinaLogistics /></ProtectedRoute>} />
+                  <Route path="argentina/finances" element={<ProtectedRoute requireSuperAdmin><ArgentinaFinancialDashboard /></ProtectedRoute>} />
+                  <Route path="deblex/portal" element={<Navigate to="/deblex" replace />} />
                   <Route path="markets" element={<ProtectedRoute requireSuperAdmin><Navigate to="/admin/international-markets" replace /></ProtectedRoute>} />
                   <Route path="markets/:countryCode/preview" element={<ProtectedRoute requireSuperAdmin><AdminInternationalMarketPreview /></ProtectedRoute>} />
                   <Route path="ai" element={<ProtectedRoute requireSuperAdmin><Navigate to="/superadmin/ai" replace /></ProtectedRoute>} />
