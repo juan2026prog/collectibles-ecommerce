@@ -1,13 +1,15 @@
-import { createClient } from '@supabase/supabase-js';
 import crypto from 'node:crypto';
 import { callOpenAIResponses } from './openai.js';
 import { calculateOpenAICost, getModelPricingRates } from './openaiPricing.js';
-
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
+import { createValidatedSupabaseClient } from './supabaseEnvGuard.js';
 
 function db() {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  return key ? createClient(SUPABASE_URL, key, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+  try {
+    return createValidatedSupabaseClient(process.env, { requireServiceRole: true });
+  } catch (err) {
+    console.error('[radarNewsRefresh] Supabase environment guard rejected client:', err?.code || err?.message);
+    return null;
+  }
 }
 const parseBool=(v,f=true)=>v==null||v===''?f:String(v).toLowerCase()==='true';
 const parseDays=(v,f=3)=>{const n=Number(v);return Number.isFinite(n)?Math.max(1,Math.min(14,Math.round(n))):f;};

@@ -7,7 +7,8 @@ vi.mock('../../../server/lib/authGuard.js', () => ({ authenticateRequest: mocks.
 beforeEach(() => {
   vi.resetModules(); vi.resetAllMocks(); vi.useFakeTimers();
   vi.stubGlobal('fetch', mocks.fetch);
-  vi.stubEnv('SUPABASE_URL', 'https://test.supabase.co');
+  vi.stubEnv('SUPABASE_URL', 'https://csnudufkpfzveoonjumy.supabase.co');
+  vi.stubEnv('VITE_SUPABASE_URL', 'https://csnudufkpfzveoonjumy.supabase.co');
   vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'test-key');
   vi.spyOn(console, 'warn').mockImplementation(() => {});
 });

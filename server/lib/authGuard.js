@@ -6,10 +6,18 @@
 // ============================================================
 
 import { createClient } from '@supabase/supabase-js';
+import { validateSupabaseConfig } from './supabaseEnvGuard.js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const CRON_SECRET = process.env.CRON_SECRET;
+
+function getValidatedAuthSupabaseConfig() {
+  // Prefer privileged service role if configured, otherwise validated public anon key (never hardcoded Prod URL)
+  const hasServiceRole = Boolean(
+    process.env.SUPABASE_SERVICE_ROLE_KEY &&
+    !String(process.env.SUPABASE_SERVICE_ROLE_KEY).startsWith('sb_publishable_')
+  );
+  return validateSupabaseConfig(process.env, { requireServiceRole: hasServiceRole });
+}
 
 // In-flight duplicate request registry to prevent double-click paid execution
 const inFlightRequests = new Map();
@@ -113,7 +121,8 @@ export async function authenticateRequest(req, options = {}) {
 
   // 4. Validate Token Server-Side with Supabase Auth
   try {
-    const authSupabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+    const { url: supabaseUrl, key: supabaseKey } = getValidatedAuthSupabaseConfig();
+    const authSupabase = createClient(supabaseUrl, supabaseKey, {
       auth: { persistSession: false, autoRefreshToken: false }
     });
 
@@ -146,7 +155,7 @@ export async function authenticateRequest(req, options = {}) {
     let isAdmin = isJwtAdmin;
 
     // Create an authenticated client with the user's Bearer token so Postgres RLS satisfies auth.uid() = id / user_id
-    const userDbClient = createClient(SUPABASE_URL, SUPABASE_KEY, {
+    const userDbClient = createClient(supabaseUrl, supabaseKey, {
       auth: { persistSession: false, autoRefreshToken: false },
       global: {
         headers: {

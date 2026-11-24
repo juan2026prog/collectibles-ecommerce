@@ -14,8 +14,21 @@ import {
 } from '../server/lib/researchCostOptimizer.js';
 import { authenticateRequest } from '../server/lib/authGuard.js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+import { createValidatedSupabaseClient } from '../server/lib/supabaseEnvGuard.js';
+
+function createEstimateSupabaseClient(authHeader = '') {
+  try {
+    return createValidatedSupabaseClient(process.env, {
+      requireServiceRole: true,
+      clientOptions: authHeader.startsWith('Bearer ')
+        ? { global: { headers: { Authorization: authHeader } } }
+        : {},
+    });
+  } catch (err) {
+    console.error('[ai-estimate] Supabase environment guard rejected client:', err?.code || err?.message);
+    return null;
+  }
+}
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
@@ -86,14 +99,7 @@ export default async function handler(req, res) {
   }
 
   const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
-  const client = (SUPABASE_KEY && !SUPABASE_KEY.startsWith('sb_publishable'))
-    ? createClient(SUPABASE_URL, SUPABASE_KEY, {
-        auth: { persistSession: false, autoRefreshToken: false },
-        ...(authHeader.startsWith('Bearer ') ? {
-          global: { headers: { Authorization: authHeader } }
-        } : {})
-      })
-    : null;
+  const client = createEstimateSupabaseClient(authHeader);
 
   const mode = resolveResearchMode(research_depth);
   const isModelOverride = requested_model && requested_model !== 'AUTO';

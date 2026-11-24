@@ -24,8 +24,21 @@ import { validateRequestedModel } from '../server/lib/openaiPricing.js';
 import { authenticateRequest, acquireInFlightLock } from '../server/lib/authGuard.js';
 import { validateCandidateBatch, associateSourcesToCandidates, mergeCommercialEnrichment } from '../server/lib/sourcingSourceVerifier.js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+import { createValidatedSupabaseClient } from '../server/lib/supabaseEnvGuard.js';
+
+function createAiSupabaseClient(authHeader = '') {
+  try {
+    return createValidatedSupabaseClient(process.env, {
+      requireServiceRole: true,
+      clientOptions: authHeader.startsWith('Bearer ')
+        ? { global: { headers: { Authorization: authHeader } } }
+        : {},
+    });
+  } catch (err) {
+    console.error('[ai-execute] Supabase environment guard rejected client:', err?.code || err?.message);
+    return null;
+  }
+}
 
 const ENGINE_COUNTRY_FLAG = {
   AI_SEARCH: 'ai_search_enabled',
@@ -244,14 +257,7 @@ async function executeHandler(req, res) {
   }
 
   const authHeader = req.headers['authorization'] || req.headers['Authorization'] || '';
-  const client = (SUPABASE_KEY && !SUPABASE_KEY.startsWith('sb_publishable'))
-    ? createClient(SUPABASE_URL, SUPABASE_KEY, {
-        auth: { persistSession: false, autoRefreshToken: false },
-        ...(authHeader.startsWith('Bearer ') ? {
-          global: { headers: { Authorization: authHeader } }
-        } : {})
-      })
-    : null;
+  const client = createAiSupabaseClient(authHeader);
 
   const startTime = Date.now();
   const requestId = `req_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -1355,8 +1361,8 @@ export default async function handler(req, res) {
       }
 
       let signalRows = [], marketRows = [];
-      if (SUPABASE_KEY && items.length) {
-        const verifierDb = createClient(SUPABASE_URL, SUPABASE_KEY);
+      const verifierDb = items.length ? createAiSupabaseClient() : null;
+      if (verifierDb && items.length) {
         const titles = items.map(i => i.title || i.name).filter(Boolean);
         const [signalResult, marketResult] = await Promise.all([
           verifierDb.from('sourcing_signals').select('*').in('product_identity', titles).limit(100),

@@ -9,8 +9,8 @@ import ResponsiveDataList from '../../components/admin/ResponsiveDataList';
 import FilterDrawer from '../../components/admin/FilterDrawer';
 import { BackofficePageHeader, BackofficeSearch, BackofficeTabs, BackofficeStatusBadge, BackofficeActionMenu } from '../../components/backoffice';
 
-const SUPABASE_URL = 'https://cobtsgkwcftvexaarwmo.supabase.co';
-const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNvYnRzZ2t3Y2Z0dmV4YWFyd21vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NzIwNTMsImV4cCI6MjA5MDE0ODA1M30.vXyiMl093ojZ8OyEpRuGnX5O5lHsLXxljynrYtMmf50';
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || '';
+const ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
 const ORDER_STATUSES = [
   { value: 'created', label: 'Creada / Pendiente', color: 'bg-yellow-100 text-yellow-800' },

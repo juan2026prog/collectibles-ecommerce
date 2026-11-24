@@ -1,18 +1,18 @@
-import { createClient } from '@supabase/supabase-js';
 import crypto from 'node:crypto';
 import { authenticateRequest } from '../server/lib/authGuard.js';
+import { createValidatedSupabaseClient } from '../server/lib/supabaseEnvGuard.js';
 import { researchViaGateway } from '../server/lib/sourcingGateway.js';
 import { runRadarNewsRefresh, estimateRadarRefreshCost, repairExistingRadarImages } from '../server/lib/radarNewsRefresh.js';
 import { validateCandidateBatch, verifyCandidateSources } from '../server/lib/sourcingSourceVerifier.js';
 import { canonicalCandidateKey, validateStoredCandidate, deduplicateCanonicalCandidates, SOURCING_PURCHASE_CAPABILITY, AUTO_PUBLISH } from '../shared/sourcingCandidateValidation.js';
 
 function getServiceRoleClient() {
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!serviceKey) return null;
-  return createClient(url, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
+  try {
+    return createValidatedSupabaseClient(process.env, { requireServiceRole: true });
+  } catch (err) {
+    console.error('[Discovery] Supabase environment guard rejected client:', err?.code || err?.message);
+    return null;
+  }
 }
 
 function logDatabaseError(stage, table, operation, runId, error) {

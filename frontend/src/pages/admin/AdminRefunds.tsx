@@ -652,7 +652,7 @@ export default function AdminRefunds() {
       // Clave de idempotencia estrictamente estable derivada de la solicitud persistida
       const stableIdempotencyKey = req.idempotency_key || `unified-request-${req.id}`;
 
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co'}/functions/v1/refund-order`, {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL || ''}/functions/v1/refund-order`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

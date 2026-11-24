@@ -5,17 +5,27 @@
 // POST: (Protected / Admin / Cron) Sync live rates or apply manual override
 // ==============================================================================
 
-import { createClient } from '@supabase/supabase-js';
 import { authenticateRequest } from '../server/lib/authGuard.js';
+import { createValidatedSupabaseClient, validateSupabaseConfig } from '../server/lib/supabaseEnvGuard.js';
 import { withDeadline } from './_lib/public-supabase.js';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_f_7xF86CT0DFwT7YupNh_Q_TzmemHNf';
+function getCurrencySupabaseClient(requireServiceRole = false) {
+  return createValidatedSupabaseClient(process.env, {
+    requireServiceRole,
+    clientOptions: {
+      global: { headers: { 'x-application-name': 'collectibles-currency-sync' } }
+    }
+  });
+}
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { persistSession: false },
-  global: {
-    headers: { 'x-application-name': 'collectibles-currency-sync' }
+// Lazy environment-validated client: prefers service role when present, otherwise anon for reads;
+// strictly rejects missing URLs or cross-environment Production/Staging connections.
+const supabase = new Proxy({}, {
+  get(_target, prop) {
+    const hasService = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY && !String(process.env.SUPABASE_SERVICE_ROLE_KEY).startsWith('sb_publishable_'));
+    const client = getCurrencySupabaseClient(hasService);
+    const val = client[prop];
+    return typeof val === 'function' ? val.bind(client) : val;
   }
 });
 
@@ -356,6 +366,7 @@ export default async function handler(req, res) {
       }
 
       try {
+        validateSupabaseConfig(process.env, { requireServiceRole: true });
         const syncResult = await executeLiveSync(auth.isCron ? 'VERCEL_CRON_SECRET' : 'ADMIN_GET_SYNC');
         const isFailure = syncResult.sync_status === 'FAILED_PERSISTENCE';
         return res.status(isFailure ? 502 : 200).json({
@@ -483,6 +494,16 @@ export default async function handler(req, res) {
         ok: false,
         error: 'UNAUTHORIZED_MUTATION_REQUEST',
         message: 'Acceso denegado. Se requiere autenticación administrativa válida.'
+      });
+    }
+
+    try {
+      validateSupabaseConfig(process.env, { requireServiceRole: true });
+    } catch (envErr) {
+      return res.status(503).json({
+        ok: false,
+        error: envErr?.code || 'SERVER_CONFIGURATION_ERROR',
+        message: 'Entorno Supabase no válido para escrituras privilegiadas.'
       });
     }
 

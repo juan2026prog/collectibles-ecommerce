@@ -5,18 +5,17 @@
 // Prevents cross-visitor conversation leaks & prevents ASSISTANT/ADMIN spoofing.
 // ============================================================
 
-import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 import { authenticateRequest } from '../server/lib/authGuard.js';
-
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+import { createValidatedSupabaseClient } from '../server/lib/supabaseEnvGuard.js';
 
 function getServiceClient() {
-  if (!SUPABASE_KEY || SUPABASE_KEY.startsWith('sb_publishable')) return null;
-  return createClient(SUPABASE_URL, SUPABASE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false }
-  });
+  try {
+    return createValidatedSupabaseClient(process.env, { requireServiceRole: true });
+  } catch (err) {
+    console.error('[support-chat] Supabase environment guard rejected client:', err?.code || err?.message);
+    return null;
+  }
 }
 
 /**

@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { validateSupabaseConfig } from '../../server/lib/supabaseEnvGuard.js';
 
 // Per serverless instance: bound active HTTP reads and reject an unbounded bot queue.
 // This is not a database-wide connection limit.
@@ -42,9 +43,7 @@ export function publicReadFailure(error) {
 
 // Public read paths must never fall back to a service key or inherit a visitor's session.
 export function createPublicSupabase(env = process.env) {
-  const url = env.VITE_SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = env.VITE_SUPABASE_ANON_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY || env.SUPABASE_ANON_KEY;
-  if (!url || !key) throw new Error('Public Supabase configuration unavailable');
+  const { url, key } = validateSupabaseConfig(env, { requireServiceRole: false });
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: { fetch: fetchWithDeadline },
