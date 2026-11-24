@@ -1,5 +1,4 @@
 import { createGoogleAuthClient, testGoogleAuth, sanitizeGoogleAuthError } from '../server/lib/google-auth.js';
-import gate3CertHandler from './_lib/gate3-cert-check.js';
 import {
   findCollectiblesProperty,
   listSitemaps,
@@ -27,15 +26,10 @@ export default async function handler(req, res) {
   // CORS & Security headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-cron-secret, x-gate3-cert-token');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-cron-secret');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
-  }
-
-  // TEMPORARY Gate 3 Admin Certification dispatch (Preview + branch fix/p2-p3-p4-production-readiness only)
-  if (req.headers?.['x-gate3-cert-token'] || req.headers?.['X-Gate3-Cert-Token']) {
-    return gate3CertHandler(req, res);
   }
 
   // Security gate: Require valid CRON_SECRET, GSC_MONITOR_SECRET, or admin authorization
