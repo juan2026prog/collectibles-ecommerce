@@ -389,8 +389,8 @@ describe('P2.2 — Asynchronous PayPal Webhook State Machine (14 Scenarios)', ()
     const fnPath = path.join(REPO_ROOT, 'supabase/functions/paypal-webhook/index.ts');
     const source = fs.readFileSync(fnPath, 'utf8');
     expect(source).toContain('/v1/notifications/verify-webhook-signature');
-    expect(source).toContain('Deno.env.get("PAYPAL_CLIENT_ID")');
-    expect(source).toContain('Deno.env.get("PAYPAL_WEBHOOK_ID")');
+    expect(source).toContain('resolvePayPalRuntimeConfig');
+    expect(source).toContain('requireWebhookId: true');
     expect(source).toContain('paypal_webhook_events');
     expect(source).toContain('STOCK_EXHAUSTED_ON_LATE_APPROVAL');
   });

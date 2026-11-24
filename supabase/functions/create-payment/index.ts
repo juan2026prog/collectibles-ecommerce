@@ -8,6 +8,7 @@ import { getGuestTokenSecret, generateOrderAccessToken, verifyOrderAccessToken }
 import { startMercadoPagoPreference, PaymentRecoveryError } from "../_shared/mercadopago-recovery.ts";
 import { paymentTelemetry } from "../_shared/payment-telemetry.ts";
 import { resolvePayPalChargeFromRate } from "../_shared/paypal-fx.ts";
+import { resolvePayPalRuntimeConfig } from "../_shared/paypal-config.ts";
 
 interface PaymentRequest {
   provider: "dlocal" | "paypal" | "mercadopago";
@@ -214,14 +215,13 @@ serve(async (req: Request) => {
     }
 
     if (provider === "paypal") {
-      const clientId = (config.payments_paypal_client_id || "").trim();
-      const clientSecret = (config.payments_paypal_client_secret || config.payments_paypal_secret_key || "").trim();
-      if (!clientId || !clientSecret) {
-        throw new Error("PayPal credentials not configured. Set Client ID and Client Secret in Admin > Settings > Payments.");
-      }
-
-      const isSandbox = config.payments_paypal_sandbox === "true";
-      const apiBase = isSandbox ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
+      const ppConfig = resolvePayPalRuntimeConfig({
+        supabaseUrl,
+        env: Deno.env.toObject(),
+        siteSettings: config,
+        requireWebhookId: false,
+      });
+      const { clientId, clientSecret, apiBase } = ppConfig;
       const tokenResponse = await fetch(`${apiBase}/v1/oauth2/token`, {
         method: "POST",
         headers: {
@@ -251,7 +251,10 @@ serve(async (req: Request) => {
         usdUyuRateRow = fxRow;
       }
 
-      const paypalCharge = resolvePayPalChargeFromRate(amount, currency, usdUyuRateRow);
+      const allowTestFixture = ppConfig.isSandbox === true && !supabaseUrl.includes("cobtsgkwcftvexaarwmo");
+      const paypalCharge = resolvePayPalChargeFromRate(amount, currency, usdUyuRateRow, Date.now(), {
+        allowTestFixture,
+      });
       const paypalCurrency = paypalCharge.paypalCurrency;
       const paypalAmount = paypalCharge.paypalAmount;
 

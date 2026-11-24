@@ -32,6 +32,7 @@ export function resolvePayPalChargeFromRate(
   originalCurrencyRaw: string,
   rateRow: ExchangeRateRow | null,
   nowMs: number = Date.now(),
+  options?: { allowTestFixture?: boolean },
 ): PayPalChargeResolution {
   if (!Number.isFinite(originalAmount) || originalAmount <= 0) {
     throw new Error("PAYPAL_INVALID_AMOUNT: El importe de la orden debe ser mayor a cero.");
@@ -66,8 +67,21 @@ export function resolvePayPalChargeFromRate(
     throw new Error("PAYPAL_FX_INACTIVE: La cotización USD/UYU no se encuentra activa para cobros.");
   }
 
-  const allowedStatuses = new Set(["VERIFIED", "MANUAL_OVERRIDE"]);
-  if (!allowedStatuses.has(String(rateRow.status || "").toUpperCase())) {
+  const normalizedStatus = String(rateRow.status || "").toUpperCase().trim();
+  const isTestFixture =
+    normalizedStatus === "TEST_ONLY" ||
+    String(rateRow.provider || "").toUpperCase().startsWith("TEST_ONLY");
+
+  if (isTestFixture && options?.allowTestFixture !== true) {
+    throw new Error("PAYPAL_FX_TEST_FIXTURE_FORBIDDEN_IN_LIVE: Cotización TEST_ONLY prohibida fuera de Staging Sandbox.");
+  }
+
+  const allowedStatuses = new Set(
+    options?.allowTestFixture === true
+      ? ["VERIFIED", "MANUAL_OVERRIDE", "TEST_ONLY"]
+      : ["VERIFIED", "MANUAL_OVERRIDE"]
+  );
+  if (!allowedStatuses.has(normalizedStatus)) {
     throw new Error(`PAYPAL_FX_UNVERIFIED: La cotización USD/UYU tiene estado '${rateRow.status}' no aprobado para cobros.`);
   }
 

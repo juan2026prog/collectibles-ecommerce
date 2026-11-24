@@ -7,6 +7,7 @@ import { finalizeOrderIfNeeded, orderSummary } from "../_shared/order-payments.t
 import { getCorsHeaders } from "../_shared/cors.ts";
 import { getGuestTokenSecret, verifyOrderAccessToken } from "../_shared/order-token.ts";
 import { verifyPayPalCaptureReconciliation } from "../_shared/paypal-fx.ts";
+import { resolvePayPalRuntimeConfig } from "../_shared/paypal-config.ts";
 
 declare const Deno: any;
 
@@ -97,13 +98,15 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      const isSandbox = config.payments_paypal_sandbox === "true";
-      const clientId = config.payments_paypal_client_id;
-      const secret = config.payments_paypal_client_secret || config.payments_paypal_secret_key;
-      const baseUrl = isSandbox ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
-      if (!clientId || !secret) {
-        throw new Error("Missing PayPal credentials");
-      }
+      const ppConfig = resolvePayPalRuntimeConfig({
+        supabaseUrl,
+        env: Deno.env.toObject(),
+        siteSettings: config,
+        requireWebhookId: false,
+      });
+      const clientId = ppConfig.clientId;
+      const secret = ppConfig.clientSecret;
+      const baseUrl = ppConfig.apiBase;
 
       const auth = btoa(`${clientId}:${secret}`);
       const tokenRes = await fetch(`${baseUrl}/v1/oauth2/token`, {

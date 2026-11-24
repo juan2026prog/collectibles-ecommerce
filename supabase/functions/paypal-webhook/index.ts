@@ -10,6 +10,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { finalizeOrderIfNeeded } from "../_shared/order-payments.ts";
 import { verifyPayPalCaptureReconciliation } from "../_shared/paypal-fx.ts";
+import { resolvePayPalRuntimeConfig } from "../_shared/paypal-config.ts";
 import {
   parsePayPalWebhookEvent,
   evaluatePayPalWebhookTransition,
@@ -119,32 +120,22 @@ serve(async (req: Request) => {
       ]);
 
     const config = Object.fromEntries((settingsRows || []).map((r: any) => [r.key, r.value]));
-    const isSandbox = (Deno.env.get("PAYPAL_SANDBOX") || config.payments_paypal_sandbox) === "true";
-    const clientId = (
-      (isSandbox ? Deno.env.get("PAYPAL_SANDBOX_CLIENT_ID") : Deno.env.get("PAYPAL_CLIENT_ID")) ||
-      config.payments_paypal_client_id ||
-      ""
-    ).trim();
-    const clientSecret = (
-      (isSandbox ? Deno.env.get("PAYPAL_SANDBOX_CLIENT_SECRET") : Deno.env.get("PAYPAL_CLIENT_SECRET")) ||
-      config.payments_paypal_client_secret ||
-      config.payments_paypal_secret_key ||
-      ""
-    ).trim();
-    const webhookId = (
-      (isSandbox ? Deno.env.get("PAYPAL_SANDBOX_WEBHOOK_ID") : Deno.env.get("PAYPAL_WEBHOOK_ID")) ||
-      config.payments_paypal_webhook_id ||
-      ""
-    ).trim();
-    const expectedMerchantId = (Deno.env.get("PAYPAL_MERCHANT_ID") || config.payments_paypal_merchant_id || "").trim() || null;
-
-    // Fail-closed: refuse processing if webhook verification cannot be performed
-    if (!clientId || !clientSecret || !webhookId) {
-      console.error("[paypal-webhook] Missing PayPal credentials or PAYPAL_WEBHOOK_ID");
-      return new Response(JSON.stringify({ error: "PayPal webhook verification not configured" }), { status: 500 });
+    let ppConfig;
+    try {
+      ppConfig = resolvePayPalRuntimeConfig({
+        supabaseUrl,
+        env: Deno.env.toObject(),
+        siteSettings: config,
+        requireWebhookId: true,
+      });
+    } catch (cfgErr: any) {
+      console.error("[paypal-webhook] PayPal config rejected:", cfgErr?.code || cfgErr?.message);
+      return new Response(JSON.stringify({ error: cfgErr?.code || "PayPal webhook verification not configured" }), { status: 500 });
     }
+    const { isSandbox, clientId, clientSecret, apiBase } = ppConfig;
+    const webhookId = ppConfig.webhookId!;
+    const expectedMerchantId = ppConfig.merchantId;
 
-    const apiBase = isSandbox ? "https://api-m.sandbox.paypal.com" : "https://api-m.paypal.com";
     const accessToken = await getPayPalAccessToken(apiBase, clientId, clientSecret);
 
     const isValidSig = await verifyPayPalWebhookSignature({
