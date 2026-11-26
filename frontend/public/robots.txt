@@ -43,5 +43,5 @@ Disallow: /callback
 Disallow: /callback/
 Disallow: /api/
 
-Sitemap: https://collectibles.uy/sitemap.xml
-Sitemap: https://collectibles.uy/sitemap_index.xml
+Sitemap: https://collectibles.com.uy/sitemap.xml
+Sitemap: https://collectibles.com.uy/sitemap_index.xml
