@@ -84,7 +84,7 @@ export function isTrustedBrowserOrigin(
     if (EXACT_PROD_ORIGINS.has(parsed.origin.toLowerCase())) {
       return true;
     }
-    if (!parsed.port && VERCEL_PREVIEW_HOST_RE.test(host)) {
+    if (!isProductionRuntime(envOverride) && !parsed.port && VERCEL_PREVIEW_HOST_RE.test(host)) {
       return true;
     }
   }
