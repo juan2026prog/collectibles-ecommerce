@@ -28,7 +28,7 @@ serve(async (req) => {
     
     // Authorization check: service role, admin, or customer ownership
     let isServiceCall = false;
-    if (authHeader.includes(serviceRoleKey)) {
+    if (serviceRoleKey && authHeader === `Bearer ${serviceRoleKey}`) {
       isServiceCall = true;
     }
 
@@ -38,7 +38,9 @@ serve(async (req) => {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) throw new Error("Unauthorized");
       userObj = user;
-      isAdmin = user.app_metadata?.role === 'admin' || user.user_metadata?.role === 'admin';
+      const { data: profile, error: profileError } = await serviceClient.from('profiles').select('is_admin').eq('id', user.id).maybeSingle();
+      if (profileError) throw new Error('AUTHORIZATION_UNAVAILABLE');
+      isAdmin = profile?.is_admin === true;
     }
 
     const { order_id, is_auto, is_retry = false } = await req.json();
@@ -54,13 +56,27 @@ serve(async (req) => {
 
     // Enforce authorization: only service role, admin, or order owner can trigger purchase verification
     if (!isServiceCall && !isAdmin) {
-      if (order.user_id !== userObj.id) {
+      if (order.customer_id !== userObj.id) {
         throw new Error("Forbidden: caller is not authorized for this order");
       }
     }
 
-    const { data: settings } = await serviceClient.from('international_sync_settings').select('*').eq('id', 1).single();
-    if (!settings) throw new Error("International sync settings not found");
+    if (order.is_international !== true || order.payment_method !== "dlocalgo")
+      throw new Error("ZINC_INTERNATIONAL_DLOCAL_ONLY");
+    if (!order.payment_processed_at || !["paid", "approved"].includes(order.payment_status) || !order.payment_id)
+      throw new Error("PAYMENT_NOT_CONFIRMED");
+    if (!isServiceCall && !isAdmin) throw new Error("ZINC_OPERATOR_ONLY");
+    const { data: holds, error: holdError } = await serviceClient
+      .from("international_cancellation_requests").select("id")
+      .eq("order_id", order_id).not("status", "in", '("rejected","refunded")').limit(1);
+    if (holdError) throw new Error("CANCELLATION_HOLD_UNAVAILABLE");
+    if (holds?.length) throw new Error("CANCELLATION_HOLD_ACTIVE");
+
+    const { data: settings, error: settingsError } = await serviceClient.from('international_sync_settings').select('*').eq('id', 1).single();
+    if (settingsError || !settings) throw new Error("International sync settings not found");
+    if (settings.international_purchases_enabled !== true || settings.auto_purchase_enabled !== true ||
+        Deno.env.get("ZINC_AUTO_PURCHASE_CERTIFIED") !== "true")
+      throw new Error("ZINC_AUTO_PURCHASE_NOT_CERTIFIED_OR_DISABLED");
 
     // Resolve explicit Zinc environment (no generic fallback)
     const targetEnv: "sandbox" | "production" = settings.zinc_production_enabled === true ? "production" : "sandbox";
@@ -130,7 +146,7 @@ serve(async (req) => {
       let reasonCode = "";
 
       // 3. Check if order is paid
-      if (order.payment_status !== 'approved' && order.status !== 'paid') {
+      if (!order.payment_processed_at || !['approved', 'paid'].includes(order.payment_status)) {
         failureMessage = "La orden no está marcada como pagada.";
         reasonCode = "PAYMENT_INCONSISTENCY";
       }
@@ -215,7 +231,7 @@ serve(async (req) => {
       }
 
       // 7. Place Order in Zinc with Deterministic PO Number
-      if (settings.auto_purchase_enabled || isServiceCall || (userObj && order.status === 'paid')) {
+      if (settings.auto_purchase_enabled === true) {
         // Enforce Server-Side Hard Production Safety Gate
         try {
           assertProductionGate(ZINC_API_KEY, settings.zinc_production_enabled === true);
@@ -302,6 +318,29 @@ serve(async (req) => {
         };
 
         try {
+          const { data: latestSettings, error: latestSettingsError } = await serviceClient.from('international_sync_settings')
+            .select('international_purchases_enabled,auto_purchase_enabled,zinc_production_enabled').eq('id', 1).single();
+          const { data: latestOrder, error: latestOrderError } = await serviceClient.from('orders')
+            .select('payment_status,payment_processed_at,payment_method,payment_id,is_international').eq('id', order_id).single();
+          const { data: latestHolds, error: latestHoldError } = await serviceClient
+            .from("international_cancellation_requests").select("id")
+            .eq("order_id", order_id).not("status", "in", '("rejected","refunded")').limit(1);
+          if (latestSettingsError || latestOrderError || latestHoldError || latestHolds?.length ||
+              latestSettings?.international_purchases_enabled !== true || latestSettings?.auto_purchase_enabled !== true ||
+              latestSettings.zinc_production_enabled !== settings.zinc_production_enabled ||
+              latestOrder?.is_international !== true || latestOrder.payment_method !== "dlocalgo" ||
+              latestOrder.payment_id !== order.payment_id || !latestOrder.payment_processed_at ||
+              !["paid", "approved"].includes(latestOrder.payment_status)) {
+            const { error: blockedUpdateError } = await serviceClient.from('international_order_items').update({
+              purchase_status: 'manual_review', review_reason_code: 'ZINC_PRE_SUBMISSION_GATE_BLOCKED',
+              zinc_error_message: 'Payment, cancellation or configuration changed before submission.',
+              updated_at: new Date().toISOString()
+            }).eq('id', intlOrderItem.id);
+            if (blockedUpdateError) throw new Error("ZINC_BLOCKED_STATE_PERSISTENCE_FAILED");
+            allOk = false;
+            finalOrderStatus = 'manual_review';
+            continue;
+          }
           const zincOrdersUrl = 'https://api.zinc.com/orders';
           const zincRes = await fetch(zincOrdersUrl, {
             method: 'POST',
