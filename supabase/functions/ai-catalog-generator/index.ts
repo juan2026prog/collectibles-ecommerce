@@ -74,7 +74,6 @@ serve(async (req) => {
        generatedTitle = result.title;
        generatedDescription = result.description;
        keywords = result.keywords || [];
-    }
 
     if (productId) {
       await supabase.from('products').update({ 
