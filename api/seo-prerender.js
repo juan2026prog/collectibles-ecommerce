@@ -3,7 +3,7 @@ import { createSeoProductRepository, isUuid } from './_lib/seo-product-repositor
 import fs from 'fs';
 import path from 'path';
 
-const BASE_URL = 'https://collectibles.uy';
+const BASE_URL = 'https://collectibles.com.uy';
 
 // Curated & static editorial academy guides list (fully indexable 200 OK)
 const ACADEMY_ARTICLES_MAP = {
@@ -712,7 +712,7 @@ export function createSeoPrerenderHandler(clientFactory = createPublicSupabase) 
     supabase ||= clientFactory();
     productRepository ||= createSeoProductRepository(supabase, STATIC_MLU_MAPPINGS);
     const rawUrl = req.url || '';
-    const parsed = new URL(rawUrl, 'https://collectibles.uy');
+    const parsed = new URL(rawUrl, 'https://collectibles.com.uy');
     const xForwardedUri = req.headers?.['x-forwarded-uri'] || req.headers?.['x-matched-path'] || '';
     const combinedUri = (parsed.pathname + ' ' + rawUrl + ' ' + xForwardedUri).toLowerCase();
 
@@ -1449,7 +1449,7 @@ export function createSeoPrerenderHandler(clientFactory = createPublicSupabase) 
       const orgSchema = {
         '@context': 'https://schema.org',
         '@type': 'Organization',
-        '@id': 'https://collectibles.uy/#organization',
+        '@id': 'https://collectibles.com.uy/#organization',
         'name': 'Collectibles',
         'alternateName': 'Collectibles Uruguay',
         'url': BASE_URL,
@@ -1474,12 +1474,12 @@ export function createSeoPrerenderHandler(clientFactory = createPublicSupabase) 
       const siteSchema = {
         '@context': 'https://schema.org',
         '@type': 'WebSite',
-        '@id': 'https://collectibles.uy/#website',
+        '@id': 'https://collectibles.com.uy/#website',
         'name': 'Collectibles Uruguay',
         'url': BASE_URL,
         'description': 'Tienda especializada en figuras de acción, Funko Pop, NECA y coleccionables en Uruguay. Figuras que cuentan historias.',
         'publisher': {
-          '@id': 'https://collectibles.uy/#organization'
+          '@id': 'https://collectibles.com.uy/#organization'
         },
         'potentialAction': {
           '@type': 'SearchAction',
@@ -1494,7 +1494,7 @@ export function createSeoPrerenderHandler(clientFactory = createPublicSupabase) 
       const storeSchema = {
         '@context': 'https://schema.org',
         '@type': 'Store',
-        '@id': 'https://collectibles.uy/#store',
+        '@id': 'https://collectibles.com.uy/#store',
         'name': 'Collectibles Uruguay',
         'url': BASE_URL,
         'description': 'Tienda online especializada en figuras de acción, Funko Pop, NECA y coleccionables en Uruguay.',
@@ -1503,7 +1503,7 @@ export function createSeoPrerenderHandler(clientFactory = createPublicSupabase) 
         'currenciesAccepted': 'UYU',
         'paymentAccepted': 'Cash, Credit Card, Mercado Pago',
         'parentOrganization': {
-          '@id': 'https://collectibles.uy/#organization'
+          '@id': 'https://collectibles.com.uy/#organization'
         },
         'address': {
           '@type': 'PostalAddress',

@@ -10,7 +10,7 @@ Dentro de este workspace, una tarea que cree o modifique código de la aplicaci�
 
 Cuando una tarea de implementación haya quedado funcional y validada, debes ejecutar la Skill `collectibles-production-deploy` antes de entregar la respuesta final al usuario.
 
-El destino de producción oficial es **https://collectibles.uy**.
+El destino de producción oficial es **https://collectibles.com.uy**.
 
 ---
 
@@ -19,7 +19,7 @@ El destino de producción oficial es **https://collectibles.uy**.
 - **No ejecutar deployment** para tareas que no hayan producido cambios reales en la aplicación (análisis, investigación, lectura, planificación, auditorías sin modificaciones).
 - **No desplegar builds fallidos.** El build debe pasar antes de cualquier commit, push o deploy.
 - **No incluir en commits** cambios preexistentes o ajenos a la tarea actual. Stagear únicamente los archivos del trabajo realizado.
-- **No afirmar que producción fue actualizada** hasta haber verificado el resultado real del deployment en `https://collectibles.uy`.
+- **No afirmar que producción fue actualizada** hasta haber verificado el resultado real del deployment en `https://collectibles.com.uy`.
 
 ---
 

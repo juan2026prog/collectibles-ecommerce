@@ -7,7 +7,7 @@ async function verifyProductionImages() {
     console.log(`Attempt ${attempt}/15 (waiting for Vercel deployment...)...`);
 
     try {
-      const csvRes = await fetch('https://collectibles.uy/meta-catalog.csv');
+      const csvRes = await fetch('https://collectibles.com.uy/meta-catalog.csv');
       const csvText = await csvRes.text();
       const lines = csvText.split('\n');
 
@@ -31,7 +31,7 @@ async function verifyProductionImages() {
         const fields = line.split('","').map(f => f.replace(/^"|"$/g, ''));
         const imageLink = fields[7];
 
-        if (!imageLink || !imageLink.startsWith('https://collectibles.uy/catalog-images/')) {
+        if (!imageLink || !imageLink.startsWith('https://collectibles.com.uy/catalog-images/')) {
           console.log(`  [${t.name}] image_link not updated yet: ${imageLink}`);
           allOk = false;
           continue;

@@ -2199,10 +2199,7 @@ Intentos Cola: ${qItem?.attempts || 0}
               <strong className="block text-gray-900 font-bold mb-1">Webhook de Estados</strong>
               Configura el siguiente endpoint en tu portal de administración de DAC para recibir las actualizaciones de estado en tiempo real de tus envíos:
               <code className="block mt-2 p-2 bg-gray-900 text-gray-100 rounded font-mono text-[10px] select-all">
-                {window.location.origin.includes('localhost') 
-                  ? 'https://collectibles-ecommerce.vercel.app/functions/v1/dac-webhook' 
-                  : `${window.location.origin}/functions/v1/dac-webhook`
-                }
+                ${(import.meta.env.VITE_SUPABASE_URL || 'https://cobtsgkwcftvexaarwmo.supabase.co').replace(/\/$/, '')}/functions/v1/dac-webhook
               </code>
             </div>
           </div>

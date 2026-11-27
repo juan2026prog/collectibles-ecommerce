@@ -746,7 +746,7 @@ export function NotificationCenterPanel({
                   />
                 </div>
                 <p className="text-[11px] opacity-70">
-                  Remitente oficial: notificaciones@collectibles.uy
+                  Contacto oficial: info@collectibles.com.uy
                 </p>
               </div>
 

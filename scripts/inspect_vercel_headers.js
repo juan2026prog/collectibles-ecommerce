@@ -25,31 +25,31 @@ function getHeaders(url) {
 
 (async () => {
   console.log('--- INSPECCIÓN DE HEADERS EN PRODUCCIÓN LIVE ---');
-  const h1 = await getHeaders('https://collectibles.uy/');
-  console.log('\nURL: https://collectibles.uy/');
+  const h1 = await getHeaders('https://collectibles.com.uy/');
+  console.log('\nURL: https://collectibles.com.uy/');
   console.log('Status:', h1.statusCode);
   console.log('x-vercel-id:', h1.headers['x-vercel-id']);
   console.log('x-vercel-cache:', h1.headers['x-vercel-cache']);
   console.log('etag:', h1.headers['etag']);
   console.log('last-modified:', h1.headers['last-modified']);
 
-  const h2 = await getHeaders('https://collectibles.uy/marca/funko');
-  console.log('\nURL: https://collectibles.uy/marca/funko');
+  const h2 = await getHeaders('https://collectibles.com.uy/marca/funko');
+  console.log('\nURL: https://collectibles.com.uy/marca/funko');
   console.log('Status:', h2.statusCode);
   console.log('x-vercel-id:', h2.headers['x-vercel-id']);
   console.log('x-vercel-cache:', h2.headers['x-vercel-cache']);
   console.log('content-disposition:', h2.headers['content-disposition']);
   console.log('etag:', h2.headers['etag']);
 
-  const h3 = await getHeaders('https://collectibles.uy/api/seo-prerender');
-  console.log('\nURL: https://collectibles.uy/api/seo-prerender');
+  const h3 = await getHeaders('https://collectibles.com.uy/api/seo-prerender');
+  console.log('\nURL: https://collectibles.com.uy/api/seo-prerender');
   console.log('Status:', h3.statusCode);
   console.log('x-vercel-id:', h3.headers['x-vercel-id']);
   console.log('x-vercel-cache:', h3.headers['x-vercel-cache']);
   console.log('content-disposition:', h3.headers['content-disposition']);
 
-  const h4 = await getHeaders('https://collectibles.uy/sitemap.xml');
-  console.log('\nURL: https://collectibles.uy/sitemap.xml');
+  const h4 = await getHeaders('https://collectibles.com.uy/sitemap.xml');
+  console.log('\nURL: https://collectibles.com.uy/sitemap.xml');
   console.log('Status:', h4.statusCode);
   console.log('x-vercel-id:', h4.headers['x-vercel-id']);
   console.log('content-type:', h4.headers['content-type']);

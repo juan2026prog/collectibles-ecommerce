@@ -24,7 +24,7 @@ async function verifyNoAddToCartDuplication() {
     });
 
     try {
-      await page.goto('https://collectibles.uy/p/mercadolibre-MLU615896308', { waitUntil: 'networkidle', timeout: 30000 });
+      await page.goto('https://collectibles.com.uy/p/mercadolibre-MLU615896308', { waitUntil: 'networkidle', timeout: 30000 });
       await page.waitForTimeout(3000);
 
       // Find and click Add to Cart button ONCE

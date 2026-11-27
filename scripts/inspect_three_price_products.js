@@ -31,7 +31,7 @@ async function inspectPrices() {
   console.log('\nProductos con menor base_price en DB:', recentP);
 
   // Fetch live merchant feed
-  const feedRes = await fetch('https://collectibles.uy/merchant-feed.xml');
+  const feedRes = await fetch('https://collectibles.com.uy/merchant-feed.xml');
   const xml = await feedRes.text();
 
   const itemMatches = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
@@ -54,7 +54,7 @@ async function inspectPrices() {
       const feedPrice = feedMap[p.id] || 'NOT_IN_FEED';
       
       // Prerender check for JSON-LD & Page
-      const pUrl = `https://collectibles.uy/producto/${p.slug}`;
+      const pUrl = `https://collectibles.com.uy/producto/${p.slug}`;
       const pageRes = await fetch(pUrl);
       const html = await pageRes.text();
 

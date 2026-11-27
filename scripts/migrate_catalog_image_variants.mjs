@@ -50,7 +50,7 @@ else if(args.includes('--catalog')){
       .eq('status','published').order('id').range(from,from+999);
     if(error)throw Error('International image inventory unavailable');visit(data);if(data.length<1000)break;
   }
-  const facets=await fetch('https://collectibles.uy/api/public-catalog?mode=facets',{signal:AbortSignal.timeout(15000)});
+  const facets=await fetch('https://collectibles.com.uy/api/public-catalog?mode=facets',{signal:AbortSignal.timeout(15000)});
   if(!facets.ok)throw Error('Public asset inventory unavailable');visit(await facets.json());
   const {data:groups,error:groupError}=await client.from('product_groups').select('badge_image_url').eq('is_active',true);
   if(groupError)throw Error('Badge inventory unavailable');visit(groups);
@@ -80,7 +80,7 @@ async function health(){
       const {error,status}=await client.from('media_image_variants').select('original_url').limit(1).abortSignal(AbortSignal.timeout(10000));
       probe.registry_status=status;
       if(error)probe.registry_error=/^[A-Z0-9_]{1,40}$/.test(error.code||'')?error.code:'READ_FAILED';
-      const response=await fetch('https://collectibles.uy/api/public-catalog?limit=15&availability=all',{signal:AbortSignal.timeout(15000)});
+      const response=await fetch('https://collectibles.com.uy/api/public-catalog?limit=15&availability=all',{signal:AbortSignal.timeout(15000)});
       const data=response.ok?await response.json():null;
       probe.catalog_status=response.status;probe.catalog_shape_ok=Array.isArray(data?.products)&&data.count>0;
       probe.origin_snapshot=response.headers.get('x-catalog-snapshot');

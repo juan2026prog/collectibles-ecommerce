@@ -120,7 +120,7 @@ export class SkyPostalClient {
       const randomSuffix = Math.floor(1000 + Math.random() * 9000);
       const trackingNumber = `SKY-${country}-${timestamp}${randomSuffix}`;
       const externalGuide = `GUA-${Math.floor(100000 + Math.random() * 900000)}`;
-      const labelUrl = `https://storage.collectibles.uy/shipping-labels/skypostal/${trackingNumber}.pdf`;
+      const labelUrl = `https://storage.collectibles.com.uy/shipping-labels/skypostal/${trackingNumber}.pdf`;
 
       const responsePayload: SkyPostalShipmentResponse = {
         success: true,
@@ -238,7 +238,7 @@ export class SkyPostalClient {
 
     return {
       success: true,
-      labelUrl: `https://storage.collectibles.uy/shipping-labels/skypostal/${trackingOrGuide}.pdf`
+      labelUrl: `https://storage.collectibles.com.uy/shipping-labels/skypostal/${trackingOrGuide}.pdf`
     };
   }
 
@@ -260,7 +260,7 @@ export class SkyPostalClient {
       success: true,
       manifestId,
       totalPackages: request.shipmentIds.length,
-      manifestUrl: `https://storage.collectibles.uy/manifests/skypostal/${manifestId}.pdf`,
+      manifestUrl: `https://storage.collectibles.com.uy/manifests/skypostal/${manifestId}.pdf`,
       manifestDate,
       fuelIndexValue: fuelRes.spotPriceUsd,
       fuelAdjustmentPercent: fuelRes.adjustmentPercent,

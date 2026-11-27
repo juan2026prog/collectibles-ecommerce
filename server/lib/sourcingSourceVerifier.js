@@ -65,7 +65,7 @@ export function productSignalContext(raw, country, signals = [], listings = []) 
     if (isRadarRelease) {
       observations.push({
         field: 'release',
-        ...provenance(s.signal_type === 'PREORDER_WINDOW' ? 'PREORDER' : 'NEW', 'OBSERVED', s.source_name || 'Radar', s.source_url || 'https://collectibles.uy/admin/radar', s.observed_at, {
+        ...provenance(s.signal_type === 'PREORDER_WINDOW' ? 'PREORDER' : 'NEW', 'OBSERVED', s.source_name || 'Radar', s.source_url || 'https://collectibles.com.uy/admin/radar', s.observed_at, {
           source_type: s.source_type,
           signal_type: s.signal_type,
           evidence_text: s.evidence_text,
@@ -74,7 +74,7 @@ export function productSignalContext(raw, country, signals = [], listings = []) 
       });
     } else {
       observations.push({ field: internal ? 'local_demand' : 'global_momentum', ...provenance(Number(s.value), 'OBSERVED', s.source_name,
-        s.source_url || (internal ? 'https://collectibles.uy/admin/sourcing' : null), s.observed_at, { source_type: s.source_type, evidence_text: s.evidence_text, signal_id: s.id }) });
+        s.source_url || (internal ? 'https://collectibles.com.uy/admin/sourcing' : null), s.observed_at, { source_type: s.source_type, evidence_text: s.evidence_text, signal_id: s.id }) });
     }
   }
   const matching = listings.filter(m => sameProductTitle(m.title, title) && publicUrl(m.permalink));

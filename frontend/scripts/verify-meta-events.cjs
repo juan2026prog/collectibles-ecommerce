@@ -21,13 +21,13 @@ async function testFullUserFlow() {
     }
   });
 
-  console.log('1. Navigating to Product Detail Page (https://collectibles.uy/p/mercadolibre-MLU615896308)...');
-  await page.goto('https://collectibles.uy/p/mercadolibre-MLU615896308', { waitUntil: 'networkidle', timeout: 30000 });
+  console.log('1. Navigating to Product Detail Page (https://collectibles.com.uy/p/mercadolibre-MLU615896308)...');
+  await page.goto('https://collectibles.com.uy/p/mercadolibre-MLU615896308', { waitUntil: 'networkidle', timeout: 30000 });
   await page.waitForTimeout(4000);
 
   const productUUID = 'fef2acf0-4c0b-4a70-b93d-fb6ae258b1f7';
-  console.log(`2. Verifying product UUID (${productUUID}) in https://collectibles.uy/meta-catalog.csv...`);
-  const csvRes = await fetch('https://collectibles.uy/meta-catalog.csv');
+  console.log(`2. Verifying product UUID (${productUUID}) in https://collectibles.com.uy/meta-catalog.csv...`);
+  const csvRes = await fetch('https://collectibles.com.uy/meta-catalog.csv');
   const csvText = await csvRes.text();
 
   const csvHasUUID = csvText.includes(productUUID);

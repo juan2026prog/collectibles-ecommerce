@@ -8,7 +8,7 @@ let cachedMetaAt = 0;
 const META_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 const DISK_META_CSV_PATH = '/tmp/collectibles_meta_catalog.csv';
 
-const BASE_SITE_URL = 'https://collectibles.uy';
+const BASE_SITE_URL = 'https://collectibles.com.uy';
 
 /**
  * Cleans text from HTML tags, line breaks, and excessive spaces.
@@ -30,8 +30,16 @@ function resolveImageUrl(imgUrl) {
   const trimmed = imgUrl.trim();
   if (!trimmed) return '';
 
-  if (trimmed.startsWith('https://collectibles.uy/catalog-images/')) {
+  if (trimmed.startsWith('https://collectibles.com.uy/catalog-images/')) {
     return trimmed;
+  }
+
+  if (trimmed.startsWith('https://collectibles.uy/catalog-images/')) {
+    return trimmed.replace('https://collectibles.uy/catalog-images/', `${BASE_SITE_URL}/catalog-images/`);
+  }
+
+  if (/^https?:\/\/([a-z0-9-]+\.)?collectibles\.uy(\/|$)/i.test(trimmed)) {
+    return '';
   }
 
   if (trimmed.includes('cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/')) {

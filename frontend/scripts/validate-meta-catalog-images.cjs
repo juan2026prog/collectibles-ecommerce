@@ -7,14 +7,14 @@ const supabaseUrl = 'https://cobtsgkwcftvexaarwmo.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNvYnRzZ2t3Y2Z0dmV4YWFyd21vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ1NzIwNTMsImV4cCI6MjA5MDE0ODA1M30.vXyiMl093ojZ8OyEpRuGnX5O5lHsLXxljynrYtMmf50';
 
 const supabase = createClient(supabaseUrl, supabaseKey);
-const BASE_SITE_URL = 'https://collectibles.uy';
+const BASE_SITE_URL = 'https://collectibles.com.uy';
 
 function resolveImageUrl(imgUrl) {
   if (!imgUrl || typeof imgUrl !== 'string') return '';
   const trimmed = imgUrl.trim();
   if (!trimmed) return '';
 
-  if (trimmed.startsWith('https://collectibles.uy/catalog-images/')) {
+  if (trimmed.startsWith('https://collectibles.com.uy/catalog-images/')) {
     return trimmed;
   }
 
@@ -46,8 +46,8 @@ function resolveImageUrl(imgUrl) {
 
 // Convert proxied catalog-images URL back to direct target URL for local testing before deployment
 function getDirectTargetUrl(proxiedUrl) {
-  if (!proxiedUrl.startsWith('https://collectibles.uy/catalog-images/')) return proxiedUrl;
-  const pathPart = proxiedUrl.substring('https://collectibles.uy/catalog-images/'.length);
+  if (!proxiedUrl.startsWith('https://collectibles.com.uy/catalog-images/')) return proxiedUrl;
+  const pathPart = proxiedUrl.substring('https://collectibles.com.uy/catalog-images/'.length);
 
   if (pathPart.startsWith('external/')) {
     return 'https://' + pathPart.substring('external/'.length);

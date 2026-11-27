@@ -153,7 +153,7 @@ function generateSimulatedSessions() {
         wishlist: i % 9 === 0
       },
       metadata: {
-        domain: i % 22 === 0 ? 'localhost:5173' : (i % 35 === 0 ? 'collectibles-ecommerce-preview.vercel.app' : 'collectibles.uy'),
+        domain: i % 22 === 0 ? 'localhost:5173' : (i % 35 === 0 ? 'collectibles-ecommerce-preview.vercel.app' : 'collectibles.com.uy'),
         isTesting: isTestSession
       }
     });

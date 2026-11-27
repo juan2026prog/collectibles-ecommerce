@@ -1,4 +1,4 @@
-const BASE_URL = 'https://collectibles.uy';
+const BASE_URL = 'https://collectibles.com.uy';
 
 function cleanText(str) {
   if (!str) return '';

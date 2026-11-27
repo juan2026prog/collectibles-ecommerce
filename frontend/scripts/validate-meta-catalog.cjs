@@ -7,7 +7,7 @@ const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLI
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const SUPABASE_STORAGE_BUCKET = 'product-images';
-const BASE_SITE_URL = 'https://collectibles.uy';
+const BASE_SITE_URL = 'https://collectibles.com.uy';
 
 function cleanText(text) {
   if (!text) return '';
@@ -138,7 +138,7 @@ async function validateMetaCatalog() {
 
     // 6. Link check
     const productLink = `${BASE_SITE_URL}/p/${p.slug}`;
-    if (!productLink.startsWith('https://collectibles.uy/p/')) {
+    if (!productLink.startsWith('https://collectibles.com.uy/p/')) {
       errors.push(`Row ${idx} (ID: ${p.id}): Invalid URL link -> ${productLink}`);
     }
 

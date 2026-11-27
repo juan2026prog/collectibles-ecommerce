@@ -139,7 +139,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
   {
     key: 'product_url',
     label: 'URL del producto',
-    description: 'URL pública completa del producto en Collectibles.uy (Campo calculado de solo lectura).',
+    description: 'URL pública completa del producto en Collectibles.com.uy (Campo calculado de solo lectura).',
     order: 4,
     type: 'url',
     exportable: true,
@@ -147,9 +147,9 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     adminOnly: false,
     nullable: true,
     blankBehavior: 'ignore',
-    example: 'https://collectibles.uy/producto/figura-batman-legacy',
+    example: 'https://collectibles.com.uy/producto/figura-batman-legacy',
     synonyms: ['product_url', 'url_producto', 'link', 'enlace'],
-    exportResolver: p => p.slug ? `https://collectibles.uy/producto/${p.slug}` : ''
+    exportResolver: p => p.slug ? `https://collectibles.com.uy/producto/${p.slug}` : ''
   },
 
   // --- CONTENIDO ---
@@ -665,7 +665,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     adminOnly: false,
     nullable: true,
     blankBehavior: 'ignore',
-    example: 'https://collectibles.uy/images/batman-1.jpg',
+    example: 'https://collectibles.com.uy/images/batman-1.jpg',
     synonyms: ['image_url', 'imagen_principal', 'foto', 'image', 'url_imagen', 'img'],
     exportResolver: p => p.image_url || p.metadata?.image_url || ''
   },
@@ -682,7 +682,7 @@ export const PRODUCT_MASTER_FIELDS: ProductFieldDefinition[] = [
     adminOnly: false,
     nullable: true,
     blankBehavior: 'erase',
-    example: 'https://collectibles.uy/images/batman-2.jpg | https://collectibles.uy/images/batman-3.jpg',
+    example: 'https://collectibles.com.uy/images/batman-2.jpg | https://collectibles.com.uy/images/batman-3.jpg',
     synonyms: ['additional_images', 'imagenes_adicionales', 'galeria', 'gallery_urls', 'fotos_secundarias'],
     exportResolver: p => Array.isArray(p.gallery) ? p.gallery.map((g: any) => typeof g === 'string' ? g : g.url).filter(Boolean).join(' | ') : ''
   },

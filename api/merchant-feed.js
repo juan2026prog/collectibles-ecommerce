@@ -59,16 +59,21 @@ function resolveMerchantImageUrl(imgUrl) {
     return `https://cobtsgkwcftvexaarwmo.supabase.co${trimmed}`;
   }
 
+  // Reject untrusted legacy collectibles.uy image origins
+  if (/^https?:\/\/([a-z0-9-]+\.)?collectibles\.uy(\/|$)/i.test(trimmed)) {
+    return '';
+  }
+
   // 2. MercadoLibre static image URLs (proxied to add headers/extension consistency)
   if (trimmed.includes('http2.mlstatic.com/')) {
     const pathPart = trimmed.split('http2.mlstatic.com/')[1];
-    return `https://collectibles.uy/catalog-images/external/http2.mlstatic.com/${pathPart}`;
+    return `https://collectibles.com.uy/catalog-images/external/http2.mlstatic.com/${pathPart}`;
   }
 
   // 3. Other external image URLs
   if (/^(https?:\/\/)/.test(trimmed)) {
     const withoutProtocol = trimmed.replace(/^https?:\/\//, '');
-    return `https://collectibles.uy/catalog-images/external/${withoutProtocol}`;
+    return `https://collectibles.com.uy/catalog-images/external/${withoutProtocol}`;
   }
 
   // 4. Relative paths or product image filenames
@@ -100,7 +105,7 @@ async function fetchAllPaged(queryBuilder, pageSize = 1000, maxTotal = 50000) {
   return all;
 }
 
-export async function generateMerchantFeedXml(supabase, baseUrl = 'https://collectibles.uy') {
+export async function generateMerchantFeedXml(supabase, baseUrl = 'https://collectibles.com.uy') {
   // 1. Paginated fetch for ALL published active products
   const allProducts = await fetchAllPaged((from, to) =>
     supabase

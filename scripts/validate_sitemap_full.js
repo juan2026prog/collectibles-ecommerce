@@ -61,7 +61,7 @@ function simulateReq(query) {
     let type = 'home';
     let queryParams = { type: 'home' };
 
-    if (url.endsWith('collectibles.uy') || url.endsWith('collectibles.uy/')) {
+    if (url.endsWith('collectibles.com.uy') || url.endsWith('collectibles.com.uy/')) {
       type = 'home';
       queryParams = { type: 'home' };
     } else if (url.includes('/shop')) {

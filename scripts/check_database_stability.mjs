@@ -1,7 +1,7 @@
 // Read-only, sequential probes. No cache busting, provider calls or credentials.
 import { pathToFileURL } from 'node:url';
 
-const ORIGIN = 'https://collectibles.uy';
+const ORIGIN = process.env.STABILITY_TARGET_ORIGIN || 'https://collectibles.com.uy';
 const PATHS = ['/', '/shop', '/api/public-catalog?limit=15&availability=all', '/api/public-catalog?limit=15&availability=all&search=pokemon'];
 
 export async function probeDatabasePath(path, fetcher = fetch) {

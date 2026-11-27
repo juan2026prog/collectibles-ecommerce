@@ -1155,7 +1155,7 @@ export default function Home() {
       <SEO
         title="Collectibles Uruguay | Figuras de Acción, Funko y Coleccionables"
         description="Collectibles Uruguay. Figuras de acción, Funko Pop, NECA y coleccionables de tus personajes y franquicias favoritas. Stock local y envíos a todo Uruguay. Figuras que cuentan historias."
-        keywords="figuras de accion uruguay, funko pop uruguay, neca uruguay, coleccionables uruguay, bandai uruguay, marvel legends uruguay, anime uruguay, collectibles.uy"
+        keywords="figuras de accion uruguay, funko pop uruguay, neca uruguay, coleccionables uruguay, bandai uruguay, marvel legends uruguay, anime uruguay, collectibles.com.uy"
       />
 
       {layoutBlocks.filter((b: any) => b.visible !== false).map((b: any) => (

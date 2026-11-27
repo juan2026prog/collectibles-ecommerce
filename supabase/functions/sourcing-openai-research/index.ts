@@ -12,7 +12,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_MODEL = "gpt-4o";
 
-const SYSTEM_PROMPT = `You are COLLECTIBLES SOURCING RESEARCH AGENT for Collectibles.uy, a premium collectibles store in Uruguay.
+const SYSTEM_PROMPT = `You are COLLECTIBLES SOURCING RESEARCH AGENT for Collectibles.com.uy, a premium collectibles store in Uruguay.
 
 MISSION: Discover commercially relevant product candidates for the Sourcing Center.
 
@@ -243,7 +243,7 @@ serve(async (req) => {
       "sideshow.com", "www.sideshow.com",
       "ironstudios.com", "www.ironstudios.com",
       "funko.com", "www.funko.com",
-      "collectibles.uy", "www.collectibles.uy"
+      "collectibles.com.uy", "www.collectibles.com.uy"
     ];
 
     function isValidHttpsUrl(rawUrl: string): boolean {

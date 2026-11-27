@@ -7,7 +7,7 @@
  * to audit Google Search Console integration, sitemaps, and URL inspection.
  */
 
-const PRODUCTION_URL = 'https://collectibles.uy';
+const PRODUCTION_URL = 'https://collectibles.com.uy';
 
 async function runGoogleSearchConsoleCheck() {
   const baseUrl = process.env.COLLECTIBLES_BASE_URL || PRODUCTION_URL;
@@ -90,7 +90,7 @@ async function runGoogleSearchConsoleCheck() {
     console.log('-'.repeat(125));
 
     urls.forEach(u => {
-      const urlShort = u.url.replace('https://collectibles.uy', '').padEnd(55);
+      const urlShort = u.url.replace('https://collectibles.com.uy', '').padEnd(55);
       const verdict = (u.verdict || 'UNKNOWN').padEnd(10);
       const cov = (u.coverageState || 'UNKNOWN').slice(0, 28).padEnd(30);
       const robots = (u.robotsTxtState || 'UNKNOWN').padEnd(12);

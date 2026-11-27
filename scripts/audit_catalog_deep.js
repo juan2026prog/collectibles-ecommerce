@@ -392,7 +392,7 @@ function checkUrlHttp(targetUrl) {
   // PARTE 7 — REPORTE FINAL CATALOG_READINESS_FINAL.md
   const mdFinal = `# REPORTE DE ESTADO REAL DE CATÁLOGO: AUDITORÍA DE DATOS Y IMÁGENES
 
-**Dominio oficial:** \`https://collectibles.uy\`  
+**Dominio oficial:** \`https://collectibles.com.uy\`  
 **Fecha de informe:** 1 de Septiembre, 2026  
 
 ---

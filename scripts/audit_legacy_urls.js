@@ -1,7 +1,7 @@
 import fs from 'fs';
 
 async function auditLegacyUrls() {
-  const target = 'https://collectibles.uy';
+  const target = 'https://collectibles.com.uy';
   
   console.log('================================================================');
   console.log('AUDITORÍA LIVE PRODUCCIÓN DE RESOLUCIÓN DE URLs LEGACY /p/');

@@ -1,11 +1,11 @@
 import fs from 'fs';
 
 const sitemaps = [
-  { name: 'Productos', url: 'https://collectibles.uy/sitemap-products.xml' },
-  { name: 'Categorías', url: 'https://collectibles.uy/sitemap-categories.xml' },
-  { name: 'Marcas', url: 'https://collectibles.uy/sitemap-brands.xml' },
-  { name: 'Academy', url: 'https://collectibles.uy/sitemap-academy.xml' },
-  { name: 'Páginas', url: 'https://collectibles.uy/sitemap-pages.xml' }
+  { name: 'Productos', url: 'https://collectibles.com.uy/sitemap-products.xml' },
+  { name: 'Categorías', url: 'https://collectibles.com.uy/sitemap-categories.xml' },
+  { name: 'Marcas', url: 'https://collectibles.com.uy/sitemap-brands.xml' },
+  { name: 'Academy', url: 'https://collectibles.com.uy/sitemap-academy.xml' },
+  { name: 'Páginas', url: 'https://collectibles.com.uy/sitemap-pages.xml' }
 ];
 
 async function generate() {

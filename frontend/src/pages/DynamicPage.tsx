@@ -462,7 +462,7 @@ export default function DynamicPage({ forcedSlug }: { forcedSlug?: string }) {
       <Helmet>
         <title>{`${page.title} | Collectibles Uruguay`}</title>
         <meta name="description" content={pageSubtitle} />
-        <link rel="canonical" href={`https://collectibles.uy/page/${page.slug || slug}`} />
+        <link rel="canonical" href={`https://collectibles.com.uy/page/${page.slug || slug}`} />
       </Helmet>
       {/* HERO DOCUMENTO */}
       <section className="relative overflow-hidden border-b border-white/10">

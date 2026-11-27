@@ -668,7 +668,7 @@ export default function VendorStorefront() {
 
   const seoTitle = store.seo_title || `${store.store_name} - Tienda Oficial | Collectibles`;
   const seoDesc = store.seo_description || store.description || `Encuentra los productos de ${store.store_name} en Collectibles Uruguay.`;
-  const canonicalUrl = `https://collectibles.uy/store/${slug}`;
+  const canonicalUrl = `https://collectibles.com.uy/store/${slug}`;
 
   // Trust metrics helpers
   const showRating = store.reviews_count > 0;
@@ -703,7 +703,7 @@ export default function VendorStorefront() {
             "name": store.store_name,
             "description": seoDesc,
             "url": canonicalUrl,
-            "image": store.logo_url || "https://collectibles.uy/logo.png",
+            "image": store.logo_url || "https://cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/public-assets/1775828705619-isologocolle.jpg",
             "telephone": store.contact_phone || undefined,
             "email": store.contact_email || undefined,
             "address": pickupAddress ? {

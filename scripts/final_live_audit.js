@@ -1,7 +1,7 @@
-// Complete Live Validation Audit against https://collectibles.uy
+// Complete Live Validation Audit against https://collectibles.com.uy
 import fs from 'fs';
 
-const BASE = 'https://collectibles.uy';
+const BASE = 'https://collectibles.com.uy';
 
 async function fetchManual(url, headers = {}) {
   try {
@@ -305,9 +305,9 @@ async function runAudit() {
   // 14. WWW Y HTTP CANONICALIZATION
   console.log('\n>>> 14. COMPROBANDO WWW Y HTTP...');
   const domainTests = [
-    'http://collectibles.uy',
-    'http://www.collectibles.uy',
-    'https://www.collectibles.uy'
+    'http://collectibles.com.uy',
+    'http://www.collectibles.com.uy',
+    'https://www.collectibles.com.uy'
   ];
   const section14 = [];
   for (const d of domainTests) {

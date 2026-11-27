@@ -49,7 +49,7 @@ async function diagnose() {
   console.log('DIAGNÓSTICO PROFUNDO DE DISAPPROVALS EN MERCHANT FEED');
   console.log('================================================================\n');
 
-  const res = await fetch('https://collectibles.uy/merchant-feed.xml');
+  const res = await fetch('https://collectibles.com.uy/merchant-feed.xml');
   const xml = await res.text();
 
   const itemMatches = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
@@ -76,7 +76,7 @@ async function diagnose() {
       const productId = idMatch ? idMatch[1] : 'UNKNOWN';
       const title = titleMatch ? titleMatch[1] : 'UNKNOWN';
       const link = linkMatch ? linkMatch[1] : '';
-      const slug = link.replace('https://collectibles.uy/producto/', '');
+      const slug = link.replace('https://collectibles.com.uy/producto/', '');
       const imageUrl = imgMatch ? imgMatch[1] : '';
       const priceStr = priceMatch ? priceMatch[1] : '';
 

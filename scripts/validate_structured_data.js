@@ -61,7 +61,7 @@ const { generateProductSchema, generateBreadcrumbs } = require('../api/lib/seo-h
       const pContextOk = pSchema['@context'] === 'https://schema.org/';
       const pTypeOk = pSchema['@type'] === 'Product';
       const pFieldsOk = Boolean(pSchema.name && pSchema.offers && pSchema.offers.priceCurrency === 'UYU');
-      const pUrlsOk = Boolean(pSchema.url && pSchema.url.startsWith('https://collectibles.uy/producto/'));
+      const pUrlsOk = Boolean(pSchema.url && pSchema.url.startsWith('https://collectibles.com.uy/producto/'));
       const pResult = (pContextOk && pTypeOk && pFieldsOk && pUrlsOk) ? 'PASS' : 'FAIL';
 
       if (pResult === 'PASS') passCount++; else failCount++;
