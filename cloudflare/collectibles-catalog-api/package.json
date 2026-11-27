@@ -2,7 +2,7 @@
   "name": "collectibles-catalog-api",
   "version": "1.0.0",
   "private": true,
-  "description": "Cloudflare Worker + D1 Public Read Layer for Collectibles.uy",
+  "description": "Cloudflare Worker + D1 Public Read Layer for Collectibles.com.uy",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",

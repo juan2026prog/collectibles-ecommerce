@@ -16,7 +16,7 @@ migrations_dir = "migrations"
 [vars]
 ENVIRONMENT = "production"
 CATALOG_RUNTIME_ENABLED = "false"
-ALLOWED_ORIGINS = "https://collectibles.uy,https://www.collectibles.uy,http://localhost:5173,http://localhost:3000"
+ALLOWED_ORIGINS = "https://collectibles.com.uy,https://www.collectibles.com.uy,https://collectibles-ecommerce.vercel.app"
 DEFAULT_PAGE_SIZE = "24"
 MAX_PAGE_SIZE = "60"
 

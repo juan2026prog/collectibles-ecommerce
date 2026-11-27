@@ -156,25 +156,77 @@ function clampInt(value: string | null, defaultValue: number, min: number, max: 
   return Math.max(min, Math.min(max, parsed));
 }
 
-function buildCorsHeaders(request: Request, env: Env): Record<string, string> {
-  const origin = request.headers.get('Origin') || '';
-  const allowedList = (env.ALLOWED_ORIGINS || 'https://collectibles.uy,https://www.collectibles.uy,http://localhost:5173')
+const OFFICIAL_SITE_ORIGIN = 'https://collectibles.com.uy';
+const PROJECT_VERCEL_PREVIEW_REGEX = /^collectibles-ecommerce(-[a-z0-9-]+)?\.vercel\.app$/i;
+
+export function isAllowedWorkerOrigin(rawOrigin: string | null | undefined, env: Env): boolean {
+  if (!rawOrigin || !rawOrigin.trim()) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(rawOrigin.trim());
+  } catch {
+    return false;
+  }
+
+  const host = parsed.hostname.toLowerCase().replace(/\.$/, '');
+  if (!host || host === 'collectibles.uy' || host.endsWith('.collectibles.uy')) {
+    return false;
+  }
+
+  const isProd = (env.ENVIRONMENT || 'production').trim().toLowerCase() === 'production';
+  if (host === 'localhost' || host === '127.0.0.1') {
+    if (isProd) return false;
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  }
+
+  if (parsed.protocol !== 'https:') {
+    return false;
+  }
+
+  const allowedList = (
+    env.ALLOWED_ORIGINS ||
+    'https://collectibles.com.uy,https://www.collectibles.com.uy,https://collectibles-ecommerce.vercel.app'
+  )
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
 
-  const allowOrigin = allowedList.includes(origin) || origin.endsWith('.vercel.app')
-    ? origin
-    : allowedList[0] || 'https://collectibles.uy';
+  for (const entry of allowedList) {
+    try {
+      const u = new URL(entry);
+      const entryHost = u.hostname.toLowerCase().replace(/\.$/, '');
+      if (entryHost === 'collectibles.uy' || entryHost.endsWith('.collectibles.uy')) continue;
+      if (isProd && (entryHost === 'localhost' || entryHost === '127.0.0.1')) continue;
+      if (u.origin === parsed.origin) return true;
+    } catch {
+      continue;
+    }
+  }
 
-  return {
-    'Access-Control-Allow-Origin': allowOrigin,
+  if (PROJECT_VERCEL_PREVIEW_REGEX.test(host) && !parsed.port) {
+    return true;
+  }
+
+  return false;
+}
+
+export function buildCorsHeaders(request: Request, env: Env): Record<string, string> {
+  const origin = request.headers.get('Origin');
+  const headers: Record<string, string> = {
     'Access-Control-Allow-Methods': 'GET, HEAD, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Catalog-Client, X-Sync-Timestamp, If-None-Match, X-Catalog-Session-Preview, X-Catalog-Preview',
     'Access-Control-Expose-Headers': 'X-Catalog-Mode, X-Catalog-Kill-Switch, X-Catalog-Cache, X-Catalog-Source',
     'Access-Control-Max-Age': '86400',
     'Vary': 'Origin',
   };
+
+  if (!origin) {
+    headers['Access-Control-Allow-Origin'] = OFFICIAL_SITE_ORIGIN;
+  } else if (isAllowedWorkerOrigin(origin, env)) {
+    headers['Access-Control-Allow-Origin'] = new URL(origin.trim()).origin;
+  }
+
+  return headers;
 }
 
 function jsonResponse(
@@ -1237,7 +1289,7 @@ async function handleMerchantFeedXml(env: Env, corsHeaders: Record<string, strin
       <g:id>${escapeXml(String(p.id))}</g:id>
       <g:title>${escapeXml(String(p.title || '').slice(0, 150))}</g:title>
       <g:description>${escapeXml(String(p.description || p.title || '').slice(0, 1000))}</g:description>
-      <g:link>https://collectibles.uy/producto/${escapeXml(String(p.slug))}</g:link>
+      <g:link>https://collectibles.com.uy/producto/${escapeXml(String(p.slug))}</g:link>
       <g:image_link>${escapeXml(String(p.primary_image_url))}</g:image_link>
       <g:condition>${escapeXml(String(p.condition || 'new'))}</g:condition>
       <g:availability>${availability}</g:availability>
@@ -1250,9 +1302,9 @@ async function handleMerchantFeedXml(env: Env, corsHeaders: Record<string, strin
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <rss xmlns:g="http://base.google.com/ns/1.0" version="2.0">
   <channel>
-    <title>Collectibles.uy</title>
-    <link>https://collectibles.uy</link>
-    <description>Catálogo oficial Collectibles.uy</description>
+    <title>Collectibles Uruguay</title>
+    <link>https://collectibles.com.uy</link>
+    <description>Catálogo oficial Collectibles Uruguay</description>
 ${itemsXml}
   </channel>
 </rss>`;
@@ -1295,7 +1347,7 @@ async function handleMetaFeedCsv(env: Env, corsHeaders: Record<string, string>):
         escapeCsv(availability),
         escapeCsv(p.condition || 'new'),
         escapeCsv(`${Number(p.base_price).toFixed(2)} ${currency}`),
-        escapeCsv(`https://collectibles.uy/producto/${p.slug}`),
+        escapeCsv(`https://collectibles.com.uy/producto/${p.slug}`),
         escapeCsv(p.primary_image_url),
         escapeCsv(p.brand_name || 'Collectibles'),
       ].join(',');
@@ -1327,23 +1379,23 @@ async function handleSitemapXml(url: URL, env: Env, corsHeaders: Record<string, 
 
   if (!typeParam || typeParam === 'pages' || typeParam === 'all') {
     urls.push(
-      '  <url><loc>https://collectibles.uy/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>',
-      '  <url><loc>https://collectibles.uy/tienda</loc><changefreq>daily</changefreq><priority>0.9</priority></url>'
+      '  <url><loc>https://collectibles.com.uy/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>',
+      '  <url><loc>https://collectibles.com.uy/shop</loc><changefreq>daily</changefreq><priority>0.9</priority></url>'
     );
   }
   if (!typeParam || typeParam === 'categories' || typeParam === 'all') {
     for (const c of cats?.results || []) {
-      urls.push(`  <url><loc>https://collectibles.uy/categoria/${encodeURIComponent(c.slug)}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`);
+      urls.push(`  <url><loc>https://collectibles.com.uy/categoria/${encodeURIComponent(c.slug)}</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>`);
     }
   }
   if (!typeParam || typeParam === 'brands' || typeParam === 'all') {
     for (const b of brands?.results || []) {
-      urls.push(`  <url><loc>https://collectibles.uy/marca/${encodeURIComponent(b.slug)}</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>`);
+      urls.push(`  <url><loc>https://collectibles.com.uy/marca/${encodeURIComponent(b.slug)}</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>`);
     }
   }
   if (!typeParam || typeParam === 'products' || typeParam === 'all') {
     for (const p of prods?.results || []) {
-      urls.push(`  <url><loc>https://collectibles.uy/producto/${encodeURIComponent(p.slug)}</loc><changefreq>daily</changefreq><priority>0.8</priority></url>`);
+      urls.push(`  <url><loc>https://collectibles.com.uy/producto/${encodeURIComponent(p.slug)}</loc><changefreq>daily</changefreq><priority>0.8</priority></url>`);
     }
   }
 
@@ -2332,6 +2384,13 @@ export default {
     const corsHeaders = buildCorsHeaders(request, env);
 
     if (request.method === 'OPTIONS') {
+      const reqOrigin = request.headers.get('Origin');
+      if (reqOrigin && !isAllowedWorkerOrigin(reqOrigin, env)) {
+        return new Response(JSON.stringify({ ok: false, error: 'CORS origin not authorized' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json', 'Vary': 'Origin' },
+        });
+      }
       return new Response(null, { status: 204, headers: corsHeaders });
     }
 
