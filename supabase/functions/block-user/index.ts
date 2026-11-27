@@ -5,7 +5,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 // @ts-ignore
-import { corsHeaders, handleOptions, getCorsHeaders } from "../_shared/cors.ts";
+import { handleOptions, getCorsHeaders } from "../_shared/cors.ts";
 // @ts-ignore
 import { verifyAdmin } from "../_shared/auth.ts";
 
@@ -13,6 +13,7 @@ declare const Deno: any;
 
 
 serve(async (req: Request) => {
+  const corsHeaders = getCorsHeaders(req);
   const options = handleOptions(req);
   if (options) return options;
 

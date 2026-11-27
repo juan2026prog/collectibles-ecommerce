@@ -171,7 +171,7 @@ export function getCorsOrigin(
   return null;
 }
 
-const DEFAULT_ALLOW_HEADERS = 'authorization, x-client-info, apikey, content-type, x-collectibles-cron-secret, x-test-bypass';
+const DEFAULT_ALLOW_HEADERS = 'authorization, x-client-info, apikey, content-type, x-collectibles-cron-secret, x-webhook-secret, x-webhook-signature, x-webhook-event, x-test-bypass';
 const DEFAULT_ALLOW_METHODS = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
 
 export const corsHeaders: Record<string, string> = {

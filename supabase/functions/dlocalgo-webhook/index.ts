@@ -1,9 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
-import { corsHeaders } from "../_shared/cors.ts";
+import { timingSafeEqual } from "../_shared/order-token.ts";
 import { enqueueMlSyncEvent } from "../_shared/mercadolibre.ts";
 import { triggerZincVerificationIfNeeded } from "../_shared/order-payments.ts";
+
+const responseHeaders = { "Content-Type": "application/json" };
 
 async function createSignature(secretKey: string, xLogin: string, xDate: string, rawBody: string) {
   const encoder = new TextEncoder();
@@ -36,26 +38,33 @@ serve(async (req) => {
 
     const { data: settings } = await supabase.from("site_settings").select("key, value");
     const config = Object.fromEntries((settings || []).map((item: any) => [item.key, item.value]));
-    const isSandbox = config.payments_dlocal_go_sandbox === "true";
-    const xLogin = (config.payments_dlocal_go_x_login || "").trim();
-    const secretKey = (config.payments_dlocal_go_secret_key || "").trim();
-    const xDate = req.headers.get("X-Date") || "";
-    const authorization = req.headers.get("Authorization") || "";
+    const xLogin = (Deno.env.get("DLOCALGO_X_LOGIN") || config.payments_dlocal_go_x_login || config.payments_dlocal_go_api_key || "").trim();
+    const secretKey = (Deno.env.get("DLOCALGO_SECRET_KEY") || config.payments_dlocal_go_secret_key || "").trim();
+    const xDate = (req.headers.get("X-Date") || "").trim();
+    const authorization = (req.headers.get("Authorization") || "").trim();
 
-    if (xLogin && secretKey) {
-      const expectedSignature = await createSignature(secretKey, xLogin, xDate, rawBody);
-      if (!authorization || authorization !== expectedSignature) {
-        console.error("Invalid dLocal signature", { xDate, authorization });
-        return new Response(JSON.stringify({ error: "Invalid webhook signature" }), {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    } else if (!isSandbox) {
-      console.error("dLocal webhook credentials missing in production");
+    // Mandatory cryptographic signature validation in ALL environments (sandbox & production)
+    if (!xLogin || !secretKey) {
+      console.error("dLocal webhook signature credentials missing");
       return new Response(JSON.stringify({ error: "Webhook signature credentials are missing" }), {
         status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: responseHeaders,
+      });
+    }
+
+    if (!xDate || !authorization) {
+      return new Response(JSON.stringify({ error: "Missing webhook authentication headers" }), {
+        status: 401,
+        headers: responseHeaders,
+      });
+    }
+
+    const expectedSignature = await createSignature(secretKey, xLogin, xDate, rawBody);
+    if (!timingSafeEqual(authorization, expectedSignature)) {
+      console.error("Invalid dLocal signature", { xDate });
+      return new Response(JSON.stringify({ error: "Invalid webhook signature" }), {
+        status: 401,
+        headers: responseHeaders,
       });
     }
 
@@ -73,7 +82,7 @@ serve(async (req) => {
 
     if (existingOrder?.payment_processed_at && dbStatus === "paid") {
       return new Response(JSON.stringify({ received: true, skipped: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: responseHeaders,
       });
     }
 
@@ -144,7 +153,7 @@ serve(async (req) => {
       }
 
       return new Response(JSON.stringify({ received: true, mappedStatus: dbStatus }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: responseHeaders,
       });
     }
 
@@ -198,7 +207,7 @@ serve(async (req) => {
       });
 
       return new Response(JSON.stringify({ received: true, mappedStatus: dbStatus }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: responseHeaders,
       });
     }
 
@@ -287,7 +296,7 @@ serve(async (req) => {
     }
 
     return new Response(JSON.stringify({ received: true, mappedStatus: dbStatus }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: responseHeaders,
     });
   } catch (err: any) {
     console.error("dLocal Webhook Error:", err);

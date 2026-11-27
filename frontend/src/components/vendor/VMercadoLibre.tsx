@@ -385,7 +385,10 @@ export default function VMercadoLibre() {
       toast.error('Configuración de Mercado Libre ausente (Falta Client ID).');
       return;
     }
-    const redirectUri = `${window.location.origin}/vendor/ml/callback`;
+    const safeOrigin = window.location.hostname.endsWith('collectibles.uy') && !window.location.hostname.endsWith('collectibles.com.uy')
+      ? 'https://collectibles.com.uy'
+      : window.location.origin;
+    const redirectUri = `${safeOrigin}/vendor/ml/callback`;
     
     // Generate and store state token to prevent CSRF
     const stateToken = `vml_${Math.random().toString(36).substring(2, 15)}_${Date.now()}`;

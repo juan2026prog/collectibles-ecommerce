@@ -1,21 +1,17 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 
 declare const Deno: any;
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-collectibles-cron-secret, x-webhook-secret',
-};
 
 /**
  * SECURE WRAPPER: send-whatsapp-notification
  * Forwards authenticated requests (JWT, Cron Secret, or Webhook Secret) to notification-dispatcher.
  */
 serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
+  const corsHeaders = getCorsHeaders(req);
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";

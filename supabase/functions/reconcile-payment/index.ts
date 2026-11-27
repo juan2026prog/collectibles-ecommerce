@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getCorsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { verifyOptionalAuth } from "../_shared/auth.ts";
 import { getHandyProviderConfig } from "../_shared/handy.ts";
 import { finalizeOrderIfNeeded } from "../_shared/order-payments.ts";
@@ -10,9 +10,8 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: getCorsHeaders(req) });
-  }
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
 
   try {
     const user = await verifyOptionalAuth(req);

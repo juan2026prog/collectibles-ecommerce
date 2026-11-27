@@ -4,7 +4,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { verifyOptionalAuth } from "../_shared/auth.ts";
 import { finalizeOrderIfNeeded, orderSummary } from "../_shared/order-payments.ts";
-import { getCorsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { getGuestTokenSecret, verifyOrderAccessToken } from "../_shared/order-token.ts";
 
 declare const Deno: any;
@@ -18,11 +18,9 @@ interface ConfirmRequest {
 }
 
 Deno.serve(async (req: Request) => {
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
   const corsHeaders = getCorsHeaders(req);
-
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";

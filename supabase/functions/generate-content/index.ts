@@ -1,10 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
 
-import { corsHeaders, handleOptions } from "../_shared/cors.ts";
+import { handleOptions, getCorsHeaders } from "../_shared/cors.ts";
 
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  const corsHeaders = getCorsHeaders(req);
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
 
   try {
     const { action, prompt, currentText } = await req.json();

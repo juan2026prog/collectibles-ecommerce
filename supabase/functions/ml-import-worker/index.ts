@@ -11,11 +11,6 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const ML_CLIENT_ID = Deno.env.get("MERCADOLIBRE_CLIENT_ID") || "";
 const ML_CLIENT_SECRET = Deno.env.get("MERCADOLIBRE_CLIENT_SECRET") || "";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-test-bypass",
-};
-
 // ══════════════════════════════════════════════════════════════
 // Helpers copied from mercadolibre-sync/index.ts for compatibility
 // ══════════════════════════════════════════════════════════════
@@ -741,9 +736,7 @@ async function processBatchItems(supabase: any, job: any, pendingItems: any[], w
 Deno.serve(async (req) => {
   const preflight = handleOptions(req);
   if (preflight) return preflight;
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const corsHeaders = getCorsHeaders(req);
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey, { global: { fetch: workerFetch } });
 

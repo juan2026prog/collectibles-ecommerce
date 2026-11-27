@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { corsHeaders, handleOptions } from "../_shared/cors.ts";
+import { handleOptions, getCorsHeaders } from "../_shared/cors.ts";
 
 declare const Deno: any;
 
@@ -9,6 +9,7 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
 const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   const options = handleOptions(req);
   if (options) return options;
 

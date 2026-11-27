@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
+import { getCorsHeaders, getOfficialSiteUrl, handleOptions, isBlockedLegacyHostname, isTrustedBrowserOrigin } from "../_shared/cors.ts";
 import { verifyAuth } from "../_shared/auth.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
@@ -9,7 +9,27 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 const ML_CLIENT_ID = Deno.env.get("MERCADOLIBRE_CLIENT_ID") || "";
 const ML_CLIENT_SECRET = Deno.env.get("MERCADOLIBRE_CLIENT_SECRET") || "";
-const ML_REDIRECT_URI = Deno.env.get("MERCADOLIBRE_REDIRECT_URI") || "http://localhost:5173/callback";
+const ML_REDIRECT_URI = Deno.env.get("MERCADOLIBRE_REDIRECT_URI") || `${getOfficialSiteUrl()}/callback`;
+
+const ALLOWED_ML_CALLBACK_PATHS = new Set([
+  "/callback",
+  "/auth/callback",
+  "/vendor/ml/callback",
+]);
+
+function resolveValidatedMlRedirectUri(rawUri: unknown): string | null {
+  const candidate = String(rawUri || ML_REDIRECT_URI || "").trim();
+  if (!candidate) return null;
+  try {
+    const parsed = new URL(candidate);
+    if (isBlockedLegacyHostname(parsed.hostname)) return null;
+    if (!isTrustedBrowserOrigin(parsed.origin)) return null;
+    if (!ALLOWED_ML_CALLBACK_PATHS.has(parsed.pathname)) return null;
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return null;
+  }
+}
 
 Deno.serve(async (req) => {
   const options = handleOptions(req);
@@ -46,7 +66,13 @@ Deno.serve(async (req) => {
 
     // 2. Exchange authorization code with Mercado Libre OAuth
     const tokenUrl = "https://api.mercadolibre.com/oauth/token";
-    const effectiveRedirectUri = redirect_uri || ML_REDIRECT_URI;
+    const effectiveRedirectUri = resolveValidatedMlRedirectUri(redirect_uri);
+    if (!effectiveRedirectUri) {
+      return new Response(
+        JSON.stringify({ error: "redirect_uri no autorizado para Mercado Libre OAuth" }),
+        { headers: { ...getCorsHeaders(req), "Content-Type": "application/json" }, status: 400 }
+      );
+    }
     const params = new URLSearchParams({
       grant_type: "authorization_code",
       client_id: ML_CLIENT_ID,

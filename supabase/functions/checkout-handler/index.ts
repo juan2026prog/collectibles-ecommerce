@@ -4,7 +4,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 // @ts-ignore
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
-import { corsHeaders, handleOptions } from "../_shared/cors.ts";
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { verifyAuth } from "../_shared/auth.ts";
 import { executeSkyPostalPricingPipeline } from "../_shared/skypostal/skypostal-pricing-pipeline.ts";
 
@@ -83,6 +83,7 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 Deno.serve(async (req: any) => {
   const options = handleOptions(req);
   if (options) return options;
+  const corsHeaders = getCorsHeaders(req);
 
   try {
     // 1. Verify user authentication

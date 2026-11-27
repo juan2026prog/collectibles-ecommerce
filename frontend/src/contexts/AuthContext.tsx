@@ -2,6 +2,15 @@ import { createContext, useContext, useEffect, useState, useMemo, useCallback, u
 import type { Session, User, OAuthResponse } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { loginOneSignalUser, logoutOneSignalUser } from '../lib/pushNotifications';
+import { classifyHost } from '../lib/marketEngine/domainMarketResolver';
+
+function getSafeClientOrigin(): string {
+  if (typeof window === 'undefined' || !window.location?.origin) {
+    return 'https://collectibles.com.uy';
+  }
+  const hostCheck = classifyHost(window.location.hostname);
+  return hostCheck.isAuthorizedHost ? window.location.origin : 'https://collectibles.com.uy';
+}
 
 interface Profile {
   id: string;
@@ -30,6 +39,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signInWithGoogle: () => Promise<OAuthResponse>;
   signInWithOtp: (email: string) => Promise<{ error: any }>;
+  resetPassword?: (email: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -181,7 +191,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user?.id]);
 
   const signUp = useCallback(async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { emailRedirectTo: `${getSafeClientOrigin()}/` },
+    });
     return { data, error };
   }, []);
 
@@ -194,7 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo: `${getSafeClientOrigin()}/`,
         queryParams: {
           access_type: 'offline',
           prompt: 'select_account',
@@ -206,7 +220,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithOtp = useCallback(async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({ 
       email,
-      options: { emailRedirectTo: `${window.location.origin}/` }
+      options: { emailRedirectTo: `${getSafeClientOrigin()}/` }
+    });
+    return { error };
+  }, []);
+
+  const resetPassword = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+      redirectTo: `${getSafeClientOrigin()}/login?mode=reset`,
     });
     return { error };
   }, []);
@@ -233,9 +254,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(() => ({
     session, user, profile, loading, isSuperAdmin,
-    signUp, signIn, signInWithGoogle, signInWithOtp, signOut: signOutFn,
+    signUp, signIn, signInWithGoogle, signInWithOtp, resetPassword, signOut: signOutFn,
     refreshProfile
-  }), [session, user, profile, loading, isSuperAdmin, signUp, signIn, signInWithGoogle, signInWithOtp, signOutFn, refreshProfile]);
+  }), [session, user, profile, loading, isSuperAdmin, signUp, signIn, signInWithGoogle, signInWithOtp, resetPassword, signOutFn, refreshProfile]);
 
   return (
     <AuthContext.Provider value={value}>

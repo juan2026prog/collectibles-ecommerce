@@ -130,6 +130,8 @@ export function extractHandyWebhookData(payload: Record<string, any>) {
   };
 }
 
+import { resolveTrustedReturnOrigin } from "./cors.ts";
+
 export async function getHandyProviderConfig(supabaseAdmin: any) {
   const { data: provider, error } = await supabaseAdmin
     .from("payment_providers")
@@ -160,7 +162,7 @@ export async function getHandyProviderConfig(supabaseAdmin: any) {
     merchantSecretKey,
     callbackUrl,
     commerceName: String(config.commerce_name || "Collectibles"),
-    siteUrl: String(config.site_url || ""),
+    siteUrl: resolveTrustedReturnOrigin(String(config.site_url || ""), { allowLocalhost: false }),
     currency: Number(config.currency || 858),
     responseType: String(config.response_type || "Json"),
     defaultImageUrl: String(config.default_image_url || ""),

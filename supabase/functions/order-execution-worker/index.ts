@@ -1,6 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { getCorsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { enqueueMlSyncEvent } from "../_shared/mercadolibre.ts";
 import { triggerZincVerificationIfNeeded } from "../_shared/order-payments.ts";
 import { verifyAdmin } from "../_shared/auth.ts";
@@ -8,8 +8,9 @@ import { verifyAdmin } from "../_shared/auth.ts";
 declare const Deno: any;
 
 Deno.serve(async (req: Request) => {
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
   const corsHeaders = getCorsHeaders(req);
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
     // ══════════════════════════════════════════════════════════
