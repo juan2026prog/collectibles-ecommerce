@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Production Live Site Audit on https://collectibles.uy', () => {
+test.describe('Production Live Site Audit on https://collectibles.com.uy', () => {
   test.use({ viewport: { width: 375, height: 667 } });
 
-  test('Audit PRODUCTION DOM & Meta tags on https://collectibles.uy', async ({ page }) => {
+  test('Audit PRODUCTION DOM & Meta tags on https://collectibles.com.uy', async ({ page }) => {
     // 1. Audit public home/login head for meta tags
-    await page.goto('https://collectibles.uy/', { waitUntil: 'domcontentloaded' });
+    await page.goto('https://collectibles.com.uy/', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1000);
 
     const publicHeadAudit = await page.evaluate(() => {
@@ -21,7 +21,7 @@ test.describe('Production Live Site Audit on https://collectibles.uy', () => {
     console.log('PUBLIC_HEAD_AUDIT:', JSON.stringify(publicHeadAudit, null, 2));
 
     // 2. Log in or navigate to admin login
-    await page.goto('https://collectibles.uy/login', { waitUntil: 'domcontentloaded' });
+    await page.goto('https://collectibles.com.uy/login', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1000);
 
     // Try logging in if form exists
@@ -39,7 +39,7 @@ test.describe('Production Live Site Audit on https://collectibles.uy', () => {
     }
 
     // Now go to /admin/categories
-    await page.goto('https://collectibles.uy/admin/categories', { waitUntil: 'domcontentloaded' });
+    await page.goto('https://collectibles.com.uy/admin/categories', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1500);
 
     const adminAudit = await page.evaluate(() => {

@@ -227,7 +227,7 @@ describe('Merchant Feed Resilience and Circuit Breakers', () => {
 <rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">
   <channel>
     <title>Collectibles Uruguay - Google Merchant Feed</title>
-    <link>https://collectibles.uy</link>
+    <link>https://collectibles.com.uy</link>
     <description>Feed dinámico oficial de productos de Collectibles Uruguay</description>
     <item>
       <g:id>prod-disk-1</g:id>

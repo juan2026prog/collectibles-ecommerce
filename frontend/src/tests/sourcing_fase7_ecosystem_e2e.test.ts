@@ -19,8 +19,8 @@ const streetFighterRyuCanonical: NormalizedProduct = {
   scale: '1:12',
   upc: '4573102654321',
   mpn: 'SF-RYU-SHF',
-  image_url: 'https://images.collectibles.uy/streetfighter/ryu.jpg',
-  gallery_images: ['https://images.collectibles.uy/streetfighter/ryu_box.jpg'],
+  image_url: 'https://images.collectibles.com.uy/streetfighter/ryu.jpg',
+  gallery_images: ['https://images.collectibles.com.uy/streetfighter/ryu_box.jpg'],
   offers: [
     {
       id: 'off_amz_ryu',

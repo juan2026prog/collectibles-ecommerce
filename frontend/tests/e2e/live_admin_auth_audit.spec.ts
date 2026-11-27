@@ -10,9 +10,9 @@ test.describe('Live Production Authenticated DOM & BoundingBox Audit', () => {
     });
   });
 
-  test('Audit authenticated DOM on https://collectibles.uy/admin/categories at 375x667', async ({ page }) => {
+  test('Audit authenticated DOM on https://collectibles.com.uy/admin/categories at 375x667', async ({ page }) => {
     // Navigate directly to live production URL
-    await page.goto('https://collectibles.uy/admin/categories', { waitUntil: 'domcontentloaded' });
+    await page.goto('https://collectibles.com.uy/admin/categories', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2000);
 
     const currentUrl = page.url();

@@ -155,7 +155,7 @@ describe('Product source correctness under incidents', () => {
     });
     const handler = createSeoPrerenderHandler(() => client), res = response();
     await handler(req({ type: 'producto', slug: 'nombre-antiguo' }), res);
-    expect(res.code).toBe(301); expect(res.headers.Location).toBe('https://collectibles.uy/producto/figura-real');
+    expect(res.code).toBe(301); expect(res.headers.Location).toBe('https://collectibles.com.uy/producto/figura-real');
     expect(client.calls.some(call => call.table === 'product_images')).toBe(false);
     const missing = fakeClient(() => ({ data: null })), absent = response();
     await createSeoPrerenderHandler(() => missing)(req({ type: 'producto', slug: 'inexistente' }), absent);
@@ -227,7 +227,7 @@ describe('Public sitemap bounds and failure semantics', () => {
     const handler = createSitemapHandler(factory), index = response();
     await handler(req({ type: 'index' }), index); expect(index.code).toBe(200); expect(factory).not.toHaveBeenCalled();
     const products = response(); await handler(req({ type: 'products' }), products);
-    expect(products.code).toBe(200); expect(products.body).toContain('https://collectibles.uy/producto/figura-real');
+    expect(products.code).toBe(200); expect(products.body).toContain('https://collectibles.com.uy/producto/figura-real');
     expect(eq(client.calls[0], 'status')).toBe('published'); expect(eq(client.calls[0], 'is_active')).toBe(true);
     expect(client.calls[0].signal).toBeInstanceOf(AbortSignal);
   });

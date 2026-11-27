@@ -64,8 +64,8 @@ describe('useCollectorPermissions Hook', () => {
 
   it('hides all collector modules from regular users/visitors when collector_plugins_admin_only is true', () => {
     vi.spyOn(AuthContext, 'useAuth').mockReturnValue({
-      user: { id: 'usr-1', email: 'user@collectibles.uy' } as any,
-      profile: { id: 'usr-1', email: 'user@collectibles.uy', is_admin: false } as any,
+      user: { id: 'usr-1', email: 'user@collectibles.com.uy' } as any,
+      profile: { id: 'usr-1', email: 'user@collectibles.com.uy', is_admin: false } as any,
       loading: false,
       session: null,
       signUp: vi.fn(),
@@ -116,8 +116,8 @@ describe('useCollectorPermissions Hook', () => {
 
   it('shows all enabled collector modules for authenticated administrators in admin-only beta mode', () => {
     vi.spyOn(AuthContext, 'useAuth').mockReturnValue({
-      user: { id: 'admin-1', email: 'admin@collectibles.uy' } as any,
-      profile: { id: 'admin-1', email: 'admin@collectibles.uy', is_admin: true } as any,
+      user: { id: 'admin-1', email: 'admin@collectibles.com.uy' } as any,
+      profile: { id: 'admin-1', email: 'admin@collectibles.com.uy', is_admin: true } as any,
       loading: false,
       session: null,
       signUp: vi.fn(),
@@ -168,8 +168,8 @@ describe('useCollectorPermissions Hook', () => {
 
   it('allows admins access to collector modules even when individual feature toggles are false in DB', () => {
     vi.spyOn(AuthContext, 'useAuth').mockReturnValue({
-      user: { id: 'admin-1', email: 'admin@collectibles.uy' } as any,
-      profile: { id: 'admin-1', email: 'admin@collectibles.uy', is_admin: true } as any,
+      user: { id: 'admin-1', email: 'admin@collectibles.com.uy' } as any,
+      profile: { id: 'admin-1', email: 'admin@collectibles.com.uy', is_admin: true } as any,
       loading: false,
       session: null,
       signUp: vi.fn(),

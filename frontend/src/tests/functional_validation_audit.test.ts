@@ -239,7 +239,7 @@ describe('FUNCTIONAL VALIDATION SUITE — FX, FINANCIAL MODEL & SOURCING', () =>
         status: 'MANUAL_OVERRIDE',
         is_manual_override: true,
         override_reason: 'Ajuste de contingencia por feriado bancario nacional',
-        override_admin_email: 'superadmin@collectibles.uy',
+        override_admin_email: 'superadmin@collectibles.com.uy',
         fetched_at: new Date().toISOString(),
         effective_at: new Date().toISOString(),
         max_age_hours: 24,
@@ -250,7 +250,7 @@ describe('FUNCTIONAL VALIDATION SUITE — FX, FINANCIAL MODEL & SOURCING', () =>
       expect(overrideDetail.status).toBe('MANUAL_OVERRIDE');
       expect(overrideDetail.rate).toBe(42.50);
       expect(overrideDetail.override_reason).toBe('Ajuste de contingencia por feriado bancario nacional');
-      expect(overrideDetail.override_admin_email).toBe('superadmin@collectibles.uy');
+      expect(overrideDetail.override_admin_email).toBe('superadmin@collectibles.com.uy');
     });
 
     it('ensures fallback to USD produces unambiguous US$ formatted output without mislabeling as local currency', () => {
@@ -543,7 +543,7 @@ describe('FUNCTIONAL VALIDATION SUITE — FX, FINANCIAL MODEL & SOURCING', () =>
         status: 'MANUAL_OVERRIDE',
         is_manual_override: true,
         override_reason: 'Fijación por auditoría financiera trimestral',
-        override_admin_email: 'admin@collectibles.uy',
+        override_admin_email: 'admin@collectibles.com.uy',
         fetched_at: new Date().toISOString(),
         effective_at: new Date().toISOString(),
         max_age_hours: 24,

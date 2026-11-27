@@ -72,7 +72,7 @@ describe('SkyPostal Phase 3 — End-to-End Sandbox Pilot (Chile)', () => {
     // 6. SkyPostal Sandbox Shipment Creation & Tracking Normalization
     const mockTrackingNumber = 'SKY-CL-99201948';
     const mockGuide = 'GUA-491028';
-    const mockLabelUrl = `https://storage.collectibles.uy/shipping-labels/skypostal/${mockTrackingNumber}.pdf`;
+    const mockLabelUrl = `https://storage.collectibles.com.uy/shipping-labels/skypostal/${mockTrackingNumber}.pdf`;
 
     expect(mockTrackingNumber).toMatch(/^SKY-CL-/);
     expect(mockLabelUrl).toContain('.pdf');

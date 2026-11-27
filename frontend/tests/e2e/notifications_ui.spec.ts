@@ -11,7 +11,7 @@ test.describe('Notification UI E2E Verification', () => {
           id: 'test-admin-uuid-9999',
           aud: 'authenticated',
           role: 'authenticated',
-          email: 'admin@collectibles.uy'
+          email: 'admin@collectibles.com.uy'
         })
       });
     });
@@ -22,7 +22,7 @@ test.describe('Notification UI E2E Verification', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           id: 'test-admin-uuid-9999',
-          email: 'admin@collectibles.uy',
+          email: 'admin@collectibles.com.uy',
           first_name: 'Admin',
           last_name: 'Test',
           is_vendor: true,
@@ -98,7 +98,7 @@ test.describe('Notification UI E2E Verification', () => {
         refresh_token: 'fake-refresh-token',
         user: {
           id: 'test-admin-uuid-9999',
-          email: 'admin@collectibles.uy',
+          email: 'admin@collectibles.com.uy',
           aud: 'authenticated',
           role: 'authenticated'
         }

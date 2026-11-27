@@ -223,7 +223,7 @@ describe('ETAPA 6: Ciclo de Vida Completo de Sincronizaci√≥n Continua Supabase ‚
     env = {
       DB: mockDb,
       CATALOG_SYNC_SECRET: SYNC_SECRET,
-      PUBLIC_SITE_URL: 'https://collectibles.uy',
+      PUBLIC_SITE_URL: 'https://collectibles.com.uy',
     };
   });
 
@@ -247,8 +247,8 @@ describe('ETAPA 6: Ciclo de Vida Completo de Sincronizaci√≥n Continua Supabase ‚
       variants: [
         { id: 'var-uuid-auto-001', sku: 'CYBER-001', name: 'Standard', inventory_count: 5, price_adjustment: 0, is_active: true },
       ],
-      primary_image_url: 'https://images.collectibles.uy/cyberpunk-test.jpg',
-      images: [{ id: 'img-1', url: 'https://images.collectibles.uy/cyberpunk-test.jpg', is_primary: true }],
+      primary_image_url: 'https://images.collectibles.com.uy/cyberpunk-test.jpg',
+      images: [{ id: 'img-1', url: 'https://images.collectibles.com.uy/cyberpunk-test.jpg', is_primary: true }],
     };
 
     const pushRes = await pushBatchToD1Worker({

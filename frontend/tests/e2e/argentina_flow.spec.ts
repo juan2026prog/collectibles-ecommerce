@@ -100,7 +100,7 @@ test.describe('MBE Argentina Shipping Rates, Safety Rules & Vendor Permissions E
   });
 
   test('Caso 9 (UX Argentina): Navigation/Checkout displays ARS prices and explicit USD total before Handy', async ({ page }) => {
-    await page.goto('https://collectibles.uy/checkout', { waitUntil: 'domcontentloaded' });
+    await page.goto('https://collectibles.com.uy/checkout', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2500);
 
     const countrySelect = page.locator("select").filter({ hasText: "Uruguay" }).first();
@@ -114,7 +114,7 @@ test.describe('MBE Argentina Shipping Rates, Safety Rules & Vendor Permissions E
   });
 
   test('Caso 10 (Regresión Uruguay): Local UYU, DAC and Mercado Pago operate unaffected', async ({ page }) => {
-    await page.goto('https://collectibles.uy/checkout', { waitUntil: 'domcontentloaded' });
+    await page.goto('https://collectibles.com.uy/checkout', { waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(2500);
 
     const countrySelect = page.locator("select").filter({ hasText: "Uruguay" }).first();

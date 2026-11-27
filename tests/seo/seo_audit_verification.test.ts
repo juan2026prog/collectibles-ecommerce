@@ -40,10 +40,10 @@ describe('SEO & Serverless Prerender Verification Test Suite', () => {
     
     const body = getBody();
     expect(body).toContain('<urlset');
-    expect(body).toContain('<loc>https://collectibles.uy/</loc>');
-    expect(body).toContain('<loc>https://collectibles.uy/shop</loc>');
+    expect(body).toContain('<loc>https://collectibles.com.uy/</loc>');
+    expect(body).toContain('<loc>https://collectibles.com.uy/shop</loc>');
     expect(body).not.toContain('vercel.app');
-    expect(body).not.toContain('collectibles.com.uy');
+    expect(body).not.toContain('https://collectibles.uy');
   });
 
   it('FASE 12: merchant-feed.xml returns valid RSS 2.0 Google Merchant XML feed', async () => {
@@ -67,9 +67,9 @@ describe('SEO & Serverless Prerender Verification Test Suite', () => {
     expect(getStatusCode()).toBe(200);
     const body = getBody();
     expect(body).toContain('<title>');
-    expect(body).toContain('<link rel="canonical" href="https://collectibles.uy"');
+    expect(body).toContain('<link rel="canonical" href="https://collectibles.com.uy"');
     expect(body).toContain('<h1');
-    expect(body).toContain('href="https://collectibles.uy/shop"');
+    expect(body).toContain('href="https://collectibles.com.uy/shop"');
   });
 
   it('FASE 4, 5, 6, 7: Product page prerenders title, description, canonical, H1, image, JSON-LD', async () => {
@@ -84,7 +84,7 @@ describe('SEO & Serverless Prerender Verification Test Suite', () => {
     const body = getBody();
     expect(body).toContain('<title>');
     expect(body).toContain('Collectibles Uruguay</title>');
-    expect(body).toContain('<link rel="canonical" href="https://collectibles.uy/producto/figura-de-acci-n-glamrock-fred-security-breach-47490-de-funko-4336"');
+    expect(body).toContain('<link rel="canonical" href="https://collectibles.com.uy/producto/figura-de-acci-n-glamrock-fred-security-breach-47490-de-funko-4336"');
     expect(body).toContain('<h1');
     expect(body).toContain('application/ld+json');
     expect(body).toContain('"@type":"Product"');
@@ -101,7 +101,7 @@ describe('SEO & Serverless Prerender Verification Test Suite', () => {
     expect(getStatusCode()).toBe(200);
     const body = getBody();
     expect(body).toContain('<title>');
-    expect(body).toContain('<link rel="canonical" href="https://collectibles.uy/categoria/tcg"');
+    expect(body).toContain('<link rel="canonical" href="https://collectibles.com.uy/categoria/tcg"');
     expect(body).toContain('<h1');
   });
 
@@ -115,7 +115,7 @@ describe('SEO & Serverless Prerender Verification Test Suite', () => {
     expect(getStatusCode()).toBe(200);
     const body = getBody();
     expect(body).toContain('<title>');
-    expect(body).toContain('<link rel="canonical" href="https://collectibles.uy/marca/funko"');
+    expect(body).toContain('<link rel="canonical" href="https://collectibles.com.uy/marca/funko"');
     expect(body).toContain('<h1');
   });
 });

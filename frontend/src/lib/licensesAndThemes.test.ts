@@ -275,10 +275,10 @@ describe('5. Importador CSV/XLSX — Archivos Legacy y Alias Canónicos', () => 
 
 describe('6. SEO — Rutas Canónicas & Redirecciones', () => {
   it('genera canonicals únicas para licencias y themes', () => {
-    expect(generateCanonical('licencias')).toBe('https://collectibles.uy/licencias');
-    expect(generateCanonical('licencias', 'star-wars')).toBe('https://collectibles.uy/licencias/star-wars');
-    expect(generateCanonical('themes')).toBe('https://collectibles.uy/themes');
-    expect(generateCanonical('themes', 'horror')).toBe('https://collectibles.uy/themes/horror');
+    expect(generateCanonical('licencias')).toBe('https://collectibles.com.uy/licencias');
+    expect(generateCanonical('licencias', 'star-wars')).toBe('https://collectibles.com.uy/licencias/star-wars');
+    expect(generateCanonical('themes')).toBe('https://collectibles.com.uy/themes');
+    expect(generateCanonical('themes', 'horror')).toBe('https://collectibles.com.uy/themes/horror');
   });
 });
 

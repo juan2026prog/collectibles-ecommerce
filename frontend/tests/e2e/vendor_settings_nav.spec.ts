@@ -9,7 +9,7 @@ const MOCK_VENDOR = {
   description: 'Tienda de prueba E2E',
   logo_url: '',
   banner_url: '',
-  contact_email: 'vendor@collectibles.uy',
+  contact_email: 'vendor@collectibles.com.uy',
   contact_phone: '+59899123456',
   social_links: { facebook: '', instagram: '', twitter: '' },
   promotions_opt_in: true,
@@ -52,7 +52,7 @@ test.describe('Vendor Settings Navigation Responsive E2E', () => {
           id: 'test-vendor-uuid-1234',
           aud: 'authenticated',
           role: 'authenticated',
-          email: 'vendor@collectibles.uy'
+          email: 'vendor@collectibles.com.uy'
         })
       });
     });
@@ -63,7 +63,7 @@ test.describe('Vendor Settings Navigation Responsive E2E', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           id: 'test-vendor-uuid-1234',
-          email: 'vendor@collectibles.uy',
+          email: 'vendor@collectibles.com.uy',
           first_name: 'Vendor',
           last_name: 'Test',
           is_vendor: true,
@@ -129,7 +129,7 @@ test.describe('Vendor Settings Navigation Responsive E2E', () => {
         refresh_token: 'fake-refresh-token',
         user: {
           id: 'test-vendor-uuid-1234',
-          email: 'vendor@collectibles.uy',
+          email: 'vendor@collectibles.com.uy',
           aud: 'authenticated',
           role: 'authenticated'
         }
