@@ -9,7 +9,7 @@ const responseHeaders = {
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response("ok", { status: 204, headers: responseHeaders });
+    return new Response(null, { status: 204, headers: responseHeaders });
   }
 
   try {
