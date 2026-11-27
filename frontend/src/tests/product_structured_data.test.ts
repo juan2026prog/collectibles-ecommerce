@@ -17,7 +17,7 @@ describe('Product Structured Data Cleanliness & Single Entity Test Suite', () =>
 
     const mockBrand = { name: 'Funko', slug: 'funko' };
     const mockCategory = { name: 'Figuras de Acción', slug: 'figuras-de-accion' };
-    const mockImages = [{ url: 'https://images.collectibles.uy/freddy.jpg', is_primary: true }];
+    const mockImages = [{ url: 'https://images.collectibles.com.uy/freddy.jpg', is_primary: true }];
 
     const productSchema = generateProductSchema(mockProduct, mockBrand, mockCategory, mockImages);
     const breadcrumbSchema = generateBreadcrumbs('producto', { ...mockProduct, category: mockCategory, brand: mockBrand });
@@ -29,7 +29,7 @@ describe('Product Structured Data Cleanliness & Single Entity Test Suite', () =>
     // Verify required Product fields
     expect(productSchema.name).toBe(mockProduct.title);
     expect(productSchema.description).toBeDefined();
-    expect(productSchema.image).toContain('https://images.collectibles.uy/freddy.jpg');
+    expect(productSchema.image).toContain('https://images.collectibles.com.uy/freddy.jpg');
     expect(productSchema.sku).toBe('prod_glamrock_freddy_001');
     expect(productSchema.url).toContain(mockProduct.slug);
     expect(productSchema.offers).toBeDefined();

@@ -11,20 +11,20 @@ function fetchUrl(url) {
 }
 
 async function runQA() {
-  console.log("--- LIVE QA ON REAL DOMAIN https://collectibles.uy ---");
+  console.log("--- LIVE QA ON REAL DOMAIN https://collectibles.com.uy ---");
   
-  const root = await fetchUrl('https://collectibles.uy');
+  const root = await fetchUrl('https://collectibles.com.uy');
   console.log(`GET / -> Status: ${root.statusCode}`);
   const hasIndexJs = root.body.includes('/assets/index-C64EXPZb.js');
   console.log(`Latest Production JS Bundle Served: ${hasIndexJs ? 'YES (index-C64EXPZb.js)' : 'NO'}`);
 
-  const licenciasPage = await fetchUrl('https://collectibles.uy/licencias');
+  const licenciasPage = await fetchUrl('https://collectibles.com.uy/licencias');
   console.log(`GET /licencias -> Status: ${licenciasPage.statusCode}`);
 
-  const marvelPage = await fetchUrl('https://collectibles.uy/licencias/marvel');
+  const marvelPage = await fetchUrl('https://collectibles.com.uy/licencias/marvel');
   console.log(`GET /licencias/marvel -> Status: ${marvelPage.statusCode}`);
 
-  const themesPage = await fetchUrl('https://collectibles.uy/themes');
+  const themesPage = await fetchUrl('https://collectibles.com.uy/themes');
   console.log(`GET /themes -> Status: ${themesPage.statusCode}`);
 }
 

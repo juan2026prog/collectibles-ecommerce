@@ -26,7 +26,7 @@ const run = promisify(execFile);
 let manifest;
 if (args.includes('--manifest')) manifest = JSON.parse(await readFile(option('--manifest'), 'utf8'));
 else {
-  const response = await fetch('https://collectibles.uy/api/public-catalog?limit=15', { signal: AbortSignal.timeout(20000) });
+  const response = await fetch('https://collectibles.com.uy/api/public-catalog?limit=15', { signal: AbortSignal.timeout(20000) });
   if (!response.ok) throw new Error('Catalog plan unavailable');
   const catalog = await response.json();
   const urls = new Set();

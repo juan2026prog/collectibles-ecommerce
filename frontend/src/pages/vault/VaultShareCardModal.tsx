@@ -138,7 +138,7 @@ export function VaultShareCardModal({
 
   const shareText = isCurrentFull
     ? `🏆 Mira mi colección completa en My Vault (${vaultData?.total_items || availableItems.length || 3} piezas · ${vaultData?.total_franchises || 3} franquicias):\n${shareUrl}`
-    : `⭐ ${currentItem?.custom_name || 'Figura'} (${currentItem?.brand_name || 'Colección'} · ${currentItem?.scale || 'Oficial'})\n📦 Estado: ${currentItem?.condition || 'MISB'}\n${currentItem?.notes ? `💬 "${currentItem.notes}"\n` : ''}🏷️ Ver ficha verificada en Collectibles.uy: ${shareUrl}`;
+    : `⭐ ${currentItem?.custom_name || 'Figura'} (${currentItem?.brand_name || 'Colección'} · ${currentItem?.scale || 'Oficial'})\n📦 Estado: ${currentItem?.condition || 'MISB'}\n${currentItem?.notes ? `💬 "${currentItem.notes}"\n` : ''}🏷️ Ver ficha verificada en Collectibles.com.uy: ${shareUrl}`;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(shareUrl);
@@ -158,7 +158,7 @@ export function VaultShareCardModal({
 
   const handleDownloadCard = () => {
     handleCopyLink();
-    alert('¡Enlace copiado! La ficha visual incluye la marca de agua de Collectibles.uy lista para capturar o compartir en tus historias o feed.');
+    alert('¡Enlace copiado! La ficha visual incluye la marca de agua de Collectibles.com.uy lista para capturar o compartir en tus historias o feed.');
   };
 
   return (
@@ -464,7 +464,7 @@ export function VaultShareCardModal({
               </div>
             )}
 
-            {/* Card Footer with Official Collectibles White Logo on Left (Celeste Area) and collectibles.uy on Right */}
+            {/* Card Footer with Official Collectibles White Logo on Left (Celeste Area) and collectibles.com.uy on Right */}
             <div className="relative z-10 pt-3 border-t border-white/10 flex items-center justify-between">
               <div className="flex items-center">
                 <img
@@ -474,7 +474,7 @@ export function VaultShareCardModal({
                 />
               </div>
               <span className="font-mono text-[10px] font-bold text-zinc-300 tracking-wider">
-                collectibles.uy
+                collectibles.com.uy
               </span>
             </div>
           </div>

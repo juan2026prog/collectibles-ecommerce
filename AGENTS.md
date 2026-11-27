@@ -17,10 +17,10 @@ Toda tarea que cree, modifique, refactorice o corrija archivos de la aplicación
 
 3. GIT PUSH & PIPELINE DEPLOY:
    git push origin main
-   (El repositorio en GitHub está integrado con Vercel CI/CD; el push a origin/main dispara el despliegue de producción oficial a https://collectibles.uy).
+   (El repositorio en GitHub está integrado con Vercel CI/CD; el push a origin/main dispara el despliegue de producción oficial a https://collectibles.com.uy).
 
 4. VERIFICACIÓN DE DOMINIO:
-   Comprobar que https://collectibles.uy esté en línea y respondiendo HTTP 200 sin errores críticos.
+   Comprobar que https://collectibles.com.uy esté en línea y respondiendo HTTP 200 sin errores críticos.
 ```
 
 ## Reglas de Seguridad y Limpieza

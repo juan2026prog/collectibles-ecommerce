@@ -1,12 +1,13 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { corsHeaders, handleOptions } from "../_shared/cors.ts";
+import { getCorsHeaders, getOfficialSiteUrl, handleOptions } from "../_shared/cors.ts";
 import { verifyAdmin } from "../_shared/auth.ts";
 import { syncProductsToCloudflareD1 } from "../_shared/cloudflareCatalogSync.ts";
 
 Deno.serve(async (req: Request) => {
   const options = handleOptions(req);
   if (options) return options;
+  const corsHeaders = getCorsHeaders(req);
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -1348,7 +1349,7 @@ Deno.serve(async (req: Request) => {
           body: JSON.stringify({
             event_name: 'Refund',
             event_id: `refund-${dbRefund.id}`,
-            event_source_url: 'https://collectibles.uy/admin/refunds',
+            event_source_url: `${getOfficialSiteUrl()}/admin/refunds`,
             user_data: {
               email: order.customer_email,
               phone: order.customer_phone,

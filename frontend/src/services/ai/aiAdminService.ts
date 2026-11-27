@@ -323,7 +323,7 @@ export class AIAdminService {
       await supabase.from('ai_audit_logs').insert({
         action: payload.action || 'AI_CONFIG_CHANGED',
         actor_id: userData?.user?.id || null,
-        actor_email: payload.actor_email || userData?.user?.email || 'superadmin@collectibles.uy',
+        actor_email: payload.actor_email || userData?.user?.email || 'collectiblesuy@gmail.com',
         engine: payload.engine || null,
         country_code: payload.country_code || null,
         old_value: payload.old_value || null,

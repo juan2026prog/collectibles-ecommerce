@@ -96,10 +96,10 @@ describe('Product Q&A System — Unit & Integration Tests', () => {
       expect(rendered.push.title).toContain('Nueva pregunta sobre un producto');
       expect(rendered.push.body).toContain('Figura Goku');
       expect(rendered.push.body).toContain('¿Viene en caja cerrada?');
-      expect(rendered.deepLink).toBe('https://collectibles.uy/vendor?tab=questions');
+      expect(rendered.deepLink).toBe('https://collectibles.com.uy/vendor?tab=questions');
       expect(rendered.email.subject).toContain('Nueva pregunta en: Figura Goku');
       expect(rendered.email.html).toContain('Responder pregunta');
-      expect(rendered.email.html).toContain('https://collectibles.uy/vendor?tab=questions');
+      expect(rendered.email.html).toContain('https://collectibles.com.uy/vendor?tab=questions');
     });
 
     it('generates correct admin notification payload for official product questions', () => {
@@ -110,8 +110,8 @@ describe('Product Q&A System — Unit & Integration Tests', () => {
         isVendor: false,
       });
 
-      expect(rendered.deepLink).toBe('https://collectibles.uy/admin/questions');
-      expect(rendered.email.html).toContain('https://collectibles.uy/admin/questions');
+      expect(rendered.deepLink).toBe('https://collectibles.com.uy/admin/questions');
+      expect(rendered.email.html).toContain('https://collectibles.com.uy/admin/questions');
     });
 
     it('generates correct customer notification payload with #pregunta-{id} anchor deep link', () => {
@@ -127,9 +127,9 @@ describe('Product Q&A System — Unit & Integration Tests', () => {
       expect(rendered.push.title).toContain('Respondieron tu pregunta');
       expect(rendered.push.body).toContain('Figura Goku');
       expect(rendered.push.body).toContain('Sí, viene sellada de fábrica con holograma de autenticidad.');
-      expect(rendered.deepLink).toBe('https://collectibles.uy/p/figura-goku-ssj#pregunta-q-999');
+      expect(rendered.deepLink).toBe('https://collectibles.com.uy/producto/figura-goku-ssj#pregunta-q-999');
       expect(rendered.email.subject).toContain('Respondieron tu pregunta en: Figura Goku');
-      expect(rendered.email.html).toContain('https://collectibles.uy/p/figura-goku-ssj#pregunta-q-999');
+      expect(rendered.email.html).toContain('https://collectibles.com.uy/producto/figura-goku-ssj#pregunta-q-999');
       expect(rendered.email.html).toContain('Ver producto');
     });
   });

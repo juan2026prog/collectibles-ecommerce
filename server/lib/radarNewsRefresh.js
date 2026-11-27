@@ -29,7 +29,7 @@ async function resolveSourceImage(sourceUrl, story = {}) {
   try {
     const response = await fetch(sourceUrl, {
       headers: {
-        'User-Agent': 'CollectiblesRadarBot/1.0 (+https://collectibles.uy)',
+        'User-Agent': 'CollectiblesRadarBot/1.0 (+https://collectibles.com.uy)',
         'Accept': 'text/html,application/xhtml+xml'
       },
       redirect: 'follow',
@@ -97,7 +97,7 @@ async function resolveSourceImage(sourceUrl, story = {}) {
       try {
         const headCheck = await fetch(best, {
           method: 'HEAD',
-          headers: { 'User-Agent': 'CollectiblesRadarBot/1.0 (+https://collectibles.uy)' },
+          headers: { 'User-Agent': 'CollectiblesRadarBot/1.0 (+https://collectibles.com.uy)' },
           signal: AbortSignal.timeout(4000)
         });
         if (!headCheck.ok) {

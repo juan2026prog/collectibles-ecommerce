@@ -1,7 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { corsHeaders, handleOptions } from "../_shared/cors.ts";
+import { handleOptions, getCorsHeaders } from "../_shared/cors.ts";
 import { verifyAdmin } from "../_shared/auth.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
@@ -9,6 +9,7 @@ const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   const options = handleOptions(req);
   if (options) return options;
 
@@ -73,7 +74,6 @@ serve(async (req) => {
        generatedTitle = result.title;
        generatedDescription = result.description;
        keywords = result.keywords || [];
-    }
 
     if (productId) {
       await supabase.from('products').update({ 

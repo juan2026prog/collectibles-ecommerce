@@ -10,7 +10,7 @@ describe('SkyPostal Phase 3 — Idempotency & Error Classification', () => {
       suborder_id: 'sub_5566',
       tracking_code: 'SKY-CL-98765432',
       external_guide: 'GUA-123456',
-      shipping_label_url: 'https://storage.collectibles.uy/shipping-labels/skypostal/SKY-CL-98765432.pdf'
+      shipping_label_url: 'https://storage.collectibles.com.uy/shipping-labels/skypostal/SKY-CL-98765432.pdf'
     };
 
     // Simulated checkExistingShipment

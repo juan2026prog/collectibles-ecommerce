@@ -204,7 +204,7 @@ export const EmailRecipientsModal: React.FC<EmailRecipientsModalProps> = ({
                         type="email"
                         value={recipient.email}
                         onChange={(e) => handleUpdateField(recipient.id, 'email', e.target.value)}
-                        placeholder="ejemplo@collectibles.uy"
+                        placeholder="ejemplo@collectibles.com.uy"
                         className="w-full text-base sm:text-xs font-mono px-3 py-2.5 sm:py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-black focus:border-black bg-white min-h-[44px] sm:min-h-[36px]"
                       />
                     </div>

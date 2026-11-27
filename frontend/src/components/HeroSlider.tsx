@@ -346,7 +346,19 @@ export default function HeroSlider({ banners, loading = false }: HeroSliderProps
                   {/* Primary CTA (supports button_text or D1 cta_text) */}
                   {(banner.button_text || banner.cta_text) && (
                     <Link 
-                      to={banner.button_url || banner.link_url || banner.cta_link || '/shop'} 
+                      to={(() => {
+                        const raw = (banner.button_url || banner.link_url || banner.cta_link || '/shop').trim();
+                        try {
+                          if (raw.startsWith('http://') || raw.startsWith('https://')) {
+                            const u = new URL(raw);
+                            const h = u.hostname.toLowerCase();
+                            if (h === 'collectibles.uy' || h.endsWith('.collectibles.uy') || h === 'collectibles.com.uy' || h === 'www.collectibles.com.uy') {
+                              return `${u.pathname}${u.search}${u.hash}` || '/shop';
+                            }
+                          }
+                        } catch {}
+                        return raw;
+                      })()} 
                       onClick={() => trackClarityEvent('home_hero_click')}
                       className="btn-primary px-8 py-4 sm:px-10 sm:py-5 text-sm sm:text-base rounded-full group inline-flex items-center"
                     >

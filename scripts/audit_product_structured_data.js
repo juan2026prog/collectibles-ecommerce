@@ -1,7 +1,7 @@
 import fs from 'fs';
 
 async function auditProductStructuredData() {
-  const target = 'https://collectibles.uy';
+  const target = 'https://collectibles.com.uy';
   const sampleProducts = [
     '/producto/figura-de-acci-n-glamrock-fred-security-breach-47490-de-funko-4336',
     '/producto/super-skrull-avengers-marvel-legends-hasbro-loose-7767',

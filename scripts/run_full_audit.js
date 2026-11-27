@@ -1,7 +1,7 @@
 // Comprehensive 15-Section Validation Audit Runner
-// Collects all real data from https://collectibles.uy and generates the final markdown report
+// Collects all real data from https://collectibles.com.uy and generates the final markdown report
 
-const BASE = 'https://collectibles.uy';
+const BASE = 'https://collectibles.com.uy';
 
 async function fetchManual(url, headers = {}) {
   try {
@@ -247,9 +247,9 @@ async function runFullAudit() {
   // 14. WWW Y HTTP
   console.log('\n=== SECTION 14: WWW Y HTTP ===');
   const domainVariants = [
-    'http://collectibles.uy/',
-    'http://www.collectibles.uy/',
-    'https://www.collectibles.uy/'
+    'http://collectibles.com.uy/',
+    'http://www.collectibles.com.uy/',
+    'https://www.collectibles.com.uy/'
   ];
   const domainResults = [];
   for (const u of domainVariants) {

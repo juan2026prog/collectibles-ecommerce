@@ -43,7 +43,10 @@ export default function VendorMLCallback() {
 
   async function exchangeCodeForToken(code: string) {
     try {
-      const redirectUri = `${window.location.origin}/vendor/ml/callback`;
+      const safeOrigin = window.location.hostname.endsWith('collectibles.uy') && !window.location.hostname.endsWith('collectibles.com.uy')
+        ? 'https://collectibles.com.uy'
+        : window.location.origin;
+      const redirectUri = `${safeOrigin}/vendor/ml/callback`;
       
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token || '';

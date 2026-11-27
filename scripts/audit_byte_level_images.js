@@ -1,6 +1,6 @@
 import fs from 'fs';
 
-const targetFeedUrl = process.argv[2] || 'https://collectibles.uy/merchant-feed.xml';
+const targetFeedUrl = process.argv[2] || 'https://collectibles.com.uy/merchant-feed.xml';
 
 function detectRealFormat(buffer) {
   if (!buffer || buffer.length < 12) return 'UNKNOWN';

@@ -6,7 +6,7 @@ const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsI
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const BASE_URL = 'https://collectibles.uy';
+const BASE_URL = 'https://collectibles.com.uy';
 const GOOGLEBOT_DESKTOP = 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
 const GOOGLEBOT_MOBILE = 'Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)';
 
@@ -78,7 +78,7 @@ async function fetchAllDatabaseEntities() {
 async function auditFullGoogleIndexability() {
   console.log('================================================================');
   console.log('COLLECTIBLES2026 — FINAL GOOGLE INDEXABILITY & SITEMAP AUDIT');
-  console.log('Target Domain: https://collectibles.uy');
+  console.log('Target Domain: https://collectibles.com.uy');
   console.log('================================================================\n');
 
   // Step 1: Database Inventory
@@ -363,7 +363,7 @@ async function auditFullGoogleIndexability() {
   console.log('7. Auditando robots.txt...');
   const robotsRes = await fetch(`${BASE_URL}/robots.txt`);
   const robotsTxt = await robotsRes.text();
-  const robotsHasSitemap = robotsTxt.includes('Sitemap: https://collectibles.uy/sitemap.xml');
+  const robotsHasSitemap = robotsTxt.includes('Sitemap: https://collectibles.com.uy/sitemap.xml');
   const robotsAllowsProducto = robotsTxt.includes('Allow: /producto/');
   const robotsAllowsCategoria = robotsTxt.includes('Allow: /categoria/');
   const robotsAllowsMarca = robotsTxt.includes('Allow: /marca/');
@@ -409,7 +409,7 @@ async function auditFullGoogleIndexability() {
   const mdReport = `# CERTIFICACIÓN TÉCNICA GLOBAL DE INDEXABILIDAD EN GOOGLE Y PARIDAD DE SITEMAP
 
 **Fecha:** 2026-09-03  
-**Dominio de Producción:** \`https://collectibles.uy\`  
+**Dominio de Producción:** \`https://collectibles.com.uy\`  
 **CSV Completo de Auditoría:** \`qa/GOOGLE_INDEXABILITY_FULL_AUDIT.csv\`
 
 ---
@@ -439,7 +439,7 @@ async function auditFullGoogleIndexability() {
 
 ---
 
-## 3. PARIDAD DE SITEMAP XML (\`https://collectibles.uy/sitemap.xml\`)
+## 3. PARIDAD DE SITEMAP XML (\`https://collectibles.com.uy/sitemap.xml\`)
 
 | Métrica de Paridad | Resultado Obtenido | Requisito de Certificación |
 |---|---|---|
@@ -488,7 +488,7 @@ Se evaluaron las **${sitemapUrls.length} URLs** mediante emulación directa de \
 
 - **Storefront y Secciones Públicas:** Permitidas explícitamente (\`/\`, \`/shop\`, \`/producto/\`, \`/categoria/\`, \`/marca/\`, \`/licencias\`, \`/themes\`, \`/page/\`, \`/contact\`).
 - **Áreas Privadas:** Bloqueadas (\`/admin\`, \`/vendor\`, \`/checkout\`, \`/cart\`, \`/account\`, \`/api/\`, etc.).
-- **Directiva de Sitemap:** Presente y apuntando a \`https://collectibles.uy/sitemap.xml\`.
+- **Directiva de Sitemap:** Presente y apuntando a \`https://collectibles.com.uy/sitemap.xml\`.
 
 ---
 

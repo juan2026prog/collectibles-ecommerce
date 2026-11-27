@@ -1,5 +1,5 @@
 // URL Health Check Script across all 5 sub-sitemaps
-const BASE = 'https://collectibles.uy';
+const BASE = 'https://collectibles.com.uy';
 
 async function fetchLocs(sitemapUrl) {
   const res = await fetch(sitemapUrl, { cache: 'no-store' });

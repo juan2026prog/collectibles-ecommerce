@@ -170,7 +170,7 @@ export default function AdminCurrencies() {
           quote_currency: overrideCurrency,
           rate: num,
           reason: overrideReason.trim(),
-          admin_email: session?.user?.email || 'superadmin@collectibles.uy'
+          admin_email: session?.user?.email || 'collectiblesuy@gmail.com'
         })
       });
 
@@ -209,7 +209,7 @@ export default function AdminCurrencies() {
         body: JSON.stringify({
           action: 'RESTORE_AUTOMATIC',
           quote_currency: currency,
-          admin_email: session?.user?.email || 'superadmin@collectibles.uy'
+          admin_email: session?.user?.email || 'collectiblesuy@gmail.com'
         })
       });
 

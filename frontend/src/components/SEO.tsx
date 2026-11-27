@@ -19,7 +19,7 @@ export function SEO({
   description,
   keywords,
   image,
-  url = typeof window !== 'undefined' ? window.location.origin + window.location.pathname : BASE_URL,
+  url = typeof window !== 'undefined' ? `${BASE_URL}${window.location.pathname}` : BASE_URL,
   type = 'website',
   schema,
   noIndex = false,
@@ -31,22 +31,28 @@ export function SEO({
   // Format title cleanly without duplicated site names
   const fullTitle = title.includes('Collectibles') ? title : `${title} | ${siteName}`;
 
-  // Clean and ensure absolute canonical URL starting with https://collectibles.uy without query params
-  let canonicalUrl = url;
-  if (!canonicalUrl.startsWith('http')) {
-    canonicalUrl = `${BASE_URL}${canonicalUrl.startsWith('/') ? '' : '/'}${canonicalUrl}`;
-  }
-  canonicalUrl = canonicalUrl.replace('http://', 'https://').replace('www.collectibles.uy', 'collectibles.uy');
-  // Strip query string and hashes from canonical
+  // Clean and ensure absolute canonical URL starting with https://collectibles.com.uy without query params,
+  // never emitting vercel.app, localhost, www, or legacy collectibles.uy canonicals.
+  let canonicalUrl = url || BASE_URL;
   try {
-    const parsed = new URL(canonicalUrl);
-    canonicalUrl = `${parsed.origin}${parsed.pathname}`;
-  } catch {}
+    const parsed = canonicalUrl.startsWith('http')
+      ? new URL(canonicalUrl)
+      : new URL(canonicalUrl.startsWith('/') ? canonicalUrl : `/${canonicalUrl}`, BASE_URL);
+    canonicalUrl = `${BASE_URL}${parsed.pathname === '/' ? '' : parsed.pathname}`;
+    if (!canonicalUrl.startsWith(BASE_URL)) {
+      canonicalUrl = BASE_URL;
+    }
+    if (parsed.pathname === '/' && url?.endsWith('/')) {
+      canonicalUrl = `${BASE_URL}/`;
+    }
+  } catch {
+    canonicalUrl = BASE_URL;
+  }
 
   const organizationSchema = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    "@id": "https://collectibles.uy/#organization",
+    "@id": "https://collectibles.com.uy/#organization",
     "name": "Collectibles",
     "alternateName": "Collectibles Uruguay",
     "url": BASE_URL,
@@ -68,18 +74,18 @@ export function SEO({
   const webSiteSchema = {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    "@id": "https://collectibles.uy/#website",
+    "@id": "https://collectibles.com.uy/#website",
     "name": "Collectibles Uruguay",
     "url": BASE_URL,
     "description": "Tienda especializada en figuras de acción, Funko Pop, NECA y coleccionables en Uruguay. Figuras que cuentan historias.",
     "publisher": {
-      "@id": "https://collectibles.uy/#organization"
+      "@id": "https://collectibles.com.uy/#organization"
     },
     "potentialAction": {
       "@type": "SearchAction",
       "target": {
         "@type": "EntryPoint",
-        "urlTemplate": "https://collectibles.uy/shop?q={search_term_string}"
+        "urlTemplate": "https://collectibles.com.uy/shop?q={search_term_string}"
       },
       "query-input": "required name=search_term_string"
     }
@@ -88,7 +94,7 @@ export function SEO({
   const storeSchema = {
     "@context": "https://schema.org",
     "@type": "Store",
-    "@id": "https://collectibles.uy/#store",
+    "@id": "https://collectibles.com.uy/#store",
     "name": "Collectibles Uruguay",
     "url": BASE_URL,
     "description": "Tienda online especializada en figuras de acción, Funko Pop, NECA y coleccionables en Uruguay.",
@@ -97,7 +103,7 @@ export function SEO({
     "currenciesAccepted": "UYU",
     "paymentAccepted": "Cash, Credit Card, Mercado Pago",
     "parentOrganization": {
-      "@id": "https://collectibles.uy/#organization"
+      "@id": "https://collectibles.com.uy/#organization"
     },
     "address": {
       "@type": "PostalAddress",

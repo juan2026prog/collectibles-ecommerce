@@ -28,7 +28,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
   const rows = [];
   rows.push('url,type,entity_id,slug,indexable,canonical_expected,schema_expected,status_expected,notes');
 
-  const baseUrl = 'https://collectibles.uy';
+  const baseUrl = 'https://collectibles.com.uy';
 
   // 1. HOME
   rows.push(`"${baseUrl}/",HOME,N/A,,true,"${baseUrl}/","WebSite,Organization",200,"Portada principal"`);

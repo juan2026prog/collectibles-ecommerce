@@ -14,7 +14,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const PRODUCTION_URL = 'https://collectibles.uy';
+const PRODUCTION_URL = 'https://collectibles.com.uy';
 const CACHE_FILE = path.resolve('seo', 'gsc_full_inspection_cache.json');
 const VERIFIED_JSON_FILE = path.resolve('seo', 'gsc_full_verified_results.json');
 const MANUAL_PRIORITY_JSON = path.resolve('seo', 'manual-indexation-priority.json');
@@ -394,7 +394,7 @@ async function runFullAudit() {
       tecnicamenteLista: 'si'
     };
 
-    if (u === 'https://collectibles.uy/' || u === 'https://collectibles.uy/shop' || u === 'https://collectibles.uy/academy' || u === 'https://collectibles.uy/ai-search' || u === 'https://collectibles.uy/radar' || u === 'https://collectibles.uy/releases' || u === 'https://collectibles.uy/compare' || u === 'https://collectibles.uy/import-hub' || u === 'https://collectibles.uy/licencias' || u === 'https://collectibles.uy/themes' || u.includes('/academy/como-empezar') || u.includes('/academy/figuras-accion') || u.includes('/academy/guia-escalas') || u.includes('/academy/como-reconocer') || u.includes('/categoria/figuras-de-accion') || u.includes('/categoria/funkos') || u.includes('/marca/neca') || u.includes('/marca/funko') || u.includes('/marca/hot-toys')) {
+    if (u === 'https://collectibles.com.uy/' || u === 'https://collectibles.com.uy/shop' || u === 'https://collectibles.com.uy/academy' || u === 'https://collectibles.com.uy/ai-search' || u === 'https://collectibles.com.uy/radar' || u === 'https://collectibles.com.uy/releases' || u === 'https://collectibles.com.uy/compare' || u === 'https://collectibles.com.uy/import-hub' || u === 'https://collectibles.com.uy/licencias' || u === 'https://collectibles.com.uy/themes' || u.includes('/academy/como-empezar') || u.includes('/academy/figuras-accion') || u.includes('/academy/guia-escalas') || u.includes('/academy/como-reconocer') || u.includes('/categoria/figuras-de-accion') || u.includes('/categoria/funkos') || u.includes('/marca/neca') || u.includes('/marca/funko') || u.includes('/marca/hot-toys')) {
       entry.motivo = 'Hub principal, modulo clave, taxonomia principal o guia pilar no indexada aun por Google';
       p1.push(entry);
     } else if (u.includes('/academy/') || u.includes('/categoria/') || u.includes('/marca/') || u.includes('/page/')) {

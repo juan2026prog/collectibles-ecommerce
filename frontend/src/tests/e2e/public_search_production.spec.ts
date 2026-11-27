@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('E2E Public Search Verification on https://collectibles.uy', () => {
+test.describe('E2E Public Search Verification on https://collectibles.com.uy', () => {
   // Test desktop viewport
   test.describe('Desktop Viewport (1280x800)', () => {
     test.use({ viewport: { width: 1280, height: 800 } });
 
     test('1. Header search autocomplete & navigation on Desktop', async ({ page }) => {
-      await page.goto('https://collectibles.uy/shop', { waitUntil: 'domcontentloaded' });
+      await page.goto('https://collectibles.com.uy/shop', { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(1000);
 
       // Verify search input is present in header or catalog
@@ -27,7 +27,7 @@ test.describe('E2E Public Search Verification on https://collectibles.uy', () =>
     });
 
     test('2. Direct catalog search query via URL with pagination', async ({ page }) => {
-      await page.goto('https://collectibles.uy/shop?q=Pokemon', { waitUntil: 'domcontentloaded' });
+      await page.goto('https://collectibles.com.uy/shop?q=Pokemon', { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(2000);
 
       // Verify products are rendered or catalog container exists
@@ -35,13 +35,13 @@ test.describe('E2E Public Search Verification on https://collectibles.uy', () =>
       expect(bodyText).toBeDefined();
 
       // Ensure page 2 pagination navigation does not crash
-      await page.goto('https://collectibles.uy/shop?q=Pokemon&page=2', { waitUntil: 'domcontentloaded' });
+      await page.goto('https://collectibles.com.uy/shop?q=Pokemon&page=2', { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(1500);
       expect(page.url()).toContain('page=2');
     });
 
     test('3. Zero results search displays graceful empty state without crashing', async ({ page }) => {
-      await page.goto('https://collectibles.uy/shop?q=producto_inexistente_xyz_99999', { waitUntil: 'domcontentloaded' });
+      await page.goto('https://collectibles.com.uy/shop?q=producto_inexistente_xyz_99999', { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(1500);
 
       const bodyText = await page.textContent('body');
@@ -49,7 +49,7 @@ test.describe('E2E Public Search Verification on https://collectibles.uy', () =>
     });
 
     test('4. Full Product Card Integrity: Own Product (Minecraft)', async ({ page }) => {
-      await page.goto('https://collectibles.uy/shop?q=MINECRAFT', { waitUntil: 'domcontentloaded' });
+      await page.goto('https://collectibles.com.uy/shop?q=MINECRAFT', { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(2500);
 
       // Target article.grid-card containing product
@@ -75,7 +75,7 @@ test.describe('E2E Public Search Verification on https://collectibles.uy', () =>
     });
 
     test('5. Full Product Card Integrity: Vendor Product (Star Wars / Black Series)', async ({ page }) => {
-      await page.goto('https://collectibles.uy/shop?q=Star%20Wars', { waitUntil: 'domcontentloaded' });
+      await page.goto('https://collectibles.com.uy/shop?q=Star%20Wars', { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(2500);
 
       const card = page.locator('article.grid-card').first();
@@ -95,7 +95,7 @@ test.describe('E2E Public Search Verification on https://collectibles.uy', () =>
     });
 
     test('6. Full Product Card Integrity: International Product (NECA Ghost Face)', async ({ page }) => {
-      await page.goto('https://collectibles.uy/shop?q=Ghost%20Face', { waitUntil: 'domcontentloaded' });
+      await page.goto('https://collectibles.com.uy/shop?q=Ghost%20Face', { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(2500);
 
       const card = page.locator('article.grid-card').first();
@@ -120,7 +120,7 @@ test.describe('E2E Public Search Verification on https://collectibles.uy', () =>
     test.use({ viewport: { width: 390, height: 844 } });
 
     test('7. Mobile storefront search accessible and responsive', async ({ page }) => {
-      await page.goto('https://collectibles.uy/shop', { waitUntil: 'domcontentloaded' });
+      await page.goto('https://collectibles.com.uy/shop', { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(1000);
 
       // Locate mobile search input in mobile container

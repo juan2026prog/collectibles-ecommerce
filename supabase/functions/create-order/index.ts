@@ -3,7 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 import { verifyOptionalAuth } from "../_shared/auth.ts";
 
-import { getCorsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { syncProductsToCloudflareD1 } from "../_shared/cloudflareCatalogSync.ts";
 import { getGuestTokenSecret, generateOrderAccessToken } from "../_shared/order-token.ts";
 
@@ -278,12 +278,8 @@ export function validateAndResolveOrderCountry(shippingAddress: any, declaredCur
 
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: { ...getCorsHeaders(req), "Content-Type": "application/json" },
-    });
-  }
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
 
   try {
     console.log("create-order started");

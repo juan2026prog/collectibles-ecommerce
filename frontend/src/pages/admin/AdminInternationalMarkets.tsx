@@ -1171,7 +1171,7 @@ export default function AdminInternationalMarkets() {
                           {log.entity_type} {log.country_code ? `(${log.country_code})` : ''}
                         </td>
                         <td className="py-3.5 px-4 text-surface-300">
-                          {log.actor_email || 'admin@collectibles.uy'}
+                          {log.actor_email || 'collectiblesuy@gmail.com'}
                         </td>
                         <td className="py-3.5 px-4 text-surface-300">
                           {log.reason || (log.after_state ? JSON.stringify(log.after_state) : '—')}

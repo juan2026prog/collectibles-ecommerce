@@ -1,7 +1,7 @@
 // Strict Validation Script for Collectibles.uy Sitemaps and Robots
 // Executes all verification steps directly against production
 
-const BASE = 'https://collectibles.uy';
+const BASE = 'https://collectibles.com.uy';
 
 async function fetchRaw(url, options = {}) {
   try {

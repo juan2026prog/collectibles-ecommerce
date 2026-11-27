@@ -487,7 +487,7 @@ export default async function handler(req, res) {
     }
 
     // Always derive authenticated user's email securely from the verified token/session
-    const verifiedAdminEmail = auth.user?.email || 'admin@collectibles.uy';
+    const verifiedAdminEmail = auth.user?.email || 'collectiblesuy@gmail.com';
     const { action, quote_currency, rate, reason } = req.body || {};
 
     // 1. Manual Override Action
@@ -532,7 +532,7 @@ export default async function handler(req, res) {
             rate: numRate,
             provider: 'MANUAL_OVERRIDE',
             source_name: `Manual Override by ${email}`,
-            source_url: 'https://collectibles.uy/superadmin/currencies',
+            source_url: 'https://collectibles.com.uy/superadmin/currencies',
             status: 'MANUAL_OVERRIDE',
             is_manual_override: true,
             reason,

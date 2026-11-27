@@ -390,8 +390,8 @@ export function validateAndScoreImage(
   // hacerse pasar por "oficial". Mejor no mostrar imagen que mostrar otro producto.
   if (imageSourceUrl) {
     try {
-      const imageHost = new URL(cleanUrl, 'https://collectibles.uy').hostname.toLowerCase().replace(/^www\./, '');
-      const sourceHost = new URL(imageSourceUrl, 'https://collectibles.uy').hostname.toLowerCase().replace(/^www\./, '');
+      const imageHost = new URL(cleanUrl, 'https://collectibles.com.uy').hostname.toLowerCase().replace(/^www\./, '');
+      const sourceHost = new URL(imageSourceUrl, 'https://collectibles.com.uy').hostname.toLowerCase().replace(/^www\./, '');
       const marketplaceImage = imageHost.includes('mlstatic.com') || imageHost.includes('amazon') || imageHost.includes('ebay');
       const sourceIsMarketplace = sourceHost.includes('mercadolibre') || sourceHost.includes('amazon') || sourceHost.includes('ebay');
       if (marketplaceImage && !sourceIsMarketplace) {
@@ -612,7 +612,7 @@ export async function parseReleaseHeuristically(input: {
     release_precision: 'TBA',
     date_display_text: null,
     source_name: sourceName,
-    source_url: sourceUrl || 'https://collectibles.uy',
+    source_url: sourceUrl || 'https://collectibles.com.uy',
     image_match_score: 0.50,
     confidence_score: 50,
     radar_signal,

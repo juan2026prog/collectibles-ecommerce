@@ -221,7 +221,7 @@ export default function ReleaseDetailPage() {
       <SEO
         title={`${release.title} | Radar Collectibles`}
         description={release.summary || release.description || 'Noticias, tendencias, lanzamientos y productos vinculados'}
-        url={`https://collectibles.uy/radar/${slug}`}
+        url={`https://collectibles.com.uy/radar/${slug}`}
       />
 
       {/* Back Link */}

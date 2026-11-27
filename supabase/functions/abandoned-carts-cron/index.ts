@@ -1,4 +1,4 @@
-import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
+import { getCorsHeaders, getOfficialSiteUrl, handleOptions } from "../_shared/cors.ts";
 import { guardWorker, workerErrorResponse, workerFetch } from "../_shared/workerGuard.ts";
 // @ts-ignore
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
@@ -87,7 +87,7 @@ Deno.serve(async (req: any) => {
         const tpl = getTemplate('Recuperación Carrito (1H)');
         let finalHtml = tpl?.content || '<p>Hola {{nombre}}, vimos que dejaste artículos en tu carrito.</p>';
         finalHtml = finalHtml.replace('{{nombre}}', cart.email.split('@')[0]);
-        finalHtml = finalHtml.replace('{{checkout_url}}', 'https://collectibles.uy/checkout');
+        finalHtml = finalHtml.replace('{{checkout_url}}', `${getOfficialSiteUrl()}/checkout`);
 
         console.log(`Sending 1h recovery email to: ${cart.email}`);
         
@@ -174,7 +174,7 @@ Deno.serve(async (req: any) => {
         let finalHtml = tpl?.content || '<p>Hola {{nombre}}, vuelve y llévate tu pedido con 10% OFF usando el código {{cupon}}</p>';
         finalHtml = finalHtml.replace('{{nombre}}', cart.email.split('@')[0]);
         finalHtml = finalHtml.replace('{{cupon}}', uniqueCode);
-        finalHtml = finalHtml.replace('{{checkout_url}}', 'https://collectibles.uy/checkout');
+        finalHtml = finalHtml.replace('{{checkout_url}}', `${getOfficialSiteUrl()}/checkout`);
 
         console.log(`Sending 48h recovery email with coupon ${uniqueCode} to: ${cart.email}`);
         

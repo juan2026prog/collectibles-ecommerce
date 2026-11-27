@@ -30,7 +30,11 @@ export default function MLCallback() {
 
   async function exchangeCodeForToken(code: string) {
     try {
-      const redirectUri = import.meta.env.VITE_ML_REDIRECT_URI || `${window.location.origin}/auth/callback`;
+      const envRedirect = import.meta.env.VITE_ML_REDIRECT_URI;
+      const safeOrigin = window.location.hostname.endsWith('collectibles.uy') && !window.location.hostname.endsWith('collectibles.com.uy')
+        ? 'https://collectibles.com.uy'
+        : window.location.origin;
+      const redirectUri = (envRedirect && !envRedirect.includes('collectibles.uy')) ? envRedirect : `${safeOrigin}/auth/callback`;
       
       const session = (await supabase.auth.getSession()).data.session;
       const token = session?.access_token || '';

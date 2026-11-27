@@ -1,6 +1,6 @@
 ---
 name: collectibles-production-deploy
-description: Deploys completed Collectibles code changes safely to the official production site collectibles.uy. Use after any task that creates, edits, fixes, refactors or otherwise changes application code or production configuration in the Collectibles workspace.
+description: Deploys completed Collectibles code changes safely to the official production site collectibles.com.uy. Use after any task that creates, edits, fixes, refactors or otherwise changes application code or production configuration in the Collectibles workspace.
 ---
 
 # Collectibles — Production Deploy Skill
@@ -13,7 +13,7 @@ Una tarea de código en el workspace de Collectibles **NO está terminada** hast
 CODE COMPLETE + BUILD PASS + GIT COMMIT + GIT PUSH + VERCEL PRODUCTION DEPLOY + COLLECTIBLES.UY VERIFIED
 ```
 
-Guardar archivos localmente **no es suficiente**. El trabajo queda institucionalizado en producción cuando `https://collectibles.uy` refleja los cambios.
+Guardar archivos localmente **no es suficiente**. El trabajo queda institucionalizado en producción cuando `https://collectibles.com.uy` refleja los cambios.
 
 ---
 
@@ -135,13 +135,13 @@ git push origin main
 ```
 El pipeline de Vercel inicia inmediatamente el build y despliegue del commit a producción.
 
-El destino oficial es: **`https://collectibles.uy`**
+El destino oficial es: **`https://collectibles.com.uy`**
 
 ---
 
 ### PASO F — Verificación del dominio oficial (Smoke Check)
 
-Confirmar que `https://collectibles.uy` responde correctamente después del deploy.
+Confirmar que `https://collectibles.com.uy` responde correctamente después del deploy.
 
 **Smoke check mínimo obligatorio:**
 
@@ -155,12 +155,12 @@ Confirmar que `https://collectibles.uy` responde correctamente después del depl
 
 | Funcionalidad modificada | URL a verificar |
 |--------------------------|-----------------|
-| My Vault                 | `https://collectibles.uy/vault` |
-| Radar                    | `https://collectibles.uy/radar` |
-| Checkout                 | `https://collectibles.uy/checkout` |
-| Perfil / Auth            | `https://collectibles.uy/profile` |
-| Marketplace              | `https://collectibles.uy/marketplace` |
-| Admin                    | `https://collectibles.uy/admin` |
+| My Vault                 | `https://collectibles.com.uy/vault` |
+| Radar                    | `https://collectibles.com.uy/radar` |
+| Checkout                 | `https://collectibles.com.uy/checkout` |
+| Perfil / Auth            | `https://collectibles.com.uy/profile` |
+| Marketplace              | `https://collectibles.com.uy/marketplace` |
+| Admin                    | `https://collectibles.com.uy/admin` |
 
 Si la tarea afecta una URL concreta, verificar también esa URL específica.
 
@@ -172,9 +172,9 @@ Si Antigravity dispone de Browser y la tarea modifica una funcionalidad visual i
 
 Vercel puede devolver una URL del tipo `https://xxxxx.vercel.app`. **Esa URL NO es la confirmación final requerida.**
 
-El endpoint comercial oficial es **`https://collectibles.uy`**.
+El endpoint comercial oficial es **`https://collectibles.com.uy`**.
 
-El proceso se considera completo **únicamente** cuando el deployment de producción está disponible a través de `collectibles.uy`.
+El proceso se considera completo **únicamente** cuando el deployment de producción está disponible a través de `collectibles.com.uy`.
 
 ---
 
@@ -223,7 +223,7 @@ Si `git status` contiene archivos no relacionados, dejarlos intactos.
 | Build falla | Corregir → volver a probar → continuar solo si pasa |
 | `git push` falla | Diagnosticar el motivo antes de desplegar |
 | Vercel falla | Diagnosticar el deployment antes de declarar completado |
-| `collectibles.uy` no responde | Investigar antes de declarar la tarea terminada |
+| `collectibles.com.uy` no responde | Investigar antes de declarar la tarea terminada |
 
 > **NO ocultar errores. NO declarar un deploy exitoso basándose únicamente en que se ejecutó el comando.**
 
@@ -238,7 +238,7 @@ Al terminar una tarea que haya realizado deployment, la respuesta debe incluir b
 ✓ Commit: <hash o mensaje>
 ✓ Push
 ✓ Deploy Production
-✓ collectibles.uy verificado
+✓ collectibles.com.uy verificado
 ```
 
 No escribir una explicación enorme de operaciones internas. Lo importante es confirmar claramente si producción quedó actualizada.

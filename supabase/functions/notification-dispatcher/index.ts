@@ -2,13 +2,17 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 import { notificationTemplates, formatCurrencyUYU, formatOrderNumber } from "../_shared/notificationTemplates.ts";
+import { getCorsHeaders, getOfficialSiteUrl, handleOptions, resolveTrustedReturnOrigin } from "../_shared/cors.ts";
+import {
+  isUntrustedEmailAddress,
+  resolveSafeEmailSender,
+  sanitizeStoredRecipients,
+  STABLE_ADMIN_EMAIL,
+} from "../_shared/email-guard.ts";
 
 declare const Deno: any;
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-collectibles-cron-secret, x-webhook-secret, svix-id, svix-timestamp, svix-signature, x-onesignal-signature',
-};
+const EXTRA_DISPATCHER_HEADERS = 'x-webhook-secret, svix-id, svix-timestamp, svix-signature, x-onesignal-signature';
 
 export function maskPhone(phone: string): string {
   if (!phone) return '********';
@@ -155,9 +159,9 @@ export interface NotificationPayload {
 }
 
 serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
+  const preflight = handleOptions(req, EXTRA_DISPATCHER_HEADERS);
+  if (preflight) return preflight;
+  const corsHeaders = getCorsHeaders(req, EXTRA_DISPATCHER_HEADERS);
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -359,7 +363,8 @@ serve(async (req: Request) => {
 
     const waConfig = Object.fromEntries((waSettings || []).map((s: any) => [s.key, s.value]));
     const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || waConfig.resend_api_key || '';
-    const RESEND_FROM = Deno.env.get('RESEND_FROM') || waConfig.resend_from || 'Collectibles Marketplace <notificaciones@collectibles.uy>';
+    const senderConfig = resolveSafeEmailSender(Deno.env.get('RESEND_FROM') || waConfig.resend_from);
+    const RESEND_FROM = senderConfig.from || '';
     const WHATSAPP_TOKEN = Deno.env.get('WHATSAPP_TOKEN') || waConfig.whatsapp_token || '';
     const WHATSAPP_PHONE_ID = Deno.env.get('WHATSAPP_PHONE_ID') || waConfig.whatsapp_phone_id || '';
     const isWhatsAppConfigured = Boolean(
@@ -706,11 +711,35 @@ serve(async (req: Request) => {
       if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
         return { success: false, status: 422, transientError: false, error: 'Dirección de correo inválida' };
       }
+      if (isUntrustedEmailAddress(email)) {
+        const blockedMsg = 'Envío bloqueado por seguridad: destinatario pertenece a dominio no confiable.';
+        await logNotification({
+          scope,
+          vendor_id: vendorId,
+          user_id: extraMeta?.user_id || null,
+          affiliate_id: extraMeta?.affiliate_id || null,
+          order_id: extraMeta?.order_id || null,
+          suborder_id: extraMeta?.suborder_id || null,
+          outbox_id: extraMeta?.outbox_id || null,
+          event_type: evType,
+          channel: 'email',
+          provider: 'resend',
+          recipient: email,
+          status: 'failed',
+          idempotency_key: idempotencyKey,
+          is_permanent_error: true,
+          error_message: blockedMsg,
+        });
+        return { success: false, status: 422, transientError: false, error: blockedMsg };
+      }
       if (await isAlreadyDispatched(idempotencyKey)) {
         return { success: true, status: 200 };
       }
 
-      if (!RESEND_API_KEY || RESEND_API_KEY === 'mock-resend-key') {
+      if (!RESEND_API_KEY || RESEND_API_KEY === 'mock-resend-key' || !senderConfig.allowed || !RESEND_FROM) {
+        const errReason = (!RESEND_API_KEY || RESEND_API_KEY === 'mock-resend-key')
+          ? 'Falta RESEND_API_KEY en Supabase Secrets'
+          : (senderConfig.reason || 'Remitente RESEND_FROM no verificado');
         await logNotification({
           scope,
           vendor_id: vendorId,
@@ -725,10 +754,10 @@ serve(async (req: Request) => {
           recipient: email,
           status: 'provider_unavailable',
           idempotency_key: idempotencyKey,
-          is_permanent_error: true,
-          error_message: 'Falta RESEND_API_KEY en Supabase Secrets'
+          is_permanent_error: false,
+          error_message: errReason
         });
-        return { success: false, status: 503, transientError: false, error: 'Falta RESEND_API_KEY en Supabase Secrets' };
+        return { success: false, status: 503, transientError: true, error: errReason };
       }
 
       try {
@@ -740,9 +769,10 @@ serve(async (req: Request) => {
           },
           body: JSON.stringify({
             from: RESEND_FROM,
+            reply_to: senderConfig.replyTo,
             to: [email.trim()],
             subject: subject,
-            html: bodyHtml.includes('<') ? bodyHtml : `<div style="font-family: sans-serif; padding: 20px; color: #333;"><h2 style="color: #f00856;">Collectibles.uy</h2><p>${bodyHtml}</p></div>`,
+            html: bodyHtml.includes('<') ? bodyHtml : `<div style="font-family: sans-serif; padding: 20px; color: #333;"><h2 style="color: #f00856;">Collectibles</h2><p>${bodyHtml}</p></div>`,
             text: bodyHtml.replace(/<[^>]*>?/gm, '')
           }),
           signal: AbortSignal.timeout(10000),
@@ -838,17 +868,17 @@ serve(async (req: Request) => {
             .maybeSingle();
 
           const raw = data?.email_recipients || [];
-          const active = raw.filter((r: any) => r.active && r.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(r.email).trim()));
+          const active = sanitizeStoredRecipients(raw, { ensureAdminFallback: false });
           if (active.length > 0) {
-            return active.map((r: any) => ({ name: r.name || 'Vendedor', email: String(r.email).trim() }));
+            return active;
           }
           // Fallback to vendor contact_email or profile email
           const { data: vRow } = await supabaseAdmin.from('vendors').select('contact_email, store_name').eq('id', vendorId).maybeSingle();
-          if (vRow?.contact_email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(vRow.contact_email.trim())) {
+          if (vRow?.contact_email && !isUntrustedEmailAddress(vRow.contact_email)) {
             return [{ name: vRow.store_name || 'Vendedor', email: vRow.contact_email.trim() }];
           }
           const { data: pRow } = await supabaseAdmin.from('profiles').select('email, first_name').eq('id', vendorId).maybeSingle();
-          if (pRow?.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(pRow.email.trim())) {
+          if (pRow?.email && !isUntrustedEmailAddress(pRow.email)) {
             return [{ name: pRow.first_name || 'Vendedor', email: pRow.email.trim() }];
           }
           return [];
@@ -858,9 +888,7 @@ serve(async (req: Request) => {
             .select('email_recipients')
             .maybeSingle();
 
-          const raw = data?.email_recipients || [];
-          const active = raw.filter((r: any) => r.active && r.email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(r.email).trim()));
-          return active.map((r: any) => ({ name: r.name || 'Admin', email: String(r.email).trim() }));
+          return sanitizeStoredRecipients(data?.email_recipients || [], { ensureAdminFallback: true });
         }
       } catch (err) {
         console.error('[Notification Dispatcher] Error loading email recipients:', err);
@@ -2469,7 +2497,7 @@ serve(async (req: Request) => {
               const vendorId = product.vendor_id;
               const title = "⚠️ Stock Bajo";
               const message = `El producto "${product.title} (${variant.name || 'Único'})" tiene stock bajo (${variant.inventory_count} ud).`;
-              const targetUrl = "https://collectibles.uy/vendor?tab=products";
+              const targetUrl = `${getOfficialSiteUrl()}/vendor?tab=products`;
 
               if (vendorId) {
                 await dispatchInAppNotification({
@@ -2628,7 +2656,7 @@ serve(async (req: Request) => {
         const prodObj: any = qObj?.product ? (Array.isArray(qObj.product) ? qObj.product[0] : qObj.product) : null;
 
         if (answer && qObj && prodObj) {
-          const answeredByName = answer.is_admin_answer ? 'Collectibles.uy' : 'El Vendedor';
+          const answeredByName = answer.is_admin_answer ? 'Collectibles' : 'El Vendedor';
           const tpl = notificationTemplates.product_question_answered({
             productTitle: prodObj.title,
             productSlug: prodObj.slug,
@@ -2959,7 +2987,7 @@ serve(async (req: Request) => {
             const domJson = await domRes.json().catch(() => ({}));
             resendDomains = Array.isArray(domJson?.data) ? domJson.data : [];
             resendApiStatus = 'connected';
-            const colDom = resendDomains.find((d: any) => d.name === 'collectibles.uy');
+            const colDom = resendDomains.find((d: any) => d.name === 'collectibles.com.uy' || d.name.endsWith('.collectibles.com.uy'));
             collectiblesDomainStatus = colDom ? colDom.status : 'not_found_in_resend';
           } else {
             resendApiStatus = `http_${domRes.status}`;
@@ -2989,14 +3017,17 @@ serve(async (req: Request) => {
         JSON.stringify({
           success: true,
           checked_at: new Date().toISOString(),
-          canonical_domain: 'https://collectibles.uy',
+          canonical_domain: getOfficialSiteUrl(),
           temporary_access_domain: 'https://collectibles-ecommerce.vercel.app',
           providers: {
             resend: {
-              configured: Boolean(RESEND_API_KEY && RESEND_API_KEY !== 'mock-resend-key'),
+              configured: Boolean(RESEND_API_KEY && RESEND_API_KEY !== 'mock-resend-key' && senderConfig.allowed),
               api_status: resendApiStatus,
-              from_address: RESEND_FROM,
-              domain_collectibles_uy_status: collectiblesDomainStatus,
+              from_address: RESEND_FROM || null,
+              sender_verified_guard: senderConfig.allowed,
+              sender_guard_reason: senderConfig.reason || null,
+              reply_to: senderConfig.replyTo,
+              domain_collectibles_com_uy_status: collectiblesDomainStatus,
               domains: resendDomains.map((d: any) => ({
                 id: d.id,
                 name: d.name,
@@ -3222,7 +3253,7 @@ serve(async (req: Request) => {
         const vendorTag = body_vendor_id ? ' (Vendedor)' : '';
         const subject = body.subject || "Prueba de notificaciones — Collectibles";
         const emailMessage = body.body || `Esta es una notificación de prueba. El canal Email está funcionando correctamente.${vendorTag} ✅`;
-        const htmlBody = `<div style="font-family: sans-serif; padding: 20px; color: #333;"><h2 style="color: #f00856;">Collectibles.uy</h2><p>${emailMessage}</p></div>`;
+        const htmlBody = `<div style="font-family: sans-serif; padding: 20px; color: #333;"><h2 style="color: #f00856;">Collectibles</h2><p>${emailMessage}</p></div>`;
 
         let successCount = 0;
         let lastError: string | null = null;
@@ -3251,7 +3282,7 @@ serve(async (req: Request) => {
       } else {
         const title = body.title || "Collectibles Marketplace";
         const message = body.body || "Esta es una notificación de prueba. Todo está funcionando correctamente. ✅";
-        const targetUrl = body.url || "https://collectibles.uy";
+        const targetUrl = resolveTrustedReturnOrigin(body.url);
 
         if (targetUserId) {
           await dispatchPushProvider([targetUserId], body_vendor_id || null, title, message, targetUrl, testKey, scope, 'test_notification');

@@ -7,7 +7,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default async function handler(req, res) {
   try {
-    const baseUrl = 'https://collectibles.uy';
+    const baseUrl = 'https://collectibles.com.uy';
     
     const [{ data: products }, { data: categories }, { data: brands }] = await Promise.all([
       supabase.from('products').select('slug, updated_at').eq('is_active', true),

@@ -1,8 +1,8 @@
 const fs = require('fs');
 
 async function checkLiveCsv() {
-  console.log('Fetching live https://collectibles.uy/meta-catalog.csv ...');
-  const res = await fetch('https://collectibles.uy/meta-catalog.csv');
+  console.log('Fetching live https://collectibles.com.uy/meta-catalog.csv ...');
+  const res = await fetch('https://collectibles.com.uy/meta-catalog.csv');
   const text = await res.text();
 
   const lines = text.split('\n');

@@ -1927,7 +1927,7 @@ export default function AdminProducts() {
                           )}
                           <div className="flex items-center gap-2 text-xs text-gray-500 px-1">
                              <span className="font-bold">Enlace permanente:</span>
-                             <span className="text-blue-500 underline">https://collectibles-ecommerce.com/p/</span>
+                             <span className="text-blue-500 underline">https://collectibles.com.uy/producto/</span>
                              <span className="text-blue-600 font-mono select-all bg-blue-50 px-2 py-0.5 rounded font-semibold">{slugify(form.title) || form.slug || 'slug-automatico'}</span>
                           </div>
                        </div>

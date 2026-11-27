@@ -238,8 +238,8 @@ const SAMPLE_LOCAL_PRODUCT = {
   vendor_slug: 'montevideo-toys',
   vendor_status: 'active',
   vendor_ships_to_argentina: 1,
-  primary_image_url: 'https://collectibles.uy/img/batman.webp',
-  images_json: JSON.stringify([{ id: 'img-1', url: 'https://collectibles.uy/img/batman.webp', is_primary: true }]),
+  primary_image_url: 'https://collectibles.com.uy/img/batman.webp',
+  images_json: JSON.stringify([{ id: 'img-1', url: 'https://collectibles.com.uy/img/batman.webp', is_primary: true }]),
   variants_json: JSON.stringify([{ id: 'var-bat-1', sku: 'FK-BAT-80', price_adjustment: 0, inventory_count: 4 }]),
   search_text: 'funko pop batman 80th anniversary fk-bat-80',
   created_at: '2026-10-01T10:00:00Z',
@@ -300,7 +300,7 @@ describe('Migración Collectibles a Cloudflare D1 + Workers — Suite de Integra
       categories: [{ id: 'cat-funko', name: 'Funko Pop', slug: 'funko-pop', is_active: 1 }],
       brands: [{ id: 'brand-funko', name: 'Funko', slug: 'funko', is_active: 1, status: 'approved' }],
       promotions: [{ id: 'promo-1', name: '10% OFF Figuras', type: 'percentage', value: 10, is_active: 1, priority: 10 }],
-      radar: [{ id: 'rad-1', title: 'Batman Returns Wave', slug: 'batman-returns-wave', release_date: '2026-12-01', hype_score: 95, hero_image_url: 'https://collectibles.uy/img/batman-radar.webp' }],
+      radar: [{ id: 'rad-1', title: 'Batman Returns Wave', slug: 'batman-returns-wave', release_date: '2026-12-01', hype_score: 95, hero_image_url: 'https://collectibles.com.uy/img/batman-radar.webp' }],
       settings: {
         public_site_config: { store_name: 'Collectibles.uy', exchange_rate_uyu: '43.5' },
         feature_toggles: { marketplace: true, radar: true },
@@ -821,7 +821,7 @@ describe('Migración Collectibles a Cloudflare D1 + Workers — Suite de Integra
         country: 'UY',
         ci: '41234567',
       },
-      customer_email: 'test-simulado@collectibles.uy',
+      customer_email: 'test-simulado@collectibles.com.uy',
       terms_accepted: true,
       terms_accepted_at: new Date().toISOString(),
       accepted_terms_version: 'v1.0',
@@ -882,7 +882,7 @@ describe('Migración Collectibles a Cloudflare D1 + Workers — Suite de Integra
     const mockLocalImages = mockLocalProducts.map((p, idx) => ({
       id: `img-${idx + 1}`,
       product_id: p.id,
-      url: `https://cdn.collectibles.uy/local-${idx + 1}.webp`,
+      url: `https://cdn.collectibles.com.uy/local-${idx + 1}.webp`,
       alt_text: p.title,
       is_primary: true,
       sort_order: 0,
@@ -956,7 +956,7 @@ describe('Migración Collectibles a Cloudflare D1 + Workers — Suite de Integra
     };
 
     const probeResult = await executeControlledTenProductReadProbe({
-      supabaseUrl: 'https://mock-supabase.collectibles.uy',
+      supabaseUrl: 'https://mock-supabase.collectibles.com.uy',
       serviceKey: 'mock-service-key-not-real',
       fetcher: mockSupabaseFetcher,
     });
@@ -1020,7 +1020,7 @@ describe('Migración Collectibles a Cloudflare D1 + Workers — Suite de Integra
       upsert_product_groups: [{ id: 'grp-1', name: 'Destacados', slug: 'destacados', product_ids: [pLocal1.id] }],
       upsert_vendor_stores: [{ id: 'store-uy-1', vendor_id: 'vendor-uy-1', store_name: 'Montevideo Toys', store_slug: 'montevideo-toys' }],
       upsert_promotions: [{ id: 'promo-1', name: 'Promo Octubre', type: 'percentage', value: 10 }],
-      upsert_banners: [{ id: 'ban-1', title: 'Hero', image_url: 'https://cdn.collectibles.uy/hero.webp' }],
+      upsert_banners: [{ id: 'ban-1', title: 'Hero', image_url: 'https://cdn.collectibles.com.uy/hero.webp' }],
       upsert_badges: [{ id: 'bdg-1', name: 'Preventa', slug: 'preventa' }],
       upsert_radar_releases: [{ id: 'rad-1', title: 'Goku SSJ4', slug: 'goku-ssj4', release_date: '2026-12-01' }],
       upsert_slug_redirects: [{ old_slug: 'viejo-slug', new_slug: pLocal1.slug, product_id: pLocal1.id }],
@@ -1114,9 +1114,9 @@ describe('Migración Collectibles a Cloudflare D1 + Workers — Suite de Integra
           is_active: 1,
           status: 'published',
           is_international: 0,
-          primary_image_url: 'https://images.collectibles.uy/ghostbusters-zeddemore.jpg',
+          primary_image_url: 'https://images.collectibles.com.uy/ghostbusters-zeddemore.jpg',
           images_json: JSON.stringify([
-            { id: 'img-1', url: 'https://images.collectibles.uy/ghostbusters-zeddemore.jpg', alt_text: 'Front', sort_order: 0, is_primary: true },
+            { id: 'img-1', url: 'https://images.collectibles.com.uy/ghostbusters-zeddemore.jpg', alt_text: 'Front', sort_order: 0, is_primary: true },
           ]),
           variants_json: JSON.stringify([
             { id: '524ab3d4-ebe1-49c6-b3f3-ddbea56db1b7', sku: 'COL-000517', name: 'Standard', price_adjustment: 0, inventory_count: 3, is_active: true },
@@ -1146,7 +1146,7 @@ describe('Migración Collectibles a Cloudflare D1 + Workers — Suite de Integra
           is_active: 1,
           status: 'published',
           is_international: 1,
-          primary_image_url: 'https://images.collectibles.uy/neca-phantom.jpg',
+          primary_image_url: 'https://images.collectibles.com.uy/neca-phantom.jpg',
           images_json: '[]',
           variants_json: '[]',
           created_at: '2026-04-12T10:00:00Z',
@@ -1165,7 +1165,7 @@ describe('Migración Collectibles a Cloudflare D1 + Workers — Suite de Integra
           is_active: 1,
           status: 'published',
           is_international: 0,
-          primary_image_url: 'https://images.collectibles.uy/ultra-pro.jpg',
+          primary_image_url: 'https://images.collectibles.com.uy/ultra-pro.jpg',
           images_json: '[]',
           variants_json: '[]',
           created_at: '2026-04-13T10:00:00Z',
@@ -1184,7 +1184,7 @@ describe('Migración Collectibles a Cloudflare D1 + Workers — Suite de Integra
     const env: Env = {
       DB: mockDb,
       CATALOG_SYNC_SECRET: 'test-secret-at-least-32-chars-long-12345',
-      PUBLIC_SITE_URL: 'https://collectibles.uy',
+      PUBLIC_SITE_URL: 'https://collectibles.com.uy',
     };
 
     // 1. Lectura de ficha local en UYU

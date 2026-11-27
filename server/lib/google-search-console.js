@@ -20,7 +20,7 @@ export async function listSites(client) {
 }
 
 /**
- * Automatically locate the collectibles.uy siteUrl without assuming sc-domain or https
+ * Automatically locate the collectibles.com.uy siteUrl without assuming sc-domain or https
  */
 export async function findCollectiblesProperty(client) {
   const sites = await listSites(client);
@@ -28,7 +28,7 @@ export async function findCollectiblesProperty(client) {
   // Match domain property or URL prefix property
   const match = sites.find(s => {
     const raw = (s.siteUrl || '').toLowerCase();
-    return raw.includes('collectibles.uy');
+    return raw.includes('collectibles.com.uy');
   });
 
   if (!match) {

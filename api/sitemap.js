@@ -1,7 +1,7 @@
 import { createPublicSupabase, publicReadFailure } from './_lib/public-supabase.js';
 import { createSitemapRepository } from './_lib/seo-sitemap-repository.js';
 
-const BASE_URL = 'https://collectibles.uy';
+const BASE_URL = 'https://collectibles.com.uy';
 
 // Curated & static editorial academy guides list (32 articles, all 200 OK)
 const ACADEMY_ARTICLE_SLUGS = [
@@ -45,7 +45,7 @@ export function createSitemapHandler(clientFactory = createPublicSupabase) {
   return async function handler(req, res) {
   try {
     const rawUrl = req.url || '';
-    const parsed = new URL(rawUrl, 'https://collectibles.uy');
+    const parsed = new URL(rawUrl, 'https://collectibles.com.uy');
     const xForwardedUri = req.headers?.['x-forwarded-uri'] || req.headers?.['x-matched-path'] || '';
     const fullPath = (parsed.pathname + ' ' + rawUrl + ' ' + xForwardedUri).toLowerCase();
     const typeParam = (parsed.searchParams.get('type') || req.query?.type || '').toLowerCase();

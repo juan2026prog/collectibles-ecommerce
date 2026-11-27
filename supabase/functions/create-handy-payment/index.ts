@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { verifyOptionalAuth } from "../_shared/auth.ts";
 import { getHandyProviderConfig } from "../_shared/handy.ts";
-import { getCorsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders, handleOptions, isBlockedLegacyHostname, resolveTrustedReturnOrigin } from "../_shared/cors.ts";
 
 interface CreateHandyPaymentRequest {
   order_id: string;
@@ -25,9 +25,8 @@ const supabaseAdmin = createClient(
 
 Deno.serve(async (req: Request) => {
   // CORS Preflight Request
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: getCorsHeaders(req) });
-  }
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
 
   try {
     console.log("create-handy-payment started");
@@ -241,19 +240,26 @@ Deno.serve(async (req: Request) => {
       throw new Error("HANDY_INVALID_CURRENCY");
     }
 
-    const baseSiteUrl = handy.siteUrl && !handy.siteUrl.includes("localhost")
-      ? handy.siteUrl.trim()
-      : "https://collectibles.uy";
+    const baseSiteUrl = resolveTrustedReturnOrigin(handy.siteUrl || req.headers.get("origin"), { allowLocalhost: false });
 
     const returnSuccessUrl = `${baseSiteUrl.replace(/\/$/, '')}/checkout/success?order_id=${orderId}&provider=handy`;
 
-    // Ensure we omit LinkImageUrl if empty or invalid
-    const linkImageUrl = handy.defaultImageUrl && handy.defaultImageUrl.trim().startsWith("http")
-      ? handy.defaultImageUrl.trim()
-      : undefined;
+    // Ensure we omit LinkImageUrl if empty, invalid, or pointing to untrusted legacy domain
+    let linkImageUrl: string | undefined = undefined;
+    if (handy.defaultImageUrl && handy.defaultImageUrl.trim()) {
+      try {
+        const parsedImg = new URL(handy.defaultImageUrl.trim());
+        if (parsedImg.protocol === "https:" && !isBlockedLegacyHostname(parsedImg.hostname)) {
+          linkImageUrl = parsedImg.toString();
+        }
+      } catch {
+        linkImageUrl = undefined;
+      }
+    }
 
-    // CallbackUrl must be exactly:
-    const callbackUrl = "https://cobtsgkwcftvexaarwmo.supabase.co/functions/v1/handy-webhook";
+    const callbackUrl = handy.callbackUrl && handy.callbackUrl.startsWith(supabaseUrl)
+      ? handy.callbackUrl
+      : `${supabaseUrl}/functions/v1/handy-webhook`;
 
     // Strictly match official Handy Boton de Pago v2.0 specification
     const requestPayload: Record<string, any> = {

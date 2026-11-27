@@ -5,6 +5,12 @@
  * Customer, Admin, Vendor, Affiliate/Influencer.
  */
 
+import { getOfficialSiteUrl } from "./cors.ts";
+
+function getSiteBaseUrl(): string {
+  return getOfficialSiteUrl();
+}
+
 export function formatCurrencyUYU(amount: number, currency: string = 'UYU'): string {
   const formatted = new Intl.NumberFormat('es-UY', {
     style: 'decimal',
@@ -99,7 +105,7 @@ function wrapCollectiblesEmail(title: string, badgeText: string, badgeColor: str
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1f2937; background-color: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px;">
   <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #f3f4f6; padding-bottom: 16px; margin-bottom: 20px;">
     <div>
-      <span style="font-size: 18px; font-weight: 900; color: #111827; letter-spacing: -0.5px;">COLLECTIBLES<span style="color: #f00856;">.UY</span></span>
+      <span style="font-size: 18px; font-weight: 900; color: #111827; letter-spacing: -0.5px;">COLLECTIBLES<span style="color: #f00856;">.COM.UY</span></span>
     </div>
     <span style="background-color: ${badgeColor}; color: #ffffff; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 9999px; text-transform: uppercase;">${badgeText}</span>
   </div>
@@ -110,7 +116,7 @@ function wrapCollectiblesEmail(title: string, badgeText: string, badgeColor: str
   ${ctaBlock}
   <div style="margin-top: 32px; padding-top: 16px; border-top: 1px solid #f3f4f6; font-size: 12px; color: #6b7280; text-align: center;">
     <p style="margin: 0 0 4px 0;">Collectibles Marketplace · Vázquez 1418, Montevideo, Uruguay</p>
-    <p style="margin: 0;">Si necesitás asistencia, respondé a este correo o visitá <a href="https://collectibles.uy/contact" style="color: #f00856; text-decoration: none;">Soporte</a>.</p>
+    <p style="margin: 0;">Si necesitás asistencia, respondé a este correo o visitá <a href="${getSiteBaseUrl()}/contact" style="color: #f00856; text-decoration: none;">Soporte</a>.</p>
   </div>
 </div>
   `.trim();
@@ -122,7 +128,7 @@ export const notificationTemplates = {
   // ═══════════════════════════════════════════════════════════════════════════
   customer_order_created: (data: { orderNumber: string; orderId: string; totalAmount: number; currency?: string }) => {
     const formattedTotal = formatCurrencyUYU(data.totalAmount, data.currency || 'UYU');
-    const deepLink = `https://collectibles.uy/account?tab=orders&order_id=${data.orderId}`;
+    const deepLink = `${getSiteBaseUrl()}/account?tab=orders&order_id=${data.orderId}`;
     return {
       inApp: {
         title: `Pedido ${data.orderNumber} creado`,
@@ -153,7 +159,7 @@ export const notificationTemplates = {
 
   customer_payment_pending: (data: { orderNumber: string; orderId: string; totalAmount: number; currency?: string; paymentMethod?: string }) => {
     const formattedTotal = formatCurrencyUYU(data.totalAmount, data.currency || 'UYU');
-    const deepLink = `https://collectibles.uy/account?tab=orders&order_id=${data.orderId}`;
+    const deepLink = `${getSiteBaseUrl()}/account?tab=orders&order_id=${data.orderId}`;
     return {
       inApp: {
         title: `Pago en proceso — Pedido ${data.orderNumber}`,
@@ -194,7 +200,7 @@ export const notificationTemplates = {
     isArgentina?: boolean;
     items?: VendorOrderItem[];
   }) => {
-    const deepLink = `https://collectibles.uy/account?tab=orders&order_id=${data.orderId}`;
+    const deepLink = `${getSiteBaseUrl()}/account?tab=orders&order_id=${data.orderId}`;
     const displayAmount = data.isArgentina && data.displayTotal
       ? `${data.displayCurrency || 'ARS'} ${Number(data.displayTotal).toLocaleString('es-AR')}`
       : formatCurrencyUYU(data.totalAmount, data.currency || 'UYU');
@@ -228,9 +234,9 @@ export const notificationTemplates = {
       },
       email: {
         subject: `✅ ¡Confirmación de tu Orden ${data.orderNumber}!`,
-        text: `¡Gracias por tu compra en Collectibles.uy! Recibimos el pago de tu orden ${data.orderNumber} por ${displayAmount} y ya comenzamos a prepararla. Ver pedido: ${deepLink}`,
+        text: `¡Gracias por tu compra en Collectibles! Recibimos el pago de tu orden ${data.orderNumber} por ${displayAmount} y ya comenzamos a prepararla. Ver pedido: ${deepLink}`,
         html: wrapCollectiblesEmail(
-          `¡Gracias por tu compra en Collectibles.uy!`,
+          `¡Gracias por tu compra en Collectibles!`,
           'Pago Aprobado',
           '#059669',
           `<p>Hemos confirmado el pago de tu orden <strong>${data.orderNumber}</strong> y ya comenzamos a prepararla para su envío.</p>
@@ -249,7 +255,7 @@ export const notificationTemplates = {
 
   customer_payment_rejected: (data: { orderNumber: string; orderId: string; totalAmount: number; currency?: string }) => {
     const formattedTotal = formatCurrencyUYU(data.totalAmount, data.currency || 'UYU');
-    const deepLink = `https://collectibles.uy/account?tab=orders&order_id=${data.orderId}`;
+    const deepLink = `${getSiteBaseUrl()}/account?tab=orders&order_id=${data.orderId}`;
     return {
       inApp: {
         title: `Pago rechazado — Pedido ${data.orderNumber}`,
@@ -279,7 +285,7 @@ export const notificationTemplates = {
   },
 
   customer_order_preparing: (data: { orderNumber: string; orderId: string; suborderNumber?: string; isPrepared?: boolean; items?: VendorOrderItem[] }) => {
-    const deepLink = `https://collectibles.uy/account?tab=orders&order_id=${data.orderId}`;
+    const deepLink = `${getSiteBaseUrl()}/account?tab=orders&order_id=${data.orderId}`;
     const stageTitle = data.isPrepared ? `Pedido listo para despacho` : `Tu pedido está en preparación`;
     const stageBadge = data.isPrepared ? 'Preparado' : 'En Preparación';
     const subLabel = data.suborderNumber ? ` (Envío ${data.suborderNumber})` : '';
@@ -330,7 +336,7 @@ export const notificationTemplates = {
     dispatchedAt?: string | null;
     items?: VendorOrderItem[];
   }) => {
-    const deepLink = `https://collectibles.uy/account?tab=orders&order_id=${data.orderId}`;
+    const deepLink = `${getSiteBaseUrl()}/account?tab=orders&order_id=${data.orderId}`;
     const validTrackingUrl = resolveValidTrackingUrl(data.carrier, data.trackingNumber, data.trackingUrl);
     const carrierName = (data.carrier || 'Logística Oficial').toUpperCase();
     const dateFormatted = data.dispatchedAt
@@ -391,7 +397,7 @@ export const notificationTemplates = {
   },
 
   customer_order_delivered: (data: { orderNumber: string; orderId: string; suborderNumber?: string | null; items?: VendorOrderItem[] }) => {
-    const deepLink = `https://collectibles.uy/account?tab=orders&order_id=${data.orderId}`;
+    const deepLink = `${getSiteBaseUrl()}/account?tab=orders&order_id=${data.orderId}`;
     const subLabel = data.suborderNumber ? ` (Envío ${data.suborderNumber})` : '';
     return {
       inApp: {
@@ -426,7 +432,7 @@ export const notificationTemplates = {
   // ═══════════════════════════════════════════════════════════════════════════
   vendor_order_paid: (data: VendorOrderPaidTemplateData) => {
     const formattedTotal = formatCurrencyUYU(data.vendorTotal);
-    const deepLink = `https://collectibles.uy/vendor?tab=orders&order_id=${data.orderId}`;
+    const deepLink = `${getSiteBaseUrl()}/vendor?tab=orders&order_id=${data.orderId}`;
     
     const itemsListHtml = data.items
       .map(item => `<li>${item.product_name} &times; ${item.quantity}</li>`)
@@ -471,7 +477,7 @@ export const notificationTemplates = {
 
   admin_own_order_paid: (data: AdminOwnOrderPaidTemplateData) => {
     const formattedTotal = formatCurrencyUYU(data.collectiblesTotal);
-    const deepLink = `https://collectibles.uy/admin/orders?order_id=${data.orderId}`;
+    const deepLink = `${getSiteBaseUrl()}/admin/orders?order_id=${data.orderId}`;
     const label = data.saleTypeLabel || 'Collectibles';
     
     const itemsListHtml = data.items
@@ -517,7 +523,7 @@ export const notificationTemplates = {
 
   order_cancelled: (data: OrderCancelledTemplateData) => {
     if (data.isCustomer) {
-      const deepLink = `https://collectibles.uy/account?tab=orders&order_id=${data.orderId}`;
+      const deepLink = `${getSiteBaseUrl()}/account?tab=orders&order_id=${data.orderId}`;
       const reasonText = data.reason || 'Cancelación procesada y reembolso en curso';
       return {
         inApp: {
@@ -549,8 +555,8 @@ export const notificationTemplates = {
 
     const isVendor = data.isVendor ?? true;
     const deepLink = isVendor 
-      ? `https://collectibles.uy/vendor?tab=orders&order_id=${data.orderId}`
-      : `https://collectibles.uy/admin/orders?order_id=${data.orderId}`;
+      ? `${getSiteBaseUrl()}/vendor?tab=orders&order_id=${data.orderId}`
+      : `${getSiteBaseUrl()}/admin/orders?order_id=${data.orderId}`;
 
     if (isVendor) {
       return {
@@ -625,10 +631,10 @@ export const notificationTemplates = {
     const formattedAmt = data.amount ? formatCurrencyUYU(data.amount) : '';
 
     const deepLink = data.recipientRole === 'customer'
-      ? `https://collectibles.uy/account?tab=requests`
+      ? `${getSiteBaseUrl()}/account?tab=requests`
       : data.recipientRole === 'vendor'
-      ? `https://collectibles.uy/vendor?tab=orders&order_id=${data.orderId}`
-      : `https://collectibles.uy/admin/refunds`;
+      ? `${getSiteBaseUrl()}/vendor?tab=orders&order_id=${data.orderId}`
+      : `${getSiteBaseUrl()}/admin/refunds`;
 
     let title = `Solicitud sobre pedido ${data.orderNumber}`;
     let badge = 'En Revisión';
@@ -700,10 +706,10 @@ export const notificationTemplates = {
   }) => {
     const formattedAmt = formatCurrencyUYU(data.amount, data.currency || 'UYU');
     const deepLink = data.recipientRole === 'customer'
-      ? `https://collectibles.uy/account?tab=orders&order_id=${data.orderId}`
+      ? `${getSiteBaseUrl()}/account?tab=orders&order_id=${data.orderId}`
       : data.recipientRole === 'vendor'
-      ? `https://collectibles.uy/vendor?tab=finances`
-      : `https://collectibles.uy/admin/refunds`;
+      ? `${getSiteBaseUrl()}/vendor?tab=finances`
+      : `${getSiteBaseUrl()}/admin/refunds`;
 
     if (data.status === 'completed') {
       const title = data.recipientRole === 'vendor'
@@ -822,10 +828,10 @@ export const notificationTemplates = {
   }) => {
     const formattedAmt = formatCurrencyUYU(data.amount);
     const deepLink = data.recipientRole === 'customer'
-      ? `https://collectibles.uy/account?tab=orders&order_id=${data.orderId}`
+      ? `${getSiteBaseUrl()}/account?tab=orders&order_id=${data.orderId}`
       : data.recipientRole === 'vendor'
-      ? `https://collectibles.uy/vendor?tab=finances`
-      : `https://collectibles.uy/admin/refunds`;
+      ? `${getSiteBaseUrl()}/vendor?tab=finances`
+      : `${getSiteBaseUrl()}/admin/refunds`;
 
     const title = data.recipientRole === 'admin'
       ? `🚨 Contracargo / Disputa recibida — ${data.orderNumber}`
@@ -864,7 +870,7 @@ export const notificationTemplates = {
 
   vendor_financial_adjustment: (data: { storeName: string; orderNumber: string; amount: number; typeAdj: string; reason?: string }) => {
     const formattedAmt = formatCurrencyUYU(data.amount);
-    const deepLink = `https://collectibles.uy/vendor?tab=finances`;
+    const deepLink = `${getSiteBaseUrl()}/vendor?tab=finances`;
     return {
       inApp: {
         title: `Ajuste financiero registrado (${data.typeAdj})`,
@@ -902,7 +908,7 @@ export const notificationTemplates = {
 
   vendor_liquidation_event: (data: { storeName?: string; amount: number; isPaid: boolean; reference?: string }) => {
     const formattedAmt = formatCurrencyUYU(data.amount);
-    const deepLink = `https://collectibles.uy/vendor?tab=settlements`;
+    const deepLink = `${getSiteBaseUrl()}/vendor?tab=settlements`;
     const title = data.isPaid
       ? `💸 Liquidación pagada — ${formattedAmt}`
       : `📊 Nueva liquidación disponible — ${formattedAmt}`;
@@ -954,7 +960,7 @@ export const notificationTemplates = {
     statusLabel?: string;
     reason?: string;
   }) => {
-    const deepLink = `https://collectibles.uy/affiliate?tab=overview`;
+    const deepLink = `${getSiteBaseUrl()}/affiliate?tab=overview`;
     const commFormatted = data.commissionAmount !== undefined ? formatCurrencyUYU(data.commissionAmount) : '';
     const baseFormatted = data.commissionableAmount !== undefined ? formatCurrencyUYU(data.commissionableAmount) : '';
     const dateStr = data.saleDate ? new Date(data.saleDate).toLocaleDateString('es-UY') : new Date().toLocaleDateString('es-UY');
@@ -1075,7 +1081,7 @@ export const notificationTemplates = {
   admin_vendor_daily_summary: (data: AdminDailySummaryTemplateData) => {
     const formattedMarketplaceTotal = formatCurrencyUYU(data.marketplaceTotal);
     const formattedCommissionTotal = formatCurrencyUYU(data.commissionTotal);
-    const deepLink = `https://collectibles.uy/admin/marketplace`;
+    const deepLink = `${getSiteBaseUrl()}/admin/marketplace`;
 
     const rowsHtml = data.vendorRows
       .map(r => `
@@ -1154,8 +1160,8 @@ export const notificationTemplates = {
 
   product_question_received: (data: { productTitle: string; productId: string; questionText: string; isVendor?: boolean }) => {
     const deepLink = data.isVendor 
-      ? `https://collectibles.uy/vendor?tab=questions`
-      : `https://collectibles.uy/admin/questions`;
+      ? `${getSiteBaseUrl()}/vendor?tab=questions`
+      : `${getSiteBaseUrl()}/admin/questions`;
 
     const recipientLabel = data.isVendor ? 'Vendor' : 'Administración';
 
@@ -1191,7 +1197,7 @@ export const notificationTemplates = {
   },
 
   product_question_answered: (data: { productTitle: string; productSlug: string; questionId: string; questionText: string; answerText: string; answeredBy: string }) => {
-    const deepLink = `https://collectibles.uy/p/${data.productSlug}#pregunta-${data.questionId}`;
+    const deepLink = `${getSiteBaseUrl()}/producto/${data.productSlug}#pregunta-${data.questionId}`;
 
     return {
       inApp: {

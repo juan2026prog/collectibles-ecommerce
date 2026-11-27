@@ -67,7 +67,7 @@ function simulateReq(query) {
 
     const idOk = Boolean(id);
     const titleOk = Boolean(title);
-    const linkOk = Boolean(link && link.startsWith('https://collectibles.uy/producto/'));
+    const linkOk = Boolean(link && link.startsWith('https://collectibles.com.uy/producto/'));
     const priceOk = Boolean(price && price.includes('UYU'));
     const availOk = Boolean(availability === 'in_stock' || availability === 'out_of_stock');
 

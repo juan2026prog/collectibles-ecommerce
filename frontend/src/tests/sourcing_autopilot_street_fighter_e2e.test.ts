@@ -17,8 +17,8 @@ const streetFighterCanonicalProduct: NormalizedProduct = {
   scale: '6"',
   upc: '801310345678',
   mpn: 'SF-AKUMA-DLX',
-  image_url: 'https://images.collectibles.uy/streetfighter/akuma.jpg',
-  gallery_images: ['https://images.collectibles.uy/streetfighter/akuma_box.jpg'],
+  image_url: 'https://images.collectibles.com.uy/streetfighter/akuma.jpg',
+  gallery_images: ['https://images.collectibles.com.uy/streetfighter/akuma_box.jpg'],
   offers: [
     {
       id: 'off_amz_akuma',

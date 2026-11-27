@@ -2,7 +2,7 @@ const https = require('https');
 
 function checkProduction() {
   return new Promise((resolve) => {
-    https.get('https://collectibles.uy/marca/funko', {
+    https.get('https://collectibles.com.uy/marca/funko', {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -26,7 +26,7 @@ function checkProduction() {
 }
 
 (async () => {
-  console.log('Esperando despliegue de Vercel en Producción (https://collectibles.uy)...');
+  console.log('Esperando despliegue de Vercel en Producción (https://collectibles.com.uy)...');
   let attempts = 0;
   const maxAttempts = 15;
 
@@ -36,7 +36,7 @@ function checkProduction() {
     console.log(`[Intento ${attempts}/${maxAttempts}] Status: ${res.status} | Title: "${res.title}" | Canonical: "${res.canonical}"`);
 
     if (res.isUpdated) {
-      console.log('\n¡DESPLIEGUE EN PRODUCCIÓN CONFIRMADO! Vercel ha activado el nuevo código en https://collectibles.uy');
+      console.log('\n¡DESPLIEGUE EN PRODUCCIÓN CONFIRMADO! Vercel ha activado el nuevo código en https://collectibles.com.uy');
       process.exit(0);
     }
 

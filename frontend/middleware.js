@@ -33,7 +33,7 @@ export default async function middleware(request) {
         const data = await res.json();
         if (data && data.length > 0 && data[0].new_slug) {
           const newSlug = data[0].new_slug;
-          const redirectUrl = new URL(`/p/${newSlug}`, request.url);
+          const redirectUrl = new URL(`/producto/${newSlug}`, request.url);
           return new Response(null, {
             status: 301,
             headers: {

@@ -204,7 +204,7 @@ const ImportHubPage: React.FC = () => {
       <Helmet>
         <title>HUB de Importaciones & Franquicias Aduaneras | Collectibles Uruguay</title>
         <meta name="description" content="Calculá costos de importación, gestioná tus cupos de franquicia aduanera de U$S 200 y rastreá tus encomiendas hacia Uruguay." />
-        <link rel="canonical" href="https://collectibles.uy/import-hub" />
+        <link rel="canonical" href="https://collectibles.com.uy/import-hub" />
       </Helmet>
       <div className="max-w-7xl mx-auto space-y-6">
         

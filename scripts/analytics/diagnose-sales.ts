@@ -700,7 +700,7 @@ async function runDiagnosis() {
       if (urlsSeen.has(url)) continue;
       urlsSeen.add(url);
 
-      if (url === 'https://collectibles.uy/' || url === 'https://collectibles.uy') {
+      if (url === 'https://collectibles.com.uy/' || url === 'https://collectibles.com.uy' || url === 'https://collectibles.uy/' || url === 'https://collectibles.uy') {
         homeVisits += sess;
       } else if (url.includes('/categoria/') || url.includes('/category/') || url.includes('/marca/')) {
         catVisits += sess;

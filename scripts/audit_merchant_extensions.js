@@ -50,7 +50,7 @@ async function auditExtensions() {
   console.log('AUDITORÍA PROFUNDA DE EXTENSIONES Y REALIDAD BINARIA (1.207 ITEMS)');
   console.log('================================================================\n');
 
-  const feedUrl = 'https://collectibles.uy/merchant-feed.xml';
+  const feedUrl = 'https://collectibles.com.uy/merchant-feed.xml';
   const feedRes = await fetch(feedUrl);
   const xml = await feedRes.text();
 

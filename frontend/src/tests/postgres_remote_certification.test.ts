@@ -20,9 +20,10 @@ import { describe, it, expect } from 'vitest';
  * 14. Guest vs Authenticated user handling
  */
 
-describe('PostgreSQL Remote create_order_atomic_v2 Certification', () => {
-  const serviceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNvYnRzZ2t3Y2Z0dmV4YWFyd21vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NDU3MjA1MywiZXhwIjoyMDkwMTQ4MDUzfQ.jajO92RgFxYTkMkvJDA9Dl2Kug1iNbaGhVNrsDxV6mU';
-  const supabaseUrl = 'https://cobtsgkwcftvexaarwmo.supabase.co';
+const remoteCertEnabled = process.env.ALLOW_REMOTE_DB_CERT === 'true' && Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+describe.skipIf(!remoteCertEnabled)('PostgreSQL Remote create_order_atomic_v2 Certification', () => {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  const supabaseUrl = process.env.SUPABASE_URL || 'https://csnudufkpfzveoonjumy.supabase.co';
 
   // Helper template matching all 33 strict parameters of create_order_atomic_v2
   function buildRpcPayload(overrides: Record<string, any>) {
@@ -31,7 +32,7 @@ describe('PostgreSQL Remote create_order_atomic_v2 Certification', () => {
       p_total_amount: 2.00,
       p_currency: 'UYU',
       p_payment_method: 'mercadopago',
-      p_customer_email: 'cert_test@collectibles.uy',
+      p_customer_email: 'cert_test@example.invalid',
       p_customer_phone: '099111222',
       p_shipping_address: {
         first_name: 'Test',
@@ -278,7 +279,7 @@ describe('PostgreSQL Remote create_order_atomic_v2 Certification', () => {
   it('Escenario 10, 11 & 12: Idempotencia atómica en BD real y recompras independientes', async () => {
     const keyA = `cert_idemp_A_${Date.now()}`;
     const baseParams = buildRpcPayload({
-      p_customer_email: 'buyer_idemp@collectibles.uy',
+      p_customer_email: 'buyer_idemp@example.invalid',
       p_customer_phone: '099555666',
       p_checkout_request_key: keyA
     });

@@ -1,7 +1,7 @@
 import { chromium } from '@playwright/test';
 
 async function verifyProduction() {
-  console.log("Starting Live Production QA Verification on https://collectibles.uy ...");
+  console.log("Starting Live Production QA Verification on https://collectibles.com.uy ...");
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
 
@@ -10,7 +10,7 @@ async function verifyProduction() {
     console.log("\n--- 1. DESKTOP 1280px TEST ---");
     const desktopPage = await context.newPage();
     await desktopPage.setViewportSize({ width: 1280, height: 800 });
-    await desktopPage.goto('https://collectibles.uy', { waitUntil: 'networkidle' });
+    await desktopPage.goto('https://collectibles.com.uy', { waitUntil: 'networkidle' });
 
     const licenciasHeaderLink = desktopPage.locator('header nav a[href="/licencias"]').first();
     const isLicenciasVisible = await licenciasHeaderLink.isVisible();
@@ -34,7 +34,7 @@ async function verifyProduction() {
       console.log(`\n--- 2. MOBILE ${w}px TEST ---`);
       const mobilePage = await context.newPage();
       await mobilePage.setViewportSize({ width: w, height: 840 });
-      await mobilePage.goto('https://collectibles.uy', { waitUntil: 'networkidle' });
+      await mobilePage.goto('https://collectibles.com.uy', { waitUntil: 'networkidle' });
 
       // Open Hamburger drawer
       const hamburger = mobilePage.locator('header button').last();
@@ -57,18 +57,18 @@ async function verifyProduction() {
     const routePage = await context.newPage();
     
     // /licencias
-    await routePage.goto('https://collectibles.uy/licencias', { waitUntil: 'networkidle' });
+    await routePage.goto('https://collectibles.com.uy/licencias', { waitUntil: 'networkidle' });
     const licTitle = await routePage.locator('h1').textContent();
     const hasMarvelOnPage = await routePage.locator('text=Marvel').first().isVisible();
     console.log(`ROUTE /licencias Title: "${licTitle?.trim()}", Marvel Visible: ${hasMarvelOnPage ? 'PASS' : 'FAIL'}`);
 
     // /licencias/marvel
-    await routePage.goto('https://collectibles.uy/licencias/marvel', { waitUntil: 'networkidle' });
+    await routePage.goto('https://collectibles.com.uy/licencias/marvel', { waitUntil: 'networkidle' });
     const marvelHeading = await routePage.locator('h1').textContent();
     console.log(`ROUTE /licencias/marvel Heading: "${marvelHeading?.trim()}" -> PASS`);
 
     // /themes
-    await routePage.goto('https://collectibles.uy/themes', { waitUntil: 'networkidle' });
+    await routePage.goto('https://collectibles.com.uy/themes', { waitUntil: 'networkidle' });
     const themesTitle = await routePage.locator('h1').textContent();
     const hasCineTv = await routePage.locator('text=Cine & TV').first().isVisible();
     console.log(`ROUTE /themes Title: "${themesTitle?.trim()}", Cine & TV Visible: ${hasCineTv ? 'PASS' : 'FAIL'}`);

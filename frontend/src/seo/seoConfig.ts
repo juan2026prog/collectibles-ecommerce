@@ -1,6 +1,6 @@
 import { resolveProductPrice } from '../lib/priceResolver';
 
-export const BASE_URL = 'https://collectibles.uy';
+export const BASE_URL = 'https://collectibles.com.uy';
 
 export interface SeoConfig {
   title: string;

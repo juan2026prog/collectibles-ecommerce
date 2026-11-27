@@ -1,7 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { verifyOptionalAuth } from "../_shared/auth.ts";
-import { corsHeaders, handleOptions, getCorsHeaders } from "../_shared/cors.ts";
+import { handleOptions, getCorsHeaders, resolveTrustedReturnOrigin } from "../_shared/cors.ts";
+import { isUntrustedEmailAddress } from "../_shared/email-guard.ts";
 import { getGuestTokenSecret, generateOrderAccessToken, verifyOrderAccessToken } from "../_shared/order-token.ts";
 
 
@@ -25,9 +26,8 @@ function getCustomerName(order: Record<string, any>) {
 
 serve(async (req: Request) => {
   const telemetry = paymentTelemetry();
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: getCorsHeaders(req) });
-  }
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -136,7 +136,7 @@ serve(async (req: Request) => {
       address: order.shipping_address?.street || order.shipping_address?.full_address || "",
       phone: order.customer_phone || undefined,
     };
-    const origin = req.headers.get("origin") || "https://collectibles-ecommerce.vercel.app";
+    const origin = resolveTrustedReturnOrigin(req.headers.get("origin"), { allowLocalhost: true });
 
     if (provider === "dlocal") {
       const apiKey = (config.payments_dlocal_go_api_key || "").trim();
@@ -374,15 +374,18 @@ serve(async (req: Request) => {
         }
       }
 
-      const isLocalhost = origin.includes("localhost") || origin.includes("127.0.0.1");
-      const mpOrigin = isLocalhost ? "https://collectibles-ecommerce.vercel.app" : origin;
+      const mpOrigin = resolveTrustedReturnOrigin(req.headers.get("origin"), { allowLocalhost: false });
+      const buyerEmail = (customer.email || "").trim();
+      if (!buyerEmail || isUntrustedEmailAddress(buyerEmail)) {
+        throw new Error("La orden requiere un correo electrónico válido del comprador para procesar el pago.");
+      }
 
       const preferencePayload = {
         items: mpItems,
         payer: {
-          email: customer.email || "guest@collectibles.uy",
+          email: buyerEmail,
           name: customer.name.split(" ")[0] || "Cliente",
-          surname: customer.name.split(" ").slice(1).join(" ") || "Guest",
+          surname: customer.name.split(" ").slice(1).join(" ") || "Comprador",
         },
         back_urls: {
           success: `${mpOrigin}/checkout/success?order_id=${orderId}&provider=mercadopago`,

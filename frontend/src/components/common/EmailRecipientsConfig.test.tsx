@@ -5,8 +5,8 @@ import { EmailRecipientsConfig, type EmailRecipient } from './EmailRecipientsCon
 
 describe('EmailRecipientsConfig Component', () => {
   const defaultRecipients: EmailRecipient[] = [
-    { id: '1', name: 'Administración', email: 'admin@collectibles.uy', active: true },
-    { id: '2', name: 'Depósito', email: 'deposito@collectibles.uy', active: true },
+    { id: '1', name: 'Administración', email: 'admin@collectibles.com.uy', active: true },
+    { id: '2', name: 'Depósito', email: 'deposito@collectibles.com.uy', active: true },
   ];
 
   beforeEach(() => {
@@ -41,8 +41,8 @@ describe('EmailRecipientsConfig Component', () => {
     fireEvent.click(toggleBtn);
 
     expect(screen.getByText(/Cerrar configuración/i)).toBeInTheDocument();
-    expect(screen.getByDisplayValue('admin@collectibles.uy')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('deposito@collectibles.uy')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('admin@collectibles.com.uy')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('deposito@collectibles.com.uy')).toBeInTheDocument();
   });
 
   it('3. prevents adding a 4th recipient when 3 are already present', () => {

@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     let title = 'Collectibles Uruguay | Figuras de Acción, Funko y Coleccionables';
     let description = 'Collectibles Uruguay. Figuras de acción, Funko Pop, NECA y coleccionables de tus personajes y franquicias favoritas. Stock local y envíos a todo Uruguay. Figuras que cuentan historias.';
     let image = 'https://cobtsgkwcftvexaarwmo.supabase.co/storage/v1/object/public/public-assets/1775828705619-isologocolle.jpg';
-    let urlCanonical = `https://collectibles.uy${pathname}`;
+    let urlCanonical = `https://collectibles.com.uy${pathname}`;
     let jsonLd = '';
 
     const segments = pathname.split('/').filter(Boolean);
@@ -51,7 +51,7 @@ export default async function handler(req, res) {
 
         if (redirect && redirect.new_slug) {
           res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-          return res.redirect(301, `/p/${redirect.new_slug}`);
+          return res.redirect(301, `/producto/${redirect.new_slug}`);
         }
       }
 

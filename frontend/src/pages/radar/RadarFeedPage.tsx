@@ -357,7 +357,7 @@ export default function RadarFeedPage() {
       <SEO
         title="Radar Collectibles — Noticias, tendencias y lanzamientos"
         description="Noticias, tendencias, preventas, lanzamientos y productos relacionados del mundo del coleccionismo."
-        url="https://collectibles.uy/radar"
+        url="https://collectibles.com.uy/radar"
       />
 
       {/* Header */}

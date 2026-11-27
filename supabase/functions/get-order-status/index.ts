@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import { verifyOptionalAuth } from "../_shared/auth.ts";
-import { getCorsHeaders } from "../_shared/cors.ts";
+import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
 import { getGuestTokenSecret, verifyOrderAccessToken } from "../_shared/order-token.ts";
 
 interface OrderStatusRequest {
@@ -19,9 +19,8 @@ interface OrderStatusRequest {
  * - Zero notifications or external API calls
  */
 serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: getCorsHeaders(req) });
-  }
+  const preflight = handleOptions(req);
+  if (preflight) return preflight;
 
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {

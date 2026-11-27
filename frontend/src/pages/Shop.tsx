@@ -1231,13 +1231,13 @@ export default function Shop({ isInternational }: { isInternational?: boolean } 
     : generateMetaDescription(seoType, group?.description || currentCategory?.description || currentBrand?.description, pageTitle);
 
   const shopSeoUrl = isLicenseRoute && licParam
-    ? `https://collectibles.uy/licencias/${licParam}`
+    ? `https://collectibles.com.uy/licencias/${licParam}`
     : isThemeRoute && themeParam
-    ? `https://collectibles.uy/themes/${themeParam}`
+    ? `https://collectibles.com.uy/themes/${themeParam}`
     : isCategoryRoute && catParam
-    ? `https://collectibles.uy/categoria/${catParam}`
+    ? `https://collectibles.com.uy/categoria/${catParam}`
     : isBrandRoute && brandParam
-    ? `https://collectibles.uy/marca/${brandParam}`
+    ? `https://collectibles.com.uy/marca/${brandParam}`
     : generateCanonical(seoType, entityObj?.slug);
 
   return (

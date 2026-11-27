@@ -49,7 +49,7 @@ describe('Sourcing Intelligence — FASES 0–7 Consolidation Suite', () => {
       upc: '801310334003',
       mpn: '33403',
       sku_reference: 'COL-JADA-SF-RYU-001',
-      primary_image: 'https://images.collectibles.uy/ryu.jpg',
+      primary_image: 'https://images.collectibles.com.uy/ryu.jpg',
       product_status: 'ACTIVE',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()

@@ -90,18 +90,18 @@ describe('Multicountry Block 1 — Fail-Safe Default Markets & Commerce Modes', 
 
 describe('Multicountry Block 1 — Domain Market Resolver', () => {
   it('normalizes hostnames correctly (strips protocol, port, paths, trailing dots)', () => {
-    expect(normalizeHostname('https://collectibles.uy/shop')).toBe('collectibles.uy');
-    expect(normalizeHostname('http://collectibles.uy:3000')).toBe('collectibles.uy');
-    expect(normalizeHostname('WWW.COLLECTIBLES.UY.')).toBe('www.collectibles.uy');
+    expect(normalizeHostname('https://collectibles.com.uy/shop')).toBe('collectibles.com.uy');
+    expect(normalizeHostname('http://collectibles.com.uy:3000')).toBe('collectibles.com.uy');
+    expect(normalizeHostname('WWW.COLLECTIBLES.COM.UY.')).toBe('www.collectibles.com.uy');
     expect(normalizeHostname('localhost:5173')).toBe('localhost');
     expect(normalizeHostname('')).toBe('');
     expect(normalizeHostname(null)).toBe('');
   });
 
-  it('resolves official production domain collectibles.uy to UY', () => {
-    expect(resolveCountryFromHostname('collectibles.uy')).toBe('UY');
-    expect(resolveCountryFromHostname('www.collectibles.uy')).toBe('UY');
-    expect(resolveCountryFromHostname('https://collectibles.uy/cart')).toBe('UY');
+  it('resolves official production domain collectibles.com.uy to UY', () => {
+    expect(resolveCountryFromHostname('collectibles.com.uy')).toBe('UY');
+    expect(resolveCountryFromHostname('www.collectibles.com.uy')).toBe('UY');
+    expect(resolveCountryFromHostname('https://collectibles.com.uy/cart')).toBe('UY');
   });
 
   it('resolves localhost and development environments safely to UY', () => {
@@ -123,6 +123,28 @@ describe('Multicountry Block 1 — Domain Market Resolver', () => {
     expect(resolveCountryFromHostname('malicious-site.com')).toBe('UY');
     expect(resolveCountryFromHostname('random-domain.org')).toBe('UY');
     expect(resolveCountryFromHostname(undefined)).toBe('UY');
+  });
+
+  it('classifies collectibles.com.uy as PRODUCTION_OFFICIAL and legacy collectibles.uy as UNTRUSTED_UNKNOWN', () => {
+    const officialApex = classifyHost('collectibles.com.uy');
+    expect(officialApex.classification).toBe('PRODUCTION_OFFICIAL');
+    expect(officialApex.isAuthorizedHost).toBe(true);
+    expect(officialApex.canCheckoutOnDomain).toBe(true);
+
+    const officialWww = classifyHost('www.collectibles.com.uy');
+    expect(officialWww.classification).toBe('PRODUCTION_OFFICIAL');
+    expect(officialWww.isAuthorizedHost).toBe(true);
+    expect(officialWww.canCheckoutOnDomain).toBe(true);
+
+    const legacyApex = classifyHost('collectibles.uy');
+    expect(legacyApex.classification).toBe('UNTRUSTED_UNKNOWN');
+    expect(legacyApex.isAuthorizedHost).toBe(false);
+    expect(legacyApex.canCheckoutOnDomain).toBe(false);
+
+    const legacyWww = classifyHost('www.collectibles.uy');
+    expect(legacyWww.classification).toBe('UNTRUSTED_UNKNOWN');
+    expect(legacyWww.isAuthorizedHost).toBe(false);
+    expect(legacyWww.canCheckoutOnDomain).toBe(false);
   });
 
   it('classifies unknown domains as UNTRUSTED_UNKNOWN with canCheckoutOnDomain=false', () => {

@@ -42,7 +42,7 @@ async function auditMerchantFeed() {
   const publishedActive = contentRange ? parseInt(contentRange.split('/')[1], 10) : 1207;
 
   // 2. Fetch live feed
-  const liveFeedUrl = 'https://collectibles.uy/merchant-feed.xml';
+  const liveFeedUrl = 'https://collectibles.com.uy/merchant-feed.xml';
   const feedRes = await fetch(liveFeedUrl);
   const xml = await feedRes.text();
 
@@ -165,7 +165,7 @@ async function auditMerchantFeed() {
   report += `## 2. AUDITORÍA Y RESOLUCIÓN DE RECHAZOS (DISAPPROVALS)\n\n`;
   report += `### A. "Tipo de imagen no admitido [image_link]" (73 Casos Resueltos)\n`;
   report += `- **Causa:** Anteriormente, las imágenes de productos fuera de los primeros 1,000 registros o servidas mediante endpoints externos (MercadoLibre / CDN) no contaban con cabeceras de proxy de primera parte o eran convertidas a formatos no soportados por Google (AVIF).\n`;
-  report += `- **Solución Aplicada:** Todas las URLs de imagen se enrutan de forma segura mediante el proxy de primera parte \`https://collectibles.uy/catalog-images/...\` (\`api/catalog-image.js\`), que normaliza automáticamente el \`Content-Type\` a \`image/jpeg\` o \`image/webp\`, maneja redirecciones HTTP 301/302 y elimina bloqueos de hotlinking para \`Googlebot-Image/1.0\`.\n\n`;
+  report += `- **Solución Aplicada:** Todas las URLs de imagen se enrutan de forma segura mediante el proxy de primera parte \`https://collectibles.com.uy/catalog-images/...\` (\`api/catalog-image.js\`), que normaliza automáticamente el \`Content-Type\` a \`image/jpeg\` o \`image/webp\`, maneja redirecciones HTTP 301/302 y elimina bloqueos de hotlinking para \`Googlebot-Image/1.0\`.\n\n`;
 
   report += `### B. "Falta el precio del producto" (3 Casos Resueltos)\n`;
   report += `- **Causa:** Productos con precio 0 o nulo en el feed generaban \`<g:price>0.00 UYU</g:price>\`, rechazado por Merchant Center.\n`;

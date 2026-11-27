@@ -10,25 +10,38 @@ import {
 
 // Priority URL Sample for automated inspection
 const PRIORITY_URL_SAMPLE = [
-  'https://collectibles.uy/',
-  'https://collectibles.uy/academy',
-  'https://collectibles.uy/academy/como-empezar-coleccion-figuras',
-  'https://collectibles.uy/academy/figuras-accion-vs-estatuas',
-  'https://collectibles.uy/categoria/figuras-de-accion',
-  'https://collectibles.uy/categoria/estatuas-y-bustos',
-  'https://collectibles.uy/marca/hot-toys',
-  'https://collectibles.uy/marca/funko',
-  'https://collectibles.uy/import-hub',
-  'https://collectibles.uy/shop'
+  'https://collectibles.com.uy/',
+  'https://collectibles.com.uy/academy',
+  'https://collectibles.com.uy/academy/como-empezar-coleccion-figuras',
+  'https://collectibles.com.uy/academy/figuras-accion-vs-estatuas',
+  'https://collectibles.com.uy/categoria/figuras-de-accion',
+  'https://collectibles.com.uy/categoria/estatuas-y-bustos',
+  'https://collectibles.com.uy/marca/hot-toys',
+  'https://collectibles.com.uy/marca/funko',
+  'https://collectibles.com.uy/import-hub',
+  'https://collectibles.com.uy/shop'
 ];
 
+const ALLOWED_GSC_ORIGINS = new Set([
+  'https://collectibles.com.uy',
+  'https://www.collectibles.com.uy',
+  'https://collectibles-ecommerce.vercel.app'
+]);
+
 export default async function handler(req, res) {
-  // CORS & Security headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  // CORS & Security headers (restricted to official origins)
+  const reqOrigin = req.headers?.['origin'] || '';
+  if (ALLOWED_GSC_ORIGINS.has(reqOrigin)) {
+    res.setHeader('Access-Control-Allow-Origin', reqOrigin);
+  }
+  res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-cron-secret');
 
   if (req.method === 'OPTIONS') {
+    if (reqOrigin && !ALLOWED_GSC_ORIGINS.has(reqOrigin)) {
+      return res.status(403).json({ status: 'FORBIDDEN', error: 'CORS origin not authorized' });
+    }
     return res.status(200).end();
   }
 
@@ -102,7 +115,7 @@ export default async function handler(req, res) {
     if (!propertyInfo.found || !propertyInfo.siteUrl) {
       return res.status(404).json({
         status: 'ERROR',
-        message: 'collectibles.uy property not found among accessible Search Console sites',
+        message: 'collectibles.com.uy property not found among accessible Search Console sites',
         availableSites: propertyInfo.availableSites
       });
     }
@@ -112,7 +125,7 @@ export default async function handler(req, res) {
     // Action 2: Sitemaps Management
     if (action === 'sitemaps') {
       const sitemaps = await listSitemaps(client, siteUrl);
-      const targetSitemap = 'https://collectibles.uy/sitemap.xml';
+      const targetSitemap = 'https://collectibles.com.uy/sitemap.xml';
       const existing = sitemaps.find(s => s.path === targetSitemap);
 
       let submissionResult = null;
@@ -159,7 +172,7 @@ export default async function handler(req, res) {
     if (action === 'check-full' || action === 'full-check') {
       // 1. Sitemaps status
       const sitemaps = await listSitemaps(client, siteUrl);
-      const targetSitemap = 'https://collectibles.uy/sitemap.xml';
+      const targetSitemap = 'https://collectibles.com.uy/sitemap.xml';
       const existingSitemap = sitemaps.find(s => s.path === targetSitemap);
 
       let sitemapSubmitted = false;

@@ -49,11 +49,12 @@ export default function AdminSeo() {
   }
 
   function generateSitemap() {
-    const baseUrl = settings['seo_site_url'] || 'https://collectibles.uy';
+    const rawSiteUrl = settings['seo_site_url'] || '';
+    const baseUrl = (!rawSiteUrl || rawSiteUrl.includes('collectibles.uy')) ? 'https://collectibles.com.uy' : rawSiteUrl.replace(/\/$/, '');
     const urls = [
       `  <url><loc>${baseUrl}/</loc><priority>1.0</priority></url>`,
       `  <url><loc>${baseUrl}/shop</loc><priority>0.9</priority></url>`,
-      ...products.filter(p => p.status === 'active').map(p => `  <url><loc>${baseUrl}/p/${p.slug}</loc><priority>0.8</priority></url>`),
+      ...products.filter(p => p.status === 'active' || p.status === 'published').map(p => `  <url><loc>${baseUrl}/producto/${p.slug}</loc><priority>0.8</priority></url>`),
       ...pages.filter(p => p.status === 'published').map(p => `  <url><loc>${baseUrl}/page/${p.slug}</loc><priority>0.6</priority></url>`),
     ];
     const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>`;
@@ -118,8 +119,8 @@ export default function AdminSeo() {
             { key: 'ai_seo_enabled', label: 'Habilitar Auto-Generación AI (Gemini) en Productos Nuevos', placeholder: 'true o false (por defecto: false)', type: 'boolean' },
             { key: 'seo_site_title', label: 'Título del Sitio (Title Tag)', placeholder: 'Collectibles - Premium Collectibles Store' },
             { key: 'seo_site_description', label: 'Descripción del Sitio (Meta Description)', placeholder: 'Tienda de coleccionables premium. Funko Pop, figuras, manga y más.', textarea: true },
-            { key: 'seo_site_url', label: 'URL Canónica del Sitio', placeholder: 'https://collectibles.uy' },
-            { key: 'seo_og_image', label: 'Imagen Open Graph (og:image)', placeholder: 'https://collectibles.uy/og-image.jpg' },
+            { key: 'seo_site_url', label: 'URL Canónica del Sitio', placeholder: 'https://collectibles.com.uy' },
+            { key: 'seo_og_image', label: 'Imagen Open Graph (og:image)', placeholder: 'https://collectibles.com.uy/og-image.jpg' },
             { key: 'seo_google_verification', label: 'Google Verification Code', placeholder: 'google-site-verification=...' },
             { key: 'seo_robots_txt', label: 'Robots.txt personalizado', placeholder: 'User-agent: *\nAllow: /', textarea: true },
           ].map(field => (

@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
 import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 import { getCorsHeaders, handleOptions } from "../_shared/cors.ts";
+import { resolveSafeEmailSender } from "../_shared/email-guard.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") || "";
 const isDev = Deno.env.get("ENVIRONMENT") === "development" || Deno.env.get("ALLOW_TEST_BYPASS") === "true";
@@ -713,6 +714,13 @@ async function sendMbeEmail(supabase: any, orderId: string, isResend: boolean) {
       });
     }
 
+    const senderRes = resolveSafeEmailSender(Deno.env.get("RESEND_FROM"));
+    if (!senderRes.allowed || !senderRes.from) {
+      throw new SafeLogError("RESEND_SENDER_UNVERIFIED", senderRes.reason || "Sender domain not verified", {
+        orderNumber: order.order_number
+      });
+    }
+
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -720,7 +728,8 @@ async function sendMbeEmail(supabase: any, orderId: string, isResend: boolean) {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        from: "Collectibles <ventas@collectibles.com>",
+        from: senderRes.from,
+        reply_to: senderRes.replyTo,
         to: ["info@mbe.uy"],
         subject: subject,
         html: `

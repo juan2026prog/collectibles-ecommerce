@@ -4,6 +4,7 @@ export const isUuid = value => typeof value === 'string'
   && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 
 const PRODUCT_FIELDS = 'id,title,slug,description,short_description,base_price,compare_at_price,is_active,status,category_id,brand_id,condition,seo_title,seo_description,meta_title,meta_description,metadata,ml_item_id';
+const CORE_PRODUCT_FIELDS = 'id,title,slug,description,short_description,base_price,compare_at_price,is_active,status,category_id,brand_id,condition,metadata';
 
 function assertRead(result, stage) {
   if (result?.error) throw Object.assign(new Error('Database request failed'), { code: result.error.code, stage });
@@ -21,8 +22,19 @@ export function createSeoProductRepository(client, staticMappings = {}) {
     pending.set(key, result);
     return result;
   }
-  const productQuery = (field, value) => client.from('products').select(PRODUCT_FIELDS)
+  const buildProductQuery = (fields, field, value) => client.from('products').select(fields)
     .eq(field, value).eq('status', 'published').eq('is_active', true).maybeSingle();
+  async function readProduct(read, field, value, stage) {
+    try {
+      return await read(buildProductQuery(PRODUCT_FIELDS, field, value), 3500, stage);
+    } catch (err) {
+      if (err?.code === '42703') {
+        if (field === 'ml_item_id') return { data: null };
+        return await read(buildProductQuery(CORE_PRODUCT_FIELDS, field, value), 3500, stage);
+      }
+      throw err;
+    }
+  }
   const visible = row => row?.status === 'published' && row.is_active === true;
   const found = (product, redirect) => ({ product, isRedirect: redirect, canonicalSlug: product.slug });
 
@@ -55,21 +67,25 @@ export function createSeoProductRepository(client, staticMappings = {}) {
           }
         }
         if (isUuid(slug)) {
-          const { data } = await read(productQuery('id', slug), 3500, 'product_lookup_id');
+          const { data } = await readProduct(read, 'id', slug, 'product_lookup_id');
           if (visible(data)) return found(data, true);
         }
-        const { data: direct } = await read(productQuery('slug', slug), 3500, 'product_lookup_slug');
+        const { data: direct } = await readProduct(read, 'slug', slug, 'product_lookup_slug');
         if (visible(direct)) return found(direct, false);
-        const { data: redirect } = await read(client.from('product_slug_redirects').select('new_slug,product_id')
-          .eq('old_slug', slug).maybeSingle(), 2500, 'product_lookup_redirect');
-        if (redirect?.new_slug) {
-          const { data } = await read(productQuery('slug', redirect.new_slug), 3500, 'product_lookup_target');
-          if (visible(data)) return found(data, true);
+        try {
+          const { data: redirect } = await read(client.from('product_slug_redirects').select('new_slug,product_id')
+            .eq('old_slug', slug).maybeSingle(), 2500, 'product_lookup_redirect');
+          if (redirect?.new_slug) {
+            const { data } = await readProduct(read, 'slug', redirect.new_slug, 'product_lookup_target');
+            if (visible(data)) return found(data, true);
+          }
+        } catch (err) {
+          if (err?.code !== '42P01' && err?.code !== '42703') throw err;
         }
         const match = slug.match(/MLU\s*[-_]?\s*\d+/i);
         if (match) {
           const id = match[0].toUpperCase().replace(/[-_\s]/g, '');
-          const { data } = await read(productQuery('ml_item_id', id), 3500, 'product_lookup_marketplace');
+          const { data } = await readProduct(read, 'ml_item_id', id, 'product_lookup_marketplace');
           if (visible(data)) return found(data, true);
         }
         const key = slug.toLowerCase();

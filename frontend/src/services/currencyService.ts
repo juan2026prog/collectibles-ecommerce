@@ -145,7 +145,7 @@ export function getStoredExchangeRate(currency: DisplayCurrency = 'UYU'): Exchan
       rate: 1.0,
       provider: 'CANONICAL_BENCHMARK',
       source_name: 'Moneda Canónica Oficial USD',
-      source_url: 'https://collectibles.uy',
+      source_url: 'https://collectibles.com.uy',
       status: 'VERIFIED',
       is_manual_override: false,
       fetched_at: new Date().toISOString(),
