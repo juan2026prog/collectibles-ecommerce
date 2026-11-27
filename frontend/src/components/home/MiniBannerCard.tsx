@@ -90,10 +90,20 @@ export default function MiniBannerCard({
     </div>
   );
 
-  // Wrap in Link if link_url is provided
+  // Wrap in Link if link_url is provided (normalizing legacy collectibles.uy URLs to internal SPA paths)
   if (link_url) {
+    let safeLink = link_url.trim();
+    try {
+      if (safeLink.startsWith('http://') || safeLink.startsWith('https://')) {
+        const u = new URL(safeLink);
+        const h = u.hostname.toLowerCase();
+        if (h === 'collectibles.uy' || h.endsWith('.collectibles.uy') || h === 'collectibles.com.uy' || h === 'www.collectibles.com.uy') {
+          safeLink = `${u.pathname}${u.search}${u.hash}` || '/shop';
+        }
+      }
+    } catch {}
     return (
-      <Link to={link_url} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f00856]/50 rounded-2xl">
+      <Link to={safeLink} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-[#f00856]/50 rounded-2xl">
         {content}
       </Link>
     );
