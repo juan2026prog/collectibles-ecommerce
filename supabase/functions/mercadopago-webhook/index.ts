@@ -75,7 +75,7 @@ async function verifyMPSignature(
 Deno.serve(async (req: Request) => {
   const telemetry = paymentTelemetry();
   // Webhooks are server-to-server — no CORS preflight needed
-  if (req.method === 'OPTIONS') return new Response('ok', { status: 204 });
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204 });
 
   let rawBody = "";
   let body: any = null;
