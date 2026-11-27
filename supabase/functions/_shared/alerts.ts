@@ -1,5 +1,5 @@
 // @ts-ignore
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
+import { STABLE_ADMIN_EMAIL, isUntrustedEmailAddress, extractEmailAddress } from "./email-guard.ts";
 
 export interface AlertPayload {
   alertType: string;
@@ -90,7 +90,8 @@ export async function sendAlert(
 async function dispatchExternalNotifications(alert: any) {
   const discordUrl = Deno.env.get("DISCORD_WEBHOOK_URL");
   const slackUrl = Deno.env.get("SLACK_WEBHOOK_URL");
-  const adminEmail = Deno.env.get("ADMIN_EMAIL") || "admin@collectibles.com";
+  const rawAdminEmail = Deno.env.get("ADMIN_EMAIL") || STABLE_ADMIN_EMAIL;
+  const adminEmail = isUntrustedEmailAddress(rawAdminEmail) ? STABLE_ADMIN_EMAIL : extractEmailAddress(rawAdminEmail);
   const supabaseUrl = Deno.env.get("SUPABASE_URL") || "";
   const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 

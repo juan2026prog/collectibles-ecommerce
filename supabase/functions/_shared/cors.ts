@@ -30,6 +30,14 @@ function getEnv(key: string, envOverride?: Record<string, string | undefined>): 
   } catch {
     // ignore
   }
+  try {
+    const proc = (globalThis as any).process;
+    if (proc?.env && key in proc.env) {
+      return String(proc.env[key] ?? '');
+    }
+  } catch {
+    // ignore
+  }
   return '';
 }
 
