@@ -23,6 +23,7 @@ import PackageCard from '../components/checkout/PackageCard';
 import PaymentMethodCard from '../components/checkout/PaymentMethodCard';
 import ShipmentSummary from '../components/checkout/ShipmentSummary';
 import { formatUSD } from '../lib/formatters';
+import { classifyHost } from '../lib/marketEngine/domainMarketResolver';
 
 const PROVINCIAS_ARGENTINA = [
   "Buenos Aires",
@@ -2233,6 +2234,14 @@ export default function Checkout() {
       return;
     }
     if (submitLockRef.current || isSubmitting) return;
+
+    if (typeof window !== 'undefined' && window.location?.hostname) {
+      const hostResolution = classifyHost(window.location.hostname);
+      if (!hostResolution.canCheckoutOnDomain) {
+        setCheckoutError('Este dominio no está autorizado para procesar compras. Por favor ingresá en https://collectibles.com.uy.');
+        return;
+      }
+    }
 
     if (!termsAccepted) {
       setCheckoutError('Debe aceptar los Términos y Condiciones para continuar.');
@@ -4696,7 +4705,7 @@ export default function Checkout() {
                     <label htmlFor="terms-checkbox" className="text-xs text-slate-300 cursor-pointer select-none leading-relaxed">
                       He leído y acepto los{" "}
                       <a
-                        href="https://collectibles-ecommerce.vercel.app/page/terminos"
+                        href="/page/terminos"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-primary-400 hover:text-primary-300 underline font-semibold transition-colors"

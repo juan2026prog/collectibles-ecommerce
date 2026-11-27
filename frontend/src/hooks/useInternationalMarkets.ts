@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { MarketRecord, MarketResolution, MarketStatus } from '../lib/marketEngine/marketTypes';
 import { INITIAL_DEFAULT_MARKETS, resolveMarket } from '../lib/marketEngine/marketEngine';
-import { resolveCountryFromHostname } from '../lib/marketEngine/domainMarketResolver';
+import { classifyHost } from '../lib/marketEngine/domainMarketResolver';
 
 export interface AuditLogEntry {
   id: string;
@@ -80,7 +80,7 @@ export function useInternationalMarkets() {
       
       const payload = {
         actor_id: user?.id || 'admin-local',
-        actor_email: user?.email || 'admin@collectibles.uy',
+        actor_email: user?.email || 'admin@collectibles.com.uy',
         action: entry.action,
         entity_type: entry.entity_type,
         entity_id: entry.entity_id,
@@ -210,8 +210,12 @@ export function useInternationalMarkets() {
 
   const getMarketByHostname = useCallback((rawHostname?: string): MarketResolution => {
     const host = rawHostname !== undefined ? rawHostname : (typeof window !== 'undefined' ? window.location.hostname : '');
-    const code = resolveCountryFromHostname(host);
-    return resolveMarket(code, markets);
+    const domain = classifyHost(host);
+    const resolved = resolveMarket(domain.countryCode, markets);
+    return {
+      ...resolved,
+      canCheckout: resolved.canCheckout && domain.canCheckoutOnDomain,
+    };
   }, [markets]);
 
   return {

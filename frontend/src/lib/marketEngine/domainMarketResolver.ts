@@ -6,13 +6,12 @@
  *
  * Security Principles:
  * 1. Explicitly differentiates:
- *    - PRODUCTION_OFFICIAL: Official verified domains (collectibles.uy).
- *    - PREVIEW_AUTHORIZED: Verified Vercel preview environments (*.vercel.app).
- *    - DEVELOPMENT_LOCAL: Localhost and local IP development.
- *    - UNTRUSTED_UNKNOWN: Spoofed, unmapped, or untrusted hostnames.
- * 2. Untrusted hostnames NEVER receive automatic commercial authorization (isAuthorizedHost = false, canCheckout = false).
+ *    - PRODUCTION_OFFICIAL: Official verified domains (collectibles.com.uy / www.collectibles.com.uy).
+ *    - PREVIEW_AUTHORIZED: Verified project-scoped Vercel preview environments (collectibles-ecommerce*.vercel.app).
+ *    - DEVELOPMENT_LOCAL: Localhost and loopback development.
+ *    - UNTRUSTED_UNKNOWN: Spoofed, unmapped, third-party, or legacy untrusted hostnames (including collectibles.uy).
+ * 2. Untrusted hostnames NEVER receive automatic commercial authorization (isAuthorizedHost = false, canCheckoutOnDomain = false).
  * 3. Never trust arbitrary client headers or query parameters as authority for financial transactions.
- * 4. Preserves 100% functionality for collectibles.uy and authorized Vercel previews.
  */
 
 export type HostClassification =
@@ -38,8 +37,8 @@ export interface DomainResolutionResult {
 
 export const AUTHORIZED_DOMAIN_MAPPINGS: DomainMapping[] = [
   // Uruguay (Official Production & Local Development)
-  { hostname: 'collectibles.uy', countryCode: 'UY', classification: 'PRODUCTION_OFFICIAL', notes: 'Dominio oficial Uruguay' },
-  { hostname: 'www.collectibles.uy', countryCode: 'UY', classification: 'PRODUCTION_OFFICIAL', notes: 'Alias www Uruguay' },
+  { hostname: 'collectibles.com.uy', countryCode: 'UY', classification: 'PRODUCTION_OFFICIAL', notes: 'Dominio oficial Uruguay' },
+  { hostname: 'www.collectibles.com.uy', countryCode: 'UY', classification: 'PRODUCTION_OFFICIAL', notes: 'Alias www oficial Uruguay' },
   { hostname: 'localhost', countryCode: 'UY', classification: 'DEVELOPMENT_LOCAL', notes: 'Entorno de desarrollo local' },
   { hostname: '127.0.0.1', countryCode: 'UY', classification: 'DEVELOPMENT_LOCAL', notes: 'Entorno de desarrollo IP loopback' },
 
@@ -47,6 +46,8 @@ export const AUTHORIZED_DOMAIN_MAPPINGS: DomainMapping[] = [
   { hostname: 'collectibles.ar', countryCode: 'AR', classification: 'PRODUCTION_OFFICIAL', notes: 'Dominio previsto Argentina (Pendiente certificación/DNS)' },
   { hostname: 'www.collectibles.ar', countryCode: 'AR', classification: 'PRODUCTION_OFFICIAL', notes: 'Alias www Argentina' },
 ];
+
+const VERCEL_AUTHORIZED_PREVIEW_RE = /^collectibles-ecommerce(-[a-z0-9-]+)?\.vercel\.app$/;
 
 /**
  * Normalizes a raw host or hostname string (strips ports, protocols, path and trailing dots).
@@ -66,13 +67,13 @@ export function normalizeHostname(rawHost: string | null | undefined): string {
   }
 
   // Strip path or query if present
-  host = host.split('/')[0].split('?')[0];
+  host = host.split('/')[0].split('?')[0].split('#')[0];
 
   // Strip port if present (e.g., localhost:5173 -> localhost)
   host = host.split(':')[0];
 
   // Strip trailing dot if present
-  if (host.endsWith('.')) {
+  while (host.endsWith('.')) {
     host = host.slice(0, -1);
   }
 
@@ -80,22 +81,23 @@ export function normalizeHostname(rawHost: string | null | undefined): string {
 }
 
 /**
- * Evaluates host classification with security guarantees.
+ * Evaluates host classification with strict security guarantees.
+ * Former domain collectibles.uy (and all *.collectibles.uy subdomains) are explicitly UNTRUSTED_UNKNOWN.
  */
 export function classifyHost(rawHost: string | null | undefined): DomainResolutionResult {
   const host = normalizeHostname(rawHost);
 
-  if (!host) {
+  if (!host || host === 'collectibles.uy' || host.endsWith('.collectibles.uy')) {
     return {
-      hostname: '',
+      hostname: host,
       countryCode: 'UY',
       classification: 'UNTRUSTED_UNKNOWN',
       isAuthorizedHost: false,
-      canCheckoutOnDomain: false
+      canCheckoutOnDomain: false,
     };
   }
 
-  const matched = AUTHORIZED_DOMAIN_MAPPINGS.find(m => m.hostname === host);
+  const matched = AUTHORIZED_DOMAIN_MAPPINGS.find((m) => m.hostname === host);
   if (matched) {
     const isProdOrDev = matched.classification === 'PRODUCTION_OFFICIAL' || matched.classification === 'DEVELOPMENT_LOCAL';
     // Argentina is not authorized for checkout even if domain matches until certified
@@ -106,29 +108,28 @@ export function classifyHost(rawHost: string | null | undefined): DomainResoluti
       countryCode: matched.countryCode,
       classification: matched.classification,
       isAuthorizedHost: true,
-      canCheckoutOnDomain: canCheckout
+      canCheckoutOnDomain: canCheckout,
     };
   }
 
-  // Vercel Preview Deployments (e.g. collectibles-ecommerce-*.vercel.app)
-  if (host.endsWith('.vercel.app')) {
+  // Project-scoped Vercel Preview & Backup Deployments ONLY (blocks arbitrary *.vercel.app)
+  if (VERCEL_AUTHORIZED_PREVIEW_RE.test(host)) {
     return {
       hostname: host,
       countryCode: 'UY',
       classification: 'PREVIEW_AUTHORIZED',
       isAuthorizedHost: true,
-      canCheckoutOnDomain: true // Enabled for QA preview of Uruguay
+      canCheckoutOnDomain: true,
     };
   }
 
-  // Hostnames desconocidos o no autorizados:
-  // Se asigna país UY como contenido informativo estático pero NO se otorga autorización comercial
+  // Unknown or untrusted hostnames never receive commercial checkout authorization
   return {
     hostname: host,
     countryCode: 'UY',
     classification: 'UNTRUSTED_UNKNOWN',
     isAuthorizedHost: false,
-    canCheckoutOnDomain: false
+    canCheckoutOnDomain: false,
   };
 }
 
